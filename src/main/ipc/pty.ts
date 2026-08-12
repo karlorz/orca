@@ -6454,7 +6454,10 @@ export function registerPtyHandlers(
                     ? {
                         handoff: {
                           launchConfig: args.launchConfig,
-                          recordedConnectionId: args.legacyResumeRecordedConnectionId ?? null
+                          recordedConnectionId: args.legacyResumeRecordedConnectionId ?? null,
+                          ...(args.resumeProviderSession?.transcriptPath
+                            ? { transcriptPath: args.resumeProviderSession.transcriptPath }
+                            : {})
                         }
                       }
                     : {})
@@ -7686,6 +7689,11 @@ export function registerPtyHandlers(
       } finally {
         releaseWorktreeSpawn?.()
         finishTerminalInstall()
+        rejectPaneSpawnReservation(
+          paneSpawnReservationKey,
+          paneSpawnReservation,
+          new Error('pane_spawn_abandoned')
+        )
       }
     }
   )

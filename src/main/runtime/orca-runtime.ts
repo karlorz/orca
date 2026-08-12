@@ -29085,7 +29085,10 @@ export class OrcaRuntimeService {
     }
     return {
       settleLaunched: () => {
-        store.setWorktreeMeta(worktreeId, { pendingAgentLaunch: undefined })
+        store.setWorktreeMeta(worktreeId, {
+          agentLaunchFailure: undefined,
+          pendingAgentLaunch: undefined
+        })
         notify()
       },
       settleFailed: (failure) => {
