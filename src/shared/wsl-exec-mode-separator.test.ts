@@ -20,7 +20,12 @@ const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST
 
 const SCANNED_ROOTS = ['src', 'config', 'tests']
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build'])
+// Dot-directories under the scanned roots are git-ignored scratch, never shipped
+// source — `tests/e2e/.cross-version-checkouts` holds whole released copies of
+// Orca, so scanning it reports offenders from old versions.
+const isIgnoredDirectory = (entry: string): boolean =>
+  entry.startsWith('.') || IGNORED_DIRECTORIES.has(entry)
 
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
@@ -31,7 +36,7 @@ function collectSourceFiles(root: string): string[] {
     return found
   }
   for (const entry of entries) {
-    if (IGNORED_DIRECTORIES.has(entry)) {
+    if (isIgnoredDirectory(entry)) {
       continue
     }
     const full = join(root, entry)

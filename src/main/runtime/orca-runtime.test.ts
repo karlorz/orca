@@ -71,6 +71,8 @@ import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeMobileSessionCreateTerminalAgentLaunchFailure,
+  type RuntimeMobileSessionCreateTerminalResult,
   type RuntimeMobileSessionTabsResult,
   type RuntimeSyncWindowGraph,
   type RuntimeTerminalCreate
@@ -134,6 +136,19 @@ import {
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
+
+/** The mobile create now answers with a host-owned agentLaunch failure instead
+ *  of a tab; these assertions all cover the created-tab arm. */
+function createdMobileTab(
+  result:
+    | RuntimeMobileSessionCreateTerminalResult
+    | RuntimeMobileSessionCreateTerminalAgentLaunchFailure
+): RuntimeMobileSessionCreateTerminalResult['tab'] {
+  if (!('tab' in result)) {
+    throw new Error(`expected a created mobile terminal, got ${JSON.stringify(result)}`)
+  }
+  return result.tab
+}
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1487,6 +1502,7 @@ function createQuickCommandRuntime(terminalQuickCommands: readonly TerminalQuick
     getSettings: () => settings,
     updateSettings,
     getAgentCatalogMigrationError: () => null,
+    getAgentCatalogSchemaTooNew: () => null,
     previewSettingsUpdate: (patch: Record<string, unknown>) => ({ ...settings, ...patch }),
     updateSettingsDurable: updateSettings,
     onSettingsChanged: (listener: (updates: Record<string, unknown>) => void) => {
@@ -6234,7 +6250,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/agent-feature',
-          command: "'codex' '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           worktreeId: result.worktree.id
         })
       )
@@ -6345,7 +6361,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: 'C:/remote/agent-feature',
-          command: "& 'codex' '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fix Bob''s branch'"
         })
       )
       expect(addWorktree).not.toHaveBeenCalled()
@@ -28258,23 +28274,27 @@ describe('OrcaRuntimeService', () => {
         preAllocatedHandle: expect.stringMatching(/^term_/)
       })
     )
-    expect(result.tab).toMatchObject({
+    expect(createdMobileTab(result)).toMatchObject({
       type: 'terminal',
       status: 'ready',
       terminal: expect.stringMatching(/^term_/),
       viewMode: 'chat',
       isActive: true
     })
-    expect(persistViewMode).toHaveBeenCalledWith(TEST_WORKTREE_ID, result.tab.parentTabId, {
-      viewMode: 'chat'
-    })
+    expect(persistViewMode).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      createdMobileTab(result).parentTabId,
+      {
+        viewMode: 'chat'
+      }
+    )
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(listed.tabs).toEqual([
       expect.objectContaining({
-        id: result.tab.id,
+        id: createdMobileTab(result).id,
         status: 'ready',
-        terminal: result.tab.terminal
+        terminal: createdMobileTab(result).terminal
       })
     ])
   })
@@ -28374,7 +28394,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(spawn).not.toHaveBeenCalled()
     expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-    expect(result.tab).toMatchObject({
+    expect(createdMobileTab(result)).toMatchObject({
       type: 'terminal',
       status: 'ready',
       ptyId: 'pty-paired-headed',
@@ -28558,14 +28578,14 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(
-      hostTerminal.tab.id
+      createdMobileTab(hostTerminal).id
     )
     expect(
       (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-a')).activeTabId
-    ).toBe(callerTerminal.tab.id)
+    ).toBe(createdMobileTab(callerTerminal).id)
     expect(
       (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-b')).activeTabId
-    ).toBe(hostTerminal.tab.id)
+    ).toBe(createdMobileTab(hostTerminal).id)
   })
 
   it('scopes terminal-create idempotency to the paired caller', async () => {
@@ -28592,7 +28612,7 @@ describe('OrcaRuntimeService', () => {
       })
     ])
 
-    expect(createdA.tab.id).not.toBe(createdB.tab.id)
+    expect(createdMobileTab(createdA).id).not.toBe(createdMobileTab(createdB).id)
     expect(spawnIndex).toBe(2)
   })
 
@@ -28627,7 +28647,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawnedEnv.ORCA_WORKSPACE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
     expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
     expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
-    expect(result.tab).toMatchObject({
+    expect(createdMobileTab(result)).toMatchObject({
       type: 'terminal',
       status: 'ready',
       terminal: expect.stringMatching(/^term_/),
@@ -28855,9 +28875,9 @@ describe('OrcaRuntimeService', () => {
     expect(listed.tabs).toEqual([
       expect.objectContaining({
         type: 'terminal',
-        id: created.tab.id,
-        parentTabId: created.tab.parentTabId,
-        leafId: created.tab.leafId,
+        id: createdMobileTab(created).id,
+        parentTabId: createdMobileTab(created).parentTabId,
+        leafId: createdMobileTab(created).leafId,
         ptyId: 'serve-mobile-pty',
         status: 'ready'
       })
@@ -33742,7 +33762,7 @@ describe('OrcaRuntimeService', () => {
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
-    expect(created.tab).toMatchObject({
+    expect(createdMobileTab(created)).toMatchObject({
       type: 'terminal',
       launchAgent: 'claude'
     })
@@ -33904,7 +33924,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(focusTerminal).not.toHaveBeenCalled()
-    expect(result.tab).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
+    expect(createdMobileTab(result)).toMatchObject({ parentTabId: 'tab-renderer', isActive: false })
 
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -34069,7 +34089,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(createRequests).toHaveLength(1)
     expect(second).toBe(first)
-    expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer' })
+    expect(createdMobileTab(first)).toMatchObject({ parentTabId: 'tab-renderer' })
   })
 
   it('returns the settled success for a retried clientMutationId whose response was lost', async () => {
@@ -34287,8 +34307,8 @@ describe('OrcaRuntimeService', () => {
       ([channel]) => channel === 'terminal:requestTabCreate'
     )
     expect(createRequests).toHaveLength(2)
-    expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer-a' })
-    expect(second.tab).toMatchObject({ parentTabId: 'tab-renderer-b' })
+    expect(createdMobileTab(first)).toMatchObject({ parentTabId: 'tab-renderer-a' })
+    expect(createdMobileTab(second)).toMatchObject({ parentTabId: 'tab-renderer-b' })
   })
 
   it('materializes a renderer-created mobile terminal whose surface stays pending', async () => {
@@ -34378,7 +34398,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1)
       const result = await settledCreate
 
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-pending',
         leafId: pendingLeafId,
@@ -34635,7 +34655,7 @@ describe('OrcaRuntimeService', () => {
       const result = await settledCreate
 
       expect(settled).toBe(true)
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-alive',
         leafId,
@@ -34691,7 +34711,7 @@ describe('OrcaRuntimeService', () => {
       expect(settled).toBe(true)
       const result = await settledCreate
 
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-early',
         leafId,
@@ -34751,7 +34771,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(50)
       const result = await create
 
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-bare',
         leafId,
@@ -34816,7 +34836,10 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(50)
       const result = await create
 
-      expect(result.tab).toMatchObject({ type: 'terminal', parentTabId: 'tab-carried' })
+      expect(createdMobileTab(result)).toMatchObject({
+        type: 'terminal',
+        parentTabId: 'tab-carried'
+      })
       expect(write).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -34913,7 +34936,7 @@ describe('OrcaRuntimeService', () => {
       const result = await settledCreate
 
       expect(settled).toBe(true)
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-guard',
         leafId,
@@ -34984,7 +35007,7 @@ describe('OrcaRuntimeService', () => {
       const result = await settledCreate
 
       expect(settled).toBe(true)
-      expect(result.tab).toMatchObject({
+      expect(createdMobileTab(result)).toMatchObject({
         type: 'terminal',
         parentTabId: 'tab-catch',
         leafId,
@@ -45475,7 +45498,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-agent-startup',
-        command: "'codex' '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
         worktreeId: result.worktree.id
       })
     )
@@ -45839,7 +45862,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-cli-aider-startup',
-        command: "'aider' '--yes-always'",
+        command: "aider '--yes-always'",
         worktreeId: result.worktree.id
       })
     )
@@ -46460,7 +46483,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/remote/repo-nautilus-2',
-        command: `claude '--dangerously-skip-permissions' --prefill '${draftUrl}'`,
+        command: `'claude' '--dangerously-skip-permissions' '--prefill' '${draftUrl}'`,
         connectionId: 'ssh-1',
         worktreeId: result.worktree.id
       })

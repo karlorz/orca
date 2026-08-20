@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { CreatedWorktreeResult } from '../../shared/worktree/create-types'
 import {
   listWorktreesMock,
   addWorktreeMock,
@@ -148,7 +148,7 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
     resolveFetch()
-    const result = (await createPromise) as CreateWorktreeResult
+    const result = (await createPromise) as CreatedWorktreeResult
     expect(addWorktreeMock).toHaveBeenCalled()
     expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
@@ -204,7 +204,7 @@ describe('registerWorktreeHandlers', () => {
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+    })) as CreatedWorktreeResult
 
     expect(addWorktreeMock).toHaveBeenCalled()
     expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
@@ -318,7 +318,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
-    expect((result as CreateWorktreeResult).baseFallback).toEqual({
+    expect((result as CreatedWorktreeResult).baseFallback).toEqual({
       requestedRef: 'team/feature',
       localRef: 'team/feature'
     })
@@ -370,7 +370,7 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
-    expect((result as CreateWorktreeResult).baseFallback).toEqual({
+    expect((result as CreatedWorktreeResult).baseFallback).toEqual({
       requestedRef: 'origin/main',
       localRef: 'main'
     })
@@ -443,7 +443,7 @@ describe('registerWorktreeHandlers', () => {
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+    })) as CreatedWorktreeResult
 
     expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -486,7 +486,7 @@ describe('registerWorktreeHandlers', () => {
     const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+    })) as CreatedWorktreeResult
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',

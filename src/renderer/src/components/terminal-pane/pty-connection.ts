@@ -303,6 +303,7 @@ import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
   type ResumableTuiAgent,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -321,7 +322,10 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
-import { resolveTuiAgentConfig } from '../../../../shared/custom-tui-agents'
+import {
+  resolveTuiAgentBaseAgent,
+  resolveTuiAgentConfig
+} from '../../../../shared/custom-tui-agents'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
@@ -347,6 +351,28 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
+
+/**
+ * The owner's built-in base agent, for comparisons keyed by built-in identity
+ * (synthetic Pi-compatible title profiles). A custom id resolves to its base;
+ * anything outside the catalog (e.g. a hook's 'unknown') passes through, so
+ * callers keep the requested id for per-agent preferences.
+ */
+function resolvePaneOwnerBaseAgent(owner: AgentType | undefined): AgentType | undefined {
+  if (owner === undefined) {
+    return undefined
+  }
+  const settings = useAppStore.getState().settings
+  return (
+    // Accepts non-catalog AgentType strings too: resolveTuiAgentBaseAgent
+    // returns null for anything it cannot resolve, and we fall back to `owner`.
+    resolveTuiAgentBaseAgent(
+      owner as TuiAgent,
+      settings?.customTuiAgents,
+      settings?.deletedCustomTuiAgents
+    ) ?? owner
+  )
+}
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -565,6 +591,10 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   // Host-owned resume: the client sends the ownership-key variant and the host
   // loads its private record to assemble command/env/launchConfig/token itself.
   agentLaunch: AgentLaunchResumeRequest
+  // The ownership key carries only the session id, so the resumed session's own
+  // metadata still rides: the host needs its transcriptPath for the pre-U5 legacy
+  // handoff and the whole session for Codex resume-account verification.
+  resumeProviderSession: AgentProviderSessionMetadata
   // One-release legacy handoff — present only for a pre-U5 record (or pre-U5 live
   // session) whose captured config the host ingests once. Absent on v1 sessions.
   launchConfig?: SleepingAgentLaunchConfig
@@ -1205,7 +1235,9 @@ export function connectPanePty(
   ): void => {
     const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
     suppressNativeWindowsIdleCodexFocusReports =
-      agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
+      agentType && agentType !== 'unknown'
+        ? resolvePaneOwnerBaseAgent(agentType) === 'codex'
+        : titleAgentType === 'codex'
   }
   let queueAgentIdleTerminalModeReset = (): void => {
     if (disposed) {
@@ -1616,7 +1648,7 @@ export function connectPanePty(
   ): void => {
     const settings = useAppStore.getState().settings
     if (
-      (agentType === 'claude' || isClaudeAgent(title)) &&
+      (resolvePaneOwnerBaseAgent(agentType) === 'claude' || isClaudeAgent(title)) &&
       (settings === null || settings.promptCacheTimerEnabled)
     ) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
@@ -3737,7 +3769,8 @@ export function connectPanePty(
       !initialAgentStatus &&
       paneStartup?.telemetry?.launch_source === 'sidebar' &&
       paneStartup.telemetry.request_kind === 'resume' &&
-      (paneStartup.launchAgent === 'codex' || paneStartup.telemetry.agent_kind === 'codex')
+      (resolvePaneOwnerBaseAgent(paneStartup.launchAgent) === 'codex' ||
+        paneStartup.telemetry.agent_kind === 'codex')
     ) {
       // Why: history resumes open on a completed Codex composer without a done
       // row, so arm the same Windows stale-focus guard until work starts again.
@@ -3802,7 +3835,22 @@ export function connectPanePty(
     }
     const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
     const authoritativePaneAgent = getAuthoritativePaneAgent()
-    const agentType = resolveCompatibleAgentTypeForOwner(payload.agentType, authoritativePaneAgent)
+    // Why: a custom id owning the pane has no synthetic-title profile of its own,
+    // so match the wrapper's identity group on the base — otherwise an OMP-based
+    // custom agent keeps repainting itself as Pi.
+    const authoritativePaneBaseAgent = resolvePaneOwnerBaseAgent(authoritativePaneAgent)
+    const baseOwnedAgentType = resolveCompatibleAgentTypeForOwner(
+      payload.agentType,
+      authoritativePaneBaseAgent
+    )
+    // Why the row publishes the BASE, not the requested custom id: every consumer
+    // downstream is keyed on built-ins — SYNTHETIC_AGENT_TITLE_PROFILES, the Codex
+    // attention debounce in agent-completion-coordinator, and the ESC/Ctrl-C flush
+    // branches in agent-interrupt-inference. Per-agent icons/labels already read
+    // the custom id from `tab.launchAgent`. (Promoting it here also mis-fires:
+    // `baseOwnedAgentType === authoritativePaneBaseAgent` is true for every custom
+    // whose base has no titleIdentityGroup, which is not re-ownership.)
+    const agentType = baseOwnedAgentType
     const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
     // Why: this is the remote-runtime path where the renderer, not main, parses OSC 9999 out of
     // PTY bytes — so the renderer is the sequencing authority for these rows and says so. Kept
@@ -3820,7 +3868,8 @@ export function connectPanePty(
     const statusTitle = resolvedStatusTitle
       ? normalizeCompatibleAgentTitleForOwner(
           resolvedStatusTitle,
-          agentType ?? authoritativePaneAgent
+          // Base again: the synthetic label set is per built-in profile.
+          baseOwnedAgentType ?? authoritativePaneBaseAgent
         )
       : resolvedStatusTitle
     // Why: proves the claim — only a pane that really produced byte-derived
@@ -4873,8 +4922,12 @@ export function connectPanePty(
       }
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
+    // Why the base resolve: a codex-based custom agent runs the same binary and
+    // hits the same state-DB backfill failure, so the recovery notice must arm on
+    // the resolved base rather than the requested (possibly custom) id.
     const codexBackfillErrorDetector =
-      paneStartup?.launchAgent === 'codex' || tab?.launchAgent === 'codex'
+      resolvePaneOwnerBaseAgent(paneStartup?.launchAgent) === 'codex' ||
+      resolvePaneOwnerBaseAgent(tab?.launchAgent) === 'codex'
         ? createCodexBackfillErrorDetector()
         : null
 
@@ -5209,6 +5262,7 @@ export function connectPanePty(
       return {
         agent,
         agentLaunch,
+        resumeProviderSession: providerSession,
         command: '',
         // Pane-identity env (ORCA_PANE_KEY etc.) must reach the resumed process for
         // hook attribution; agent env + the admission token are host-owned, and the
@@ -5453,6 +5507,11 @@ export function connectPanePty(
           ? { env: mergeStartupEnvWithPaneIdentity(startupOverride.env) }
           : {}),
         ...(coldRestoreOverride ? { agentLaunch: coldRestoreOverride.agentLaunch } : {}),
+        // Rides with the ownership key: the host reads its transcriptPath for the
+        // pre-U5 handoff and the session for Codex resume-account verification.
+        ...(coldRestoreOverride
+          ? { resumeProviderSession: coldRestoreOverride.resumeProviderSession }
+          : {}),
         ...(coldRestoreOverride?.launchConfig
           ? { launchConfig: coldRestoreOverride.launchConfig }
           : {}),
@@ -9123,6 +9182,11 @@ export function connectPanePty(
               ...(coldRestoreStartup?.agentLaunch
                 ? { agentLaunch: coldRestoreStartup.agentLaunch }
                 : {}),
+              // Rides with the ownership key: the host reads its transcriptPath for
+              // the pre-U5 handoff and the session for Codex resume verification.
+              ...(coldRestoreStartup?.resumeProviderSession
+                ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+                : {}),
               ...(coldRestoreStartup?.env
                 ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
                 : {}),
@@ -9376,6 +9440,11 @@ export function connectPanePty(
         // sessionId MISS resumes the agent on the one-shot fresh-exec fallback
         // instead of spawning a bare shell; a warm HIT ignores it.
         ...(coldRestoreStartup?.agentLaunch ? { agentLaunch: coldRestoreStartup.agentLaunch } : {}),
+        // Rides with the ownership key: the host reads its transcriptPath for the
+        // pre-U5 handoff and the session for Codex resume-account verification.
+        ...(coldRestoreStartup?.resumeProviderSession
+          ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+          : {}),
         ...(coldRestoreStartup?.env
           ? { env: mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
           : {}),
