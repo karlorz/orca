@@ -322,10 +322,8 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
-import {
-  resolveTuiAgentBaseAgent,
-  resolveTuiAgentConfig
-} from '../../../../shared/custom-tui-agents'
+import { resolveTuiAgentConfig } from '../../../../shared/custom-tui-agents'
+import { resolvePaneOwnerBaseAgent } from '@/lib/agent-base-identity'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
@@ -351,28 +349,6 @@ import {
 } from './renderer-owned-agent-status-registry'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
-
-/**
- * The owner's built-in base agent, for comparisons keyed by built-in identity
- * (synthetic Pi-compatible title profiles). A custom id resolves to its base;
- * anything outside the catalog (e.g. a hook's 'unknown') passes through, so
- * callers keep the requested id for per-agent preferences.
- */
-function resolvePaneOwnerBaseAgent(owner: AgentType | undefined): AgentType | undefined {
-  if (owner === undefined) {
-    return undefined
-  }
-  const settings = useAppStore.getState().settings
-  return (
-    // Accepts non-catalog AgentType strings too: resolveTuiAgentBaseAgent
-    // returns null for anything it cannot resolve, and we fall back to `owner`.
-    resolveTuiAgentBaseAgent(
-      owner as TuiAgent,
-      settings?.customTuiAgents,
-      settings?.deletedCustomTuiAgents
-    ) ?? owner
-  )
-}
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -2998,11 +2974,14 @@ export function connectPanePty(
   const canApplyCommandCodeOutputStatus = (): boolean => {
     const state = useAppStore.getState()
     const foreground = state.paneForegroundAgentByPaneKey[cacheKey]
+    // Base-resolve every identity so a command-code-based custom pane owns its output too.
     return canCommandCodeOutputOwnPane({
-      foregroundAgent: foreground?.agent,
+      foregroundAgent: resolvePaneOwnerBaseAgent(foreground?.agent ?? undefined),
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent: getAuthoritativePaneAgent(),
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[cacheKey]?.agentType
+      paneOwnerAgent: resolvePaneOwnerBaseAgent(getAuthoritativePaneAgent()),
+      retainedPaneOwnerAgent: resolvePaneOwnerBaseAgent(
+        state.retainedAgentsByPaneKey[cacheKey]?.agentType
+      )
     })
   }
 
@@ -3020,18 +2999,23 @@ export function connectPanePty(
     const currentTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
     const normalizedPrompt = prompt.trim()
     if (
-      currentEntry?.agentType === 'command-code' &&
-      currentEntry.state === 'done' &&
+      resolvePaneOwnerBaseAgent(currentEntry?.agentType) === 'command-code' &&
+      currentEntry?.state === 'done' &&
       (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
     ) {
       return
     }
+    // Preserve the requested custom id — stamping the base would relabel the row.
+    const ownerAgent = getAuthoritativePaneAgent()
     currentState.setAgentStatus(
       cacheKey,
       {
         state: 'working',
         prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-        agentType: 'command-code',
+        agentType:
+          ownerAgent && resolvePaneOwnerBaseAgent(ownerAgent) === 'command-code'
+            ? ownerAgent
+            : 'command-code',
         // Why: Command Code has no prompt-start hook; this row is read off the pane's own output.
         observation: rendererAgentStatusObservations.observe(cacheKey, {
           origin: 'process',
@@ -3059,7 +3043,11 @@ export function connectPanePty(
       }
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[cacheKey]
-      if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+      if (
+        !currentEntry ||
+        resolvePaneOwnerBaseAgent(currentEntry.agentType) !== 'command-code' ||
+        currentEntry.state !== 'working'
+      ) {
         return
       }
       const currentPrompt = currentEntry.prompt.trim()
@@ -3071,8 +3059,9 @@ export function connectPanePty(
         cacheKey,
         {
           state: 'done',
+          // Keep the row's own identity (a custom id for command-code-based customs).
           prompt: currentPrompt || normalizedPrompt,
-          agentType: 'command-code',
+          agentType: currentEntry.agentType ?? 'command-code',
           observation: rendererAgentStatusObservations.observe(cacheKey, {
             origin: 'process',
             observedAt: Date.now(),
