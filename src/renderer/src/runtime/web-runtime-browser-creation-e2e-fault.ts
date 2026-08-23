@@ -40,6 +40,10 @@ let creationSettlement: Promise<BrowserCreationSettlement> | null = null
 const suppressedPageIds = new Set<string>()
 const MAX_SUPPRESSED_PAGE_IDS = 128
 
+function rejectPendingCreationSettlement(error: string): void {
+  settleCreation?.({ status: 'rejected', error })
+}
+
 function resetFault(): void {
   releaseCreatedPage?.()
   armed = false
@@ -49,7 +53,7 @@ function resetFault(): void {
   failNextInventoryRpc = false
   releaseCreatedPage = null
   createdPageBarrier = null
-  settleCreation?.({ status: 'rejected', error: 'E2E browser creation settlement reset' })
+  rejectPendingCreationSettlement('E2E browser creation settlement reset')
   settleCreation = null
   creationSettlement = null
   suppressedPageIds.clear()
@@ -76,7 +80,7 @@ function exposeFaultApi(): void {
       failNextInventoryRpc = true
     },
     armSettlement: () => {
-      settleCreation?.({ status: 'rejected', error: 'E2E browser creation settlement superseded' })
+      rejectPendingCreationSettlement('E2E browser creation settlement superseded')
       creationSettlement = new Promise<BrowserCreationSettlement>((resolve) => {
         settleCreation = resolve
       })
