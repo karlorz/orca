@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { isMacPlatform } from './terminal-link-open-hints'
+import { resolveTerminalRightClickAction } from './terminal-right-click-ownership'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -65,9 +67,20 @@ export function useTerminalContextMenuTrigger({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: when users opt into terminal-style right-click, a selection copies
-    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
-    if (rightClickToPaste && !event.ctrlKey) {
+    const mouseTrackingMode = clickedPane?.terminal.modes.mouseTrackingMode
+    const rightClickAction = resolveTerminalRightClickAction({
+      fromTerminalContent,
+      mouseTrackingMode,
+      rightClickToPaste,
+      event,
+      isMac: isMacPlatform()
+    })
+
+    if (rightClickAction === 'terminal-app') {
+      return
+    }
+
+    if (rightClickAction === 'paste-or-copy') {
       event.stopPropagation()
       if (!clickedPane) {
         return
@@ -83,19 +96,6 @@ export function useTerminalContextMenuTrigger({
       } else {
         void pasteResolvedPane('right-click')
       }
-      return
-    }
-
-    // Forward right-click to the terminal application when it owns mouse input
-    // (Herdr, tmux, Zellij, Neovim, btop, lazygit, etc.). Alt (Option on macOS)
-    // overrides to open Orca's menu. Pane title/bar right-clicks always open
-    // Orca's menu because those areas are owned by Orca, not the terminal app.
-    if (
-      fromTerminalContent &&
-      clickedPane &&
-      clickedPane.terminal.modes.mouseTrackingMode !== 'none' &&
-      !event.altKey
-    ) {
       return
     }
 
