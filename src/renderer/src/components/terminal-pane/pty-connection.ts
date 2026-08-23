@@ -169,6 +169,7 @@ import {
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
+import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import {
@@ -7546,6 +7547,15 @@ export function connectPanePty(
             recordRendererOrderedSeq(snapshot)
             recordTerminalOutput(pane.terminal)
             await waitForTerminalReplayWritesParsed(pane.terminal)
+            // Why: visibility-resume's atlas wipe can paint the pre-restore
+            // buffer. Present after replay so a synchronized alt-screen footer
+            // cannot composite on the stale framebuffer.
+            if (deps.isVisibleRef.current) {
+              presentPaneViewport(pane)
+              recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {
+                paneId: pane.id
+              })
+            }
           },
           {
             shouldRestore: () =>
