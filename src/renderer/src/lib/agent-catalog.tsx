@@ -306,6 +306,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'herdr',
+    label: translate('auto.lib.agent.catalog.df221ddcb3', 'Herdr'),
+    cmd: 'herdr',
+    faviconDomain: 'herdr.dev',
+    homepageUrl: 'https://herdr.dev'
   }
 ])
 

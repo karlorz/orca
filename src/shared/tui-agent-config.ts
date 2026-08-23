@@ -106,15 +106,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   trae: {
-    // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
-    // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
+    // Why: bytedance/trae-agent also installs `trae-cli`; detect TRAE CN's `traecli` alias instead.
     detectCmd: 'traecli',
     launchCmd: 'traecli',
     expectedProcess: 'traecli',
     // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
     promptInjectionMode: 'argv',
-    // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a
-    // Trae subcommand or flag — `--` stops both in its Cobra parser.
+    // Why: `--` stops Cobra parsing so `help`/`config`/`-…` prompts aren't treated as subcommands/flags.
     argvPromptSeparator: '--'
   },
   opencode: {
@@ -332,6 +330,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'devin',
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
+    promptInjectionMode: 'stdin-after-start'
+  },
+  herdr: {
+    detectCmd: 'herdr',
+    launchCmd: 'herdr',
+    expectedProcess: 'herdr',
     promptInjectionMode: 'stdin-after-start'
   }
 }
