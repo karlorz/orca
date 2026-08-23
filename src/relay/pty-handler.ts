@@ -89,6 +89,10 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
+import {
+  buildRelayCodexHookLaunchArgEnv,
+  RELAY_OWNED_AGENT_HOOK_ENV_KEYS
+} from './agent-hook-endpoint-coordinates'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -654,6 +658,9 @@ export class PtyHandler {
       },
       rendererEnv
     ) as Record<string, string>
+    for (const key of RELAY_OWNED_AGENT_HOOK_ENV_KEYS) {
+      delete baseEnv[key]
+    }
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -688,6 +695,8 @@ export class PtyHandler {
     for (const key of envToDelete) {
       delete result[key]
     }
+    // Why: hook deletion is the final enabled-state authority; default slots explicitly disable hooks.
+    Object.assign(result, buildRelayCodexHookLaunchArgEnv(result))
     if (!envToDelete.includes('TERM') && rendererEnv && Object.hasOwn(rendererEnv, 'TERM')) {
       result.TERM = rendererEnv.TERM
     }

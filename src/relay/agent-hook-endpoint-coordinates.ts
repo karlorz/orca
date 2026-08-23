@@ -5,10 +5,22 @@ import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
+import {
+  REMOTE_CODEX_HOOK_ENABLE_ARG_ENV,
+  REMOTE_CODEX_HOOK_FEATURE_ARG_ENV
+} from '../shared/codex-remote-hook-launch'
 
 // Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
+
+export const RELAY_OWNED_AGENT_HOOK_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
@@ -32,6 +44,17 @@ export function endpointDirForRelaySocket(sockPath: string): string {
     return join(defaultEndpointDir(), windowsNamedPipeEndpointName(sockPath))
   }
   return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
+}
+
+export function buildRelayCodexHookLaunchArgEnv(env: {
+  ORCA_AGENT_HOOK_PORT?: string
+  ORCA_AGENT_HOOK_TOKEN?: string
+}): Record<string, string> {
+  const enabled = Boolean(env.ORCA_AGENT_HOOK_PORT && env.ORCA_AGENT_HOOK_TOKEN)
+  return {
+    [REMOTE_CODEX_HOOK_ENABLE_ARG_ENV]: enabled ? '--enable' : '-c',
+    [REMOTE_CODEX_HOOK_FEATURE_ARG_ENV]: enabled ? 'hooks' : 'features.hooks=false'
+  }
 }
 
 /** Env vars to inject into relay-spawned PTYs so the hook script/plugin POSTs back to the loopback server. */

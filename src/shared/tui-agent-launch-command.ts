@@ -11,6 +11,7 @@ import {
   type AgentStartupShell
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
+import { planRemoteCodexHookLaunchContext } from './codex-remote-hook-launch'
 
 export type ResolvedAgentLaunchCommand =
   | {
@@ -18,8 +19,16 @@ export type ResolvedAgentLaunchCommand =
       command: string
       commandWithoutSessionOptions: string
       appliedSessionOptions: Record<string, SessionOptionValue>
+      launchEnv?: Record<string, string>
     }
   | { ok: false; error: string }
+
+export function mergeTuiAgentLaunchEnv(
+  agentEnv: Record<string, string> | null | undefined,
+  launchEnv: Record<string, string> | undefined
+): { env?: Record<string, string> } {
+  return agentEnv || launchEnv ? { env: { ...agentEnv, ...launchEnv } } : {}
+}
 
 export function resolveAgentLaunchCommand(args: {
   agent: TuiAgent
@@ -47,6 +56,14 @@ export function resolveAgentLaunchCommand(args: {
   if (!trailingTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${trailingTokens.error}` }
   }
+  const launchContext = planRemoteCodexHookLaunchContext({
+    agent: args.agent,
+    command,
+    shell: args.shell,
+    isRemote: args.isRemote,
+    trailingTokens: trailingTokens.tokens
+  })
+  const launchContextCommand = launchContext.command
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,
@@ -77,8 +94,12 @@ export function resolveAgentLaunchCommand(args: {
     }
   }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
-  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
+  const commandWithoutSessionOptions = suffix.suffix
+    ? `${launchContextCommand} ${suffix.suffix}`
+    : launchContextCommand
+  const commandWithOptions = optionSuffix
+    ? `${launchContextCommand} ${optionSuffix}`
+    : launchContextCommand
   const overrideTokens = args.sessionOptionsOverrideAgentArgs
     ? insertBeforeTerminator(
         removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
@@ -86,8 +107,8 @@ export function resolveAgentLaunchCommand(args: {
       )
     : []
   const commandWithOverrides = overrideTokens.length
-    ? `${command} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
-    : command
+    ? `${launchContextCommand} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
+    : launchContextCommand
   return {
     ok: true,
     command: args.sessionOptionsOverrideAgentArgs
@@ -96,7 +117,8 @@ export function resolveAgentLaunchCommand(args: {
         ? `${commandWithOptions} ${suffix.suffix}`
         : commandWithOptions,
     commandWithoutSessionOptions,
-    appliedSessionOptions: resolvedOptions.appliedValues
+    appliedSessionOptions: resolvedOptions.appliedValues,
+    ...(launchContext.env ? { launchEnv: launchContext.env } : {})
   }
 }
 

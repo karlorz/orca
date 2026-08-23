@@ -9,6 +9,7 @@ import {
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { fishHistorySessionName, relayFishHistorySessionName } from '../main/fish-history-session'
 import { hashWorktreeId } from '../main/terminal-history-id'
+import { buildRelayHookPtyEnv } from './agent-hook-endpoint-coordinates'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -532,6 +533,77 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_PANE_KEY).toBe('augmenter-wins')
     // Renderer-supplied keys not in augmenter map flow through:
     expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
+  })
+
+  it('clears Codex hook argv slots after hook coordinates are explicitly deleted', async () => {
+    handler.addEnvAugmenter(() => ({
+      ORCA_AGENT_HOOK_PORT: '12345',
+      ORCA_AGENT_HOOK_TOKEN: 'token-1',
+      ORCA_CODEX_HOOK_ENABLE_ARG: '--enable',
+      ORCA_CODEX_HOOK_FEATURE_ARG: 'hooks'
+    }))
+
+    await dispatcher.callRequest('pty.spawn', {
+      envToDelete: ['ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN']
+    })
+
+    const env = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+    expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+    expect(env.ORCA_CODEX_HOOK_ENABLE_ARG).toBe('-c')
+    expect(env.ORCA_CODEX_HOOK_FEATURE_ARG).toBe('features.hooks=false')
+  })
+
+  it('drops stale hook coordinates when the relay hook server is unavailable', async () => {
+    const keys = [
+      'ORCA_AGENT_HOOK_PORT',
+      'ORCA_AGENT_HOOK_TOKEN',
+      'ORCA_AGENT_HOOK_ENV',
+      'ORCA_AGENT_HOOK_VERSION',
+      'ORCA_AGENT_HOOK_ENDPOINT'
+    ] as const
+    const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    Object.assign(process.env, {
+      ORCA_AGENT_HOOK_PORT: '43117',
+      ORCA_AGENT_HOOK_TOKEN: 'stale-token',
+      ORCA_AGENT_HOOK_ENV: 'stale',
+      ORCA_AGENT_HOOK_VERSION: '1',
+      ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale.env'
+    })
+    handler.addEnvAugmenter(() =>
+      buildRelayHookPtyEnv({
+        port: 0,
+        token: '',
+        env: 'remote',
+        endpointFilePath: '/tmp/current.env',
+        endpointFileWritten: false
+      })
+    )
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          ORCA_AGENT_HOOK_PORT: '54321',
+          ORCA_AGENT_HOOK_TOKEN: 'renderer-token'
+        }
+      })
+    } finally {
+      for (const key of keys) {
+        const value = saved[key]
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+    for (const key of keys) {
+      expect(env[key]).toBeUndefined()
+    }
+    expect(env.ORCA_CODEX_HOOK_ENABLE_ARG).toBe('-c')
+    expect(env.ORCA_CODEX_HOOK_FEATURE_ARG).toBe('features.hooks=false')
   })
 
   it('passes PTY and explicit launch identity to env augmenters', async () => {

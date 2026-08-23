@@ -20,6 +20,12 @@ import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
 import { clearEnvCommand, quoteStartupArg, withoutEnvCommand } from './tui-agent-startup-shell'
+import {
+  REMOTE_CODEX_HOOK_ENABLE_ARG_ENV,
+  REMOTE_CODEX_HOOK_FEATURE_ARG_ENV,
+  REMOTE_CODEX_HOOK_FEATURE_ARGS
+} from './codex-remote-hook-launch'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 
 const FISH = resolveFishBinary(4)
 
@@ -69,11 +75,15 @@ function sandboxEnv(): NodeJS.ProcessEnv {
 }
 
 /** Runs one line in a real shell with no user config reachable. */
-function runInShell(shell: LiveShell, script: string): string {
+function runInShell(
+  shell: LiveShell,
+  script: string,
+  extraEnv: Record<string, string> = {}
+): string {
   return execFileSync(shell.path, ['-c', script], {
     encoding: 'utf8',
     timeout: 20_000,
-    env: sandboxEnv()
+    env: { ...sandboxEnv(), ...extraEnv }
   })
 }
 
@@ -139,6 +149,41 @@ describe.skipIf(process.platform === 'win32')(
         // forged by a value that was mis-split into two arguments.
         const output = runInShell(shell, `printf '%s\\0' ${quoted}`)
         expect(output.split('\0').slice(0, -1)).toEqual(argv)
+      })
+
+      it.each([
+        ['enabled', '--enable', 'hooks', ['sentinel', '--enable', 'hooks']],
+        ['disabled', '-c', 'features.hooks=false', ['sentinel', '-c', 'features.hooks=false']]
+      ])(
+        'expands remote Codex hook argv as two portable slots when %s',
+        (_label, enable, feature, expected) => {
+          const output = runInShell(
+            shell,
+            `printf '%s\\037' sentinel ${REMOTE_CODEX_HOOK_FEATURE_ARGS}`,
+            {
+              [REMOTE_CODEX_HOOK_ENABLE_ARG_ENV]: enable,
+              [REMOTE_CODEX_HOOK_FEATURE_ARG_ENV]: feature
+            }
+          )
+          expect(output.split('\x1f').slice(0, -1)).toEqual(expected)
+        }
+      )
+
+      it('runs a persisted remote Codex launch under nounset without relay support', () => {
+        const plan = buildAgentStartupPlan({
+          agent: 'codex',
+          prompt: '',
+          cmdOverrides: {},
+          platform: 'linux',
+          shell: 'posix',
+          isRemote: true,
+          allowEmptyPromptLaunch: true
+        })
+        const persisted = plan?.launchConfig
+        const probe = persisted?.agentCommand?.replace('codex', "printf 'LAUNCHED'")
+        const nounset = shell.name === 'fish' ? '' : 'set -u; '
+
+        expect(runInShell(shell, `${nounset}${probe}`, persisted?.agentEnv)).toBe('LAUNCHED')
       })
 
       // Why `set -u` gets its own case: the copied resume command puts the clear

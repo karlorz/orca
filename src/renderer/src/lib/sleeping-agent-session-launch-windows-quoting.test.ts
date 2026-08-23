@@ -80,13 +80,13 @@ const record: SleepingAgentSessionRecord = {
   updatedAt: 1
 }
 
-async function launch(): Promise<string | undefined> {
+async function launch(): Promise<{ command: string; env?: Record<string, string> } | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
   launchSleepingAgentSession(record)
   const queued = mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as
-    | { command: string }
+    | { command: string; env?: Record<string, string> }
     | undefined
-  return queued?.command
+  return queued
 }
 
 describe('launchSleepingAgentSession Windows shell quoting', () => {
@@ -115,25 +115,25 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
   it('quotes the resume argv for a cmd.exe tab', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
 
-    await expect(launch()).resolves.toBe(
-      `codex "--dangerously-bypass-approvals-and-sandbox" "resume" "${SESSION_ID}"`
-    )
+    await expect(launch()).resolves.toMatchObject({
+      command: `codex "--dangerously-bypass-approvals-and-sandbox" "resume" "${SESSION_ID}"`
+    })
   })
 
   it('keeps PowerShell quoting for a powershell tab', async () => {
     store.settings.terminalWindowsShell = 'powershell.exe'
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toMatchObject({
+      command: `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
+    })
   })
 
   it('quotes the resume argv for a Git Bash tab', async () => {
     store.settings.terminalWindowsShell = 'git-bash'
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toMatchObject({
+      command: `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
+    })
   })
 
   it('ignores the local Windows shell setting for an SSH workspace', async () => {
@@ -150,8 +150,14 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       ]
     }
 
-    await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
-    )
+    await expect(launch()).resolves.toMatchObject({
+      command:
+        `codex $ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG ` +
+        `'--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`,
+      env: {
+        ORCA_CODEX_HOOK_ENABLE_ARG: '-c',
+        ORCA_CODEX_HOOK_FEATURE_ARG: 'features.hooks=false'
+      }
+    })
   })
 })

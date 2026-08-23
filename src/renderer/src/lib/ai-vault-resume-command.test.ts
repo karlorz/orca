@@ -10,6 +10,8 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
+const REMOTE_HOOK_ARGS = '$ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG'
+
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
 type AiVaultResumeCommandState = Pick<
@@ -551,11 +553,70 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toMatchObject({
-      command: "codex 'resume' 'session one'",
+      command: `codex ${REMOTE_HOOK_ARGS} 'resume' 'session one'`,
       cwd: '/home/alice/repo',
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      env: {
+        ORCA_CODEX_HOOK_ENABLE_ARG: '-c',
+        ORCA_CODEX_HOOK_FEATURE_ARG: 'features.hooks=false'
+      },
       providerSession: { key: 'session_id', id: 'session one' }
     })
+  })
+
+  it('rebuilds remote managed-home Codex commands through the launch planner', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: '/home/alice/.orca/codex-home',
+          executionHostId: 'ssh:dev-box',
+          resumeCommand:
+            "CODEX_HOME='/stale/captured-home' codex --profile captured resume 'session one'"
+        }
+      })
+    ).toMatchObject({
+      command:
+        "CODEX_HOME='/home/alice/.orca/codex-home' codex " +
+        `${REMOTE_HOOK_ARGS} 'resume' 'session one'`,
+      cwd: '/home/alice/repo',
+      env: {
+        ORCA_CODEX_HOOK_ENABLE_ARG: '-c',
+        ORCA_CODEX_HOOK_FEATURE_ARG: 'features.hooks=false'
+      },
+      providerSession: { key: 'session_id', id: 'session one' }
+    })
+  })
+
+  it('keeps captured Codex commands when the target is not SSH POSIX', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [
+      { id: 'repo-1', path: '/home/alice/repo', executionHostId: 'runtime:target' }
+    ] as never
+    const resumeCommand = "CODEX_HOME='/home/alice/.codex' codex --profile captured resume 's1'"
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 's1',
+          cwd: '/home/alice/repo',
+          codexHome: '/home/alice/.codex',
+          executionHostId: 'runtime:source',
+          executionHostPlatform: 'linux',
+          resumeCommand
+        }
+      })
+    ).toMatchObject({ command: resumeCommand })
   })
 
   it('rebuilds remote real-home Codex commands when the override is blank', () => {
@@ -576,7 +637,7 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("codex 'resume' 'session one'")
+    ).toBe(`codex ${REMOTE_HOOK_ARGS} 'resume' 'session one'`)
   })
 
   it('copies remote real-home Codex commands with explicit environment cleanup', () => {
@@ -598,12 +659,12 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
+      "cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'"
     )
     expect(command).not.toContain('/retired/shared-home')
   })
 
-  it('rebuilds the command when a non-blank override is supplied for a remote session', () => {
+  it('fails open when a non-blank remote override hides the Codex argv boundary', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
@@ -705,6 +766,6 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("codex 'resume' 'session one'")
+    ).toBe(`codex ${REMOTE_HOOK_ARGS} 'resume' 'session one'`)
   })
 })

@@ -25,6 +25,7 @@ const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
+const REMOTE_CODEX_HOOK_ARGS = '$ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG'
 const state = createAgentBackgroundSessionTestState({
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -198,7 +199,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
+          command: `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox' 'run the automation'`,
           startupCommandDelivery: 'shell-ready'
         })
       )
@@ -212,7 +213,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r`
       )
     } finally {
       vi.useRealTimers()
@@ -238,7 +239,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r`
       )
     } finally {
       vi.useRealTimers()
@@ -262,7 +263,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r`
       )
     } finally {
       vi.useRealTimers()
@@ -288,8 +289,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command:
-            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+          command: `codex --prefill 'draft from override' ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox'`
         })
       )
       expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
@@ -303,7 +303,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+        `codex --prefill 'draft from override' ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox'\r`
       )
     } finally {
       vi.useRealTimers()

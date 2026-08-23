@@ -218,10 +218,13 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          command:
+            "codex $ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
           commandDelivery: 'provider',
           startupCommandDelivery: 'shell-ready',
           env: expect.objectContaining({
+            ORCA_CODEX_HOOK_ENABLE_ARG: '-c',
+            ORCA_CODEX_HOOK_FEATURE_ARG: 'features.hooks=false',
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
             ORCA_WORKTREE_ID: 'wt-1',
@@ -231,7 +234,7 @@ describe('connectPanePty', () => {
         })
       )
       expect(transport.sendInput).not.toHaveBeenCalledWith(
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+        "codex $ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
       )
     } finally {
       globalThis.setTimeout = originalSetTimeout

@@ -388,6 +388,9 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledWith(
       expect.not.objectContaining({ sessionId: expect.any(String) })
     )
+    expect(transport.connect.mock.calls[0]?.[0]?.command).not.toContain(
+      'ORCA_CODEX_HOOK_ENABLE_ARG'
+    )
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, null)
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', restoredPtyId)
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, freshPtyId)

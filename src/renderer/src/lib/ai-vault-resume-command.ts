@@ -126,12 +126,26 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
+  const platform =
+    args.session.executionHostId &&
+    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+    args.session.executionHostPlatform
+      ? args.session.executionHostPlatform
+      : getAiVaultResumePlatform(args.state, args.worktreeId)
+  const needsRemoteCodexHookPlanning =
+    args.session.agent === 'codex' &&
+    platform !== 'win32' &&
+    !embedCwd &&
+    isAiVaultResumeSshTarget(args.state, args.worktreeId)
+  const needsCodexResumeRebuild =
+    (args.session.agent === 'codex' && args.session.codexHome === null) ||
+    needsRemoteCodexHookPlanning
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.resumeCommand &&
     args.session.agent !== 'omp' &&
-    !(args.session.agent === 'codex' && args.session.codexHome === null) &&
+    !needsCodexResumeRebuild &&
     !args.commandOverride?.trim()
   ) {
     return {
@@ -140,12 +154,6 @@ function buildAiVaultResumeForWorktree(
       ...(providerSession ? { providerSession } : {})
     }
   }
-  const platform =
-    args.session.executionHostId &&
-    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
-    args.session.executionHostPlatform
-      ? args.session.executionHostPlatform
-      : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
@@ -175,6 +183,7 @@ function buildAiVaultResumeForWorktree(
         args.state.settings?.agentDefaultArgs
       ),
       agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
+      isRemote: needsRemoteCodexHookPlanning,
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})
@@ -231,6 +240,13 @@ function buildAiVaultResumeForWorktree(
     ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(args.session)
   }
+}
+
+function isAiVaultResumeSshTarget(
+  state: AiVaultResumeWorktreeArgs['state'],
+  worktreeId?: string | null
+): boolean {
+  return parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))?.kind === 'ssh'
 }
 
 function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartupShell {

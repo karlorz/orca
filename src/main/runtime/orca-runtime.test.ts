@@ -31,6 +31,7 @@ import {
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
 const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
+const REMOTE_CODEX_HOOK_ARGS = '$ORCA_CODEX_HOOK_ENABLE_ARG $ORCA_CODEX_HOOK_FEATURE_ARG'
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
 import {
   addSparseWorktree,
@@ -6112,7 +6113,11 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/agent-feature',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+          command: `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox' 'hi'`,
+          env: expect.objectContaining({
+            ORCA_CODEX_HOOK_ENABLE_ARG: '-c',
+            ORCA_CODEX_HOOK_FEATURE_ARG: 'features.hooks=false'
+          }),
           worktreeId: result.worktree.id
         })
       )
@@ -46154,7 +46159,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          command: `codex ${REMOTE_CODEX_HOOK_ARGS} '--dangerously-bypass-approvals-and-sandbox'`,
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
         })
