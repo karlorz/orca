@@ -49,7 +49,8 @@ export function useTerminalContextMenuTrigger({
   const openContextMenu = (
     event: React.MouseEvent<HTMLElement>,
     clickedPaneId: number | null,
-    boundsElement: HTMLElement
+    boundsElement: HTMLElement,
+    fromTerminalContent: boolean = true
   ): void => {
     event.preventDefault()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -85,6 +86,19 @@ export function useTerminalContextMenuTrigger({
       return
     }
 
+    // Forward right-click to the terminal application when it owns mouse input
+    // (Herdr, tmux, Zellij, Neovim, btop, lazygit, etc.). Alt (Option on macOS)
+    // overrides to open Orca's menu. Pane title/bar right-clicks always open
+    // Orca's menu because those areas are owned by Orca, not the terminal app.
+    if (
+      fromTerminalContent &&
+      clickedPane &&
+      clickedPane.terminal.modes.mouseTrackingMode !== 'none' &&
+      !event.altKey
+    ) {
+      return
+    }
+
     menuOpenedAtRef.current = Date.now()
     const bounds = boundsElement.getBoundingClientRect()
     setPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -114,7 +128,7 @@ export function useTerminalContextMenuTrigger({
       event.preventDefault()
       return
     }
-    openContextMenu(event, paneId, boundsElement)
+    openContextMenu(event, paneId, boundsElement, false)
   }
 
   return { open, setOpen, point, menuOpenedAtRef, onContextMenuCapture, onPaneTitleContextMenu }
