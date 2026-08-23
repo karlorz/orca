@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { isMacPlatform } from './terminal-link-open-hints'
+import { resolveTerminalRightClickAction } from './terminal-right-click-ownership'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -49,7 +51,8 @@ export function useTerminalContextMenuTrigger({
   const openContextMenu = (
     event: React.MouseEvent<HTMLElement>,
     clickedPaneId: number | null,
-    boundsElement: HTMLElement
+    boundsElement: HTMLElement,
+    fromTerminalContent: boolean = true
   ): void => {
     event.preventDefault()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -64,9 +67,20 @@ export function useTerminalContextMenuTrigger({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: when users opt into terminal-style right-click, a selection copies
-    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
-    if (rightClickToPaste && !event.ctrlKey) {
+    const mouseTrackingMode = clickedPane?.terminal.modes.mouseTrackingMode
+    const rightClickAction = resolveTerminalRightClickAction({
+      fromTerminalContent,
+      mouseTrackingMode,
+      rightClickToPaste,
+      event,
+      isMac: isMacPlatform()
+    })
+
+    if (rightClickAction === 'terminal-app') {
+      return
+    }
+
+    if (rightClickAction === 'paste-or-copy') {
       event.stopPropagation()
       if (!clickedPane) {
         return
@@ -114,7 +128,7 @@ export function useTerminalContextMenuTrigger({
       event.preventDefault()
       return
     }
-    openContextMenu(event, paneId, boundsElement)
+    openContextMenu(event, paneId, boundsElement, false)
   }
 
   return { open, setOpen, point, menuOpenedAtRef, onContextMenuCapture, onPaneTitleContextMenu }
