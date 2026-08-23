@@ -85,7 +85,10 @@ import {
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
-import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
+import {
+  isRemoteDesktopViewportClaimEligible,
+  shouldClaimRemoteDesktopViewport
+} from './remote-desktop-viewport-claim'
 import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import {
@@ -4411,7 +4414,15 @@ export function connectPanePty(
     if (queuePanePtyResizeIfHeld(pane.container, cols, rows)) {
       return
     }
-    transport.resize(cols, rows, { claim: true })
+    const currentPtyId = transport.getPtyId()
+    const claim =
+      !isRemoteRuntimePtyId(currentPtyId) ||
+      isRemoteDesktopViewportClaimEligible({
+        paneVisible: deps.isVisibleRef.current,
+        documentVisible: document.visibilityState !== 'hidden',
+        documentFocused: document.hasFocus()
+      })
+    transport.resize(cols, rows, { claim })
   }
 
   const onHeldPtyResizeFlush = (event: Event): void => {
