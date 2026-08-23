@@ -18,6 +18,20 @@ const NATIVE_MODULES = [
     : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
+/**
+ * Exports added by config/patches/node-pty@1.1.0.patch.
+ *
+ * Measured on a shipped 1.4.186 Windows install: the app loaded node-pty from
+ * `prebuilds/` and its conpty native exported only
+ * startProcess/connect/resize/clear/kill. Every job call therefore returned
+ * "unavailable" at runtime, so pane teardown silently fell back to the
+ * PID-ancestry path the job object exists to replace, and the orphaned-tree
+ * fixes were inert on the one platform they target.
+ *
+ * The win32 guard that would have caught it (windows-pty-job.win32.test.ts)
+ * is real but never runs, because the PTY suites have no Windows CI lane.
+ */
+const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurrentProcessToJob']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -277,11 +291,38 @@ function loadNodePtyNativeModule() {
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
   const native = loadNativeModule(nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir)
+  assertNodePtyJobOwnership(nativeName, native)
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
     )
   }
+}
+
+/**
+ * Refuse a node-pty whose conpty native cannot own a PTY tree.
+ *
+ * Checked here rather than at package time because this script is the one
+ * place that already resolves the exact native the app will load.
+ */
+function assertNodePtyJobOwnership(nativeName, native) {
+  if (process.platform !== 'win32' || nativeName !== 'conpty') {
+    return
+  }
+  const exported = native?.module ?? native
+  const missing = NODE_PTY_JOB_EXPORTS.filter((name) => typeof exported?.[name] !== 'function')
+  if (missing.length === 0) {
+    return
+  }
+  throw new Error(
+    [
+      `node-pty's conpty native is missing ${missing.join(', ')}.`,
+      `Resolved from: ${native?.dir ?? 'unknown'}`,
+      'That build cannot own a PTY tree, so terminatePtyJob degrades to "unavailable"',
+      'and pane teardown falls back to guessing by PID ancestry.',
+      'Rebuild node-pty from source so config/patches/node-pty@1.1.0.patch applies.'
+    ].join(' ')
+  )
 }
 
 function assertNodePtyWindowsConptyRuntime(nativeDir) {
