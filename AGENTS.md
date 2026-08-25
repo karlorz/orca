@@ -1,5 +1,16 @@
 # Design System
 
+## Fork Release Rules
+
+This is `karlorz/orca`, a fork of `stablyai/orca`. Follow these rules for all fork releases:
+
+1. **Sync before release.** Always `git fetch upstream && git merge upstream/main` into `fork-main` before tagging. Never tag on a stale fork.
+2. **Fork version tag format:** `fork-voice-v{upstream-version}-{fork-suffix}` where upstream-version is the latest upstream stable (e.g. `1.4.186`) and fork-suffix starts at `0` and increments (`-0`, `-1`, `-2`, …) for each fork release on the same upstream version.
+3. **Never rewrite a published tag.** If a CI build fails or you need changes, use a new tag with an incremented suffix.
+4. **Push only to fork remote.** Never push tags, commits, or branches to `stablyai/orca` (upstream). Only push to `fork` (remote URL `https://github.com/karlorz/orca.git`).
+5. **CI publishes as prerelease, not draft.** The workflow creates `--draft --prerelease`, verifies assets, then `gh release edit --draft=false --prerelease --latest=false`. The operator switches to Latest in the GitHub UI manually (uncheck Pre-release first, then pick Latest).
+6. **No GitHub issues/PRs upstream.** Issues and PRs only against `github.com/karlorz/*` repos.
+
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 
 ## Electron UI Validation
