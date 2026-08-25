@@ -62,7 +62,7 @@ export async function packageDraftRelease({
   const filesMap = {}
   const copiedArtifacts = []
 
-  const artifactNames = ['orca-macos-arm64.dmg', 'orca-macos-arm64.zip', 'orca-mobile.apk']
+  const artifactNames = ['orca-mobile.apk']
 
   for (const name of artifactNames) {
     const src = join(artifactsDir, name)

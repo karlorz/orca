@@ -1,9 +1,9 @@
-name: Fork Mobile Voice Release
+name: Fork Mobile Android Release
 
 on:
   push:
     tags:
-      - 'mobile-android-v*-karlorz.*'
+      - 'mobile-android-v*.*.*-*'
 
 permissions:
   contents: read
@@ -30,8 +30,8 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
-          if [[ ! "$REF_NAME" =~ ^refs/tags/mobile-android-v[0-9.]+-karlorz\.[0-9]+$ ]]; then
-            echo "Only tags matching mobile-android-v<version>-karlorz.<suffix> are allowed: $REF_NAME" >&2
+          if [[ ! "$REF_NAME" =~ ^refs/tags/mobile-android-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "Only tags matching mobile-android-v<x.y.z>-<N> are allowed: $REF_NAME" >&2
             exit 1
           fi
           git fetch "${SERVER_URL}/karlorz/orca.git" fork-main:refs/remotes/fork/fork-main
@@ -74,8 +74,7 @@ jobs:
       - name: Run focused workflow, config, and APK inspection tests
         run: |
           pnpm exec vitest run config/scripts/fork-mobile-voice-release.test.mjs \
-            config/scripts/inspect-android-apk.test.mjs \
-            config/scripts/electron-builder-mac-channel-config.test.mjs
+            config/scripts/inspect-android-apk.test.mjs
 
       - name: Mobile typecheck
         working-directory: mobile
@@ -92,153 +91,6 @@ jobs:
       - name: Mobile format check
         working-directory: mobile
         run: pnpm format:check
-
-  build-mac-arm64:
-    needs: [verify]
-    if: github.repository == 'karlorz/orca'
-    runs-on: macos-15
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Ensure native runtime ready
-        run: node config/scripts/ensure-native-runtime.mjs --runtime=node
-
-      - name: Compute fork voice build version
-        id: version
-        env:
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
-          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: node config/scripts/fork-voice-build-version.mjs
-
-      - name: Build release bundles
-        env:
-          ORCA_SKIP_DEV_CLI_INSTALL: '1'
-        run: pnpm build:release
-
-      - name: Package macOS arm64 artifacts
-        env:
-          ORCA_FORK_VOICE_BUILD: '1'
-          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
-          ORCA_BUILD_COMMIT: ${{ github.sha }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --mac --arm64 --publish never --config config/electron-builder.config.cjs
-
-      - name: Inspect packaged ZIP in runner temp
-        env:
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          INSPECT_DIR="$(mktemp -d)"
-          ZIP_PATH="dist/orca-macos-arm64.zip"
-          echo "Extracting ZIP $ZIP_PATH for inspection into $INSPECT_DIR..."
-          unzip -q "$ZIP_PATH" -d "$INSPECT_DIR"
-          APP_PATH="$INSPECT_DIR/Orca.app"
-
-          # 1. Mach-O arm64 main executable
-          EXEC_FILE="$APP_PATH/Contents/MacOS/Orca"
-          FILE_INFO="$(file "$EXEC_FILE")"
-          echo "Main executable file info: $FILE_INFO"
-          if [[ "$FILE_INFO" != *"arm64"* ]]; then
-            echo "Expected arm64 binary in Orca executable, got $FILE_INFO" >&2
-            exit 1
-          fi
-
-          # 2. Info.plist bundle version
-          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")"
-          echo "Bundle version: $PLIST_VERSION"
-          if [[ "$PLIST_VERSION" != "$EXPECTED_VERSION" ]]; then
-            echo "Expected bundle version $EXPECTED_VERSION, got $PLIST_VERSION" >&2
-            exit 1
-          fi
-
-          # 3. Ad-hoc code signature and no notarization claim
-          echo "Verifying strict ad-hoc code signature..."
-          codesign --verify --deep --strict "$APP_PATH"
-          CODESIGN_INFO="$(codesign -dvvv "$APP_PATH" 2>&1)"
-          echo "Codesign info:"
-          echo "$CODESIGN_INFO"
-          if [[ "$CODESIGN_INFO" == *"TeamIdentifier="* && "$CODESIGN_INFO" != *"TeamIdentifier=not set"* ]]; then
-            echo "Unexpected TeamIdentifier found in development build: $CODESIGN_INFO" >&2
-            exit 1
-          fi
-          if [[ "$CODESIGN_INFO" != *"Signature=adhoc"* && "$CODESIGN_INFO" != *"flags=0x2(adhoc)"* ]]; then
-            echo "Missing positive ad-hoc signature marker in codesign info: $CODESIGN_INFO" >&2
-            exit 1
-          fi
-          if spctl -a -vv "$APP_PATH" 2>&1 | grep -i "notarized"; then
-            echo "Unexpected notarization acceptance on ad-hoc build" >&2
-            exit 1
-          fi
-
-          # 4. Updater metadata points to karlorz/orca
-          UPDATE_YML="$APP_PATH/Contents/Resources/app-update.yml"
-          if [[ ! -f "$UPDATE_YML" ]]; then
-            echo "Missing required app-update.yml in packaged app" >&2
-            exit 1
-          fi
-          echo "app-update.yml contents:"
-          cat "$UPDATE_YML"
-          if ! grep -q "owner: karlorz" "$UPDATE_YML" || ! grep -q "repo: orca" "$UPDATE_YML"; then
-            echo "app-update.yml missing karlorz/orca target" >&2
-            exit 1
-          fi
-
-          # 5. Packaged app.asar robust listing & extraction check
-          ASAR_PATH="$APP_PATH/Contents/Resources/app.asar"
-          ASAR_EXTRACT_DIR="$(mktemp -d)"
-          pnpm exec asar extract "$ASAR_PATH" "$ASAR_EXTRACT_DIR"
-          if ! grep -r -q "pet.speak.subscribe" "$ASAR_EXTRACT_DIR"; then
-            echo "pet.speak.subscribe missing from packaged app.asar" >&2
-            exit 1
-          fi
-          if ! grep -r -q "pet.speak.complete" "$ASAR_EXTRACT_DIR"; then
-            echo "pet.speak.complete missing from packaged app.asar" >&2
-            exit 1
-          fi
-          echo "All macOS artifact inspections passed."
-
-      - name: Collect macOS metadata fragment
-        id: mac_meta
-        run: |
-          set -euo pipefail
-          mkdir -p mac-artifacts
-          cp dist/orca-macos-arm64.dmg mac-artifacts/orca-macos-arm64.dmg
-          cp dist/orca-macos-arm64.zip mac-artifacts/orca-macos-arm64.zip
-          cat <<EOF > mac-artifacts/mac-metadata.json
-          {
-            "nodeVersion": "$(node -v)",
-            "electronBuilderVersion": "$(pnpm exec electron-builder --version)",
-            "arch": "arm64",
-            "runner": "macos-15"
-          }
-          EOF
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: mac-artifacts
-          path: mac-artifacts/*
-          if-no-files-found: error
 
   build-android:
     needs: [verify]
@@ -329,7 +181,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    needs: [verify, build-mac-arm64, build-android]
+    needs: [verify, build-android]
     if: github.repository == 'karlorz/orca'
     runs-on: ubuntu-latest
     permissions:
@@ -360,7 +212,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p raw-artifacts
-          cp staged-artifacts/mac-artifacts/* raw-artifacts/
           cp staged-artifacts/android-artifacts/* raw-artifacts/
 
           node -e '
@@ -407,13 +258,12 @@ jobs:
 
           echo "Creating draft release for tag $TAG_NAME..."
           cat << 'EOF' > release-notes.md
-          ### Orca Mobile Voice Development Release
+          ### Orca Mobile Android Development Release
 
-          - Fork development build
-          - macOS arm64
+          - Fork development APK (mobile train only)
+          - Marketing version matches upstream (0.0.44-N tags)
           - Android development-signed APK
-          - Signing: ad-hoc/development; not notarized
-          - Not Apple-notarized
+          - Signing: debug-keystore
           - Not auto-installed and no installation was performed
           EOF
 
@@ -441,8 +291,6 @@ jobs:
           EXPECTED_ASSETS="BUILD-METADATA.json
           SHA256SUMS.txt
           TEST-SUMMARY.md
-          orca-macos-arm64.dmg
-          orca-macos-arm64.zip
           orca-mobile.apk"
 
           ACTUAL_ASSETS="$(cd "$VERIFY_DIR" && find . -maxdepth 1 -type f -exec basename {} \; | sort)"

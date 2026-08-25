@@ -26,6 +26,7 @@ import {
   fetchMobileHomeStats,
   fetchMobileHomeTaskProviders
 } from './mobile-home-host-requests'
+import { sortByLastConnected } from './sort-by-last-connected'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export function useMobileHomeData() {
@@ -127,14 +128,8 @@ export function useMobileHomeData() {
     }, [router])
   )
 
-  const sortedHosts = useMemo(
-    () => hosts.toSorted((left, right) => right.lastConnected - left.lastConnected),
-    [hosts]
-  )
-  const sortedHostCatalog = useMemo(
-    () => hostCatalog.toSorted((left, right) => right.lastConnected - left.lastConnected),
-    [hostCatalog]
-  )
+  const sortedHosts = useMemo(() => sortByLastConnected(hosts), [hosts])
+  const sortedHostCatalog = useMemo(() => sortByLastConnected(hostCatalog), [hostCatalog])
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const resumeCard = useMemo(

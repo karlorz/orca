@@ -4,13 +4,15 @@
 
 This is `karlorz/orca`, a fork of `stablyai/orca`. Follow these rules for all fork releases:
 
-1. **Sync before release.** Always `git fetch upstream && git merge upstream/main` into `fork-main` before tagging. Never tag on a stale fork.
-2. **Fork tag format:** `mobile-android-v{mobile-version}-karlorz.{suffix}` where mobile-version is the `expo.version` from `mobile/app.json` (e.g. `0.0.45`) and suffix starts at `0` and increments (`karlorz.0`, `karlorz.1`, …). This mirrors upstream's `mobile-android-v{version}` tag pattern (e.g. `mobile-android-v0.0.44`). Desktop version (`1.4.x`) is not used for mobile tags.
-3. **Never rewrite a published tag.** If a CI build fails or you need changes, use a new tag with an incremented suffix.
-4. **Push only to fork remote.** Never push tags, commits, or branches to `stablyai/orca` (upstream). Only push to `fork` (remote URL `https://github.com/karlorz/orca.git`).
-5. **CI publishes as prerelease, not draft.** The workflow creates `--draft --prerelease`, verifies assets, then `gh release edit --draft=false --prerelease --latest=false`. The operator switches to Latest in the GitHub UI manually (uncheck Pre-release first, then pick Latest).
-6. **Upstream mobile workflow is fenced.** `mobile-android-release.yml` has `if: !contains(github.ref_name, 'karlorz')` so fork tags do not trigger the upstream build.
-7. **No GitHub issues/PRs upstream.** Issues and PRs only against `github.com/karlorz/*` repos.
+1. **Two trains, like upstream.** Desktop is `release-cut` / `v1.4.x`. Mobile Android is `mobile-android-v*`. Never put macOS DMG/ZIP on a mobile tag.
+2. **Keep upstream mobile marketing version.** `mobile/app.json` `expo.version` stays `0.0.44` while upstream's latest mobile tag is `mobile-android-v0.0.44`. Do not bump to 0.0.45. Increment `versionCode` only.
+3. **Fork mobile tags:** `mobile-android-v0.0.44-0`, `mobile-android-v0.0.44-1`, … (`*.*.*-N`). Never `fork-voice-v*`, never `-karlorz.N`.
+4. **Never rewrite a published tag.** If CI fails or you need changes, use a new suffix (`-1`, `-2`, …).
+5. **Push only to fork remote.** Never push tags, commits, or branches to `stablyai/orca` (upstream). Only push to `fork` (`https://github.com/karlorz/orca.git`).
+6. **CI publishes as prerelease, not draft.** `--draft --prerelease`, verify assets, then `gh release edit --draft=false --prerelease --latest=false`. Operator switches Latest in the GitHub UI (uncheck Pre-release first).
+7. **Fence the copied upstream mobile workflow** with `if: github.repository == 'stablyai/orca'` so `mobile-android-v0.0.44-0` does not run it on this fork.
+8. **No GitHub issues/PRs upstream.** Issues and PRs only against `github.com/karlorz/*` repos.
+9. **Sync `upstream/main` only after a launchable APK exists** for the current mobile line. Do not tag a merge that has not opened on the phone.
 
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 
@@ -19,9 +21,11 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
 # Style
+
 ## Concise/Brief Non-obviosu comments ONLY
-  * DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
-  * BE CONCISE. 1 LINE if possible
+
+- DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
+- BE CONCISE. 1 LINE if possible
 
 ## Lint Rules: Do Not Disable Max Lines
 
@@ -34,6 +38,7 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 
 # Considerations
+
 ## Worktree Safety
 
 Always use the primary working directory (the worktree) for all file reads and edits. Never follow absolute paths from subagent results that point to the main repo.

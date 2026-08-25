@@ -145,10 +145,10 @@ describe('fork voice electron-builder config gate', () => {
 })
 
 describe('mobile version increment contract', () => {
-  it('mobile/app.json has version 0.0.45 and versionCode 14 with package com.stably.orca.mobile', () => {
+  it('mobile/app.json stays on upstream marketing 0.0.44 with a higher versionCode', () => {
     const appJson = JSON.parse(readFileSync(join(projectDir, 'mobile/app.json'), 'utf8'))
-    expect(appJson.expo.version).toBe('0.0.45')
-    expect(appJson.expo.android.versionCode).toBe(14)
+    expect(appJson.expo.version).toBe('0.0.44')
+    expect(appJson.expo.android.versionCode).toBe(15)
     expect(appJson.expo.android.package).toBe('com.stably.orca.mobile')
   })
 })
@@ -197,8 +197,6 @@ describe('release metadata and checksum helpers', () => {
 
     const fs = await import('node:fs')
     fs.mkdirSync(artifactsDir, { recursive: true })
-    fs.writeFileSync(join(artifactsDir, 'orca-macos-arm64.dmg'), 'dmg')
-    fs.writeFileSync(join(artifactsDir, 'orca-macos-arm64.zip'), 'zip')
     fs.writeFileSync(join(artifactsDir, 'orca-mobile.apk'), 'apk')
 
     try {
@@ -246,11 +244,11 @@ describe('release metadata and checksum helpers', () => {
 })
 
 describe('fork mobile voice release workflow safety contract', () => {
-  it('triggers only on push of tags matching fork-voice-v*', () => {
+  it('triggers only on push of mobile-android-vX.Y.Z-N tags', () => {
     const wf = readWorkflow()
     const triggers = wf.on ?? wf[true]
     expect(triggers.push).toBeDefined()
-    expect(triggers.push.tags).toEqual(['mobile-android-v*-karlorz.*'])
+    expect(triggers.push.tags).toEqual(['mobile-android-v*.*.*-*'])
     expect(triggers.pull_request).toBeUndefined()
   })
 
@@ -267,9 +265,10 @@ describe('fork mobile voice release workflow safety contract', () => {
 
     const jobs = wf.jobs
     expect(jobs.verify.permissions).toBeUndefined()
-    expect(jobs['build-mac-arm64'].permissions).toBeUndefined()
+    expect(jobs['build-mac-arm64']).toBeUndefined()
     expect(jobs['build-android'].permissions).toBeUndefined()
     expect(jobs['publish-release'].permissions).toEqual({ contents: 'write' })
+    expect(jobs['publish-release'].needs).toEqual(['verify', 'build-android'])
   })
 
   it('configures checkout with persist-credentials: false and performs reachability check against fork-main with non-empty tag regex', () => {
@@ -283,7 +282,7 @@ describe('fork mobile voice release workflow safety contract', () => {
       }
     }
     const verifyStep = wf.jobs.verify.steps.find((s) => s.name?.includes('reachability'))
-    expect(verifyStep.run).toContain('mobile-android-v[0-9.]+-karlorz')
+    expect(verifyStep.run).toContain('mobile-android-v[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+')
   })
 
   it('runs root reliability and code quality gates in verify job', () => {
@@ -297,21 +296,13 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(qualityStep.run).toContain('pnpm run check:runtime-electron-ratchet')
   })
 
-  it('pins macOS runner to macos-15 and targets arm64 only with deterministic zip path', () => {
+  it('does not build or publish macOS desktop artifacts on the mobile tag', () => {
     const wf = readWorkflow()
-    const macJob = wf.jobs['build-mac-arm64']
-    expect(macJob['runs-on']).toBe('macos-15')
-    const packStep = macJob.steps.find(
-      (s) => s.name?.includes('Package') || s.run?.includes('electron-builder')
-    )
-    expect(packStep.run).toContain('--arm64')
-    expect(packStep.run).toContain('--publish never')
-    expect(packStep.run).not.toContain('--x64')
-    expect(packStep.run).not.toContain('--universal')
-    expect(packStep.run).not.toContain('--publish always')
-
-    const inspectStep = macJob.steps.find((s) => s.name?.includes('Inspect packaged ZIP'))
-    expect(inspectStep.run).toContain('dist/orca-macos-arm64.zip')
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(wf.jobs['build-mac-arm64']).toBeUndefined()
+    expect(Object.keys(wf.jobs)).toEqual(['verify', 'build-android', 'publish-release'])
+    expect(rawYaml).not.toContain('orca-macos-arm64.dmg')
+    expect(rawYaml).not.toContain('mac-artifacts')
   })
 
   it('pins Android job to Ubuntu and JDK 17 with strict SDK inspection', () => {
@@ -370,25 +361,10 @@ describe('fork mobile voice release workflow safety contract', () => {
     }
   })
 
-  it('proves pnpm build:release step explicitly sets ORCA_SKIP_DEV_CLI_INSTALL=1 to prevent host install side effects', () => {
-    const wf = readWorkflow()
-    const macJob = wf.jobs['build-mac-arm64']
-    const buildStep = macJob.steps.find((s) => s.name === 'Build release bundles')
-    expect(buildStep).toBeDefined()
-    expect(buildStep.run).toBe('pnpm build:release')
-    expect(buildStep.env?.ORCA_SKIP_DEV_CLI_INSTALL).toBe('1')
-  })
-
-  it('proves macOS artifact inspection performs strict positive ad-hoc signature verification', () => {
-    const wf = readWorkflow()
-    const macJob = wf.jobs['build-mac-arm64']
-    const inspectStep = macJob.steps.find((s) => s.name?.includes('Inspect packaged ZIP'))
-    expect(inspectStep).toBeDefined()
-    expect(inspectStep.run).toContain('codesign --verify --deep --strict "$APP_PATH"')
-    expect(inspectStep.run).toContain('CODESIGN_INFO="$(codesign -dvvv "$APP_PATH" 2>&1)"')
-    expect(inspectStep.run).not.toContain('codesign -dvvv "$APP_PATH" 2>&1 || true')
-    expect(inspectStep.run).toContain('Signature=adhoc')
-    expect(inspectStep.run).toContain('TeamIdentifier=not set')
-    expect(inspectStep.run).toContain('spctl -a -vv "$APP_PATH" 2>&1 | grep -i "notarized"')
+  it('fences the upstream mobile-android-release workflow to stablyai/orca only', () => {
+    const upstream = parse(
+      readFileSync(join(projectDir, '.github/workflows/mobile-android-release.yml'), 'utf8')
+    )
+    expect(upstream.jobs['android-build'].if).toBe("github.repository == 'stablyai/orca'")
   })
 })

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.45",
+    "version": "0.0.44",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -79,7 +79,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.stably.orca.mobile",
-      "versionCode": 14
+      "versionCode": 15
     },
     "plugins": [
       "expo-router",
