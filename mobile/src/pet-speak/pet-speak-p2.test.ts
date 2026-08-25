@@ -6,6 +6,7 @@ import {
   PetSpeakHandler,
   isValidPetSpeakPayload
 } from './pet-speak'
+import { parsePetSpeakRate } from './pet-speak-payload-validation'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -388,6 +389,21 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     expect(
       isValidPetSpeakPayload({ type: 'pet.speak', text: '你好', lang: 'zh-TW', event_id: 'ev-5' })
     ).toBe(false)
+
+    // Optional rate must not reject an otherwise valid Cantonese payload
+    expect(
+      isValidPetSpeakPayload({
+        type: 'pet.speak',
+        text: '你好',
+        lang: 'yue',
+        event_id: 'ev-rate',
+        rate: 1.2
+      })
+    ).toBe(true)
+    expect(parsePetSpeakRate(undefined)).toBe(1.2)
+    expect(parsePetSpeakRate(2)).toBe(2)
+    expect(parsePetSpeakRate(99)).toBe(2.5)
+    expect(parsePetSpeakRate(0.1)).toBe(0.5)
 
     // Send malformed event through handler
     await handler.handleEvent({

@@ -3,6 +3,7 @@ export type PetSpeakPayload = {
   text: string
   lang?: string
   event_id?: string
+  rate?: number
 }
 
 export type PetSpeakSubscribeResult = {

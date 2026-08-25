@@ -7,11 +7,24 @@ export type AudioSessionState = 'live' | 'dead'
 
 export type PetSpeakOutcome = 'spoken' | 'voice-unavailable' | 'playback-error' | 'cancelled'
 
+export const PET_SPEAK_DEFAULT_RATE = 1.2
+export const PET_SPEAK_MIN_RATE = 0.5
+export const PET_SPEAK_MAX_RATE = 2.5
+
+export function parsePetSpeakRate(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN
+  if (!Number.isFinite(n)) {
+    return PET_SPEAK_DEFAULT_RATE
+  }
+  return Math.min(PET_SPEAK_MAX_RATE, Math.max(PET_SPEAK_MIN_RATE, Math.round(n * 100) / 100))
+}
+
 export type PetSpeakEvent = {
   type: 'pet.speak'
   text: string
   lang?: string
   event_id?: string
+  rate: number
 }
 
 export type PetVoiceRelayOptions = {
@@ -260,7 +273,8 @@ export class PetVoiceRelay {
         typeof message.lang === 'string' && message.lang.trim().length > 0
           ? message.lang.trim()
           : undefined,
-      event_id: eventId
+      event_id: eventId,
+      rate: parsePetSpeakRate(message.rate)
     }
 
     for (const listener of this.listeners) {

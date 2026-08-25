@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
-import { isValidPetSpeakPayload } from './pet-speak-payload-validation'
+import { isValidPetSpeakPayload, parsePetSpeakRate } from './pet-speak-payload-validation'
 import type { PetSpeakTerminalOutcome } from './pet-speak-adapters'
 import { getExpoPetSpeechModule, type PetSpeechNativeModule } from '@orca/expo-pet-speech'
 
@@ -31,7 +31,8 @@ export class AndroidPetSpeechAdapter implements PetSpeechNativeAdapter {
       const result = await this.nativeModule.speakAsync({
         eventId: payload.event_id!,
         text: payload.text,
-        lang: payload.lang
+        lang: payload.lang,
+        rate: parsePetSpeakRate(payload.rate)
       })
       return result.outcome
     } catch {

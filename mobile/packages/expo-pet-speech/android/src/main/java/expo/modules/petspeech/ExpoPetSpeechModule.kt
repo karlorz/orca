@@ -135,6 +135,11 @@ class ExpoPetSpeechModule : Module() {
                         return@createTtsEngine
                     }
 
+                    val rate = PetSpeechRate.parse(options["rate"])
+                    if (tts.setSpeechRate(rate) == TextToSpeech.ERROR) {
+                        tts.setSpeechRate(PetSpeechRate.DEFAULT)
+                    }
+
                     val utteranceId = "utterance_${owner.id}_$validEventId"
 
                     tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {

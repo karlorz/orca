@@ -56,7 +56,29 @@ describe('AndroidPetSpeechAdapter', () => {
     expect(mockNativeModule.speakAsync).toHaveBeenCalledWith({
       eventId: 'ev-valid-1',
       text: '你好呀',
-      lang: 'yue'
+      lang: 'yue',
+      rate: 1.2
+    })
+    expect(outcome).toBe('spoken')
+  })
+
+  it('passes clamped custom rate to native speakAsync', async () => {
+    mockNativeModule.speakAsync.mockResolvedValueOnce({ outcome: 'spoken' })
+    const adapter = new AndroidPetSpeechAdapter(
+      mockNativeModule as unknown as PetSpeechNativeModule
+    )
+    const outcome = await adapter.speak({
+      type: 'pet.speak',
+      text: '快啲',
+      lang: 'yue',
+      event_id: 'ev-rate',
+      rate: 2
+    })
+    expect(mockNativeModule.speakAsync).toHaveBeenCalledWith({
+      eventId: 'ev-rate',
+      text: '快啲',
+      lang: 'yue',
+      rate: 2
     })
     expect(outcome).toBe('spoken')
   })

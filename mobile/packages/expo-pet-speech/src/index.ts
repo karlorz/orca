@@ -4,6 +4,7 @@ export interface PetSpeechUtteranceOptions {
   eventId: string
   text: string
   lang?: string
+  rate?: number
 }
 
 export interface PetSpeechResult {

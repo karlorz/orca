@@ -4,7 +4,12 @@ import { createServer, type Socket } from 'node:net'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PetVoiceRelay, type PetSpeakEvent, type PetVoiceRelayOptions } from './pet-voice-relay'
+import {
+  PetVoiceRelay,
+  parsePetSpeakRate,
+  type PetSpeakEvent,
+  type PetVoiceRelayOptions
+} from './pet-voice-relay'
 import { ALL_RPC_METHODS } from './rpc/methods'
 import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from './rpc/core'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -141,10 +146,48 @@ describe('PetVoiceRelay', () => {
         type: 'pet.speak',
         text: 'Task complete! All tests pass.',
         lang: 'yue-HK',
-        event_id: 'ev-grok-1234'
+        event_id: 'ev-grok-1234',
+        rate: 1.2
       }
     ])
 
+    relay.destroy()
+  })
+
+  it('forwards clamped speak rate and defaults missing rate to 1.2', async () => {
+    expect(parsePetSpeakRate(undefined)).toBe(1.2)
+    expect(parsePetSpeakRate('nope')).toBe(1.2)
+    expect(parsePetSpeakRate(0.1)).toBe(0.5)
+    expect(parsePetSpeakRate(9)).toBe(2.5)
+    expect(parsePetSpeakRate(2)).toBe(2)
+
+    const { captured, connectFn } = captureSubscriberConnectFn()
+    const relay = new PetVoiceRelay({
+      connectFn,
+      petSocketPath: '/tmp/test-pet.sock'
+    })
+    await new Promise((r) => process.nextTick(r))
+    const emittedEvents: PetSpeakEvent[] = []
+    relay.onSpeak((event) => {
+      emittedEvents.push(event)
+    })
+    await relay.onVoiceSubscriptionPresenceChange(1)
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '快啲讀',
+      lang: 'yue',
+      event_id: 'ev-rate-2',
+      rate: 2
+    })
+    expect(emittedEvents[0]?.rate).toBe(2)
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '慢啲讀',
+      lang: 'yue',
+      event_id: 'ev-rate-hi',
+      rate: 99
+    })
+    expect(emittedEvents[1]?.rate).toBe(2.5)
     relay.destroy()
   })
 
@@ -288,7 +331,7 @@ describe('PetVoiceRelay', () => {
     const cleanups: (() => void)[] = []
     const mockRuntime = {
       onPetSpeakDispatched: vi.fn((listener: (event: PetSpeakEvent) => void) => {
-        listener({ type: 'pet.speak', text: 'Hello', lang: 'yue-HK', event_id: 'ev-1' })
+        listener({ type: 'pet.speak', text: 'Hello', lang: 'yue-HK', event_id: 'ev-1', rate: 1.2 })
         return () => {}
       }),
       registerSubscriptionCleanup: (_id: string, cleanup: () => void) => {
@@ -307,7 +350,8 @@ describe('PetVoiceRelay', () => {
       type: 'pet.speak',
       text: 'Hello',
       lang: 'yue-HK',
-      event_id: 'ev-1'
+      event_id: 'ev-1',
+      rate: 1.2
     })
 
     cleanups.forEach((c) => c())
