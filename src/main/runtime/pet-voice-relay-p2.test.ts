@@ -33,25 +33,43 @@ function createMockPetSocket(onWrite?: (data: string) => void): MockPetSocket {
   return sock
 }
 
+type CapturedPetSocket = { socket: MockPetSocket | null }
+
+function captureSubscriberConnectFn(): {
+  captured: CapturedPetSocket
+  connectFn: PetVoiceRelayOptions['connectFn']
+} {
+  const captured: CapturedPetSocket = { socket: null }
+  const connectFn: PetVoiceRelayOptions['connectFn'] = vi.fn(
+    (_path: string, onConnect?: () => void) => {
+      const sock = createMockPetSocket((data) => {
+        if (data.includes('subscribe')) {
+          captured.socket = sock
+        }
+      })
+      if (onConnect) {
+        process.nextTick(onConnect)
+      }
+      return sock as unknown as Socket
+    }
+  )
+  return { captured, connectFn }
+}
+
+function emitCapturedSpeakIntent(captured: CapturedPetSocket, payload: unknown): void {
+  const socket = captured.socket
+  if (!socket) {
+    throw new Error('subscriber socket was not captured')
+  }
+  socket.emit('data', Buffer.from(`${JSON.stringify(payload)}\n`))
+}
+
 describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => {
   it('assigns stable bounded correlation event_id if missing in speak-intent', async () => {
-    let subscriberSocket: MockPetSocket | null = null
-    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
-      (_path: string, onConnect?: () => void) => {
-        const sock = createMockPetSocket((data) => {
-          if (data.includes('subscribe')) {
-            subscriberSocket = sock
-          }
-        })
-        if (onConnect) {
-          process.nextTick(onConnect)
-        }
-        return sock as unknown as Socket
-      }
-    )
+    const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
-      connectFn: mockConnect,
+      connectFn,
       petSocketPath: '/tmp/test-pet.sock'
     })
     await new Promise((r) => process.nextTick(r))
@@ -61,10 +79,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     await relay.onVoiceSubscriptionPresenceChange(1)
 
     // Intent without event_id
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(`${JSON.stringify({ kind: 'speak-intent', text: 'Hello', lang: 'yue' })}\n`)
-    )
+    emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: 'Hello', lang: 'yue' })
 
     expect(emitted.length).toBe(1)
     expect(emitted[0].text).toBe('Hello')
@@ -78,23 +93,10 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
   })
 
   it('rejects payload if text is empty, >70 unicode chars, or lang is not Cantonese', async () => {
-    let subscriberSocket: MockPetSocket | null = null
-    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
-      (_path: string, onConnect?: () => void) => {
-        const sock = createMockPetSocket((data) => {
-          if (data.includes('subscribe')) {
-            subscriberSocket = sock
-          }
-        })
-        if (onConnect) {
-          process.nextTick(onConnect)
-        }
-        return sock as unknown as Socket
-      }
-    )
+    const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
-      connectFn: mockConnect,
+      connectFn,
       petSocketPath: '/tmp/test-pet.sock'
     })
     await new Promise((r) => process.nextTick(r))
@@ -104,50 +106,43 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     await relay.onVoiceSubscriptionPresenceChange(1)
 
     // 1. Empty text
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(`${JSON.stringify({ kind: 'speak-intent', text: '   ', lang: 'yue' })}\n`)
-    )
+    emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: '   ', lang: 'yue' })
     // 2. >70 unicode characters
     const longText = '這是一段超過七十個字符的文字。'.repeat(6) // 15*6 = 90 chars
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(`${JSON.stringify({ kind: 'speak-intent', text: longText, lang: 'yue' })}\n`)
-    )
+    emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: longText, lang: 'yue' })
     // 3. Unsupported language (e.g., en-US, fr, es, de)
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(
-        `${JSON.stringify({ kind: 'speak-intent', text: 'Hello world', lang: 'en-US' })}\n`
-      )
-    )
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: 'Hello world',
+      lang: 'en-US'
+    })
     // 4. Overlong event_id (>128 chars)
     const longEventId = 'a'.repeat(129)
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(
-        `${JSON.stringify({ kind: 'speak-intent', text: 'Valid text', lang: 'yue', event_id: longEventId })}\n`
-      )
-    )
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: 'Valid text',
+      lang: 'yue',
+      event_id: longEventId
+    })
     // 5. Valid Cantonese variants: yue, cantonese, yue-HK, zh-HK (case insensitive)
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(
-        `${JSON.stringify({ kind: 'speak-intent', text: '你好一', lang: 'yue-hk', event_id: 'ev-1' })}\n`
-      )
-    )
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(
-        `${JSON.stringify({ kind: 'speak-intent', text: '你好二', lang: 'Cantonese', event_id: 'ev-2' })}\n`
-      )
-    )
-    subscriberSocket?.emit(
-      'data',
-      Buffer.from(
-        `${JSON.stringify({ kind: 'speak-intent', text: '你好三', lang: 'ZH-HK', event_id: 'ev-3' })}\n`
-      )
-    )
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '你好一',
+      lang: 'yue-hk',
+      event_id: 'ev-1'
+    })
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '你好二',
+      lang: 'Cantonese',
+      event_id: 'ev-2'
+    })
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '你好三',
+      lang: 'ZH-HK',
+      event_id: 'ev-3'
+    })
 
     expect(emitted.length).toBe(3)
     expect(emitted.map((e) => e.text)).toEqual(['你好一', '你好二', '你好三'])

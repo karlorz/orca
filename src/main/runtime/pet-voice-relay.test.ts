@@ -36,6 +36,37 @@ function createMockPetSocket(onWrite?: (data: string) => void): MockPetSocket {
   return sock
 }
 
+type CapturedPetSocket = { socket: MockPetSocket | null }
+
+function captureSubscriberConnectFn(): {
+  captured: CapturedPetSocket
+  connectFn: PetVoiceRelayOptions['connectFn']
+} {
+  const captured: CapturedPetSocket = { socket: null }
+  const connectFn: PetVoiceRelayOptions['connectFn'] = vi.fn(
+    (_path: string, onConnect?: () => void) => {
+      const sock = createMockPetSocket((data) => {
+        if (data.includes('subscribe')) {
+          captured.socket = sock
+        }
+      })
+      if (onConnect) {
+        process.nextTick(onConnect)
+      }
+      return sock as unknown as Socket
+    }
+  )
+  return { captured, connectFn }
+}
+
+function emitCapturedSpeakIntent(captured: CapturedPetSocket, payload: unknown): void {
+  const socket = captured.socket
+  if (!socket) {
+    throw new Error('subscriber socket was not captured')
+  }
+  socket.emit('data', Buffer.from(`${JSON.stringify(payload)}\n`))
+}
+
 describe('PetVoiceRelay', () => {
   it('updates pet presence based on active voice subscription count: 0 -> dead, 1 -> live, 2 -> live, 1 -> live, 0 -> dead', async () => {
     const sentConfigLines: string[] = []
@@ -78,23 +109,10 @@ describe('PetVoiceRelay', () => {
   })
 
   it('forwards speak-intent to connected subscribers when audio_session is live', async () => {
-    let subscriberSocket: MockPetSocket | null = null
-    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
-      (_path: string, onConnect?: () => void) => {
-        const sock = createMockPetSocket((data) => {
-          if (data.includes('subscribe')) {
-            subscriberSocket = sock
-          }
-        })
-        if (onConnect) {
-          process.nextTick(onConnect)
-        }
-        return sock as unknown as Socket
-      }
-    )
+    const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
-      connectFn: mockConnect,
+      connectFn,
       petSocketPath: '/tmp/test-pet.sock'
     })
 
@@ -116,7 +134,7 @@ describe('PetVoiceRelay', () => {
       lang: 'yue-HK',
       event_id: 'ev-grok-1234'
     }
-    subscriberSocket?.emit('data', Buffer.from(`${JSON.stringify(speakIntent)}\n`))
+    emitCapturedSpeakIntent(captured, speakIntent)
 
     expect(emittedEvents).toEqual([
       {
@@ -131,23 +149,10 @@ describe('PetVoiceRelay', () => {
   })
 
   it('does NOT forward speak-intent when audio_session is dead', async () => {
-    let subscriberSocket: MockPetSocket | null = null
-    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
-      (_path: string, onConnect?: () => void) => {
-        const sock = createMockPetSocket((data) => {
-          if (data.includes('subscribe')) {
-            subscriberSocket = sock
-          }
-        })
-        if (onConnect) {
-          process.nextTick(onConnect)
-        }
-        return sock as unknown as Socket
-      }
-    )
+    const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
-      connectFn: mockConnect,
+      connectFn,
       petSocketPath: '/tmp/test-pet.sock'
     })
 
@@ -169,7 +174,7 @@ describe('PetVoiceRelay', () => {
       lang: 'en-US',
       event_id: 'ev-grok-1234'
     }
-    subscriberSocket?.emit('data', Buffer.from(`${JSON.stringify(speakIntent)}\n`))
+    emitCapturedSpeakIntent(captured, speakIntent)
 
     expect(emittedEvents).toEqual([])
 
