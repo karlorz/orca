@@ -18,6 +18,25 @@ const appConfig = {
   }
 }
 
+function getCleanChildEnv(overrides: Record<string, string | undefined> = {}) {
+  const env = { ...process.env, ...overrides }
+  delete env.GITHUB_REF
+  delete env.GITHUB_OUTPUT
+  delete env.MOBILE_ANDROID_RELEASE_VERSION
+  delete env.MOBILE_ANDROID_BUMP_PATCH_VERSION
+  delete env.MOBILE_ANDROID_VERSION_CODE
+  delete env.MOBILE_ANDROID_BUMP_VERSION_CODE
+  delete env.MOBILE_ANDROID_PUBLISH_RELEASE
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete env[key]
+    } else {
+      env[key] = value
+    }
+  }
+  return env
+}
+
 let tempDirs: string[] = []
 
 function createAppConfig() {
@@ -42,11 +61,10 @@ describe('prepare Android release script', () => {
 
     const output = execFileSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
-      env: {
-        ...process.env,
+      env: getCleanChildEnv({
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_PUBLISH_RELEASE: 'true'
-      }
+      })
     })
 
     expect(output).toContain('Prepared Orca Mobile Android 0.0.22 (4)')
@@ -59,11 +77,10 @@ describe('prepare Android release script', () => {
 
     const result = spawnSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
-      env: {
-        ...process.env,
+      env: getCleanChildEnv({
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_BUMP_VERSION_CODE: 'true'
-      }
+      })
     })
 
     expect(result.status).toBe(1)
@@ -77,11 +94,10 @@ describe('prepare Android release script', () => {
 
     const result = spawnSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
-      env: {
-        ...process.env,
+      env: getCleanChildEnv({
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_RELEASE_VERSION: '0.0.23'
-      }
+      })
     })
 
     expect(result.status).toBe(1)
