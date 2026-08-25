@@ -212,7 +212,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p raw-artifacts
-          cp staged-artifacts/android-artifacts/* raw-artifacts/
+          echo "Downloaded artifact layout:"
+          find staged-artifacts -type f | sort
+          APK_PATH="$(find staged-artifacts -name 'orca-mobile.apk' -print -quit)"
+          if [[ -z "$APK_PATH" ]]; then
+            echo "orca-mobile.apk not found under staged-artifacts" >&2
+            exit 1
+          fi
+          cp "$APK_PATH" raw-artifacts/orca-mobile.apk
+          META_PATH="$(find staged-artifacts -name 'android-metadata.json' -print -quit || true)"
+          if [[ -n "$META_PATH" ]]; then
+            cp "$META_PATH" raw-artifacts/android-metadata.json
+          fi
 
           node -e '
             import("./config/scripts/fork-voice-package-release.mjs").then(async ({ packageDraftRelease }) => {

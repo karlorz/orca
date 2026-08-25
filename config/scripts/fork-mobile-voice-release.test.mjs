@@ -318,6 +318,15 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(inspectStep.run).not.toContain('ls | head')
   })
 
+  it('copies downloaded Android artifacts without a hard-coded android-artifacts glob', () => {
+    const wf = readWorkflow()
+    const pkgStep = wf.jobs['publish-release'].steps.find((s) =>
+      s.name?.includes('Prepare release package')
+    )
+    expect(pkgStep.run).toContain("find staged-artifacts -name 'orca-mobile.apk'")
+    expect(pkgStep.run).not.toContain('cp staged-artifacts/android-artifacts/*')
+  })
+
   it('cleans up incomplete draft on failure or cancellation', () => {
     const wf = readWorkflow()
     const releaseJob = wf.jobs['publish-release']
