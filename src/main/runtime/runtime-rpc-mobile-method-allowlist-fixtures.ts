@@ -6,7 +6,16 @@ import type { OrcaRuntimeService } from './orca-runtime'
 export type MobileRpcMock = Mock<(...args: unknown[]) => unknown>
 
 // Full mobile-surface runtime double: every RPC the mobile allowlist may reach.
-export function createMobileRpcSurfaceRuntime() {
+export function createMobileRpcSurfaceRuntime(): {
+  runtime: OrcaRuntimeService
+  mocks: Record<string, unknown>
+  expectedCodexResetScope: {
+    target: { runtime: 'host'; wslDistro: null }
+    accountId: string
+    accountRevision: number
+    offerRevision: string
+  }
+} {
   const getStatus: MobileRpcMock = vi.fn().mockResolvedValue({ graphStatus: 'ok' })
   const pushRuntimeGit: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const selectClaudeAccount: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
@@ -171,6 +180,8 @@ export function createMobileRpcSurfaceRuntime() {
     linearTeamLabels,
     linearTeamMembers,
     linearAddIssueComment,
+    cleanupSubscription: vi.fn(),
+    cleanupSubscriptionIfOwnedByConnection: vi.fn(() => true),
     getClientSettings: vi.fn(() => ({ defaultTuiAgent: 'codex', agentCmdOverrides: {} })),
     updateClientSettings: vi.fn(() => ({ defaultTaskSource: 'linear' }))
   }

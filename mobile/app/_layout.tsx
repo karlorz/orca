@@ -8,6 +8,7 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { PetSpeakRootBridge } from '../src/pet-speak/pet-speak-root-bridge'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import { loadHostCatalog } from '../src/transport/host-store'
@@ -159,6 +160,7 @@ export default function RootLayout() {
 
   return (
     <RpcClientProvider>
+      <PetSpeakRootBridge />
       <View style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style="light" />
         <Stack

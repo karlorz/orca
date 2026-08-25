@@ -1161,6 +1161,8 @@ import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
 } from './mobile-notification-replay'
+import type { PetSpeakEvent, PetSpeakOutcome } from './pet-voice-relay'
+import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
   createMobileSessionTabsNotifyCoalescer,
@@ -3281,6 +3283,8 @@ export class OrcaRuntimeService {
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
+  private petSpeakListeners = new Set<(event: PetSpeakEvent) => void>()
+  private petVoiceSubscriptionTracker: PetVoiceSubscriptionTracker | null = null
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   // Why a separate map: `connected` is a wire field that any inventory gap
   // clears, so it cannot distinguish an observed exit from lost contact. This
@@ -14337,6 +14341,45 @@ export class OrcaRuntimeService {
 
   getMobileNotificationListenerCount(): number {
     return this.notificationListeners.size
+  }
+
+  setPetVoiceSubscriptionTracker(tracker: PetVoiceSubscriptionTracker | null): void {
+    this.petVoiceSubscriptionTracker = tracker
+  }
+
+  getPetVoiceSubscriptionTracker(): PetVoiceSubscriptionTracker | null {
+    return this.petVoiceSubscriptionTracker
+  }
+
+  onPetSpeakDispatched(listener: (event: PetSpeakEvent) => void): () => void {
+    this.petSpeakListeners.add(listener)
+    return () => {
+      this.petSpeakListeners.delete(listener)
+    }
+  }
+
+  dispatchPetSpeak(event: PetSpeakEvent): void {
+    notifyRuntimeListeners(this.petSpeakListeners, (listener) => listener(event), 'pet-speak')
+  }
+
+  private petSpeakCompleteHandler:
+    | ((eventId: string, outcome: PetSpeakOutcome) => Promise<{ completed: boolean }>)
+    | null = null
+
+  setPetSpeakCompleteHandler(
+    handler: ((eventId: string, outcome: PetSpeakOutcome) => Promise<{ completed: boolean }>) | null
+  ): void {
+    this.petSpeakCompleteHandler = handler
+  }
+
+  async handlePetSpeakComplete(
+    eventId: string,
+    outcome: PetSpeakOutcome
+  ): Promise<{ completed: boolean }> {
+    if (this.petSpeakCompleteHandler) {
+      return await this.petSpeakCompleteHandler(eventId, outcome)
+    }
+    return { completed: false }
   }
 
   // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).

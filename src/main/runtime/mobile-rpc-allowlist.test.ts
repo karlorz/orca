@@ -45,6 +45,7 @@ const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
   'accounts.unsubscribe',
   'browser.screencast.unsubscribe',
   'notifications.unsubscribe',
+  'pet.speak.unsubscribe',
   'runtime.clientEvents.unsubscribe',
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',

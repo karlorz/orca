@@ -53,6 +53,8 @@ import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
 } from '../../shared/terminal-stream-protocol'
+import { PetVoiceRelay } from './pet-voice-relay'
+import { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -79,6 +81,8 @@ type OrcaRuntimeRpcServerOptions = {
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
+  // Optional PetVoiceRelay instance or options for testing
+  petVoiceRelay?: PetVoiceRelay
 }
 
 export type PairingOfferUnavailableReason =
@@ -351,6 +355,9 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'notifications.getMissedSince',
   'notifications.subscribe',
   'notifications.unsubscribe',
+  'pet.speak.subscribe',
+  'pet.speak.unsubscribe',
+  'pet.speak.complete',
   'pairing.getEndpoints',
   'pairing.provisionRelay',
   'preflight.check',
@@ -536,6 +543,7 @@ export class OrcaRuntimeRpcServer {
   private activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   private activeAskLongPolls = 0
+  private petVoiceRelay: PetVoiceRelay | null = null
 
   constructor({
     runtime,
@@ -549,7 +557,8 @@ export class OrcaRuntimeRpcServer {
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
-    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+    petVoiceRelay
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
@@ -567,6 +576,31 @@ export class OrcaRuntimeRpcServer {
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
+    if (this.platform === 'darwin') {
+      this.petVoiceRelay =
+        petVoiceRelay ??
+        new PetVoiceRelay({
+          onSpeak: (event) => {
+            this.runtime.dispatchPetSpeak?.(event)
+          }
+        })
+    } else if (petVoiceRelay) {
+      this.petVoiceRelay = petVoiceRelay
+    }
+    if (this.petVoiceRelay) {
+      const relay = this.petVoiceRelay
+      this.runtime.setPetSpeakCompleteHandler?.(async (eventId, outcome) => {
+        await relay.sendSpeakComplete(eventId, outcome)
+        return { completed: true }
+      })
+      const tracker = new PetVoiceSubscriptionTracker({
+        initialNotification: true,
+        onPresenceChange: (activeCount) => {
+          void relay.onVoiceSubscriptionPresenceChange(activeCount)
+        }
+      })
+      this.runtime.setPetVoiceSubscriptionTracker?.(tracker)
+    }
   }
 
   getDeviceRegistry(): DeviceRegistry | null {
@@ -1333,16 +1367,15 @@ export class OrcaRuntimeRpcServer {
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
       },
       onClose: (socket, hasOtherConnections) => {
-        if (!socket) {
-          return
-        }
-        this.abortWebSocketDispatches(socket.ws)
-        // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
-        this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-        this.runtime.cancelMobileDictationForConnection(socket.connectionId)
-        this.binaryStreamHandlers.delete(socket.connectionId)
-        if (!hasOtherConnections) {
-          this.runtime.onClientDisconnected(socket.device.deviceToken)
+        if (socket) {
+          this.abortWebSocketDispatches(socket.ws)
+          // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
+          this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
+          this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+          this.binaryStreamHandlers.delete(socket.connectionId)
+          if (!hasOtherConnections) {
+            this.runtime.onClientDisconnected(socket.device.deviceToken)
+          }
         }
       },
       // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
@@ -1505,6 +1538,9 @@ export class OrcaRuntimeRpcServer {
     this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
     this.detachWebSocketWiring = null
+    if (this.petVoiceRelay) {
+      this.petVoiceRelay.destroy()
+    }
     const stopResults = await Promise.allSettled(
       transports.map(async (transport) => transport.stop())
     )

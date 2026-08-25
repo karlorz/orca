@@ -22,6 +22,15 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+const isForkVoiceBuild = process.env.ORCA_FORK_VOICE_BUILD === '1'
+if (isForkVoiceBuild) {
+  const version = process.env.ORCA_FORK_VOICE_BUILD_VERSION
+  if (!version || !/^(\d+\.\d+\.\d+)-fork\.voice\.\d+\.\d+\.[0-9a-fA-F]{7,}$/.test(version)) {
+    throw new Error(
+      `Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION for fork voice build: ${version}`
+    )
+  }
+}
 // Why a second set of variables rather than making the mac ones platform-neutral:
 // the mac ones gate `isMacRelease` below, which turns on hardened runtime,
 // notarization, and root-level `forceCodeSigning`. A Windows dev build that
@@ -31,20 +40,27 @@ const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
 const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
 const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
 const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
+const isMacRelease =
+  !isForkVoiceBuild &&
+  (process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc)
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
-const localBuildVersion =
-  isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const localBuildVersion = isForkVoiceBuild
+  ? process.env.ORCA_FORK_VOICE_BUILD_VERSION
+  : isMacRelease || isWinDevChannel
+    ? undefined
+    : process.env.ORCA_LOCAL_BUILD_VERSION
 const isHourlyChannel = isMacHourly || isWinHourly
 const isDailyChannel = isMacDaily || isWinDaily
 const isAdhocChannel = isMacAdhoc || isWinAdhoc
-const devChannelBuildVersion = isHourlyChannel
-  ? process.env.ORCA_HOURLY_BUILD_VERSION
-  : isDailyChannel
-    ? process.env.ORCA_DAILY_BUILD_VERSION
-    : isAdhocChannel
-      ? process.env.ORCA_ADHOC_BUILD_VERSION
-      : undefined
+const devChannelBuildVersion = isForkVoiceBuild
+  ? undefined
+  : isHourlyChannel
+    ? process.env.ORCA_HOURLY_BUILD_VERSION
+    : isDailyChannel
+      ? process.env.ORCA_DAILY_BUILD_VERSION
+      : isAdhocChannel
+        ? process.env.ORCA_ADHOC_BUILD_VERSION
+        : undefined
 // Why each dev channel gets its own repo rather than tagging into the main one:
 // the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
 // day would evict every stable/RC entry and strand users on a feed with nothing
@@ -366,6 +382,7 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
+    ...(isForkVoiceBuild ? { identity: '-' } : {}),
     extendInfo: {
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',
@@ -437,6 +454,9 @@ module.exports = {
         to: 'MacOS/orca-keyboard-layout'
       }
     ],
+    // Why: electron-builder 26 has no root `zip` config key. Name zip/dmg
+    // as orca-macos-${arch}.ext here; dmg.artifactName below keeps the same pattern.
+    artifactName: 'orca-macos-${arch}.${ext}',
     target: [
       {
         target: 'dmg',
@@ -540,12 +560,19 @@ module.exports = {
   // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
-  publish: {
-    provider: 'github',
-    owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
-    releaseType: devChannelRepo ? 'prerelease' : 'release'
-  }
+  publish: isForkVoiceBuild
+    ? {
+        provider: 'github',
+        owner: 'karlorz',
+        repo: 'orca',
+        releaseType: 'prerelease'
+      }
+    : {
+        provider: 'github',
+        owner: 'stablyai',
+        repo: devChannelRepo ?? 'orca',
+        releaseType: devChannelRepo ? 'prerelease' : 'release'
+      }
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
