@@ -335,16 +335,17 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(cleanupStep.if).toContain('failure()')
   })
 
-  it('leaves verified GitHub releases as drafts so the operator can choose prerelease or latest', () => {
+  it('publishes verified releases as prereleases so the operator can switch to latest in GitHub UI', () => {
     const wf = readWorkflow()
     const releaseJob = wf.jobs['publish-release']
     const createStep = releaseJob.steps.find((s) => s.name?.includes('create draft'))
     expect(createStep.run).toContain('--draft')
-    expect(createStep.run).not.toContain('--prerelease')
-    const verifyStep = releaseJob.steps.find((s) => s.name?.includes('leave as draft'))
+    expect(createStep.run).toContain('--prerelease')
+    const verifyStep = releaseJob.steps.find((s) => s.name?.includes('publish prerelease'))
     expect(verifyStep.run).toContain('sha256sum -c SHA256SUMS.txt')
-    expect(verifyStep.run).not.toContain('--draft=false')
-    expect(verifyStep.run).not.toContain('--latest')
+    expect(verifyStep.run).toContain('--draft=false')
+    expect(verifyStep.run).toContain('--prerelease')
+    expect(verifyStep.run).toContain('--latest=false')
   })
 
   it('contains zero forbidden references (Apple secrets, ORCA_MAC_RELEASE, publish always, stablyai publisher, Docker, app launch, install)', () => {
