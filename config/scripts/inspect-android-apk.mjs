@@ -133,7 +133,9 @@ export function inspectAndroidApk({
     encoding: 'utf8'
   })
 
-  const sha256Match = certsOutput.match(/Signer #1 certificate SHA-256 digest:\s+([0-9a-fA-F]+)/i)
+  const sha256Match = certsOutput.match(
+    /(?:Signer #\d+|V2 Signer):? certificate SHA-256 digest:\s+([0-9a-fA-F]+)/i
+  )
   if (!sha256Match) {
     throw new Error(
       `Failed to extract Signer certificate SHA-256 digest from apksigner output:\n${certsOutput}`
@@ -141,7 +143,7 @@ export function inspectAndroidApk({
   }
   const observedCertDigest = sha256Match[1].toLowerCase()
 
-  const dnMatch = certsOutput.match(/Signer #1 certificate DN:\s+([^\n]+)/)
+  const dnMatch = certsOutput.match(/(?:Signer #\d+|V2 Signer):? certificate DN:\s+([^\n]+)/)
   const observedCertDn = dnMatch ? dnMatch[1].trim() : ''
 
   if (debugKeystorePath && existsSync(debugKeystorePath)) {

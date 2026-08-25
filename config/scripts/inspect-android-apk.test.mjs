@@ -253,6 +253,39 @@ Certificate fingerprints:
     rmSync(fixtureDir, { recursive: true, force: true })
   })
 
+  it('accepts v2-only apksigner cert lines used by assembleRelease', () => {
+    const v2OnlyApksigner = `Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Number of signers: 1
+V2 Signer: certificate DN: CN=Android Debug, OU=Android, O=Unknown, L=Unknown, ST=Unknown, C=US
+V2 Signer: certificate SHA-256 digest: aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899
+`
+    const { apkPath, fakeKeystore, customTools } = setupFakeTools({
+      badgingOutput: validBadging,
+      xmlTreeOutput: validXmlTree,
+      apksignerOutput: v2OnlyApksigner
+    })
+    const keytoolRunner = () =>
+      `Alias name: androiddebugkey
+Certificate fingerprints:
+     SHA256: AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99`
+    const result = inspectAndroidApk({
+      apkPath,
+      expectedPackage: 'com.stably.orca.mobile',
+      expectedVersion: '0.0.45',
+      expectedVersionCode: 14,
+      debugKeystorePath: fakeKeystore,
+      customTools,
+      keytoolRunner
+    })
+    expect(result.signerDigestSha256).toBe(
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
+    )
+    expect(result.signerDn).toContain('Android Debug')
+    rmSync(fixtureDir, { recursive: true, force: true })
+  })
+
   it('fails closed when certificate is not debug signed', () => {
     const nonDebugApksigner = `Verifies
 Signer #1 certificate DN: CN=Production Release, O=Stably, C=US
