@@ -136,4 +136,20 @@ describe('mobile-file-preview-route', () => {
     expect(displayNameFromPreviewPath('src/app.ts')).toBe('app.ts')
     expect(displayNameFromPreviewPath('src\\app.ts')).toBe('app.ts')
   })
+
+  it('derives display names without Array.prototype.findLast (Hermes)', () => {
+    const original = Array.prototype.findLast
+    // @ts-expect-error Hermes gap
+    delete Array.prototype.findLast
+    try {
+      expect(displayNameFromPreviewPath('src/app.ts')).toBe('app.ts')
+      expect(displayNameFromPreviewPath('src\\app.ts')).toBe('app.ts')
+    } finally {
+      Object.defineProperty(Array.prototype, 'findLast', {
+        configurable: true,
+        writable: true,
+        value: original
+      })
+    }
+  })
 })

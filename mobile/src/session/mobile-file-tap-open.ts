@@ -4,7 +4,10 @@ import type {
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
-import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
+import {
+  createMobileFilePreviewHref,
+  lastNonEmptyPathSegment
+} from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
@@ -216,5 +219,5 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
 }
 
 function displayNameFromPath(path: string): string | undefined {
-  return path.split(/[\\/]/).findLast(Boolean)
+  return lastNonEmptyPathSegment(path)
 }

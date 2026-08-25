@@ -116,6 +116,16 @@ export function createMobileFilePreviewHref(
   }
 }
 
+export function lastNonEmptyPathSegment(path: string): string | undefined {
+  const parts = path.split(/[\\/]/)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i]) {
+      return parts[i]
+    }
+  }
+  return undefined
+}
+
 export function displayNameFromPreviewPath(relativePath: string): string {
-  return relativePath.split(/[\\/]/).findLast(Boolean) ?? relativePath
+  return lastNonEmptyPathSegment(relativePath) ?? relativePath
 }

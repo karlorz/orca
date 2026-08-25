@@ -89,7 +89,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     detectedAgentIds: executionTarget.detectedAgentIds
   })
   const retiredNamesRefreshKey = useMemo(
-    () => [...(existingWorktreePaths ?? [])].sort().join('\0'),
+    () => (existingWorktreePaths?.length ? existingWorktreePaths.slice().sort().join('\0') : ''),
     [existingWorktreePaths]
   )
   const retiredWorktreeNames = useRetiredWorktreeNames(

@@ -41,4 +41,13 @@ describe('sortByLastConnected', () => {
     sortByLastConnected(input)
     expect(input).toEqual(snapshot)
   })
+
+  it('copies empty and single-item lists without calling sort', () => {
+    const empty: { lastConnected: number }[] = []
+    const one = [{ id: 'only', lastConnected: 1 }]
+    expect(sortByLastConnected(empty)).toEqual([])
+    expect(sortByLastConnected(empty)).not.toBe(empty)
+    expect(sortByLastConnected(one)).toEqual(one)
+    expect(sortByLastConnected(one)).not.toBe(one)
+  })
 })

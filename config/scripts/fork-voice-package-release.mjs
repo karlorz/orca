@@ -46,13 +46,6 @@ export async function packageDraftRelease({
     )
   }
 
-  // Read metadata fragments if present
-  let macMetadata = {}
-  const macMetaPath = join(artifactsDir, 'mac-metadata.json')
-  if (existsSync(macMetaPath)) {
-    macMetadata = JSON.parse(readFileSync(macMetaPath, 'utf8'))
-  }
-
   let androidMetadata = {}
   const androidMetaPath = join(artifactsDir, 'android-metadata.json')
   if (existsSync(androidMetaPath)) {
@@ -88,7 +81,6 @@ export async function packageDraftRelease({
     rootVersion,
     mobileVersion,
     mobileVersionCode,
-    macMetadata,
     androidMetadata,
     artifacts: copiedArtifacts
   })

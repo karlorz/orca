@@ -42,6 +42,11 @@ export function useMobileHomeData() {
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
+  const sortedHostCatalog = useMemo(() => sortByLastConnected(hostCatalog), [hostCatalog])
+  const sortedHosts = useMemo(
+    () => selectConnectableHostProfiles(sortedHostCatalog),
+    [sortedHostCatalog]
+  )
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, {
     setStats: setStatsByHost,
     setWorktreeInfo,
@@ -128,8 +133,6 @@ export function useMobileHomeData() {
     }, [router])
   )
 
-  const sortedHosts = useMemo(() => sortByLastConnected(hosts), [hosts])
-  const sortedHostCatalog = useMemo(() => sortByLastConnected(hostCatalog), [hostCatalog])
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const resumeCard = useMemo(

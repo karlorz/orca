@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fork-mobile-voice-release-${{ github.ref }}
+  group: fork-mobile-android-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
