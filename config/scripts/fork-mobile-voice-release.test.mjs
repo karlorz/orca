@@ -305,8 +305,10 @@ describe('fork mobile voice release workflow safety contract', () => {
       (s) => s.name?.includes('Package') || s.run?.includes('electron-builder')
     )
     expect(packStep.run).toContain('--arm64')
+    expect(packStep.run).toContain('--publish never')
     expect(packStep.run).not.toContain('--x64')
     expect(packStep.run).not.toContain('--universal')
+    expect(packStep.run).not.toContain('--publish always')
 
     const inspectStep = macJob.steps.find((s) => s.name?.includes('Inspect packaged ZIP'))
     expect(inspectStep.run).toContain('dist/orca-macos-arm64.zip')

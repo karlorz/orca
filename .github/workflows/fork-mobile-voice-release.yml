@@ -141,7 +141,7 @@ jobs:
           ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ github.sha }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: pnpm exec electron-builder --mac --arm64 --config config/electron-builder.config.cjs
+        run: pnpm exec electron-builder --mac --arm64 --publish never --config config/electron-builder.config.cjs
 
       - name: Inspect packaged ZIP in runner temp
         env:
