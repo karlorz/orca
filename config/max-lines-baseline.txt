@@ -17,15 +17,11 @@ inline src/main/codex-accounts/runtime-home-service.ts
 inline src/main/codex-accounts/service.ts
 inline src/main/codex/hook-service.ts
 inline src/main/daemon/daemon-init.ts
-inline src/main/git/runner.ts
-inline src/main/git/status.ts
 inline src/main/git/worktree.ts
 inline src/main/github/project-view.ts
 inline src/main/index.ts
 inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
-inline src/main/ipc/repos.ts
-inline src/main/ipc/ssh.ts
 inline src/main/ipc/worktree-remote.ts
 inline src/main/keybindings/keybinding-file.ts
 inline src/main/linear/issues.ts
