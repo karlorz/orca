@@ -3,12 +3,17 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 export function resolveAndroidSdkTools(customToolsDir = null) {
-  if (customToolsDir && existsSync(customToolsDir)) {
-    const aapt2 = join(customToolsDir, 'aapt2')
-    const apksigner = join(customToolsDir, 'apksigner')
-    if (existsSync(aapt2) && existsSync(apksigner)) {
-      return { aapt2, apksigner }
+  if (typeof customToolsDir === 'string' && customToolsDir.length > 0) {
+    if (existsSync(customToolsDir)) {
+      const aapt2 = join(customToolsDir, 'aapt2')
+      const apksigner = join(customToolsDir, 'apksigner')
+      if (existsSync(aapt2) && existsSync(apksigner)) {
+        return { aapt2, apksigner }
+      }
     }
+    throw new Error(
+      'Failed to resolve required Android build tools (aapt2, apksigner). Set ANDROID_HOME or ANDROID_SDK_ROOT to an Android SDK installation with build-tools.'
+    )
   }
 
   const sdkRoot = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT
