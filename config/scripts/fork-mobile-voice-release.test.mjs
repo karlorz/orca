@@ -250,7 +250,7 @@ describe('fork mobile voice release workflow safety contract', () => {
     const wf = readWorkflow()
     const triggers = wf.on ?? wf[true]
     expect(triggers.push).toBeDefined()
-    expect(triggers.push.tags).toEqual(['fork-voice-v*'])
+    expect(triggers.push.tags).toEqual(['mobile-android-v*-karlorz.*'])
     expect(triggers.pull_request).toBeUndefined()
   })
 
@@ -283,7 +283,7 @@ describe('fork mobile voice release workflow safety contract', () => {
       }
     }
     const verifyStep = wf.jobs.verify.steps.find((s) => s.name?.includes('reachability'))
-    expect(verifyStep.run).toContain('^refs/tags/fork-voice-v.+$')
+    expect(verifyStep.run).toContain('mobile-android-v[0-9.]+-karlorz')
   })
 
   it('runs root reliability and code quality gates in verify job', () => {

@@ -3,7 +3,7 @@ name: Fork Mobile Voice Release
 on:
   push:
     tags:
-      - 'fork-voice-v*'
+      - 'mobile-android-v*-karlorz.*'
 
 permissions:
   contents: read
@@ -30,8 +30,8 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
-          if [[ ! "$REF_NAME" =~ ^refs/tags/fork-voice-v.+$ ]]; then
-            echo "Only non-empty tag refs matching refs/tags/fork-voice-v<suffix> are allowed: $REF_NAME" >&2
+          if [[ ! "$REF_NAME" =~ ^refs/tags/mobile-android-v[0-9.]+-karlorz\.[0-9]+$ ]]; then
+            echo "Only tags matching mobile-android-v<version>-karlorz.<suffix> are allowed: $REF_NAME" >&2
             exit 1
           fi
           git fetch "${SERVER_URL}/karlorz/orca.git" fork-main:refs/remotes/fork/fork-main
