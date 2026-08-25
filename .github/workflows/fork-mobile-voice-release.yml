@@ -421,12 +421,11 @@ jobs:
             --repo karlorz/orca \
             --target "$TARGET_SHA" \
             --draft \
-            --prerelease \
             --title "$TAG_NAME" \
             --notes-file release-notes.md \
             final-release-assets/*
 
-      - name: Verify uploaded release assets and publish prerelease
+      - name: Verify uploaded release assets and leave as draft
         id: publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -460,8 +459,7 @@ jobs:
           cd "$VERIFY_DIR"
           sha256sum -c SHA256SUMS.txt
 
-          echo "Publishing prerelease..."
-          gh release edit "$TAG_NAME" --repo karlorz/orca --draft=false --latest=false
+          echo "Leaving $TAG_NAME as a draft so the operator can choose prerelease or latest."
 
       - name: Clean up incomplete draft on failure or cancellation
         if: (failure() || cancelled()) && steps.draft.outcome == 'success' && steps.publish.outcome != 'success'
