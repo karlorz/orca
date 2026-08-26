@@ -36,6 +36,9 @@ object PetSpeechBatteryExemptionPromptHelper {
         }
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_BATTERY_PROMPTED, false)) {
+            return
+        }
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
 
         requestExemptionIfNeeded(

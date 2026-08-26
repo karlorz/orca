@@ -955,6 +955,67 @@ describe('PetSpeakRootBridge', () => {
       expect(releaseSessionMock).toHaveBeenCalledTimes(1)
     })
 
+    it('releases immediately when reconnecting host becomes disconnected', async () => {
+      const clientA = makeFakeClient('connected')
+      openHostLogicalClientMock.mockReturnValue(clientA)
+
+      loadHostCatalogMock.mockResolvedValue([
+        {
+          id: HOST_A.id,
+          name: HOST_A.name,
+          endpoint: HOST_A.endpoint,
+          publicKeyB64: HOST_A.publicKeyB64,
+          credentialStatus: 'ready',
+          profile: HOST_A,
+          lastConnected: 100
+        }
+      ])
+
+      const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+      const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+      const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+      const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+      let renderer: ReactTestRenderer | null = null
+      await act(async () => {
+        renderer = create(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(PetSpeakRootBridge, {
+              isAndroid: true,
+              ensureNotificationPermissions: ensurePermissionsMock,
+              acquireVoiceSession: acquireSessionMock,
+              releaseVoiceSession: releaseSessionMock,
+              updateVoiceSessionNotification: updateNotificationMock
+            })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        clientA.emitState('reconnecting')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      await act(async () => {
+        clientA.emitState('disconnected')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        renderer?.unmount()
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+    })
+
     it('does not release when reconnecting arrives before acquireVoiceSession resolves', async () => {
       const clientA = makeFakeClient('disconnected')
       openHostLogicalClientMock.mockReturnValue(clientA)

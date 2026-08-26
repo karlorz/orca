@@ -147,8 +147,18 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
 
       holdStateRef.current = action.nextState
 
-      if (action.type === 'acquire') {
+      const reconnectingSince = action.nextState.reconnectingSince
+      if (reconnectingSince === null) {
         clearGraceTimer()
+      } else if (graceTimerRef.current === null) {
+        const remaining = Math.max(0, PET_VOICE_RECONNECT_GRACE_MS - (now - reconnectingSince))
+        graceTimerRef.current = setTimeout(() => {
+          graceTimerRef.current = null
+          evaluateHoldDecision(Date.now())
+        }, remaining)
+      }
+
+      if (action.type === 'acquire') {
         void ensureNotificationPermissionsFn().then((granted) => {
           if (granted && !isDisposedRef.current) {
             void acquireVoiceSessionFn().then((res) => {
@@ -185,35 +195,17 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
           }
         })
       } else if (action.type === 'update-notification') {
-        if (action.nextState.reconnectingSince !== null) {
-          if (graceTimerRef.current === null) {
-            const remaining = Math.max(
-              0,
-              PET_VOICE_RECONNECT_GRACE_MS - (now - action.nextState.reconnectingSince)
-            )
-            graceTimerRef.current = setTimeout(() => {
-              graceTimerRef.current = null
-              evaluateHoldDecision(Date.now())
-            }, remaining)
-          }
-        } else {
-          clearGraceTimer()
-        }
         void updateVoiceSessionNotificationFn(action.notificationText)
       } else if (action.type === 'release') {
-        clearGraceTimer()
         void releaseVoiceSessionFn()
-      } else {
-        // action.type === 'none'
-        if (action.nextState.reconnectingSince === null) {
-          clearGraceTimer()
-        }
       }
     }
 
     const cleanups = clients.map((entry) => {
       const wireUp = (state: ConnectionState) => {
+        const previous = hostStates.get(entry.hostId)
         hostStates.set(entry.hostId, state)
+        let subscriptionChanged = false
         if (state === 'connected') {
           if (
             !currentSubs.has(entry.hostId) ||
@@ -222,15 +214,18 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
             currentSubs.get(entry.hostId)?.unsub()
             const unsub = subscribeToPetSpeak(entry.client, handlerOptionsProp)
             currentSubs.set(entry.hostId, { client: entry.client, unsub })
-            evaluateHoldDecision()
+            subscriptionChanged = true
           }
         } else {
           const sub = currentSubs.get(entry.hostId)
           if (sub && sub.client === entry.client) {
             sub.unsub()
             currentSubs.delete(entry.hostId)
-            evaluateHoldDecision()
+            subscriptionChanged = true
           }
+        }
+        if (previous !== state || subscriptionChanged) {
+          evaluateHoldDecision()
         }
       }
 
