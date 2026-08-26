@@ -2,6 +2,7 @@ package expo.modules.petspeech
 
 object PetSpeechForegroundStart {
     const val IDLE_NOTIFICATION_TEXT = "Pet voice connected"
+    const val RECONNECTING_NOTIFICATION_TEXT = "Orca Pet — Reconnecting..."
 
     fun tryStartForeground(startForeground: () -> Unit): Boolean {
         return try {

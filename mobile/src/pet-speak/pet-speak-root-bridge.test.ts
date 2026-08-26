@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -730,6 +730,228 @@ describe('PetSpeakRootBridge', () => {
         await Promise.resolve()
       })
       // No double release on unmount if already released
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('pet voice reconnect hysteresis', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('does not release voice session on reconnecting blip and updates notification to Reconnecting...', async () => {
+      const clientA = makeFakeClient('connected')
+      openHostLogicalClientMock.mockReturnValue(clientA)
+
+      loadHostCatalogMock.mockResolvedValue([
+        {
+          id: HOST_A.id,
+          name: HOST_A.name,
+          endpoint: HOST_A.endpoint,
+          publicKeyB64: HOST_A.publicKeyB64,
+          credentialStatus: 'ready',
+          profile: HOST_A,
+          lastConnected: 100
+        }
+      ])
+
+      const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+      const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+      const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+      const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+      let renderer: ReactTestRenderer | null = null
+      await act(async () => {
+        renderer = create(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(PetSpeakRootBridge, {
+              isAndroid: true,
+              ensureNotificationPermissions: ensurePermissionsMock,
+              acquireVoiceSession: acquireSessionMock,
+              releaseVoiceSession: releaseSessionMock,
+              updateVoiceSessionNotification: updateNotificationMock
+            })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(acquireSessionMock).toHaveBeenCalledTimes(1)
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      // Host A transitions to reconnecting
+      await act(async () => {
+        clientA.emitState('reconnecting')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // Must NOT release session
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+      expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+
+      // Advance 2 minutes (within 5-minute grace)
+      await act(async () => {
+        vi.advanceTimersByTime(2 * 60 * 1000)
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      // Host A reconnects successfully
+      await act(async () => {
+        clientA.emitState('connected')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // Restores 'Pet voice connected' and still never released
+      expect(updateNotificationMock).toHaveBeenCalledWith('Pet voice connected')
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      await act(async () => {
+        renderer?.unmount()
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('releases voice session after 5-minute grace expiry if reconnecting persists without connecting', async () => {
+      const clientA = makeFakeClient('connected')
+      openHostLogicalClientMock.mockReturnValue(clientA)
+
+      loadHostCatalogMock.mockResolvedValue([
+        {
+          id: HOST_A.id,
+          name: HOST_A.name,
+          endpoint: HOST_A.endpoint,
+          publicKeyB64: HOST_A.publicKeyB64,
+          credentialStatus: 'ready',
+          profile: HOST_A,
+          lastConnected: 100
+        }
+      ])
+
+      const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+      const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+      const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+      const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+      let renderer: ReactTestRenderer | null = null
+      await act(async () => {
+        renderer = create(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(PetSpeakRootBridge, {
+              isAndroid: true,
+              ensureNotificationPermissions: ensurePermissionsMock,
+              acquireVoiceSession: acquireSessionMock,
+              releaseVoiceSession: releaseSessionMock,
+              updateVoiceSessionNotification: updateNotificationMock
+            })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(acquireSessionMock).toHaveBeenCalledTimes(1)
+
+      // Host A transitions to reconnecting
+      await act(async () => {
+        clientA.emitState('reconnecting')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+      expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+
+      // Advance past 5 minutes (5 min = 300,000 ms)
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60 * 1000)
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // Must release session upon 5-minute grace expiry
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('releases immediately when host is removed from catalog while reconnecting', async () => {
+      const clientA = makeFakeClient('connected')
+      openHostLogicalClientMock.mockReturnValue(clientA)
+
+      const catalogListeners = new Set<() => void>()
+      const subscribeToCatalogChange = (listener: () => void) => {
+        catalogListeners.add(listener)
+        return () => {
+          catalogListeners.delete(listener)
+        }
+      }
+
+      loadHostCatalogMock.mockResolvedValue([
+        {
+          id: HOST_A.id,
+          name: HOST_A.name,
+          endpoint: HOST_A.endpoint,
+          publicKeyB64: HOST_A.publicKeyB64,
+          credentialStatus: 'ready',
+          profile: HOST_A,
+          lastConnected: 100
+        }
+      ])
+
+      const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+      const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+      const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+      const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+      let renderer: ReactTestRenderer | null = null
+      await act(async () => {
+        renderer = create(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(PetSpeakRootBridge, {
+              isAndroid: true,
+              subscribeToCatalogChange,
+              ensureNotificationPermissions: ensurePermissionsMock,
+              acquireVoiceSession: acquireSessionMock,
+              releaseVoiceSession: releaseSessionMock,
+              updateVoiceSessionNotification: updateNotificationMock
+            })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // Transition to reconnecting
+      await act(async () => {
+        clientA.emitState('reconnecting')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      // Host is removed from catalog
+      loadHostCatalogMock.mockResolvedValue([])
+      await act(async () => {
+        for (const l of catalogListeners) l()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      // Immediate release on removal from catalog
       expect(releaseSessionMock).toHaveBeenCalledTimes(1)
     })
   })

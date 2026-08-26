@@ -8,21 +8,35 @@ class PetSpeechServiceReplacementDecisionHandler(
     var isSessionHeld: Boolean = false
         private set
 
+    var heldNotificationText: String = PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+        private set
+
     var activeOwnerId: Long? = null
         private set
     private var activeEventId: String? = null
     private var onOutcomeCallback: ((String, PetSpeechOutcome) -> Unit)? = null
     private var currentText: String? = null
 
-    fun holdSession() {
+    fun holdSession(text: String = PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT) {
         isSessionHeld = true
+        heldNotificationText = text
         if (activeOwnerId == null) {
-            onUpdateNotification(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
+            onUpdateNotification(text)
+        }
+    }
+
+    fun updateHeldNotification(text: String) {
+        if (isSessionHeld) {
+            heldNotificationText = text
+            if (activeOwnerId == null) {
+                onUpdateNotification(text)
+            }
         }
     }
 
     fun releaseSession() {
         isSessionHeld = false
+        heldNotificationText = PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
         if (activeOwnerId != null) {
             val cb = onOutcomeCallback
             val id = activeEventId
@@ -75,7 +89,7 @@ class PetSpeechServiceReplacementDecisionHandler(
             }
 
             if (isSessionHeld) {
-                onUpdateNotification(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
+                onUpdateNotification(heldNotificationText)
             } else {
                 onStopForeground()
                 onStopSelf()
@@ -110,7 +124,7 @@ class PetSpeechServiceReplacementDecisionHandler(
             }
 
             if (isSessionHeld) {
-                onUpdateNotification(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
+                onUpdateNotification(heldNotificationText)
             } else {
                 onStopForeground()
                 onStopSelf()

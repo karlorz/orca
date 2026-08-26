@@ -9,6 +9,11 @@ describe('RpcSessionLivenessWatchdog', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
+  it('locks LIVENESS_IDLE_MS within 15-20s range for WebSocket keepalive while FGS is held', () => {
+    expect(LIVENESS_IDLE_MS).toBeGreaterThanOrEqual(15_000)
+    expect(LIVENESS_IDLE_MS).toBeLessThanOrEqual(20_000)
+  })
+
   function fixture() {
     const sendProbe = vi.fn(() => true)
     const terminate = vi.fn()

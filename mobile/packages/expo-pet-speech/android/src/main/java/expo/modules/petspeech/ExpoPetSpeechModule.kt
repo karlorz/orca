@@ -220,6 +220,7 @@ class ExpoPetSpeechModule : Module() {
                 } else {
                     context.startService(startIntent)
                 }
+                PetSpeechBatteryExemptionPromptHelper.promptBatteryExemptionOnce(context)
                 promise.resolve(mapOf("held" to true))
             } catch (e: Exception) {
                 if (PetSpeechForegroundStart.isForegroundServiceStartNotAllowed(e)) {
@@ -238,6 +239,20 @@ class ExpoPetSpeechModule : Module() {
                         action = PetSpeechForegroundService.ACTION_RELEASE_SESSION
                     }
                     context.startService(stopIntent)
+                } catch (_: Exception) {}
+            }
+            promise.resolve(null)
+        }
+
+        AsyncFunction("updateVoiceSessionNotificationAsync") { text: String, promise: Promise ->
+            val context = appContext.reactContext
+            if (context != null) {
+                try {
+                    val updateIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
+                        action = PetSpeechForegroundService.ACTION_UPDATE_HELD_NOTIFICATION
+                        putExtra(PetSpeechForegroundService.EXTRA_TEXT, text)
+                    }
+                    context.startService(updateIntent)
                 } catch (_: Exception) {}
             }
             promise.resolve(null)

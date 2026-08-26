@@ -197,4 +197,48 @@ class PetSpeechForegroundServiceReplacementTest {
         assertTrue(stopSelfCalled)
         assertNull(manager.activeOwnerId)
     }
+
+    @Test
+    fun heldSessionUpdateToReconnectingTextDoesNotStopForegroundAndRestoresHeldTextOnCompletePlayback() {
+        var stopSelfCalled = false
+        var stopForegroundCalled = false
+        var updatedNotification: String? = null
+
+        val manager = PetSpeechServiceReplacementDecisionHandler(
+            onStopSelf = { stopSelfCalled = true },
+            onStopForeground = { stopForegroundCalled = true },
+            onUpdateNotification = { updatedNotification = it }
+        )
+
+        manager.holdSession()
+        assertEquals(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT, updatedNotification)
+
+        // Update notification to reconnecting text while held
+        manager.updateHeldNotification(PetSpeechForegroundStart.RECONNECTING_NOTIFICATION_TEXT)
+        assertEquals(PetSpeechForegroundStart.RECONNECTING_NOTIFICATION_TEXT, updatedNotification)
+        assertFalse(stopForegroundCalled)
+        assertFalse(stopSelfCalled)
+
+        // Utterance arrives during reconnecting
+        manager.onStartCommand(400L, "斷線重連中播報")
+        assertEquals("斷線重連中播報", updatedNotification)
+        manager.beginPlayback(400L, "ev-400", "斷線重連中播報") { _, _ -> }
+
+        // Completing playback restores the held reconnecting text, NOT idle connected
+        manager.completePlayback(400L, PetSpeechOutcome.Spoken)
+        assertEquals(PetSpeechForegroundStart.RECONNECTING_NOTIFICATION_TEXT, updatedNotification)
+        assertFalse(stopForegroundCalled)
+        assertFalse(stopSelfCalled)
+
+        // Reconnect back to idle connected
+        manager.updateHeldNotification(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
+        assertEquals(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT, updatedNotification)
+        assertFalse(stopForegroundCalled)
+        assertFalse(stopSelfCalled)
+
+        // Finally release session -> stops foreground and service
+        manager.releaseSession()
+        assertTrue(stopForegroundCalled)
+        assertTrue(stopSelfCalled)
+    }
 }

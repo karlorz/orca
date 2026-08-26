@@ -163,6 +163,17 @@ describe('AndroidPetSpeechAdapter', () => {
     expect(mockNativeModule.releaseVoiceSessionAsync).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards updateVoiceSessionNotificationAsync to native module', async () => {
+    mockNativeModule.updateVoiceSessionNotificationAsync = vi.fn().mockResolvedValueOnce(undefined)
+    const adapter = new AndroidPetSpeechAdapter(
+      mockNativeModule as unknown as PetSpeechNativeModule
+    )
+    await adapter.updateVoiceSessionNotification('Orca Pet — Reconnecting...')
+    expect(mockNativeModule.updateVoiceSessionNotificationAsync).toHaveBeenCalledWith(
+      'Orca Pet — Reconnecting...'
+    )
+  })
+
   it('getPetSpeechNativeAdapter returns AndroidPetSpeechAdapter on android and null on ios', () => {
     const androidAdapter = getPetSpeechNativeAdapter()
     expect(androidAdapter).toBeInstanceOf(AndroidPetSpeechAdapter)

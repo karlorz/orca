@@ -44,10 +44,12 @@ describe('verify-pet-speech-manifest CLI script', () => {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.stably.orca.mobile">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <application>
         <service
             android:name="expo.modules.petspeech.PetSpeechForegroundService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>`

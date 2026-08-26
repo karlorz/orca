@@ -9,6 +9,7 @@ export interface PetSpeechNativeAdapter {
   stop?(): Promise<void>
   acquireVoiceSession?(): Promise<{ held: boolean }>
   releaseVoiceSession?(): Promise<void>
+  updateVoiceSessionNotification?(text: string): Promise<void>
 }
 
 export class AndroidPetSpeechAdapter implements PetSpeechNativeAdapter {
@@ -69,6 +70,16 @@ export class AndroidPetSpeechAdapter implements PetSpeechNativeAdapter {
       }
     } catch {
       // Ignore release errors
+    }
+  }
+
+  async updateVoiceSessionNotification(text: string): Promise<void> {
+    try {
+      if (this.nativeModule?.updateVoiceSessionNotificationAsync) {
+        await this.nativeModule.updateVoiceSessionNotificationAsync(text)
+      }
+    } catch {
+      // Ignore update errors
     }
   }
 }

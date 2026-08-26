@@ -30,6 +30,10 @@ class PetSpeechForegroundService : Service() {
         const val ACTION_STOP_OWNER = "expo.modules.petspeech.ACTION_STOP_OWNER"
         const val ACTION_HOLD_SESSION = "expo.modules.petspeech.ACTION_HOLD_SESSION"
         const val ACTION_RELEASE_SESSION = "expo.modules.petspeech.ACTION_RELEASE_SESSION"
+        const val ACTION_UPDATE_HELD_NOTIFICATION = "expo.modules.petspeech.ACTION_UPDATE_HELD_NOTIFICATION"
+        private const val PREFS_NAME = "expo.modules.petspeech.prefs"
+        private const val KEY_IS_HELD = "key_is_held"
+        private const val KEY_HELD_TEXT = "key_held_text"
     }
 
     private val binder = LocalBinder()
@@ -87,36 +91,71 @@ class PetSpeechForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_HOLD_SESSION) {
-            replacementDecisionHandler.holdSession()
-            return START_NOT_STICKY
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        if (intent == null) {
+            val wasHeld = prefs.getBoolean(KEY_IS_HELD, false)
+            if (wasHeld) {
+                val savedText = prefs.getString(KEY_HELD_TEXT, PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
+                    ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+                replacementDecisionHandler.holdSession(savedText)
+                return PetSpeechStartResultDecision.computeStartResult(isHeld = true)
+            }
+            stopForegroundPlayback()
+            stopSelf()
+            return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
         }
 
-        if (intent?.action == ACTION_RELEASE_SESSION) {
+        if (intent.action == ACTION_HOLD_SESSION) {
+            val text = intent.getStringExtra(EXTRA_TEXT) ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+            prefs.edit()
+                .putBoolean(KEY_IS_HELD, true)
+                .putString(KEY_HELD_TEXT, text)
+                .apply()
+            replacementDecisionHandler.holdSession(text)
+            return PetSpeechStartResultDecision.computeStartResult(isHeld = true)
+        }
+
+        if (intent.action == ACTION_UPDATE_HELD_NOTIFICATION) {
+            val text = intent.getStringExtra(EXTRA_TEXT) ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+            if (replacementDecisionHandler.isSessionHeld) {
+                prefs.edit()
+                    .putString(KEY_HELD_TEXT, text)
+                    .apply()
+                replacementDecisionHandler.updateHeldNotification(text)
+            }
+            return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
+        }
+
+        if (intent.action == ACTION_RELEASE_SESSION) {
+            prefs.edit()
+                .putBoolean(KEY_IS_HELD, false)
+                .remove(KEY_HELD_TEXT)
+                .apply()
             replacementDecisionHandler.releaseSession()
-            return START_NOT_STICKY
+            return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
         }
 
-        if (intent?.action == ACTION_STOP_OWNER) {
+        if (intent.action == ACTION_STOP_OWNER) {
             val stopOwnerId = intent.getLongExtra(EXTRA_OWNER_ID, -1L)
             if (stopOwnerId != -1L) {
                 cancelSpeech(stopOwnerId)
             }
-            return START_NOT_STICKY
+            return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
         }
 
-        val ownerId = intent?.getLongExtra(EXTRA_OWNER_ID, -1L) ?: -1L
-        val extraText = intent?.getStringExtra(EXTRA_TEXT)
+        val ownerId = intent.getLongExtra(EXTRA_OWNER_ID, -1L)
+        val extraText = intent.getStringExtra(EXTRA_TEXT)
 
         when (val decision = PetSpeechStartCommandDecision.decide(extraText)) {
             is PetSpeechStartCommandDecision.Result.StopSelf -> {
                 stopForegroundPlayback()
                 stopSelf()
-                return START_NOT_STICKY
+                return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
             }
             is PetSpeechStartCommandDecision.Result.StartForeground -> {
                 replacementDecisionHandler.onStartCommand(ownerId, decision.trimmedText)
-                return START_NOT_STICKY
+                return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
             }
         }
     }

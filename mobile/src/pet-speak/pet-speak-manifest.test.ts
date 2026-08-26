@@ -13,7 +13,7 @@ const expoModuleConfigPath = path.resolve(
 )
 
 describe('expo-pet-speech module source manifest and autolinking configuration', () => {
-  it('declares FOREGROUND_SERVICE and FOREGROUND_SERVICE_MEDIA_PLAYBACK permissions and mediaPlayback service in package source', () => {
+  it('declares FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, and REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permissions and mediaPlayback service with stopWithTask=false in package source', () => {
     expect(existsSync(moduleManifestPath)).toBe(true)
     const content = readFileSync(moduleManifestPath, 'utf8')
 
@@ -23,9 +23,13 @@ describe('expo-pet-speech module source manifest and autolinking configuration',
     expect(content).toContain(
       '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"'
     )
+    expect(content).toContain(
+      '<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"'
+    )
     expect(content).toContain('android:name=".PetSpeechForegroundService"')
     expect(content).toContain('android:foregroundServiceType="mediaPlayback"')
     expect(content).toContain('android:exported="false"')
+    expect(content).toContain('android:stopWithTask="false"')
   })
 
   it('registers Android module correctly in expo-module.config.json', () => {

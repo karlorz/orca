@@ -17,6 +17,7 @@ export interface PetSpeechNativeModule {
   stopAsync(): Promise<void>
   acquireVoiceSessionAsync(): Promise<{ held: boolean }>
   releaseVoiceSessionAsync(): Promise<void>
+  updateVoiceSessionNotificationAsync?(text: string): Promise<void>
 }
 
 let nativeModule: PetSpeechNativeModule | null = null
