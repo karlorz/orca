@@ -1,23 +1,22 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { createHash, randomBytes } from 'node:crypto'
-import type { Socket } from 'node:net'
+import { createServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { handleOwnMobileRelayHostControlSocket } from './own-mobile-relay-control-handler'
 import type {
   OwnMobileRelayDeviceCredentialRecord,
-  OwnMobileRelayInviteRecord
+  OwnMobileRelayInviteRecord,
+  OwnMobileRelayOperatorConfig
 } from './own-mobile-relay-types'
 import {
-  handleOwnMobileRelayHostDataSocket,
-  handleOwnMobileRelayPhoneSocket,
-  type OwnMobileRelayRouter,
-  type PendingConnRecord
-} from './own-mobile-relay-splice-handler'
+  createOwnMobileRelayAuthStore,
+  type OwnMobileRelayAuthStore
+} from './own-mobile-relay-auth'
+import type { OwnMobileRelayRouter, PendingConnRecord } from './own-mobile-relay-splice-handler'
+import { registerOwnMobileRelayUpgrades } from './own-mobile-relay-http-upgrades'
+import { createOwnMobileRelayRequestHandler } from './own-mobile-relay-request-routes'
 
 export type OwnMobileRelayListenOptions = {
-  operatorAccessToken: string
+  operator?: OwnMobileRelayOperatorConfig
+  clientId?: string
   origin: string
-  identity?: { userId: string; profileId: string; organizationId: string }
   silenceLimitMs?: number
 }
 
@@ -32,52 +31,18 @@ export type OwnMobileRelayIssuedToken = {
   identity: { userId: string; profileId: string; organizationId: string }
 }
 
-const RELAY_TOKEN_TTL_MS = 60 * 60 * 1000
 const DEFAULT_SILENCE_LIMIT_MS = 15_000
-
-function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  const payload = Buffer.from(JSON.stringify(body))
-  response.writeHead(status, {
-    'content-type': 'application/json',
-    'content-length': payload.byteLength
-  })
-  response.end(payload)
-}
-
-function bearerToken(header: string | undefined): string | null {
-  if (!header?.startsWith('Bearer ')) {
-    return null
-  }
-  const token = header.slice('Bearer '.length).trim()
-  return token.length > 0 ? token : null
-}
-
-function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    request.on('data', (chunk) => chunks.push(chunk as Buffer))
-    request.on('end', () => {
-      if (chunks.length === 0) {
-        resolve(null)
-        return
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown)
-      } catch {
-        reject(new Error('invalid_json'))
-      }
-    })
-    request.on('error', reject)
-  })
-}
 
 export function listenOwnMobileRelay(
   options: OwnMobileRelayListenOptions
 ): Promise<OwnMobileRelayServer> {
   const issued = new Map<string, OwnMobileRelayIssuedToken>()
   const activeSockets = new Set<WebSocket>()
+  const authStore: OwnMobileRelayAuthStore = createOwnMobileRelayAuthStore()
   let advertisedOrigin = options.origin
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
+  const operator = options.operator
+  const configuredClientId = options.clientId ?? 'orca-desktop'
 
   const router: OwnMobileRelayRouter = {
     invites: new Map<string, OwnMobileRelayInviteRecord>(),
@@ -89,198 +54,29 @@ export function listenOwnMobileRelay(
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
 
+  const requestHandler = createOwnMobileRelayRequestHandler({
+    operator,
+    configuredClientId,
+    authStore,
+    issued,
+    advertisedOriginCallback: () => advertisedOrigin,
+    router
+  })
+
   const server = createServer((request, response) => {
-    void handleRequest(request, response)
+    void requestHandler(request, response)
   })
 
-  server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
-    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
-    if (url.pathname === '/v1/host/control') {
-      const relayToken = bearerToken(request.headers.authorization)
-      const grant = relayToken ? issued.get(relayToken) : undefined
-      if (!grant) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-        socket.destroy()
-        return
-      }
-
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        activeSockets.add(ws)
-        const cleanup = (): void => {
-          activeSockets.delete(ws)
-        }
-        ws.once('close', cleanup)
-        ws.once('error', cleanup)
-        handleOwnMobileRelayHostControlSocket(ws, grant, {
-          advertisedOrigin,
-          silenceLimitMs,
-          invites: router.invites,
-          deviceCredentials: router.deviceCredentials,
-          pendingConns: router.pendingConns,
-          onActive: (relayHostId, send) => {
-            router.activeHosts.set(relayHostId, send)
-          },
-          onClose: (relayHostId) => {
-            router.activeHosts.delete(relayHostId)
-          }
-        })
-      })
-      return
-    }
-
-    if (url.pathname.startsWith('/v1/connect/')) {
-      const relayHostId = url.pathname.slice('/v1/connect/'.length)
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        activeSockets.add(ws)
-        const cleanup = (): void => {
-          activeSockets.delete(ws)
-        }
-        ws.once('close', cleanup)
-        ws.once('error', cleanup)
-        handleOwnMobileRelayPhoneSocket(ws, relayHostId, router)
-      })
-      return
-    }
-
-    if (url.pathname.startsWith('/v1/host/data/')) {
-      const connId = url.pathname.slice('/v1/host/data/'.length)
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        activeSockets.add(ws)
-        const cleanup = (): void => {
-          activeSockets.delete(ws)
-        }
-        ws.once('close', cleanup)
-        ws.once('error', cleanup)
-        handleOwnMobileRelayHostDataSocket(ws, connId, router)
-      })
-      return
-    }
-
-    socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
-    socket.destroy()
-  })
-
-  async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
-    if (request.method === 'GET' && url.pathname === '/health') {
-      sendJson(response, 200, { ok: true })
-      return
-    }
-    if (request.method === 'POST' && url.pathname === '/v1/desktop/auth/relay-token') {
-      const access = bearerToken(request.headers.authorization)
-      if (access !== options.operatorAccessToken) {
-        sendJson(response, 401, { error: 'unauthorized' })
-        return
-      }
-      let body: unknown
-      try {
-        body = await readJsonBody(request)
-      } catch {
-        sendJson(response, 400, { error: 'invalid_json' })
-        return
-      }
-      const record = body as { relayHostId?: unknown; hostPublicKeyB64?: unknown }
-      if (typeof record.relayHostId !== 'string' || typeof record.hostPublicKeyB64 !== 'string') {
-        sendJson(response, 400, { error: 'invalid_request' })
-        return
-      }
-      const relayToken = randomBytes(32).toString('base64url')
-      issued.set(relayToken, {
-        relayHostId: record.relayHostId,
-        hostPublicKeyB64: record.hostPublicKeyB64,
-        identity: options.identity ?? {
-          userId: 'lab-user',
-          profileId: 'lab-profile',
-          organizationId: ''
-        }
-      })
-      sendJson(response, 200, {
-        relayToken,
-        expiresAt: Date.now() + RELAY_TOKEN_TTL_MS
-      })
-      return
-    }
-    if (request.method === 'POST' && url.pathname === '/v1/assign') {
-      const relayToken = bearerToken(request.headers.authorization)
-      const grant = relayToken ? issued.get(relayToken) : undefined
-      if (!grant) {
-        sendJson(response, 401, { error: 'unauthorized' })
-        return
-      }
-      let body: unknown
-      try {
-        body = await readJsonBody(request)
-      } catch {
-        sendJson(response, 400, { error: 'invalid_json' })
-        return
-      }
-      const record = body as { v?: unknown; relayHostId?: unknown }
-      if (record.v !== 1 || record.relayHostId !== grant.relayHostId) {
-        sendJson(response, 400, { error: 'invalid_request' })
-        return
-      }
-      sendJson(response, 200, {
-        v: 1,
-        cellUrl: advertisedOrigin,
-        assignmentEpoch: 1,
-        lease: randomBytes(32).toString('base64url')
-      })
-      return
-    }
-    if (request.method === 'POST' && url.pathname === '/v1/resolve') {
-      let body: unknown
-      try {
-        body = await readJsonBody(request)
-      } catch {
-        sendJson(response, 400, { error: 'invalid_json' })
-        return
-      }
-      const record = body as { v?: unknown; relayHostId?: unknown; resumeToken?: unknown }
-      if (
-        record.v !== 1 ||
-        typeof record.relayHostId !== 'string' ||
-        typeof record.resumeToken !== 'string'
-      ) {
-        sendJson(response, 400, { error: 'invalid_request' })
-        return
-      }
-
-      const tokenHash = createHash('sha256').update(record.resumeToken).digest('base64url')
-      const now = Date.now()
-      let matched = false
-
-      for (const cred of router.deviceCredentials.values()) {
-        if (cred.relayHostId === record.relayHostId) {
-          if (cred.currentResumeTokenHash === tokenHash && cred.resumeExpiresAt > now) {
-            matched = true
-            break
-          }
-          if (
-            cred.graceResumeTokenHash === tokenHash &&
-            cred.graceExpiresAt !== undefined &&
-            cred.graceExpiresAt > now
-          ) {
-            matched = true
-            break
-          }
-        }
-      }
-
-      if (!matched) {
-        sendJson(response, 401, { error: 'unauthorized' })
-        return
-      }
-
-      sendJson(response, 200, {
-        v: 1,
-        cellUrl: advertisedOrigin,
-        assignmentEpoch: 1,
-        leaseExpiresAt: Date.now() + 60_000
-      })
-      return
-    }
-    sendJson(response, 404, { error: 'not_found' })
-  }
+  server.on(
+    'upgrade',
+    registerOwnMobileRelayUpgrades(wss, {
+      issued,
+      activeSockets,
+      advertisedOriginCallback: () => advertisedOrigin,
+      silenceLimitMs,
+      router
+    })
+  )
 
   return new Promise((resolve, reject) => {
     server.once('error', reject)

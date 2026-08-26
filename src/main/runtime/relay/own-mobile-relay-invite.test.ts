@@ -4,6 +4,7 @@ import WebSocket from 'ws'
 import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
 import { RelayControlClient } from './relay-control-client'
+import { loginAndObtainSessionToken, TEST_OPERATOR } from './own-mobile-relay-test-auth'
 import type { E2EEKeypair } from '../e2ee-keypair'
 
 function waitForOpen(socket: WebSocket): Promise<void> {
@@ -47,19 +48,23 @@ describe('own mobile relay invite & splice', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -118,19 +123,23 @@ describe('own mobile relay invite & splice', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -218,19 +227,23 @@ describe('own mobile relay invite & splice', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -339,19 +352,23 @@ describe('own mobile relay invite & splice', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -423,7 +440,7 @@ describe('own mobile relay invite & splice', () => {
 
   it('phone auth while no host control is connected -> close 4404', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -448,19 +465,23 @@ describe('own mobile relay invite & splice', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({

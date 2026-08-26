@@ -5,6 +5,7 @@ import WebSocket from 'ws'
 import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
 import { RelayControlClient } from './relay-control-client'
+import { loginAndObtainSessionToken, TEST_OPERATOR } from './own-mobile-relay-test-auth'
 import type { E2EEKeypair } from '../e2ee-keypair'
 
 function nextClose(socket: WebSocket): Promise<{ code: number; reason: string }> {
@@ -67,12 +68,17 @@ async function setupRelayClient(
     publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
   }
   const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-  const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+  const identity = {
+    userId: TEST_OPERATOR.userId,
+    profileId: TEST_OPERATOR.profileId,
+    organizationId: TEST_OPERATOR.organizationId
+  }
 
+  const sessionToken = await loginAndObtainSessionToken(serverOrigin)
   const tokenRes = await fetch(`${serverOrigin}/v1/desktop/auth/relay-token`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer lab-access',
+      authorization: `Bearer ${sessionToken}`,
       'content-type': 'application/json'
     },
     body: JSON.stringify({
@@ -115,7 +121,7 @@ async function setupRelayClient(
 describe('own mobile relay resume + revoke', () => {
   it('1. install -> device-credential-installed (currentVersion 1, future resumeExpiresAt)', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -150,7 +156,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('2. install-status -> committed with same hash; unknown device -> not-found', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -204,7 +210,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('3. Resume auth on cell socket with raw token -> relay-hello ok credentialKind:resume + conn-open kind:resume; splice frame both ways', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -296,7 +302,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('4. Re-install with expectedCurrentHash -> rotation: old token still resumes (grace); device-resume-confirm on that conn -> acceptedAs:grace', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -377,7 +383,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('5. POST /v1/resolve valid -> cellUrl; unknown token -> 401', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -437,7 +443,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('6. revoke -> device-revoked; then resume -> 4401 and resolve -> 401', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 
@@ -502,7 +508,7 @@ describe('own mobile relay resume + revoke', () => {
 
   it('7. install with wrong expectedCurrentHash -> control-error code:hash-mismatch, stored hashes unchanged', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
 

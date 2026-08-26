@@ -3,6 +3,14 @@ export const GRACE_TOKEN_TTL_MS = 5 * 60 * 1000
 export const INVITE_TOKEN_TTL_MS = 10 * 60 * 1000
 export const INVITE_MAX_ATTEMPTS = 8
 
+export type OwnMobileRelayOperatorConfig = {
+  email: string
+  password: string
+  userId: string
+  profileId: string
+  organizationId: string
+}
+
 export type OwnMobileRelayInviteRecord = {
   inviteToken: string
   relayHostId: string

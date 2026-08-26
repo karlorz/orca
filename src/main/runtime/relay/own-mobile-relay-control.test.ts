@@ -3,6 +3,7 @@ import nacl from 'tweetnacl'
 import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
 import { RelayControlClient } from './relay-control-client'
+import { loginAndObtainSessionToken, TEST_OPERATOR } from './own-mobile-relay-test-auth'
 import type { E2EEKeypair } from '../e2ee-keypair'
 
 describe('own mobile relay host-control', () => {
@@ -14,20 +15,24 @@ describe('own mobile relay host-control', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       // Mint token
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -90,12 +95,15 @@ describe('own mobile relay host-control', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
@@ -128,21 +136,25 @@ describe('own mobile relay host-control', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     // Test with short silence limit (100ms) to test silence watchdog
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1',
-      identity,
       silenceLimitMs: 100
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({
@@ -185,19 +197,23 @@ describe('own mobile relay host-control', () => {
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
     const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-    const identity = { userId: 'lab-user', profileId: 'lab-profile', organizationId: '' }
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
 
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
-      origin: 'http://127.0.0.1',
-      identity
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
     })
 
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
       const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({

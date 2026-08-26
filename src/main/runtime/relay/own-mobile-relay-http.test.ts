@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import nacl from 'tweetnacl'
 import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
+import { loginAndObtainSessionToken, TEST_OPERATOR } from './own-mobile-relay-test-auth'
 
 describe('own mobile relay HTTP', () => {
   it('serves GET /health', async () => {
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
     try {
@@ -23,10 +24,12 @@ describe('own mobile relay HTTP', () => {
     const hostPublicKeyB64 = Buffer.from(hostPublicKey).toString('base64')
     const relayHostId = deriveRelayHostId(hostPublicKey)
     const server = await listenOwnMobileRelay({
-      operatorAccessToken: 'lab-access',
+      operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1'
     })
     try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+
       const unauthorized = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -37,7 +40,7 @@ describe('own mobile relay HTTP', () => {
       const tokenResponse = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
         method: 'POST',
         headers: {
-          authorization: 'Bearer lab-access',
+          authorization: `Bearer ${sessionToken}`,
           'content-type': 'application/json'
         },
         body: JSON.stringify({ relayHostId, hostPublicKeyB64 })
