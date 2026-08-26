@@ -344,6 +344,244 @@ describe('own mobile relay invite & splice', () => {
     }
   })
 
+  it('phone sends text and binary frames immediately after relay-hello before host attaches -> host receives buffered frames verbatim', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const assignRes = await fetch(`${server.origin}/v1/assign`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${relayToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ v: 1, relayHostId })
+      })
+      const { cellUrl, assignmentEpoch } = (await assignRes.json()) as {
+        cellUrl: string
+        assignmentEpoch: number
+      }
+
+      let connOpenMsg: { connId: string; connTicket: string } | null = null
+      const client = new RelayControlClient({
+        cellUrl,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: (msg) => {
+          connOpenMsg = msg
+        },
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      await client.connect()
+      const invite = await client.createInvite('device-1')
+
+      const phoneWsUrl = `${server.origin.replace('http://', 'ws://')}/v1/connect/${relayHostId}`
+      const phoneSocket = new WebSocket(phoneWsUrl)
+      await waitForOpen(phoneSocket)
+
+      const helloPromise = nextJson(phoneSocket)
+      phoneSocket.send(
+        JSON.stringify({
+          type: 'relay-auth',
+          v: 1,
+          mode: 'connect',
+          credential: invite.inviteToken
+        })
+      )
+      const hello = await helloPromise
+      expect(hello).toMatchObject({
+        type: 'relay-hello',
+        ok: true,
+        credentialKind: 'invite'
+      })
+
+      // Send early text and binary frames BEFORE host attaches
+      phoneSocket.send('early-phone-text-frame')
+      const earlyBinary = Buffer.from([100, 101, 102, 103])
+      phoneSocket.send(earlyBinary)
+
+      await vi.waitFor(() => expect(connOpenMsg).not.toBeNull())
+      const { connId, connTicket } = connOpenMsg!
+
+      // Host attaches to /v1/host/data/{connId}
+      const hostDataWsUrl = `${server.origin.replace('http://', 'ws://')}/v1/host/data/${connId}`
+      const hostDataSocket = new WebSocket(hostDataWsUrl)
+      await waitForOpen(hostDataSocket)
+
+      const hostReceivedFrames = new Promise<{ data: Buffer | string; isBinary: boolean }[]>(
+        (resolve) => {
+          const frames: { data: Buffer | string; isBinary: boolean }[] = []
+          const onMessage = (raw: WebSocket.RawData, isBinary: boolean) => {
+            frames.push({
+              data: isBinary ? (raw as Buffer) : raw.toString(),
+              isBinary
+            })
+            if (frames.length === 2) {
+              hostDataSocket.off('message', onMessage)
+              resolve(frames)
+            }
+          }
+          hostDataSocket.on('message', onMessage)
+        }
+      )
+
+      hostDataSocket.send(
+        JSON.stringify({
+          type: 'host-data-auth',
+          v: 1,
+          connTicket,
+          generation: 1
+        })
+      )
+
+      const frames = await hostReceivedFrames
+      expect(frames[0].isBinary).toBe(false)
+      expect(frames[0].data).toBe('early-phone-text-frame')
+
+      expect(frames[1].isBinary).toBe(true)
+      expect(Buffer.from(frames[1].data as Buffer)).toEqual(earlyBinary)
+
+      phoneSocket.close()
+      hostDataSocket.close()
+      client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('phone exceeds buffer frame limit before host attach -> phone closed 4401', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const assignRes = await fetch(`${server.origin}/v1/assign`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${relayToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ v: 1, relayHostId })
+      })
+      const { cellUrl, assignmentEpoch } = (await assignRes.json()) as {
+        cellUrl: string
+        assignmentEpoch: number
+      }
+
+      const client = new RelayControlClient({
+        cellUrl,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      await client.connect()
+      const invite = await client.createInvite('device-1')
+
+      const phoneWsUrl = `${server.origin.replace('http://', 'ws://')}/v1/connect/${relayHostId}`
+      const phoneSocket = new WebSocket(phoneWsUrl)
+      await waitForOpen(phoneSocket)
+
+      const helloPromise = nextJson(phoneSocket)
+      const closePromise = nextClose(phoneSocket)
+
+      phoneSocket.send(
+        JSON.stringify({
+          type: 'relay-auth',
+          v: 1,
+          mode: 'connect',
+          credential: invite.inviteToken
+        })
+      )
+      const hello = await helloPromise
+      expect(hello).toMatchObject({
+        type: 'relay-hello',
+        ok: true
+      })
+
+      // Send 17 frames (MAX_BUFFERED_FRAMES is 16)
+      for (let i = 0; i < 17; i++) {
+        phoneSocket.send(`frame-${i}`)
+      }
+
+      const close = await closePromise
+      expect(close.code).toBe(4401)
+
+      client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
   it('bad invite token -> relay-hello ok:false code:4401 then close 4401', async () => {
     const hostKeys = nacl.box.keyPair()
     const keypair: E2EEKeypair = {

@@ -1,32 +1,104 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
 import type {
+  OwnMobileRelayBufferedFrame,
   OwnMobileRelayDeviceCredentialRecord,
-  OwnMobileRelayInviteRecord
+  OwnMobileRelayRouter,
+  PendingConnRecord
 } from './own-mobile-relay-types'
 
-export type PendingConnRecord = {
-  connId: string
-  connTicket: string
-  relayHostId: string
-  relayDeviceId: string
-  expiresAt: number
-  kind: 'invite' | 'resume'
-  acceptedAs?: 'current' | 'grace'
-  phoneSocket: WebSocket
-  hostSocket?: WebSocket
-}
+export type { OwnMobileRelayBufferedFrame, OwnMobileRelayRouter, PendingConnRecord }
 
-export type OwnMobileRelayRouter = {
-  invites: Map<string, OwnMobileRelayInviteRecord>
-  deviceCredentials: Map<string, OwnMobileRelayDeviceCredentialRecord>
-  pendingConns: Map<string, PendingConnRecord>
-  connsByTicket: Map<string, PendingConnRecord>
-  activeHosts: Map<string, (msg: object) => void>
-}
-
+const MAX_BUFFERED_FRAMES = 16
+const MAX_BUFFERED_BYTES = 1024 * 1024
 const ATTACH_DEADLINE_MS = 5_000
 const LEASE_TTL_MS = 60_000
+
+function frameByteLength(raw: RawData): number {
+  if (typeof raw === 'string') {
+    return Buffer.byteLength(raw)
+  }
+  if (Buffer.isBuffer(raw)) {
+    return raw.length
+  }
+  if (Array.isArray(raw)) {
+    return raw.reduce((sum, b) => sum + b.length, 0)
+  }
+  return raw.byteLength
+}
+
+function clearPendingConn(pendingConn: PendingConnRecord, router: OwnMobileRelayRouter): void {
+  if (pendingConn.attachTimer) {
+    clearTimeout(pendingConn.attachTimer)
+    pendingConn.attachTimer = undefined
+  }
+  if (pendingConn.onPhoneMessage) {
+    pendingConn.phoneSocket.off('message', pendingConn.onPhoneMessage)
+    pendingConn.onPhoneMessage = undefined
+  }
+  router.pendingConns.delete(pendingConn.connId)
+  router.connsByTicket.delete(pendingConn.connTicket)
+}
+
+function setupPendingBuffering(
+  pendingConn: PendingConnRecord,
+  router: OwnMobileRelayRouter,
+  ws: WebSocket
+): void {
+  router.pendingConns.set(pendingConn.connId, pendingConn)
+  router.connsByTicket.set(pendingConn.connTicket, pendingConn)
+
+  const onPhoneMessage = (raw: RawData, isBinary: boolean): void => {
+    if (!pendingConn.bufferedFrames) {
+      return
+    }
+    const newBytes = (pendingConn.bufferedBytes ?? 0) + frameByteLength(raw)
+    if (
+      pendingConn.bufferedFrames.length + 1 > MAX_BUFFERED_FRAMES ||
+      newBytes > MAX_BUFFERED_BYTES
+    ) {
+      clearPendingConn(pendingConn, router)
+      ws.close(4401, 'buffer_limit_exceeded')
+      return
+    }
+    pendingConn.bufferedFrames.push({ raw, isBinary })
+    pendingConn.bufferedBytes = newBytes
+  }
+
+  pendingConn.onPhoneMessage = onPhoneMessage
+  ws.on('message', onPhoneMessage)
+
+  const remaining = Math.max(0, pendingConn.expiresAt - Date.now())
+  pendingConn.attachTimer = setTimeout(() => {
+    clearPendingConn(pendingConn, router)
+    if (ws.readyState === ws.OPEN) {
+      ws.close(4408, 'attach_timeout')
+    }
+  }, remaining)
+}
+
+function matchDeviceCredential(
+  deviceCredentials: Map<string, OwnMobileRelayDeviceCredentialRecord>,
+  relayHostId: string,
+  tokenHash: string
+): { device: OwnMobileRelayDeviceCredentialRecord; acceptedAs: 'current' | 'grace' } | null {
+  const now = Date.now()
+  for (const record of deviceCredentials.values()) {
+    if (record.relayHostId === relayHostId) {
+      if (record.currentResumeTokenHash === tokenHash && record.resumeExpiresAt > now) {
+        return { device: record, acceptedAs: 'current' }
+      }
+      if (
+        record.graceResumeTokenHash === tokenHash &&
+        record.graceExpiresAt !== undefined &&
+        record.graceExpiresAt > now
+      ) {
+        return { device: record, acceptedAs: 'grace' }
+      }
+    }
+  }
+  return null
+}
 
 export function handleOwnMobileRelayPhoneSocket(
   ws: WebSocket,
@@ -43,8 +115,7 @@ export function handleOwnMobileRelayPhoneSocket(
 
   const cleanup = (): void => {
     if (pendingConn) {
-      router.pendingConns.delete(pendingConn.connId)
-      router.connsByTicket.delete(pendingConn.connTicket)
+      clearPendingConn(pendingConn, router)
       if (pendingConn.hostSocket && pendingConn.hostSocket.readyState === ws.OPEN) {
         pendingConn.hostSocket.close(4408, 'peer_closed')
       }
@@ -55,7 +126,6 @@ export function handleOwnMobileRelayPhoneSocket(
     cleanup()
     ws.close(4401, 'socket_error')
   })
-
   ws.once('close', cleanup)
 
   ws.once('message', (raw: RawData, isBinary: boolean) => {
@@ -64,7 +134,7 @@ export function handleOwnMobileRelayPhoneSocket(
       return
     }
 
-    let parsed: unknown
+    let parsed: { type?: unknown; v?: unknown; mode?: unknown; credential?: unknown }
     try {
       parsed = JSON.parse(raw.toString('utf8'))
     } catch {
@@ -75,25 +145,20 @@ export function handleOwnMobileRelayPhoneSocket(
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
-      (parsed as { type?: unknown }).type !== 'relay-auth'
+      parsed.type !== 'relay-auth' ||
+      parsed.v !== 1 ||
+      parsed.mode !== 'connect' ||
+      typeof parsed.credential !== 'string'
     ) {
       ws.close(4401, 'invalid_auth')
       return
     }
 
-    const authMsg = parsed as {
-      type: 'relay-auth'
-      v?: unknown
-      mode?: unknown
-      credential?: unknown
-    }
+    const invite = router.invites.get(parsed.credential)
+    let relayDeviceId = ''
+    let kind: 'invite' | 'resume' = 'invite'
+    let acceptedAs: 'current' | 'grace' | undefined
 
-    if (authMsg.v !== 1 || authMsg.mode !== 'connect' || typeof authMsg.credential !== 'string') {
-      ws.close(4401, 'invalid_auth')
-      return
-    }
-
-    const invite = router.invites.get(authMsg.credential)
     if (invite) {
       if (
         invite.relayHostId !== relayHostId ||
@@ -102,115 +167,54 @@ export function handleOwnMobileRelayPhoneSocket(
       ) {
         invite.remainingAttempts -= 1
         if (invite.remainingAttempts <= 0) {
-          router.invites.delete(authMsg.credential)
+          router.invites.delete(parsed.credential)
         }
         ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
         ws.close(4401, 'invalid_invite')
         return
       }
-
-      const connId = randomBytes(16).toString('hex')
-      const connTicket = randomBytes(32).toString('base64url')
-      const expiresAt = Date.now() + ATTACH_DEADLINE_MS
-
-      pendingConn = {
-        connId,
-        connTicket,
-        relayHostId,
-        relayDeviceId: invite.relayDeviceId,
-        expiresAt,
-        kind: 'invite',
-        phoneSocket: ws
+      relayDeviceId = invite.relayDeviceId
+    } else {
+      const tokenHash = createHash('sha256').update(parsed.credential).digest('base64url')
+      const match = matchDeviceCredential(router.deviceCredentials, relayHostId, tokenHash)
+      if (!match) {
+        ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
+        ws.close(4401, 'invalid_resume_token')
+        return
       }
-      router.pendingConns.set(connId, pendingConn)
-      router.connsByTicket.set(connTicket, pendingConn)
-
-      // Notify desktop host control
-      hostSender({
-        type: 'conn-open',
-        connId,
-        connTicket,
-        kind: 'invite',
-        relayDeviceId: invite.relayDeviceId,
-        attachDeadlineMs: ATTACH_DEADLINE_MS
-      })
-
-      // Reply to phone
-      ws.send(
-        JSON.stringify({
-          type: 'relay-hello',
-          ok: true,
-          credentialKind: 'invite',
-          leaseExpiresAt: Date.now() + LEASE_TTL_MS
-        })
-      )
-      return
+      relayDeviceId = match.device.relayDeviceId
+      kind = 'resume'
+      acceptedAs = match.acceptedAs
     }
-
-    // Check resume token
-    const tokenHash = createHash('sha256').update(authMsg.credential).digest('base64url')
-    let matchedDevice: OwnMobileRelayDeviceCredentialRecord | null = null
-    let acceptedAs: 'current' | 'grace' | null = null
-
-    const now = Date.now()
-    for (const record of router.deviceCredentials.values()) {
-      if (record.relayHostId === relayHostId) {
-        if (record.currentResumeTokenHash === tokenHash && record.resumeExpiresAt > now) {
-          matchedDevice = record
-          acceptedAs = 'current'
-          break
-        }
-        if (
-          record.graceResumeTokenHash === tokenHash &&
-          record.graceExpiresAt !== undefined &&
-          record.graceExpiresAt > now
-        ) {
-          matchedDevice = record
-          acceptedAs = 'grace'
-          break
-        }
-      }
-    }
-
-    if (!matchedDevice || !acceptedAs) {
-      ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
-      ws.close(4401, 'invalid_resume_token')
-      return
-    }
-
-    const connId = randomBytes(16).toString('hex')
-    const connTicket = randomBytes(32).toString('base64url')
-    const expiresAt = Date.now() + ATTACH_DEADLINE_MS
 
     pendingConn = {
-      connId,
-      connTicket,
+      connId: randomBytes(16).toString('hex'),
+      connTicket: randomBytes(32).toString('base64url'),
       relayHostId,
-      relayDeviceId: matchedDevice.relayDeviceId,
-      expiresAt,
-      kind: 'resume',
+      relayDeviceId,
+      expiresAt: Date.now() + ATTACH_DEADLINE_MS,
+      kind,
       acceptedAs,
-      phoneSocket: ws
+      phoneSocket: ws,
+      bufferedFrames: [],
+      bufferedBytes: 0
     }
-    router.pendingConns.set(connId, pendingConn)
-    router.connsByTicket.set(connTicket, pendingConn)
+    setupPendingBuffering(pendingConn, router, ws)
 
-    // Notify desktop host control
     hostSender({
       type: 'conn-open',
-      connId,
-      connTicket,
-      kind: 'resume',
-      relayDeviceId: matchedDevice.relayDeviceId,
+      connId: pendingConn.connId,
+      connTicket: pendingConn.connTicket,
+      kind,
+      relayDeviceId,
       attachDeadlineMs: ATTACH_DEADLINE_MS
     })
 
-    // Reply to phone
     ws.send(
       JSON.stringify({
         type: 'relay-hello',
         ok: true,
-        credentialKind: 'resume',
+        credentialKind: kind,
         leaseExpiresAt: Date.now() + LEASE_TTL_MS
       })
     )
@@ -229,16 +233,14 @@ export function handleOwnMobileRelayHostDataSocket(
   }
 
   if (Date.now() > pendingConn.expiresAt) {
-    router.pendingConns.delete(connId)
-    router.connsByTicket.delete(pendingConn.connTicket)
+    clearPendingConn(pendingConn, router)
     ws.close(4401, 'attach_expired')
     return
   }
 
   const cleanup = (): void => {
-    router.pendingConns.delete(connId)
-    router.connsByTicket.delete(pendingConn.connTicket)
-    if (pendingConn.phoneSocket && pendingConn.phoneSocket.readyState === ws.OPEN) {
+    clearPendingConn(pendingConn, router)
+    if (pendingConn.phoneSocket?.readyState === ws.OPEN) {
       pendingConn.phoneSocket.close(4408, 'peer_closed')
     }
   }
@@ -247,7 +249,6 @@ export function handleOwnMobileRelayHostDataSocket(
     cleanup()
     ws.close(4401, 'socket_error')
   })
-
   ws.once('close', cleanup)
 
   ws.once('message', (raw: RawData, isBinary: boolean) => {
@@ -256,7 +257,7 @@ export function handleOwnMobileRelayHostDataSocket(
       return
     }
 
-    let parsed: unknown
+    let parsed: { type?: unknown; v?: unknown; connTicket?: unknown; generation?: unknown }
     try {
       parsed = JSON.parse(raw.toString('utf8'))
     } catch {
@@ -267,41 +268,36 @@ export function handleOwnMobileRelayHostDataSocket(
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
-      (parsed as { type?: unknown }).type !== 'host-data-auth'
+      parsed.type !== 'host-data-auth' ||
+      parsed.v !== 1 ||
+      parsed.connTicket !== pendingConn.connTicket ||
+      parsed.generation !== 1
     ) {
       ws.close(4401, 'invalid_auth')
       return
     }
 
-    const authMsg = parsed as {
-      type: 'host-data-auth'
-      v?: unknown
-      connTicket?: unknown
-      generation?: unknown
-    }
-
-    if (
-      authMsg.v !== 1 ||
-      authMsg.connTicket !== pendingConn.connTicket ||
-      authMsg.generation !== 1
-    ) {
-      ws.close(4401, 'auth_mismatch')
-      return
-    }
-
     if (Date.now() > pendingConn.expiresAt) {
-      router.pendingConns.delete(connId)
-      router.connsByTicket.delete(pendingConn.connTicket)
+      clearPendingConn(pendingConn, router)
       ws.close(4401, 'attach_expired')
       return
     }
 
+    clearPendingConn(pendingConn, router)
     pendingConn.hostSocket = ws
-    spliceSockets(pendingConn.phoneSocket, ws)
+    const buffered = pendingConn.bufferedFrames ?? []
+    pendingConn.bufferedFrames = undefined
+    pendingConn.bufferedBytes = undefined
+
+    spliceSockets(pendingConn.phoneSocket, ws, buffered)
   })
 }
 
-function spliceSockets(phone: WebSocket, host: WebSocket): void {
+function spliceSockets(
+  phone: WebSocket,
+  host: WebSocket,
+  bufferedFrames?: OwnMobileRelayBufferedFrame[]
+): void {
   const forwardToHost = (raw: RawData, isBinary: boolean): void => {
     if (host.readyState === host.OPEN) {
       host.send(raw, { binary: isBinary })
@@ -316,6 +312,14 @@ function spliceSockets(phone: WebSocket, host: WebSocket): void {
 
   phone.on('message', forwardToHost)
   host.on('message', forwardToPhone)
+
+  if (bufferedFrames && bufferedFrames.length > 0) {
+    for (const frame of bufferedFrames) {
+      if (host.readyState === host.OPEN) {
+        host.send(frame.raw, { binary: frame.isBinary })
+      }
+    }
+  }
 
   phone.once('close', () => {
     host.off('message', forwardToPhone)
