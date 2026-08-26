@@ -1,5 +1,4 @@
 import { Text, View } from 'react-native'
-import { Gauge } from 'lucide-react-native'
 import {
   getActiveProviderRateLimits,
   getProviderUsageWindows,
@@ -8,7 +7,7 @@ import {
   type AccountsSnapshot,
   type UsageProviderDescriptor
 } from '../components/AccountUsage'
-import { GrokIcon } from '../components/AgentIcons'
+import { UsageProviderIcon } from '../components/UsageProviderIcon'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-accounts-screen-styles'
 
@@ -26,11 +25,7 @@ export function MobileAccountsDisplayProviderSection(props: {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        {props.descriptor.id === 'grok' ? (
-          <GrokIcon size={14} />
-        ) : (
-          <Gauge size={14} color={colors.textMuted} />
-        )}
+        <UsageProviderIcon id={props.descriptor.id} size={14} mutedColor={colors.textMuted} />
         <Text style={styles.sectionHeading}>{props.descriptor.label}</Text>
       </View>
       <View style={styles.card}>
