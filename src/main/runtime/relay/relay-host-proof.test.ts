@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import nacl from 'tweetnacl'
 import {
   answerRelayHostChallenge,
+  createRelayHostChallenge,
   type RelayHostChallenge,
   type RelayHostProofContext
 } from './relay-host-proof'
@@ -210,6 +211,37 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
       localNow: issuedAt
     })
     expect(answerRelayHostChallenge(challenge, context)).toBeNull()
+  })
+
+  it('accepts a challenge created by createRelayHostChallenge', () => {
+    const hostKeys = nacl.box.keyPair()
+    const now = 1_700_000_000_000
+    const context: RelayHostProofContext = {
+      relayOrigin: 'https://orca-relay.karldigi.dev',
+      userId: 'user-1',
+      profileId: 'profile-1',
+      organizationId: 'org-1',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      hostPublicKey: hostKeys.publicKey,
+      hostSecretKey: hostKeys.secretKey,
+      assignmentEpoch: 3,
+      resumeRequested: false,
+      now: () => now
+    }
+    const challenge = createRelayHostChallenge({
+      relayOrigin: context.relayOrigin,
+      userId: context.userId,
+      profileId: context.profileId,
+      organizationId: context.organizationId,
+      relayHostId: context.relayHostId,
+      hostPublicKey: context.hostPublicKey,
+      assignmentEpoch: context.assignmentEpoch,
+      resumeRequested: context.resumeRequested,
+      now: context.now
+    })
+    const proof = answerRelayHostChallenge(challenge, context)
+    expect(proof).toEqual(expect.any(String))
+    expect(proof?.length).toBeGreaterThan(0)
   })
 
   it('rejects a challenge that expires before it is issued', () => {

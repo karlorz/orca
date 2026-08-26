@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import nacl from 'tweetnacl'
 
 const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
@@ -15,6 +15,20 @@ export type RelayHostChallenge = {
   nonceB64: string
   ciphertextB64: string
   expiresAt: number
+}
+
+export type RelayHostChallengeCreateInput = {
+  relayOrigin: string
+  userId: string
+  profileId: string
+  organizationId: string
+  relayHostId: string
+  hostPublicKey: Uint8Array
+  assignmentEpoch: number
+  previousGeneration?: number
+  resumeRequested: boolean
+  now?: () => number
+  challengeId?: string
 }
 
 export type RelayHostProofContext = {
@@ -47,6 +61,88 @@ function uint64(value: number): Uint8Array {
   const bytes = new Uint8Array(8)
   new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
   return bytes
+}
+
+function uint32(value: number): Uint8Array {
+  const bytes = new Uint8Array(4)
+  new DataView(bytes.buffer).setUint32(0, value, false)
+  return bytes
+}
+
+function concat(parts: readonly Uint8Array[]): Uint8Array {
+  const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))
+  let offset = 0
+  for (const part of parts) {
+    output.set(part, offset)
+    offset += part.byteLength
+  }
+  return output
+}
+
+function field(name: string, value: Uint8Array): Uint8Array {
+  const encodedName = textEncoder.encode(name)
+  return concat([uint32(encodedName.byteLength), encodedName, uint32(value.byteLength), value])
+}
+
+function canonicalBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64')
+}
+
+function encodeTranscript(
+  input: RelayHostChallengeCreateInput,
+  issuedAt: number,
+  expiresAt: number,
+  relayKey: Uint8Array,
+  nonce: Uint8Array,
+  challengeId: string
+): Uint8Array {
+  const previousGeneration =
+    input.previousGeneration === undefined ? new Uint8Array() : uint64(input.previousGeneration)
+  return concat([
+    field('protocol', textEncoder.encode(HOST_PROOF_TRANSCRIPT_DOMAIN)),
+    field('version', new Uint8Array([1])),
+    field('relayOrigin', textEncoder.encode(input.relayOrigin)),
+    field('relayEphemeralPublicKey', relayKey),
+    field('challengeNonce', nonce),
+    field('challengeId', textEncoder.encode(challengeId)),
+    field('issuedAt', uint64(issuedAt)),
+    field('expiresAt', uint64(expiresAt)),
+    field('userId', textEncoder.encode(input.userId)),
+    field('profileId', textEncoder.encode(input.profileId)),
+    field('organizationId', textEncoder.encode(input.organizationId)),
+    field('relayHostId', textEncoder.encode(input.relayHostId)),
+    field('hostPublicKey', input.hostPublicKey),
+    field('assignmentEpoch', uint64(input.assignmentEpoch)),
+    field('previousGeneration', previousGeneration),
+    field('resumeRequested', new Uint8Array([input.resumeRequested ? 1 : 0]))
+  ])
+}
+
+export function createRelayHostChallenge(input: RelayHostChallengeCreateInput): RelayHostChallenge {
+  const issuedAt = (input.now ?? Date.now)()
+  const expiresAt = issuedAt + MAX_HOST_PROOF_CHALLENGE_WINDOW_MS
+  const challengeId = input.challengeId ?? randomBytes(16).toString('hex')
+  const ephemeral = nacl.box.keyPair()
+  const nonce = new Uint8Array(randomBytes(24))
+  const secret = new Uint8Array(randomBytes(32))
+  const transcript = encodeTranscript(
+    input,
+    issuedAt,
+    expiresAt,
+    ephemeral.publicKey,
+    nonce,
+    challengeId
+  )
+  const domain = textEncoder.encode(`${HOST_CHALLENGE_PLAINTEXT_DOMAIN}\0`)
+  const plaintext = concat([domain, uint32(transcript.byteLength), transcript, secret])
+  const ciphertext = nacl.box(plaintext, nonce, input.hostPublicKey, ephemeral.secretKey)
+  return {
+    challengeId,
+    relayEphemeralPublicKeyB64: canonicalBase64(ephemeral.publicKey),
+    nonceB64: canonicalBase64(nonce),
+    ciphertextB64: canonicalBase64(ciphertext),
+    expiresAt
+  }
 }
 
 function equal(left: Uint8Array | undefined, right: Uint8Array): boolean {
