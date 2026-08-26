@@ -6,6 +6,8 @@ import type {
   OwnMobileRelayRouter,
   PendingConnRecord
 } from './own-mobile-relay-types'
+import { matchOwnMobileRelayDeviceCredential } from './own-mobile-relay-device-credential-match'
+import { spliceOwnMobileRelaySockets } from './own-mobile-relay-socket-splice'
 
 export type { OwnMobileRelayBufferedFrame, OwnMobileRelayRouter, PendingConnRecord }
 
@@ -74,29 +76,6 @@ function setupPendingBuffering(
   }, remaining)
 }
 
-function matchDeviceCredential(
-  deviceCredentials: Map<string, OwnMobileRelayDeviceCredentialRecord>,
-  relayHostId: string,
-  tokenHash: string
-): { device: OwnMobileRelayDeviceCredentialRecord; acceptedAs: 'current' | 'grace' } | null {
-  const now = Date.now()
-  for (const record of deviceCredentials.values()) {
-    if (record.relayHostId === relayHostId) {
-      if (record.currentResumeTokenHash === tokenHash && record.resumeExpiresAt > now) {
-        return { device: record, acceptedAs: 'current' }
-      }
-      if (
-        record.graceResumeTokenHash === tokenHash &&
-        record.graceExpiresAt !== undefined &&
-        record.graceExpiresAt > now
-      ) {
-        return { device: record, acceptedAs: 'grace' }
-      }
-    }
-  }
-  return null
-}
-
 export function handleOwnMobileRelayPhoneSocket(
   ws: WebSocket,
   relayHostId: string,
@@ -158,6 +137,7 @@ export function handleOwnMobileRelayPhoneSocket(
     let relayDeviceId = ''
     let kind: 'invite' | 'resume' = 'invite'
     let acceptedAs: 'current' | 'grace' | undefined
+    let resumeCredential: OwnMobileRelayDeviceCredentialRecord | undefined
 
     if (invite) {
       if (
@@ -176,7 +156,11 @@ export function handleOwnMobileRelayPhoneSocket(
       relayDeviceId = invite.relayDeviceId
     } else {
       const tokenHash = createHash('sha256').update(parsed.credential).digest('base64url')
-      const match = matchDeviceCredential(router.deviceCredentials, relayHostId, tokenHash)
+      const match = matchOwnMobileRelayDeviceCredential(
+        router.deviceCredentials,
+        relayHostId,
+        tokenHash
+      )
       if (!match) {
         ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
         ws.close(4401, 'invalid_resume_token')
@@ -185,6 +169,7 @@ export function handleOwnMobileRelayPhoneSocket(
       relayDeviceId = match.device.relayDeviceId
       kind = 'resume'
       acceptedAs = match.acceptedAs
+      resumeCredential = match.device
     }
 
     pendingConn = {
@@ -215,7 +200,17 @@ export function handleOwnMobileRelayPhoneSocket(
         type: 'relay-hello',
         ok: true,
         credentialKind: kind,
-        leaseExpiresAt: Date.now() + LEASE_TTL_MS
+        leaseExpiresAt: Date.now() + LEASE_TTL_MS,
+        ...(kind === 'resume' && resumeCredential && acceptedAs
+          ? {
+              acceptedCredentialVersion: resumeCredential.currentVersion,
+              acceptedAs,
+              resumeExpiresAt: resumeCredential.resumeExpiresAt,
+              ...(acceptedAs === 'grace' && resumeCredential.graceExpiresAt !== undefined
+                ? { graceExpiresAt: resumeCredential.graceExpiresAt }
+                : {})
+            }
+          : {})
       })
     )
   })
@@ -289,49 +284,6 @@ export function handleOwnMobileRelayHostDataSocket(
     pendingConn.bufferedFrames = undefined
     pendingConn.bufferedBytes = undefined
 
-    spliceSockets(pendingConn.phoneSocket, ws, buffered)
-  })
-}
-
-function spliceSockets(
-  phone: WebSocket,
-  host: WebSocket,
-  bufferedFrames?: OwnMobileRelayBufferedFrame[]
-): void {
-  const forwardToHost = (raw: RawData, isBinary: boolean): void => {
-    if (host.readyState === host.OPEN) {
-      host.send(raw, { binary: isBinary })
-    }
-  }
-
-  const forwardToPhone = (raw: RawData, isBinary: boolean): void => {
-    if (phone.readyState === phone.OPEN) {
-      phone.send(raw, { binary: isBinary })
-    }
-  }
-
-  phone.on('message', forwardToHost)
-  host.on('message', forwardToPhone)
-
-  if (bufferedFrames && bufferedFrames.length > 0) {
-    for (const frame of bufferedFrames) {
-      if (host.readyState === host.OPEN) {
-        host.send(frame.raw, { binary: frame.isBinary })
-      }
-    }
-  }
-
-  phone.once('close', () => {
-    host.off('message', forwardToPhone)
-    if (host.readyState === host.OPEN) {
-      host.close(4408, 'peer_closed')
-    }
-  })
-
-  host.once('close', () => {
-    phone.off('message', forwardToHost)
-    if (phone.readyState === phone.OPEN) {
-      phone.close(4408, 'peer_closed')
-    }
+    spliceOwnMobileRelaySockets(pendingConn.phoneSocket, ws, buffered)
   })
 }

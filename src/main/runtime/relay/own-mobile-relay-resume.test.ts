@@ -250,9 +250,13 @@ describe('own mobile relay resume + revoke', () => {
       expect(hello).toMatchObject({
         type: 'relay-hello',
         ok: true,
-        credentialKind: 'resume'
+        credentialKind: 'resume',
+        acceptedCredentialVersion: 1,
+        acceptedAs: 'current',
+        resumeExpiresAt: expect.any(Number)
       })
       expect((hello as { leaseExpiresAt?: number }).leaseExpiresAt).toBeGreaterThan(Date.now())
+      expect((hello as { resumeExpiresAt?: number }).resumeExpiresAt).toBeGreaterThan(Date.now())
 
       await vi.waitFor(() => expect(connOpenMsg).not.toBeNull())
       expect(connOpenMsg).toMatchObject({
