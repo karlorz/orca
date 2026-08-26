@@ -42,3 +42,18 @@ This document specifies the manual security verification procedures for the own-
 
 10. **No Hardcoded Domains**
     - [ ] No hardcoded references to proprietary external domains (e.g., `*.onorca.dev`) exist in relay connection configuration.
+
+11. **Standalone Deployment & State Authority**
+    - [ ] **First Bootstrap Serve**: Run `node own-mobile-relay.cjs serve` (or legacy no-subcommand invocation) with complete one-time bootstrap variables:
+      - `OWN_RELAY_STATE_PATH`: Path to SQLite database file.
+      - `OWN_RELAY_ORIGIN`: Advertised public Relay origin (e.g. `https://orca-relay.example.com`).
+      - `OWN_RELAY_AUTH_ORIGIN`: Distinct auth origin for password change form submissions (e.g. `https://orca-auth.example.com` or identical to Relay origin if unified).
+      - `OWN_RELAY_CLIENT_ID`: Configured desktop client ID (e.g. `orca-desktop-prod`).
+      - Complete operator credentials (`OWN_RELAY_OPERATOR_EMAIL`, `OWN_RELAY_OPERATOR_PASSWORD`, `OWN_RELAY_OPERATOR_USER_ID`, `OWN_RELAY_OPERATOR_PROFILE_ID`, optional `OWN_RELAY_OPERATOR_ORG_ID`).
+    - [ ] **Steady-State Restart**: After first bootstrap, operator credential environment variables are purged from the host environment / systemd unit. The service starts using only state path, origins, client ID, and listen settings.
+    - [ ] **Fail-Closed on Consumed Bootstrap**: If any bootstrap operator variable is supplied to an already initialized database, the service immediately fails startup before opening network listeners with `bootstrap_already_complete`.
+    - [ ] **Attended CLI Password Management**: Password management is executed via interactive CLI commands requiring a connected TTY:
+      - `node own-mobile-relay.cjs account change-password`: Prompts interactively with echo suppression for current password, new password, and confirmation.
+      - `node own-mobile-relay.cjs account reset-password`: Prompts interactively with echo suppression for new password and confirmation.
+      - Both CLI commands reject password arguments, options, and secret-bearing environment variables.
+      - Both CLI commands increment `auth_epoch`, revoking all active desktop sessions and relay grants while preserving mobile device registrations.

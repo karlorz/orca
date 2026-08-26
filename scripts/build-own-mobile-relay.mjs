@@ -20,7 +20,7 @@ try {
     format: 'cjs',
     minify: false,
     sourcemap: true,
-    target: 'node18'
+    target: 'node22'
   })
   process.stdout.write(`[build-own-mobile-relay] Successfully built ${OUT_FILE}\n`)
 } catch (error) {

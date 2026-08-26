@@ -29,6 +29,7 @@ export type OwnMobileRelayRequestContext = {
   configuredClientId: string
   authStore: OwnMobileRelayAuthStore
   advertisedOriginCallback: () => string
+  authOriginCallback?: () => string
   router: OwnMobileRelayRouter
   throttle?: AuthThrottle
   passwordPolicy?: PasswordPolicy
@@ -49,10 +50,13 @@ export function createOwnMobileRelayRequestHandler(
         return
       }
       if (request.method === 'POST') {
+        const authOrigin = context.authOriginCallback
+          ? context.authOriginCallback()
+          : context.advertisedOriginCallback()
         await handlePasswordPost(
           request,
           context.securityState,
-          context.advertisedOriginCallback(),
+          authOrigin,
           response,
           context.throttle,
           context.passwordPolicy
