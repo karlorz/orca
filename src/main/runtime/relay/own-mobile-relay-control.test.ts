@@ -379,4 +379,380 @@ describe('own mobile relay host-control', () => {
       await server.close()
     }
   })
+
+  it('closes within one heartbeat interval after parent session logout', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const silenceLimitMs = 60
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Log out parent session
+      const logoutRes = await fetch(`${server.origin}/v1/desktop/auth/logout`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${sessionToken}` }
+      })
+      expect(logoutRes.status).toBe(200)
+
+      // Within one heartbeat interval (silenceLimitMs / 3 = 20ms), control socket closes
+      await vi.waitFor(() => expect(client.isLive()).toBe(false), { timeout: 500 })
+      expect(onClose).toHaveBeenCalledWith(4401)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('closes after account authorization epoch advances from password change/reset', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const { createOwnMobileRelaySecurityStateMemory } =
+      await import('./own-mobile-relay-security-state-memory')
+    const securityState = createOwnMobileRelaySecurityStateMemory()
+
+    const silenceLimitMs = 60
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      securityState,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Replace password verifier which bumps authEpoch
+      const acc = await securityState.getAccountPasswordRecord()
+      expect(acc).not.toBeNull()
+      const replaceResult = await securityState.replacePasswordVerifier({
+        expectedVerifierVersion: acc!.verifierVersion,
+        newPasswordRecord: {
+          version: 1,
+          salt: '00'.repeat(16),
+          verifier: '11'.repeat(32),
+          params: {
+            N: 1024,
+            r: 8,
+            p: 1,
+            keyLen: 32,
+            maxmem: 64 * 1024 * 1024
+          }
+        }
+      })
+      expect(replaceResult.ok).toBe(true)
+
+      await vi.waitFor(() => expect(client.isLive()).toBe(false), { timeout: 500 })
+      expect(onClose).toHaveBeenCalledWith(4401)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('closes after grant expiry and after parent session expiry', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const { createOwnMobileRelaySecurityStateMemory } =
+      await import('./own-mobile-relay-security-state-memory')
+    let fakeNow = Date.now()
+    const baseState = createOwnMobileRelaySecurityStateMemory()
+    const state: typeof baseState = {
+      ...baseState,
+      validateRelayGrantById: (grantId, hostId, now) =>
+        baseState.validateRelayGrantById(grantId, hostId, now ?? fakeNow)
+    }
+
+    const silenceLimitMs = 60
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      securityState: state,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Advance time beyond grant TTL (e.g. + 2 days)
+      fakeNow += 48 * 60 * 60 * 1000
+
+      await vi.waitFor(() => expect(client.isLive()).toBe(false), { timeout: 500 })
+      expect(onClose).toHaveBeenCalledWith(4401)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('revalidation storage failure closes control rather than trusting previous grant', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const { createOwnMobileRelaySecurityStateMemory } =
+      await import('./own-mobile-relay-security-state-memory')
+    const baseState = createOwnMobileRelaySecurityStateMemory()
+    let throwOnRevalidate = false
+    const state: typeof baseState = {
+      ...baseState,
+      validateRelayGrantById: async (grantId, hostId, now) => {
+        if (throwOnRevalidate) {
+          throw new Error('simulated_storage_failure')
+        }
+        return baseState.validateRelayGrantById(grantId, hostId, now)
+      }
+    }
+
+    const silenceLimitMs = 60
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      securityState: state,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Trigger storage failure on revalidation
+      throwOnRevalidate = true
+
+      await vi.waitFor(() => expect(client.isLive()).toBe(false), { timeout: 500 })
+      expect(onClose).toHaveBeenCalledWith(4401)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('fails the control socket closed non-secretly if active control dispatch rejects unexpectedly', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const { createOwnMobileRelaySecurityStateMemory } =
+      await import('./own-mobile-relay-security-state-memory')
+    const baseState = createOwnMobileRelaySecurityStateMemory()
+    const state: typeof baseState = {
+      ...baseState,
+      revokeDeviceCredential: async () => {
+        throw new Error('simulated_dispatch_rejection')
+      }
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      securityState: state,
+      origin: 'http://127.0.0.1'
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Send revoke device request which will trigger the throwing method
+      await expect(client.revokeDevice('device-to-revoke-1')).rejects.toThrow()
+      await vi.waitFor(() => expect(client.isLive()).toBe(false), { timeout: 500 })
+      expect(onClose).toHaveBeenCalledWith(4401)
+    } finally {
+      await server.close()
+    }
+  })
 })

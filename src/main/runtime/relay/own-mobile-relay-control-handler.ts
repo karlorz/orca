@@ -177,8 +177,24 @@ export function handleOwnMobileRelayHostControlSocket(
       const leaseExpiresAt = Date.now() + 60_000
 
       const pingIntervalMs = Math.max(10, Math.floor(options.silenceLimitMs / 3))
-      pingTimer = setInterval(() => {
-        if (ws.readyState === ws.OPEN) {
+      pingTimer = setInterval(async () => {
+        if (ws.readyState !== ws.OPEN || state !== 'active') {
+          return
+        }
+        try {
+          const revalidated = await options.securityState.validateRelayGrantById(
+            grant.grantId,
+            grant.relayHostId
+          )
+          if (!revalidated) {
+            closeSocket(4401, 'authorization_revoked')
+            return
+          }
+        } catch {
+          closeSocket(4401, 'authorization_unavailable')
+          return
+        }
+        if (ws.readyState === ws.OPEN && state === 'active') {
           ws.send(JSON.stringify({ type: 'ping', t: Date.now() }))
         }
       }, pingIntervalMs)
@@ -207,7 +223,9 @@ export function handleOwnMobileRelayHostControlSocket(
     }
 
     if (state === 'active') {
-      void handleActiveControlMessage(ws, grant, options, msg, closeSocket)
+      handleActiveControlMessage(ws, grant, options, msg, closeSocket).catch(() => {
+        closeSocket(4401, 'authorization_unavailable')
+      })
       return
     }
 

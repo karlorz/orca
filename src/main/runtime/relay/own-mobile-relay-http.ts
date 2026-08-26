@@ -15,6 +15,7 @@ import { createOwnMobileRelaySecurityStateMemory } from './own-mobile-relay-secu
 import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
 import { bootstrapOperatorAccount } from './own-mobile-relay-account'
 import { TEST_FAST_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay-password'
+import { createOwnMobileRelayCleanupScheduler } from './own-mobile-relay-cleanup-scheduler'
 
 export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
@@ -115,11 +116,18 @@ export async function listenOwnMobileRelay(
       } else {
         advertisedOrigin = options.origin
       }
+
+      const cleanupScheduler = createOwnMobileRelayCleanupScheduler({
+        securityState
+      })
+      cleanupScheduler.start()
+
       resolve({
         origin: advertisedOrigin,
         boundPort: address.port,
         close: () =>
           new Promise((closeResolve, closeReject) => {
+            cleanupScheduler.stop()
             for (const socket of activeSockets) {
               socket.terminate()
             }
