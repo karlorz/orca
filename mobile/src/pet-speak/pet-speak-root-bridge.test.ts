@@ -954,5 +954,82 @@ describe('PetSpeakRootBridge', () => {
       // Immediate release on removal from catalog
       expect(releaseSessionMock).toHaveBeenCalledTimes(1)
     })
+
+    it('does not release when reconnecting arrives before acquireVoiceSession resolves', async () => {
+      const clientA = makeFakeClient('disconnected')
+      openHostLogicalClientMock.mockReturnValue(clientA)
+
+      loadHostCatalogMock.mockResolvedValue([
+        {
+          id: HOST_A.id,
+          name: HOST_A.name,
+          endpoint: HOST_A.endpoint,
+          publicKeyB64: HOST_A.publicKeyB64,
+          credentialStatus: 'ready',
+          profile: HOST_A,
+          lastConnected: 100
+        }
+      ])
+
+      const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+      let resolveAcquire: (value: { held: boolean }) => void = () => {}
+      const acquireSessionMock = vi.fn().mockImplementation(
+        () =>
+          new Promise<{ held: boolean }>((resolve) => {
+            resolveAcquire = resolve
+          })
+      )
+      const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+      const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+      let renderer: ReactTestRenderer | null = null
+      await act(async () => {
+        renderer = create(
+          createElement(
+            RpcClientProvider,
+            null,
+            createElement(PetSpeakRootBridge, {
+              isAndroid: true,
+              ensureNotificationPermissions: ensurePermissionsMock,
+              acquireVoiceSession: acquireSessionMock,
+              releaseVoiceSession: releaseSessionMock,
+              updateVoiceSessionNotification: updateNotificationMock
+            })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        clientA.emitState('connected')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(acquireSessionMock).toHaveBeenCalledTimes(1)
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+
+      await act(async () => {
+        clientA.emitState('reconnecting')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        resolveAcquire({ held: true })
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(releaseSessionMock).not.toHaveBeenCalled()
+      expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+
+      await act(async () => {
+        renderer?.unmount()
+        await Promise.resolve()
+      })
+      expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+    })
   })
 })

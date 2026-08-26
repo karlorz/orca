@@ -150,18 +150,9 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
       if (action.type === 'acquire') {
         clearGraceTimer()
         void ensureNotificationPermissionsFn().then((granted) => {
-          if (granted && !isDisposedRef.current && subscriptionsRef.current.size > 0) {
+          if (granted && !isDisposedRef.current) {
             void acquireVoiceSessionFn().then((res) => {
-              if (isDisposedRef.current) return
-              if (res.held && subscriptionsRef.current.size > 0) {
-                holdStateRef.current = {
-                  ...holdStateRef.current,
-                  isSessionHeld: true,
-                  isAcquiring: false,
-                  reconnectingSince: null,
-                  lastNotificationText: action.notificationText
-                }
-              } else {
+              if (isDisposedRef.current) {
                 holdStateRef.current = {
                   ...holdStateRef.current,
                   isSessionHeld: false,
@@ -172,6 +163,18 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
                 if (res.held) {
                   void releaseVoiceSessionFn()
                 }
+                return
+              }
+              holdStateRef.current = {
+                ...holdStateRef.current,
+                isAcquiring: false,
+                isSessionHeld: res.held,
+                lastNotificationText: res.held
+                  ? (holdStateRef.current.lastNotificationText ?? action.notificationText)
+                  : null
+              }
+              if (res.held) {
+                evaluateHoldDecision()
               }
             })
           } else {
