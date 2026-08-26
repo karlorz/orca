@@ -15,8 +15,11 @@ import {
   handleLogoutPost,
   handleProfile,
   handleRefreshPost,
-  handleSessionPost
+  handleSessionPost,
+  handlePasswordGet,
+  handlePasswordPost
 } from './own-mobile-relay-auth'
+import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import type { PasswordPolicy } from './own-mobile-relay-password'
 
 const RELAY_TOKEN_TTL_MS = 60 * 60 * 1000
@@ -27,6 +30,7 @@ export type OwnMobileRelayRequestContext = {
   authStore: OwnMobileRelayAuthStore
   advertisedOriginCallback: () => string
   router: OwnMobileRelayRouter
+  throttle?: AuthThrottle
   passwordPolicy?: PasswordPolicy
 }
 
@@ -38,6 +42,23 @@ export function createOwnMobileRelayRequestHandler(
     if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { ok: true })
       return
+    }
+    if (url.pathname === '/v1/desktop/auth/password') {
+      if (request.method === 'GET') {
+        handlePasswordGet(response)
+        return
+      }
+      if (request.method === 'POST') {
+        await handlePasswordPost(
+          request,
+          context.securityState,
+          context.advertisedOriginCallback(),
+          response,
+          context.throttle,
+          context.passwordPolicy
+        )
+        return
+      }
     }
     if (url.pathname === '/v1/desktop/auth/authorize') {
       if (request.method === 'GET') {
@@ -52,6 +73,7 @@ export function createOwnMobileRelayRequestHandler(
           context.configuredClientId,
           context.authStore,
           response,
+          context.throttle,
           context.passwordPolicy
         )
         return

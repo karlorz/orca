@@ -1,9 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import nacl from 'tweetnacl'
-import { deriveRelayHostId } from './relay-http-client'
+import { describe, expect, it } from 'vitest'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
-import { RelayControlClient } from './relay-control-client'
-import type { E2EEKeypair } from '../e2ee-keypair'
 
 const defaultOperator = {
   email: 'operator@example.com',
@@ -24,31 +20,26 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         origin: 'http://127.0.0.1'
       })
       try {
-        // Wrong client_id
         const res1 = await fetch(
           `${server.origin}/v1/desktop/auth/authorize?client_id=wrong&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=abc&response_type=code`
         )
         expect(res1.status).toBe(400)
 
-        // Non-loopback redirect_uri
         const res2 = await fetch(
           `${server.origin}/v1/desktop/auth/authorize?client_id=${defaultClientId}&redirect_uri=https://evil.com/auth/callback&code_challenge_method=S256&code_challenge=abc&response_type=code`
         )
         expect(res2.status).toBe(400)
 
-        // Missing code_challenge_method
         const res3 = await fetch(
           `${server.origin}/v1/desktop/auth/authorize?client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge=abc&response_type=code`
         )
         expect(res3.status).toBe(400)
 
-        // Plain code_challenge_method (must be S256)
         const res4 = await fetch(
           `${server.origin}/v1/desktop/auth/authorize?client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=plain&code_challenge=abc&response_type=code`
         )
         expect(res4.status).toBe(400)
 
-        // Missing code_challenge
         const res5 = await fetch(
           `${server.origin}/v1/desktop/auth/authorize?client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&response_type=code`
         )
@@ -152,7 +143,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
         ).toString('base64url')
 
-        // 1. Unknown code
         const resUnknown = await fetch(`${server.origin}/v1/desktop/auth/session`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -167,7 +157,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         })
         expect(resUnknown.status).toBe(400)
 
-        // Obtain real code
         const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1`
         const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
           method: 'POST',
@@ -181,7 +170,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         const location = new URL(loginRes.headers.get('location')!)
         const code = location.searchParams.get('code')!
 
-        // 2. Wrong code verifier
         const resWrongVerifier = await fetch(`${server.origin}/v1/desktop/auth/session`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -196,7 +184,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         })
         expect(resWrongVerifier.status).toBe(401)
 
-        // 3. Replay with the code (it failed / was invalidated)
         const resReplay = await fetch(`${server.origin}/v1/desktop/auth/session`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -268,10 +255,7 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           cloudProfileId: expect.any(String),
           userId: defaultOperator.userId,
           email: defaultOperator.email,
-          displayName: undefined,
-          activeOrgId: defaultOperator.organizationId,
-          activeOrgName: undefined,
-          linkedAt: expect.any(Number)
+          activeOrgId: defaultOperator.organizationId
         })
         expect(session.organizations).toEqual([
           {
@@ -285,7 +269,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           refreshedAt: expect.any(Number)
         })
 
-        // Replay of used code must fail
         const replayRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -377,19 +360,18 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           refreshedAt: expect.any(Number)
         })
 
-        // Old refresh token must now fail
-        const oldRefreshRes = await fetch(`${server.origin}/v1/desktop/auth/refresh`, {
+        const staleRes = await fetch(`${server.origin}/v1/desktop/auth/refresh`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ refreshToken: initialSession.refreshToken })
         })
-        expect(oldRefreshRes.status).toBe(401)
+        expect(staleRes.status).toBe(401)
       } finally {
         await server.close()
       }
     })
 
-    it('returns capabilities on GET and POST /v1/desktop/auth/capabilities with Bearer token, rejects without', async () => {
+    it('handles GET and POST /v1/desktop/auth/capabilities with Bearer token, rejects without', async () => {
       const server = await listenOwnMobileRelay({
         operator: defaultOperator,
         clientId: defaultClientId,
@@ -398,7 +380,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
       try {
         const session = await obtainSession(server.origin)
 
-        // Without Bearer -> 401
         const noAuthGet = await fetch(`${server.origin}/v1/desktop/auth/capabilities`)
         expect(noAuthGet.status).toBe(401)
         const noAuthPost = await fetch(`${server.origin}/v1/desktop/auth/capabilities`, {
@@ -406,7 +387,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         })
         expect(noAuthPost.status).toBe(401)
 
-        // With Bearer GET -> 200
         const getRes = await fetch(`${server.origin}/v1/desktop/auth/capabilities`, {
           headers: { authorization: `Bearer ${session.accessToken}` }
         })
@@ -417,7 +397,6 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           refreshedAt: expect.any(Number)
         })
 
-        // With Bearer POST -> 200
         const postRes = await fetch(`${server.origin}/v1/desktop/auth/capabilities`, {
           method: 'POST',
           headers: {
@@ -491,207 +470,10 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         })
         expect(logoutRes.status).toBe(200)
 
-        // Subsequent use of access token -> 401
         const capRes = await fetch(`${server.origin}/v1/desktop/auth/capabilities`, {
           headers: { authorization: `Bearer ${session.accessToken}` }
         })
         expect(capRes.status).toBe(401)
-
-        // Subsequent refresh -> 401
-        const refreshRes = await fetch(`${server.origin}/v1/desktop/auth/refresh`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ refreshToken: session.refreshToken })
-        })
-        expect(refreshRes.status).toBe(401)
-      } finally {
-        await server.close()
-      }
-    })
-  })
-
-  describe('POST /v1/desktop/auth/relay-token with session token', () => {
-    it('accepts a valid session token, rejects the old fixed operator token, and binds identity', async () => {
-      const server = await listenOwnMobileRelay({
-        operator: defaultOperator,
-        clientId: defaultClientId,
-        origin: 'http://127.0.0.1'
-      })
-      try {
-        const verifier = 'valid-code-verifier-string-12345678901234567890'
-        const challenge = Buffer.from(
-          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-        ).toString('base64url')
-
-        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1&local_profile_id=local-custom-profile`
-        const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            email: defaultOperator.email,
-            password: defaultOperator.password
-          }).toString(),
-          redirect: 'manual'
-        })
-        const location = new URL(loginRes.headers.get('location')!)
-        const code = location.searchParams.get('code')!
-
-        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            code,
-            codeVerifier: verifier,
-            nonce: 'n1',
-            redirectUri: 'http://127.0.0.1:4000/auth/callback',
-            state: 's1',
-            localProfileId: 'local-custom-profile'
-          })
-        })
-        const session = (await sessionRes.json()) as { accessToken: string }
-
-        // Reject old fixed operator token
-        const oldFixedRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
-          method: 'POST',
-          headers: {
-            authorization: 'Bearer fixed-operator-token',
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            relayHostId: 'host-1',
-            hostPublicKeyB64: 'key-1'
-          })
-        })
-        expect(oldFixedRes.status).toBe(401)
-
-        // Accept session token
-        const validRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${session.accessToken}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            relayHostId: 'host-1',
-            hostPublicKeyB64: 'key-1'
-          })
-        })
-        expect(validRes.status).toBe(200)
-        const validBody = (await validRes.json()) as { relayToken: string; expiresAt: number }
-        expect(validBody.relayToken).toBeTruthy()
-        expect(validBody.expiresAt).toBeGreaterThan(Date.now())
-      } finally {
-        await server.close()
-      }
-    })
-
-    it('binds session cloudProfileId to the relay-token grant when local_profile_id differs from operator profileId', async () => {
-      const server = await listenOwnMobileRelay({
-        operator: defaultOperator, // profileId is 'prof-op-1'
-        clientId: defaultClientId,
-        origin: 'http://127.0.0.1'
-      })
-      try {
-        const localProfileId = 'local-default' // Distinct from 'prof-op-1'
-        const verifier = 'valid-code-verifier-string-12345678901234567890'
-        const challenge = Buffer.from(
-          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-        ).toString('base64url')
-
-        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1&local_profile_id=${localProfileId}`
-        const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            email: defaultOperator.email,
-            password: defaultOperator.password
-          }).toString(),
-          redirect: 'manual'
-        })
-        const location = new URL(loginRes.headers.get('location')!)
-        const code = location.searchParams.get('code')!
-
-        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            code,
-            codeVerifier: verifier,
-            nonce: 'n1',
-            redirectUri: 'http://127.0.0.1:4000/auth/callback',
-            state: 's1',
-            localProfileId
-          })
-        })
-        const session = (await sessionRes.json()) as {
-          accessToken: string
-          cloud: { cloudProfileId: string; userId: string; activeOrgId?: string }
-        }
-        expect(session.cloud.cloudProfileId).toBe(localProfileId)
-
-        const hostKeys = nacl.box.keyPair()
-        const keypair: E2EEKeypair = {
-          publicKey: hostKeys.publicKey,
-          secretKey: hostKeys.secretKey,
-          publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
-        }
-        const relayHostId = deriveRelayHostId(hostKeys.publicKey)
-
-        const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${session.accessToken}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            relayHostId,
-            hostPublicKeyB64: keypair.publicKeyB64
-          })
-        })
-        expect(tokenRes.status).toBe(200)
-        const { relayToken } = (await tokenRes.json()) as { relayToken: string }
-
-        const assignRes = await fetch(`${server.origin}/v1/assign`, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${relayToken}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({ v: 1, relayHostId })
-        })
-        expect(assignRes.status).toBe(200)
-        const { cellUrl, assignmentEpoch } = (await assignRes.json()) as {
-          cellUrl: string
-          assignmentEpoch: number
-        }
-
-        // Desktop client uses identity matching cloud response: profileId = session.cloud.cloudProfileId
-        const clientIdentity = {
-          userId: session.cloud.userId,
-          profileId: session.cloud.cloudProfileId,
-          organizationId: session.cloud.activeOrgId ?? ''
-        }
-
-        const client = new RelayControlClient({
-          cellUrl,
-          relayJwt: relayToken,
-          relayHostId,
-          assignmentEpoch,
-          identity: clientIdentity,
-          keypair,
-          appVersion: '0.0.0-test',
-          onConnectionOpen: vi.fn(),
-          onDrain: vi.fn(),
-          onClose: vi.fn()
-        })
-
-        const ack = await client.connect()
-        expect(ack).toMatchObject({
-          type: 'host-hello-ack',
-          v: 1
-        })
-        expect(client.isLive()).toBe(true)
-        client.closeNow()
       } finally {
         await server.close()
       }

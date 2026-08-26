@@ -16,6 +16,7 @@ import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-st
 import { bootstrapOperatorAccount } from './own-mobile-relay-account'
 import { TEST_FAST_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay-password'
 import { createOwnMobileRelayCleanupScheduler } from './own-mobile-relay-cleanup-scheduler'
+import { createAuthThrottle, type AuthThrottle } from './own-mobile-relay-auth-throttle'
 
 export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
@@ -26,6 +27,7 @@ export type OwnMobileRelayListenOptions = {
   listenPort?: number
   silenceLimitMs?: number
   passwordPolicy?: PasswordPolicy
+  throttle?: AuthThrottle
 }
 
 export type OwnMobileRelayServer = {
@@ -41,6 +43,7 @@ export async function listenOwnMobileRelay(
 ): Promise<OwnMobileRelayServer> {
   const activeSockets = new Set<WebSocket>()
   const authStore: OwnMobileRelayAuthStore = createOwnMobileRelayAuthStore()
+  const throttle: AuthThrottle = options.throttle ?? createAuthThrottle()
   let advertisedOrigin = options.origin
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
   const configuredClientId = options.clientId ?? 'orca-desktop'
@@ -73,6 +76,7 @@ export async function listenOwnMobileRelay(
     authStore,
     advertisedOriginCallback: () => advertisedOrigin,
     router,
+    throttle,
     passwordPolicy
   })
 

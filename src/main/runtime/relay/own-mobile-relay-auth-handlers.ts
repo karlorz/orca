@@ -3,7 +3,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   type AuthorizationCodeRecord,
   type OwnMobileRelayAuthStore,
-  isLoopbackCallbackUri,
   verifyS256CodeChallenge
 } from './own-mobile-relay-auth-store'
 import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
@@ -13,89 +12,17 @@ import {
   CURRENT_PASSWORD_POLICY,
   type PasswordPolicy
 } from './own-mobile-relay-password'
+import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
+import { readUrlEncodedBodySafely } from './own-mobile-relay-http-utils'
+import { validateAuthorizeParams, renderLoginForm } from './own-mobile-relay-auth-params'
 
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000
 const SESSION_TTL_MS = 60 * 60 * 1000
 
-export function validateAuthorizeParams(
-  url: URL,
-  configuredClientId: string
-): {
-  valid: boolean
-  clientId: string
-  redirectUri: string
-  codeChallenge: string
-  codeChallengeMethod: string
-  state?: string
-  nonce?: string
-  localProfileId?: string
-} {
-  const clientId = url.searchParams.get('client_id') ?? ''
-  const redirectUri = url.searchParams.get('redirect_uri') ?? ''
-  const codeChallenge = url.searchParams.get('code_challenge') ?? ''
-  const codeChallengeMethod = url.searchParams.get('code_challenge_method') ?? ''
-  const state = url.searchParams.get('state') ?? undefined
-  const nonce = url.searchParams.get('nonce') ?? undefined
-  const localProfileId = url.searchParams.get('local_profile_id') ?? undefined
-
-  if (
-    clientId !== configuredClientId ||
-    !isLoopbackCallbackUri(redirectUri) ||
-    codeChallengeMethod !== 'S256' ||
-    !codeChallenge
-  ) {
-    return {
-      valid: false,
-      clientId,
-      redirectUri,
-      codeChallenge,
-      codeChallengeMethod,
-      state,
-      nonce,
-      localProfileId
-    }
-  }
-
-  return {
-    valid: true,
-    clientId,
-    redirectUri,
-    codeChallenge,
-    codeChallengeMethod,
-    state,
-    nonce,
-    localProfileId
-  }
-}
-
-export function renderLoginForm(actionUrl: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head><title>Sign in for Relay</title></head>
-<body>
-  <form method="POST" action="${actionUrl}">
-    <label>Email: <input type="email" name="email" required /></label>
-    <label>Password: <input type="password" name="password" required /></label>
-    <button type="submit">Sign In</button>
-  </form>
-</body>
-</html>`
-}
+export { validateAuthorizeParams, renderLoginForm } from './own-mobile-relay-auth-params'
 
 export async function readUrlEncodedBody(request: IncomingMessage): Promise<URLSearchParams> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    request.on('data', (chunk) => chunks.push(chunk as Buffer))
-    request.on('end', () => {
-      try {
-        const text = Buffer.concat(chunks).toString('utf8')
-        resolve(new URLSearchParams(text))
-      } catch (err) {
-        reject(err)
-      }
-    })
-    request.on('error', reject)
-  })
+  return readUrlEncodedBodySafely(request)
 }
 
 export function handleAuthorizeGet(
@@ -125,6 +52,7 @@ export async function handleAuthorizePost(
   configuredClientId: string,
   store: OwnMobileRelayAuthStore,
   response: ServerResponse,
+  throttle?: AuthThrottle,
   passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY
 ): Promise<void> {
   const validation = validateAuthorizeParams(url, configuredClientId)
@@ -136,7 +64,7 @@ export async function handleAuthorizePost(
 
   let body: URLSearchParams
   try {
-    body = await readUrlEncodedBody(request)
+    body = await readUrlEncodedBodySafely(request)
   } catch {
     response.writeHead(400, { 'content-type': 'text/plain' })
     response.end('Invalid form body')
@@ -145,11 +73,27 @@ export async function handleAuthorizePost(
 
   const email = body.get('email') ?? ''
   const password = body.get('password') ?? ''
+  const remoteIp = request.socket?.remoteAddress
+
+  if (throttle) {
+    const throttleCheck = throttle.check(email, remoteIp)
+    if (!throttleCheck.allowed) {
+      response.writeHead(429, {
+        'content-type': 'text/plain',
+        'retry-after': String(throttleCheck.retryAfterSeconds)
+      })
+      response.end('Too Many Requests')
+      return
+    }
+  }
 
   const account = await securityState.getAccount()
   const passwordRec = await securityState.getAccountPasswordRecord()
 
   if (!account || !passwordRec || email !== account.email) {
+    if (throttle) {
+      throttle.recordFailure(email, remoteIp)
+    }
     response.writeHead(401, { 'content-type': 'text/plain' })
     response.end('Unauthorized')
     return
@@ -161,9 +105,16 @@ export async function handleAuthorizePost(
     passwordPolicy
   )
   if (!verifyResult.valid) {
+    if (throttle) {
+      throttle.recordFailure(email, remoteIp)
+    }
     response.writeHead(401, { 'content-type': 'text/plain' })
     response.end('Unauthorized')
     return
+  }
+
+  if (throttle) {
+    throttle.recordSuccess(email, remoteIp)
   }
 
   if (verifyResult.needsRehash) {
@@ -281,40 +232,29 @@ export async function handleSessionPost(
     cloudProfileId
   })
 
-  const payload = {
-    accessToken: rawAccessToken,
-    refreshToken,
-    expiresAt: issuedSession.expiresAt,
-    cloud: {
-      cloudProfileId,
-      userId: authCode.identity.userId,
-      email: authCode.identity.email,
-      displayName: undefined,
-      activeOrgId: authCode.identity.organizationId || undefined,
-      activeOrgName: undefined,
-      linkedAt: now
-    },
-    organizations: authCode.identity.organizationId
-      ? [
-          {
-            orgId: authCode.identity.organizationId,
-            name: 'Personal',
-            role: 'owner'
-          }
-        ]
-      : [],
-    capabilities: {
-      flags: {
-        'relay.use': true
+  response.writeHead(200, { 'content-type': 'application/json' })
+  response.end(
+    JSON.stringify({
+      accessToken: rawAccessToken,
+      refreshToken,
+      expiresAt: issuedSession.expiresAt,
+      cloud: {
+        cloudProfileId,
+        userId: authCode.identity.userId,
+        email: authCode.identity.email,
+        activeOrgId: authCode.identity.organizationId
       },
-      refreshedAt: now
-    }
-  }
-
-  const data = Buffer.from(JSON.stringify(payload))
-  response.writeHead(200, {
-    'content-type': 'application/json',
-    'content-length': data.byteLength
-  })
-  response.end(data)
+      organizations: [
+        {
+          orgId: authCode.identity.organizationId,
+          name: 'Personal',
+          role: 'owner'
+        }
+      ],
+      capabilities: {
+        flags: { 'relay.use': true },
+        refreshedAt: now
+      }
+    })
+  )
 }
