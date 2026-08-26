@@ -1,30 +1,27 @@
-import { Text, View } from "react-native";
-import { Gauge } from "lucide-react-native";
+import { Text, View } from 'react-native'
+import { Gauge } from 'lucide-react-native'
 import {
   getActiveProviderRateLimits,
   getProviderUsageWindows,
   hasRenderableUsage,
   UsageWindowBars,
   type AccountsSnapshot,
-  type UsageProviderDescriptor,
-} from "../components/AccountUsage";
-import { colors } from "../theme/mobile-theme";
-import { styles } from "./mobile-accounts-screen-styles";
+  type UsageProviderDescriptor
+} from '../components/AccountUsage'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-accounts-screen-styles'
 
 export function MobileAccountsDisplayProviderSection(props: {
-  snapshot: AccountsSnapshot;
-  descriptor: UsageProviderDescriptor;
-  now: number;
+  snapshot: AccountsSnapshot
+  descriptor: UsageProviderDescriptor
+  now: number
 }) {
-  const usage = getActiveProviderRateLimits(
-    props.snapshot,
-    props.descriptor.id
-  );
+  const usage = getActiveProviderRateLimits(props.snapshot, props.descriptor.id)
   if (!hasRenderableUsage(props.snapshot, props.descriptor.id)) {
-    return null;
+    return null
   }
-  const windows = getProviderUsageWindows(usage);
-  const fetching = usage?.status === "fetching";
+  const windows = getProviderUsageWindows(usage)
+  const fetching = usage?.status === 'fetching'
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -35,11 +32,7 @@ export function MobileAccountsDisplayProviderSection(props: {
         <View style={styles.row}>
           <View style={styles.rowMain}>
             <Text style={styles.rowTitle}>System default</Text>
-            <UsageWindowBars
-              windows={windows}
-              fetching={fetching}
-              now={props.now}
-            />
+            <UsageWindowBars windows={windows} fetching={fetching} now={props.now} />
             {usage?.error ? (
               <Text style={styles.errorText} numberOfLines={1}>
                 {usage.error}
@@ -49,5 +42,5 @@ export function MobileAccountsDisplayProviderSection(props: {
         </View>
       </View>
     </View>
-  );
+  )
 }

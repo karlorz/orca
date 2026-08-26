@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -6,201 +6,185 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
-  Alert,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, RefreshCw, User } from "lucide-react-native";
-import { loadHosts } from "../../../src/transport/host-store";
-import { useHostClient } from "../../../src/transport/client-context";
-import { colors, spacing } from "../../../src/theme/mobile-theme";
-import { MobileAccountsDisplayProviderSection } from "../../../src/accounts/mobile-accounts-display-provider-section";
-import { MobileAccountsManagedProviderSection } from "../../../src/accounts/mobile-accounts-managed-provider-section";
-import { styles } from "../../../src/accounts/mobile-accounts-screen-styles";
-import { useNow } from "../../../src/hooks/use-now";
-import { useVisibleUsageProviders } from "../../../src/components/use-visible-usage-providers";
+  Alert
+} from 'react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
+import { loadHosts } from '../../../src/transport/host-store'
+import { useHostClient } from '../../../src/transport/client-context'
+import { colors, spacing } from '../../../src/theme/mobile-theme'
+import { MobileAccountsDisplayProviderSection } from '../../../src/accounts/mobile-accounts-display-provider-section'
+import { MobileAccountsManagedProviderSection } from '../../../src/accounts/mobile-accounts-managed-provider-section'
+import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
+import { useNow } from '../../../src/hooks/use-now'
+import { useVisibleUsageProviders } from '../../../src/components/use-visible-usage-providers'
 import {
   type AccountsSnapshot,
   type ProviderKey,
   USAGE_PROVIDERS,
-  decodeAccountsSnapshot,
-} from "../../../src/components/AccountUsage";
-import { useCodexResetCreditAction } from "../../../src/components/use-codex-reset-credit-action";
+  decodeAccountsSnapshot
+} from '../../../src/components/AccountUsage'
+import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
 
 export default function AccountsScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { hostId } = useLocalSearchParams<{ hostId: string }>();
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { hostId } = useLocalSearchParams<{ hostId: string }>()
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
-  const { client, state: connState } = useHostClient(hostId);
-  const [hostName, setHostName] = useState<string>("");
-  const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
-  const [clockEnabled, setClockEnabled] = useState(false);
-  const visibleProviders = useVisibleUsageProviders();
+  const { client, state: connState } = useHostClient(hostId)
+  const [hostName, setHostName] = useState<string>('')
+  const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
+  const [clockEnabled, setClockEnabled] = useState(false)
+  const visibleProviders = useVisibleUsageProviders()
 
   const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
-    setSnapshot(nextSnapshot);
-    setError(null);
-  }, []);
+    setSnapshot(nextSnapshot)
+    setError(null)
+  }, [])
   const rejectInvalidSnapshot = useCallback(() => {
     // Why: a stale snapshot can expose a finite reset action for the wrong
     // account; fail closed if a host sends a shape this mobile cannot prove.
-    setSnapshot(null);
-    setError("Invalid accounts snapshot from host");
-  }, []);
+    setSnapshot(null)
+    setError('Invalid accounts snapshot from host')
+  }, [])
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
     resetScope,
     scopeLabel: resetScopeLabel,
-    confirmReset: confirmCodexReset,
+    confirmReset: confirmCodexReset
   } = useCodexResetCreditAction({
     client,
-    connected: connState === "connected",
+    connected: connState === 'connected',
     hostId,
     snapshot,
     accountMutationBusy: busyAccountId !== null,
-    onSnapshot: acceptSnapshot,
-  });
+    onSnapshot: acceptSnapshot
+  })
 
   useFocusEffect(
     useCallback(() => {
-      setClockEnabled(true);
-      return () => setClockEnabled(false);
+      setClockEnabled(true)
+      return () => setClockEnabled(false)
     }, [])
-  );
+  )
   // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
-  const now = useNow(60_000, clockEnabled);
+  const now = useNow(60_000, clockEnabled)
 
   useEffect(() => {
     if (!hostId) {
-      return;
+      return
     }
-    let stale = false;
+    let stale = false
     void loadHosts().then((hosts) => {
       if (stale) {
-        return;
+        return
       }
-      const host = hosts.find((h) => h.id === hostId);
+      const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError("Host not found");
-        return;
+        setError('Host not found')
+        return
       }
-      setHostName(host.name);
-    });
+      setHostName(host.name)
+    })
     return () => {
-      stale = true;
-    };
-  }, [hostId]);
+      stale = true
+    }
+  }, [hostId])
 
   // Why: subscribe to streaming snapshot updates so usage bars refresh in
   // place when the desktop's rate-limit poll completes (every 5 min) or
   // when the user switches accounts. Falls back to a one-shot accounts.list
   // if the subscription stream errors.
   useEffect(() => {
-    if (!client || connState !== "connected") {
-      return;
+    if (!client || connState !== 'connected') {
+      return
     }
-    const unsubscribe = client.subscribe(
-      "accounts.subscribe",
-      null,
-      (payload) => {
-        if (!payload || typeof payload !== "object") {
-          return;
-        }
-        const evt = payload as { type?: string; snapshot?: unknown };
-        if (evt.type === "ready" || evt.type === "snapshot") {
-          try {
-            acceptSnapshot(decodeAccountsSnapshot(evt.snapshot));
-          } catch {
-            rejectInvalidSnapshot();
-          }
+    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
+      if (!payload || typeof payload !== 'object') {
+        return
+      }
+      const evt = payload as { type?: string; snapshot?: unknown }
+      if (evt.type === 'ready' || evt.type === 'snapshot') {
+        try {
+          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
+        } catch {
+          rejectInvalidSnapshot()
         }
       }
-    );
-    return unsubscribe;
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot]);
+    })
+    return unsubscribe
+  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
 
   const refresh = useCallback(async () => {
     if (!client) {
-      return;
+      return
     }
-    setRefreshing(true);
+    setRefreshing(true)
     try {
-      const res = await client.sendRequest("accounts.list");
+      const res = await client.sendRequest('accounts.list')
       if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result));
+        acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
-        setError(res.error.message);
+        setError(res.error.message)
       }
     } catch (e) {
-      if (
-        e instanceof Error &&
-        e.message === "Invalid accounts snapshot from host"
-      ) {
-        rejectInvalidSnapshot();
+      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
+        rejectInvalidSnapshot()
       } else {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(e instanceof Error ? e.message : String(e))
       }
     } finally {
-      setRefreshing(false);
+      setRefreshing(false)
     }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot]);
+  }, [acceptSnapshot, client, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
       if (!client) {
-        return;
+        return
       }
-      const codexTarget =
-        provider === "codex" ? snapshot?.rateLimits.codexTarget : null;
-      if (provider === "codex" && !codexTarget) {
-        return;
+      const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
+      if (provider === 'codex' && !codexTarget) {
+        return
       }
-      setBusyAccountId(accountId ?? `${provider}:default`);
+      setBusyAccountId(accountId ?? `${provider}:default`)
       const method =
-        provider === "claude"
-          ? "accounts.selectClaude"
-          : codexTarget?.runtime === "wsl"
-          ? "accounts.selectCodexForTarget"
-          : "accounts.selectCodex";
+        provider === 'claude'
+          ? 'accounts.selectClaude'
+          : codexTarget?.runtime === 'wsl'
+            ? 'accounts.selectCodexForTarget'
+            : 'accounts.selectCodex'
       try {
         // Why: old hosts silently strip unknown target fields. Use the distinct
         // targeted RPC for WSL so version skew fails before mutating host state.
         const params =
-          codexTarget?.runtime === "wsl"
-            ? { accountId, target: codexTarget }
-            : { accountId };
-        const res = await client.sendRequest(method, params);
+          codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
+        const res = await client.sendRequest(method, params)
         if (!res.ok) {
-          Alert.alert("Could not switch account", res.error.message);
+          Alert.alert('Could not switch account', res.error.message)
         } else {
           // Why: optimistic refresh — the streaming subscription will also
           // emit, but a one-shot keeps the UI responsive even if the stream
           // is temporarily disconnected.
-          await refresh();
+          await refresh()
         }
       } catch (e) {
-        Alert.alert(
-          "Could not switch account",
-          e instanceof Error ? e.message : String(e)
-        );
+        Alert.alert('Could not switch account', e instanceof Error ? e.message : String(e))
       } finally {
-        setBusyAccountId(null);
+        setBusyAccountId(null)
       }
     },
     [client, refresh, snapshot]
-  );
+  )
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textPrimary} />
@@ -216,7 +200,7 @@ export default function AccountsScreen() {
         <Pressable
           style={styles.iconButton}
           onPress={refresh}
-          disabled={!client || refreshing || connState !== "connected"}
+          disabled={!client || refreshing || connState !== 'connected'}
         >
           {refreshing ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -227,10 +211,7 @@ export default function AccountsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: insets.bottom + spacing.xl },
-        ]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -239,12 +220,10 @@ export default function AccountsScreen() {
           />
         }
       >
-        {connState !== "connected" && !snapshot ? (
+        {connState !== 'connected' && !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>
-              Connecting to {hostName || "host"}…
-            </Text>
+            <Text style={styles.placeholderText}>Connecting to {hostName || 'host'}…</Text>
           </View>
         ) : error && !snapshot ? (
           <View style={styles.placeholder}>
@@ -257,44 +236,42 @@ export default function AccountsScreen() {
           </View>
         ) : (
           <>
-            {USAGE_PROVIDERS.filter((provider) =>
-              visibleProviders.has(provider.id)
-            ).map((provider) =>
-              provider.id === "claude" || provider.id === "codex" ? (
-                <MobileAccountsManagedProviderSection
-                  key={provider.id}
-                  snapshot={snapshot}
-                  provider={provider.id}
-                  title={provider.label}
-                  now={now}
-                  busyAccountId={busyAccountId}
-                  resettingCodex={resettingCodex}
-                  connected={connState === "connected"}
-                  selectAccount={selectAccount}
-                  codexResetSupported={codexResetSupported}
-                  resetScope={resetScope}
-                  resetScopeLabel={resetScopeLabel}
-                  confirmCodexReset={confirmCodexReset}
-                />
-              ) : (
-                <MobileAccountsDisplayProviderSection
-                  key={provider.id}
-                  snapshot={snapshot}
-                  descriptor={provider}
-                  now={now}
-                />
-              )
+            {USAGE_PROVIDERS.filter((provider) => visibleProviders.has(provider.id)).map(
+              (provider) =>
+                provider.id === 'claude' || provider.id === 'codex' ? (
+                  <MobileAccountsManagedProviderSection
+                    key={provider.id}
+                    snapshot={snapshot}
+                    provider={provider.id}
+                    title={provider.label}
+                    now={now}
+                    busyAccountId={busyAccountId}
+                    resettingCodex={resettingCodex}
+                    connected={connState === 'connected'}
+                    selectAccount={selectAccount}
+                    codexResetSupported={codexResetSupported}
+                    resetScope={resetScope}
+                    resetScopeLabel={resetScopeLabel}
+                    confirmCodexReset={confirmCodexReset}
+                  />
+                ) : (
+                  <MobileAccountsDisplayProviderSection
+                    key={provider.id}
+                    snapshot={snapshot}
+                    descriptor={provider}
+                    now={now}
+                  />
+                )
             )}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
-                Add or re-authenticate accounts from desktop Settings →
-                Accounts.
+                Add or re-authenticate accounts from desktop Settings → Accounts.
               </Text>
             </View>
           </>
         )}
       </ScrollView>
     </SafeAreaView>
-  );
+  )
 }

@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
-import { ClaudeIcon, OpenAIIcon } from "../components/AgentIcons";
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Check } from 'lucide-react-native'
+import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
@@ -9,30 +9,30 @@ import {
   hasActiveProviderUsage,
   UsageBar,
   type AccountsSnapshot,
-  type ProviderKey,
-} from "../components/AccountUsage";
-import { CodexResetCreditAction } from "../components/CodexResetCreditAction";
+  type ProviderKey
+} from '../components/AccountUsage'
+import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
-  getCodexResetCreditSummary,
-} from "../components/codex-reset-credit";
-import type { CodexResetCreditExpectedScope } from "../../../src/shared/codex-reset-credit-scope";
-import { colors } from "../theme/mobile-theme";
-import { styles } from "./mobile-accounts-screen-styles";
+  getCodexResetCreditSummary
+} from '../components/codex-reset-credit'
+import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-accounts-screen-styles'
 
 export function MobileAccountsManagedProviderSection(props: {
-  snapshot: AccountsSnapshot;
-  provider: ProviderKey;
-  title: string;
-  now: number;
-  busyAccountId: string | null;
-  resettingCodex: boolean;
-  connected: boolean;
-  selectAccount: (provider: ProviderKey, accountId: string | null) => void;
-  codexResetSupported: boolean;
-  resetScope: CodexResetCreditExpectedScope | null;
-  resetScopeLabel: string | null;
-  confirmCodexReset: () => void;
+  snapshot: AccountsSnapshot
+  provider: ProviderKey
+  title: string
+  now: number
+  busyAccountId: string | null
+  resettingCodex: boolean
+  connected: boolean
+  selectAccount: (provider: ProviderKey, accountId: string | null) => void
+  codexResetSupported: boolean
+  resetScope: CodexResetCreditExpectedScope | null
+  resetScopeLabel: string | null
+  confirmCodexReset: () => void
 }) {
   const {
     snapshot,
@@ -46,19 +46,18 @@ export function MobileAccountsManagedProviderSection(props: {
     codexResetSupported,
     resetScope,
     resetScopeLabel,
-    confirmCodexReset,
-  } = props;
-  const state = provider === "claude" ? snapshot.claude : snapshot.codex;
+    confirmCodexReset
+  } = props
+  const state = provider === 'claude' ? snapshot.claude : snapshot.codex
   const activeAccountId =
-    provider === "codex" && snapshot.codex.activeAccountIdsByRuntime
+    provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
       ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
-      : state.activeAccountId;
-  const activeUsage = getActiveProviderRateLimits(snapshot, provider);
-  const activeSessionBar = getUsageBarState(activeUsage, "session");
-  const activeWeeklyBar = getUsageBarState(activeUsage, "weekly");
-  const resetCredit =
-    provider === "codex" ? getCodexResetCreditSummary(activeUsage, now) : null;
-  const Icon = provider === "claude" ? ClaudeIcon : OpenAIIcon;
+      : state.activeAccountId
+  const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+  const activeSessionBar = getUsageBarState(activeUsage, 'session')
+  const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
+  const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
+  const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -81,14 +80,14 @@ export function MobileAccountsManagedProviderSection(props: {
                   usedPercent={activeSessionBar.usedPercent}
                   unavailable={activeSessionBar.unavailable}
                   loading={activeSessionBar.loading}
-                  resetText={getWindowResetLabel(activeUsage, "session", now)}
+                  resetText={getWindowResetLabel(activeUsage, 'session', now)}
                 />
                 <UsageBar
                   label="7d"
                   usedPercent={activeWeeklyBar.usedPercent}
                   unavailable={activeWeeklyBar.unavailable}
                   loading={activeWeeklyBar.loading}
-                  resetText={getWindowResetLabel(activeUsage, "weekly", now)}
+                  resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                 />
               </View>
             ) : null}
@@ -103,33 +102,23 @@ export function MobileAccountsManagedProviderSection(props: {
         </Pressable>
 
         {state.accounts.map((account) => {
-          const isActive = activeAccountId === account.id;
+          const isActive = activeAccountId === account.id
           const inactiveEntry = !isActive
             ? getInactiveProviderUsage(snapshot, provider, account.id)
-            : null;
-          const usage = isActive
-            ? activeUsage
-            : inactiveEntry?.rateLimits ?? null;
+            : null
+          const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
           const isFetching =
-            (isActive && usage?.status === "fetching") ||
-            (!isActive && inactiveEntry?.isFetching === true);
-          const sessionBar = getUsageBarState(usage, "session", isFetching);
-          const weeklyBar = getUsageBarState(usage, "weekly", isFetching);
+            (isActive && usage?.status === 'fetching') ||
+            (!isActive && inactiveEntry?.isFetching === true)
+          const sessionBar = getUsageBarState(usage, 'session', isFetching)
+          const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
           return (
             <View key={account.id}>
               <View style={styles.separator} />
               <Pressable
-                style={({ pressed }) => [
-                  styles.row,
-                  pressed && styles.rowPressed,
-                ]}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 onPress={() => selectAccount(provider, account.id)}
-                disabled={
-                  busyAccountId !== null ||
-                  resettingCodex ||
-                  !connected ||
-                  isActive
-                }
+                disabled={busyAccountId !== null || resettingCodex || !connected || isActive}
               >
                 <View style={styles.rowMain}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
@@ -141,14 +130,14 @@ export function MobileAccountsManagedProviderSection(props: {
                       usedPercent={sessionBar.usedPercent}
                       unavailable={sessionBar.unavailable}
                       loading={sessionBar.loading}
-                      resetText={getWindowResetLabel(usage, "session", now)}
+                      resetText={getWindowResetLabel(usage, 'session', now)}
                     />
                     <UsageBar
                       label="7d"
                       usedPercent={weeklyBar.usedPercent}
                       unavailable={weeklyBar.unavailable}
                       loading={weeklyBar.loading}
-                      resetText={getWindowResetLabel(usage, "weekly", now)}
+                      resetText={getWindowResetLabel(usage, 'weekly', now)}
                     />
                   </View>
                   {usage?.error ? (
@@ -161,15 +150,12 @@ export function MobileAccountsManagedProviderSection(props: {
                   {isActive ? (
                     <Check size={16} color={colors.accentBlue} />
                   ) : busyAccountId === account.id ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.textSecondary}
-                    />
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
                   ) : null}
                 </View>
               </Pressable>
             </View>
-          );
+          )
         })}
         {resetCredit && codexResetSupported && resetScope && connected ? (
           <CodexResetCreditAction
@@ -182,5 +168,5 @@ export function MobileAccountsManagedProviderSection(props: {
         ) : null}
       </View>
     </View>
-  );
+  )
 }
