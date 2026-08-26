@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import nacl from 'tweetnacl'
+import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
+import { RelayControlClient } from './relay-control-client'
+import type { E2EEKeypair } from '../e2ee-keypair'
 
 const defaultOperator = {
   email: 'operator@example.com',
@@ -576,6 +580,118 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
         const validBody = (await validRes.json()) as { relayToken: string; expiresAt: number }
         expect(validBody.relayToken).toBeTruthy()
         expect(validBody.expiresAt).toBeGreaterThan(Date.now())
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('binds session cloudProfileId to the relay-token grant when local_profile_id differs from operator profileId', async () => {
+      const server = await listenOwnMobileRelay({
+        operator: defaultOperator, // profileId is 'prof-op-1'
+        clientId: defaultClientId,
+        origin: 'http://127.0.0.1'
+      })
+      try {
+        const localProfileId = 'local-default' // Distinct from 'prof-op-1'
+        const verifier = 'valid-code-verifier-string-12345678901234567890'
+        const challenge = Buffer.from(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+        ).toString('base64url')
+
+        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1&local_profile_id=${localProfileId}`
+        const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: defaultOperator.email,
+            password: defaultOperator.password
+          }).toString(),
+          redirect: 'manual'
+        })
+        const location = new URL(loginRes.headers.get('location')!)
+        const code = location.searchParams.get('code')!
+
+        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            nonce: 'n1',
+            redirectUri: 'http://127.0.0.1:4000/auth/callback',
+            state: 's1',
+            localProfileId
+          })
+        })
+        const session = (await sessionRes.json()) as {
+          accessToken: string
+          cloud: { cloudProfileId: string; userId: string; activeOrgId?: string }
+        }
+        expect(session.cloud.cloudProfileId).toBe(localProfileId)
+
+        const hostKeys = nacl.box.keyPair()
+        const keypair: E2EEKeypair = {
+          publicKey: hostKeys.publicKey,
+          secretKey: hostKeys.secretKey,
+          publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+        }
+        const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+
+        const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${session.accessToken}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            relayHostId,
+            hostPublicKeyB64: keypair.publicKeyB64
+          })
+        })
+        expect(tokenRes.status).toBe(200)
+        const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+        const assignRes = await fetch(`${server.origin}/v1/assign`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${relayToken}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ v: 1, relayHostId })
+        })
+        expect(assignRes.status).toBe(200)
+        const { cellUrl, assignmentEpoch } = (await assignRes.json()) as {
+          cellUrl: string
+          assignmentEpoch: number
+        }
+
+        // Desktop client uses identity matching cloud response: profileId = session.cloud.cloudProfileId
+        const clientIdentity = {
+          userId: session.cloud.userId,
+          profileId: session.cloud.cloudProfileId,
+          organizationId: session.cloud.activeOrgId ?? ''
+        }
+
+        const client = new RelayControlClient({
+          cellUrl,
+          relayJwt: relayToken,
+          relayHostId,
+          assignmentEpoch,
+          identity: clientIdentity,
+          keypair,
+          appVersion: '0.0.0-test',
+          onConnectionOpen: vi.fn(),
+          onDrain: vi.fn(),
+          onClose: vi.fn()
+        })
+
+        const ack = await client.connect()
+        expect(ack).toMatchObject({
+          type: 'host-hello-ack',
+          v: 1
+        })
+        expect(client.isLive()).toBe(true)
+        client.closeNow()
       } finally {
         await server.close()
       }

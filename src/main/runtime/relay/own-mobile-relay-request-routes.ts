@@ -133,7 +133,7 @@ export function createOwnMobileRelayRequestHandler(
         hostPublicKeyB64: record.hostPublicKeyB64,
         identity: {
           userId: session.identity.userId,
-          profileId: session.identity.profileId,
+          profileId: session.identity.cloudProfileId,
           organizationId: session.identity.organizationId
         }
       })
