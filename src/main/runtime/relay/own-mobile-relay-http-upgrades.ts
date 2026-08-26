@@ -49,8 +49,13 @@ export function registerOwnMobileRelayUpgrades(
           onActive: (relayHostId, send) => {
             context.router.activeHosts.set(relayHostId, send)
           },
-          onClose: (relayHostId) => {
-            context.router.activeHosts.delete(relayHostId)
+          onClose: (relayHostId, sender) => {
+            // Why: only the socket that owns the registration may remove it —
+            // stale or duplicate control sockets for the same host must not
+            // knock out a live registration (phone would see 4404).
+            if (sender && context.router.activeHosts.get(relayHostId) === sender) {
+              context.router.activeHosts.delete(relayHostId)
+            }
           }
         })
       })

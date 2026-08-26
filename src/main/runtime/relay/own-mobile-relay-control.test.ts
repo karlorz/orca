@@ -192,6 +192,85 @@ describe('own mobile relay host-control', () => {
     }
   })
 
+  it('keeps the active host registered when a pre-hello control socket closes early', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const silenceLimitMs = 80
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      // Socket A: a real client that completes host-proof and activates.
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Socket B: valid grant but closes before host-hello (client abandoned it).
+      const { WebSocket } = await import('ws')
+      const wsBase = server.origin.replace('http', 'ws')
+      const abandoned = new WebSocket(`${wsBase}/v1/host/control`, {
+        headers: { authorization: `Bearer ${relayToken}` }
+      })
+      await new Promise<void>((resolve) => abandoned.once('open', () => resolve()))
+      abandoned.close()
+
+      // Well past the silence watchdog: the abandoned socket must not produce
+      // a phantom close that removes socket A's active registration.
+      await new Promise((resolve) => setTimeout(resolve, silenceLimitMs * 3 + 50))
+
+      const probe = new WebSocket(`${wsBase}/v1/connect/${relayHostId}`)
+      const probeCloseCode = await new Promise<number>((resolve, reject) => {
+        probe.once('open', () => probe.send(JSON.stringify({ type: 'relay-auth', token: 'bogus' })))
+        probe.once('close', (code) => resolve(code))
+        probe.once('error', reject)
+      })
+      expect(probeCloseCode).toBe(4401)
+      expect(client.isLive()).toBe(true)
+      client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
   it('closes with 4401 on silence watchdog timeout when peer sends no frames', async () => {
     const hostKeys = nacl.box.keyPair()
     const keypair: E2EEKeypair = {

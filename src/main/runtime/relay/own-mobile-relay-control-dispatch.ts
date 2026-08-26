@@ -17,7 +17,7 @@ export type OwnMobileRelayControlContext = {
   deviceCredentials?: Map<string, OwnMobileRelayDeviceCredentialRecord>
   pendingConns?: Map<string, { relayDeviceId: string; acceptedAs?: 'current' | 'grace' }>
   onActive?: (relayHostId: string, send: (msg: object) => void) => void
-  onClose?: (relayHostId: string) => void
+  onClose?: (relayHostId: string, sender?: (msg: object) => void) => void
 }
 
 export function handleActiveControlMessage(

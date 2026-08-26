@@ -19,6 +19,7 @@ export function handleOwnMobileRelayHostControlSocket(
   let expectedProof: string | null = null
   let silenceTimer: NodeJS.Timeout | null = null
   let pingTimer: NodeJS.Timeout | null = null
+  let activeSender: ((msg: object) => void) | null = null
 
   function resetSilenceWatchdog(): void {
     if (silenceTimer) {
@@ -46,7 +47,7 @@ export function handleOwnMobileRelayHostControlSocket(
       clearInterval(pingTimer)
       pingTimer = null
     }
-    options.onClose?.(grant.relayHostId)
+    options.onClose?.(grant.relayHostId, activeSender ?? undefined)
     ws.close(code, reason)
   }
 
@@ -54,6 +55,28 @@ export function handleOwnMobileRelayHostControlSocket(
 
   ws.once('error', () => {
     closeSocket(4401, 'socket_error')
+  })
+
+  ws.once('close', () => {
+    // Why: a client that disconnected must not let the pending silence
+    // watchdog fire later — a phantom close would log noise and, worse,
+    // delete a *newer* active registration for the same relayHostId.
+    // Only a socket that reached active may remove the registration.
+    const wasActive = state === 'active'
+    if (silenceTimer) {
+      clearTimeout(silenceTimer)
+      silenceTimer = null
+    }
+    if (pingTimer) {
+      clearInterval(pingTimer)
+      pingTimer = null
+    }
+    if (state !== 'closed') {
+      state = 'closed'
+      if (wasActive) {
+        options.onClose?.(grant.relayHostId, activeSender ?? undefined)
+      }
+    }
   })
 
   ws.on('message', (raw: RawData, isBinary: boolean) => {
@@ -161,11 +184,13 @@ export function handleOwnMobileRelayHostControlSocket(
       }, pingIntervalMs)
       pingTimer.unref?.()
 
-      options.onActive?.(grant.relayHostId, (outMsg: object) => {
+      const sender = (outMsg: object): void => {
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify(outMsg))
         }
-      })
+      }
+      activeSender = sender
+      options.onActive?.(grant.relayHostId, sender)
 
       ws.send(
         JSON.stringify({
