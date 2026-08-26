@@ -2,7 +2,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { handleOwnMobileRelayHostControlSocket } from './own-mobile-relay-control-handler'
+import {
+  handleOwnMobileRelayHostControlSocket,
+  type OwnMobileRelayInviteRecord
+} from './own-mobile-relay-control-handler'
+import {
+  handleOwnMobileRelayHostDataSocket,
+  handleOwnMobileRelayPhoneSocket,
+  type OwnMobileRelayRouter,
+  type PendingConnRecord
+} from './own-mobile-relay-splice-handler'
 
 export type OwnMobileRelayListenOptions = {
   operatorAccessToken: string
@@ -69,7 +78,14 @@ export function listenOwnMobileRelay(
   let advertisedOrigin = options.origin
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
 
-  const wss = new WebSocketServer({ noServer: true })
+  const router: OwnMobileRelayRouter = {
+    invites: new Map<string, OwnMobileRelayInviteRecord>(),
+    pendingConns: new Map<string, PendingConnRecord>(),
+    connsByTicket: new Map<string, PendingConnRecord>(),
+    activeHosts: new Map<string, (msg: object) => void>()
+  }
+
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
 
   const server = createServer((request, response) => {
     void handleRequest(request, response)
@@ -77,28 +93,55 @@ export function listenOwnMobileRelay(
 
   server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
-    if (url.pathname !== '/v1/host/control') {
-      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
-      socket.destroy()
-      return
-    }
+    if (url.pathname === '/v1/host/control') {
+      const relayToken = bearerToken(request.headers.authorization)
+      const grant = relayToken ? issued.get(relayToken) : undefined
+      if (!grant) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+        socket.destroy()
+        return
+      }
 
-    const relayToken = bearerToken(request.headers.authorization)
-    const grant = relayToken ? issued.get(relayToken) : undefined
-    if (!grant) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-      socket.destroy()
-      return
-    }
-
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      activeSockets.add(ws)
-      ws.once('close', () => activeSockets.delete(ws))
-      handleOwnMobileRelayHostControlSocket(ws, grant, {
-        advertisedOrigin,
-        silenceLimitMs
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        activeSockets.add(ws)
+        ws.once('close', () => activeSockets.delete(ws))
+        handleOwnMobileRelayHostControlSocket(ws, grant, {
+          advertisedOrigin,
+          silenceLimitMs,
+          invites: router.invites,
+          onActive: (relayHostId, send) => {
+            router.activeHosts.set(relayHostId, send)
+          },
+          onClose: (relayHostId) => {
+            router.activeHosts.delete(relayHostId)
+          }
+        })
       })
-    })
+      return
+    }
+
+    if (url.pathname.startsWith('/v1/connect/')) {
+      const relayHostId = url.pathname.slice('/v1/connect/'.length)
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        activeSockets.add(ws)
+        ws.once('close', () => activeSockets.delete(ws))
+        handleOwnMobileRelayPhoneSocket(ws, relayHostId, router)
+      })
+      return
+    }
+
+    if (url.pathname.startsWith('/v1/host/data/')) {
+      const connId = url.pathname.slice('/v1/host/data/'.length)
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        activeSockets.add(ws)
+        ws.once('close', () => activeSockets.delete(ws))
+        handleOwnMobileRelayHostDataSocket(ws, connId, router)
+      })
+      return
+    }
+
+    socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+    socket.destroy()
   })
 
   async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
