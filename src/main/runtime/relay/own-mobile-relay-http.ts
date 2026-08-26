@@ -17,11 +17,14 @@ export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
   clientId?: string
   origin: string
+  listenHost?: string
+  listenPort?: number
   silenceLimitMs?: number
 }
 
 export type OwnMobileRelayServer = {
   origin: string
+  boundPort: number
   close: () => Promise<void>
 }
 
@@ -43,6 +46,8 @@ export function listenOwnMobileRelay(
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
   const operator = options.operator
   const configuredClientId = options.clientId ?? 'orca-desktop'
+  const listenHost = options.listenHost ?? '127.0.0.1'
+  const listenPort = options.listenPort ?? 0
 
   const router: OwnMobileRelayRouter = {
     invites: new Map<string, OwnMobileRelayInviteRecord>(),
@@ -80,18 +85,32 @@ export function listenOwnMobileRelay(
 
   return new Promise((resolve, reject) => {
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(listenPort, listenHost, () => {
       const address = server.address()
       if (!address || typeof address === 'string') {
         server.close()
         reject(new Error('own_mobile_relay_bind_failed'))
         return
       }
-      const advertised = new URL(options.origin)
-      advertised.port = String(address.port)
-      advertisedOrigin = advertised.origin
+      const hasPort =
+        /:\d+$/.test(options.origin) ||
+        /:\d+\//.test(options.origin) ||
+        Boolean(new URL(options.origin).port)
+
+      if (
+        hasPort ||
+        options.origin === 'http://127.0.0.1' ||
+        options.origin === 'http://localhost'
+      ) {
+        const advertised = new URL(options.origin)
+        advertised.port = String(address.port)
+        advertisedOrigin = advertised.origin
+      } else {
+        advertisedOrigin = options.origin
+      }
       resolve({
         origin: advertisedOrigin,
+        boundPort: address.port,
         close: () =>
           new Promise((closeResolve, closeReject) => {
             for (const socket of activeSockets) {

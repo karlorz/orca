@@ -24,6 +24,7 @@ node_modules
 # Build output
 dist/
 dist-electron/
+dist-own-mobile-relay/
 out/
 /build/
 release/
