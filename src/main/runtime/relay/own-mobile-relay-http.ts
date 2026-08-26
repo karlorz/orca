@@ -104,7 +104,11 @@ export function listenOwnMobileRelay(
 
       wss.handleUpgrade(request, socket, head, (ws) => {
         activeSockets.add(ws)
-        ws.once('close', () => activeSockets.delete(ws))
+        const cleanup = (): void => {
+          activeSockets.delete(ws)
+        }
+        ws.once('close', cleanup)
+        ws.once('error', cleanup)
         handleOwnMobileRelayHostControlSocket(ws, grant, {
           advertisedOrigin,
           silenceLimitMs,
@@ -124,7 +128,11 @@ export function listenOwnMobileRelay(
       const relayHostId = url.pathname.slice('/v1/connect/'.length)
       wss.handleUpgrade(request, socket, head, (ws) => {
         activeSockets.add(ws)
-        ws.once('close', () => activeSockets.delete(ws))
+        const cleanup = (): void => {
+          activeSockets.delete(ws)
+        }
+        ws.once('close', cleanup)
+        ws.once('error', cleanup)
         handleOwnMobileRelayPhoneSocket(ws, relayHostId, router)
       })
       return
@@ -134,7 +142,11 @@ export function listenOwnMobileRelay(
       const connId = url.pathname.slice('/v1/host/data/'.length)
       wss.handleUpgrade(request, socket, head, (ws) => {
         activeSockets.add(ws)
-        ws.once('close', () => activeSockets.delete(ws))
+        const cleanup = (): void => {
+          activeSockets.delete(ws)
+        }
+        ws.once('close', cleanup)
+        ws.once('error', cleanup)
         handleOwnMobileRelayHostDataSocket(ws, connId, router)
       })
       return

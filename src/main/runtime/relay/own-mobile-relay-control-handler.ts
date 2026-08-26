@@ -54,6 +54,10 @@ export function handleOwnMobileRelayHostControlSocket(
 
   resetSilenceWatchdog()
 
+  ws.once('error', () => {
+    closeSocket(4401, 'socket_error')
+  })
+
   ws.on('message', (raw: RawData, isBinary: boolean) => {
     resetSilenceWatchdog()
     if (isBinary) {

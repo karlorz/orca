@@ -33,6 +33,25 @@ export function handleOwnMobileRelayPhoneSocket(
     return
   }
 
+  let pendingConn: PendingConnRecord | null = null
+
+  const cleanup = (): void => {
+    if (pendingConn) {
+      router.pendingConns.delete(pendingConn.connId)
+      router.connsByTicket.delete(pendingConn.connTicket)
+      if (pendingConn.hostSocket && pendingConn.hostSocket.readyState === ws.OPEN) {
+        pendingConn.hostSocket.close(4408, 'peer_closed')
+      }
+    }
+  }
+
+  ws.once('error', () => {
+    cleanup()
+    ws.close(4401, 'socket_error')
+  })
+
+  ws.once('close', cleanup)
+
   ws.once('message', (raw: RawData, isBinary: boolean) => {
     if (isBinary) {
       ws.close(4401, 'binary_frame_rejected')
@@ -93,7 +112,7 @@ export function handleOwnMobileRelayPhoneSocket(
     const connTicket = randomBytes(32).toString('base64url')
     const expiresAt = Date.now() + ATTACH_DEADLINE_MS
 
-    const pendingConn: PendingConnRecord = {
+    pendingConn = {
       connId,
       connTicket,
       relayHostId,
@@ -123,14 +142,6 @@ export function handleOwnMobileRelayPhoneSocket(
         leaseExpiresAt: Date.now() + LEASE_TTL_MS
       })
     )
-
-    ws.once('close', () => {
-      router.pendingConns.delete(connId)
-      router.connsByTicket.delete(connTicket)
-      if (pendingConn.hostSocket && pendingConn.hostSocket.readyState === ws.OPEN) {
-        pendingConn.hostSocket.close(4408, 'peer_closed')
-      }
-    })
   })
 }
 
@@ -151,6 +162,21 @@ export function handleOwnMobileRelayHostDataSocket(
     ws.close(4401, 'attach_expired')
     return
   }
+
+  const cleanup = (): void => {
+    router.pendingConns.delete(connId)
+    router.connsByTicket.delete(pendingConn.connTicket)
+    if (pendingConn.phoneSocket && pendingConn.phoneSocket.readyState === ws.OPEN) {
+      pendingConn.phoneSocket.close(4408, 'peer_closed')
+    }
+  }
+
+  ws.once('error', () => {
+    cleanup()
+    ws.close(4401, 'socket_error')
+  })
+
+  ws.once('close', cleanup)
 
   ws.once('message', (raw: RawData, isBinary: boolean) => {
     if (isBinary) {
