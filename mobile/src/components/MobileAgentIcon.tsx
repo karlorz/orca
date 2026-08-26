@@ -6,7 +6,7 @@ import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
-import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
+import { ClaudeIcon, GrokIcon, OpenAIIcon } from './AgentIcons'
 
 // Why: agent branding should match the desktop/new-worktree picker everywhere
 // mobile lets users choose the agent that will own a workspace.
@@ -91,6 +91,9 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   }
   if (agentId === 'codex') {
     return <OpenAIIcon size={size} />
+  }
+  if (agentId === 'grok') {
+    return <GrokIcon size={size} />
   }
   if (agentId === 'pi') {
     return <PiIcon size={size} />

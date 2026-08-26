@@ -29,7 +29,8 @@ vi.mock('./mobile-agent-icon-assets', () => ({
 
 vi.mock('./AgentIcons', () => ({
   ClaudeIcon: 'ClaudeIcon',
-  OpenAIIcon: 'OpenAIIcon'
+  OpenAIIcon: 'OpenAIIcon',
+  GrokIcon: 'GrokIcon'
 }))
 
 describe('MobileAgentIcon OMP gradient', () => {

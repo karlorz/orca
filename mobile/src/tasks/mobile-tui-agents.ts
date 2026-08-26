@@ -85,7 +85,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   openclaude: 'openclaude.gitlawb.com',
-  grok: 'x.ai',
+  grok: 'grok.com',
   copilot: 'github.com',
   opencode: 'opencode.ai',
   'mimo-code': 'mimo.xiaomi.com',

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon, DroidIcon, GrokIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -75,7 +75,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
-    faviconDomain: 'x.ai',
+    faviconDomain: 'grok.com',
     homepageUrl: 'https://x.ai/cli'
   },
   {
@@ -342,6 +342,9 @@ export function AgentIcon({
   }
   if (agent === 'codex') {
     return <OpenAIIcon size={size} />
+  }
+  if (agent === 'grok') {
+    return <GrokIcon size={size} />
   }
   if (agent === 'droid') {
     return <DroidIcon size={size} />

@@ -10,6 +10,7 @@ const GLYPH_AGENT_IDS = new Set<TuiAgent>([
   'claude',
   'claude-agent-teams',
   'codex',
+  'grok',
   'pi',
   'omp',
   'aider'

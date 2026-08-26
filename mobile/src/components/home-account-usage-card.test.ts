@@ -15,7 +15,8 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({ Gauge: 'Gauge' }))
 vi.mock('./AgentIcons', () => ({
   ClaudeIcon: 'ClaudeIcon',
-  OpenAIIcon: 'OpenAIIcon'
+  OpenAIIcon: 'OpenAIIcon',
+  GrokIcon: 'GrokIcon'
 }))
 
 function limits(provider: ProviderRateLimits['provider']): ProviderRateLimits {

@@ -103,7 +103,8 @@ vi.mock('./transport/client-context', () => {
 
 vi.mock('./components/AgentIcons', () => ({
   ClaudeIcon: 'ClaudeIcon',
-  OpenAIIcon: 'OpenAIIcon'
+  OpenAIIcon: 'OpenAIIcon',
+  GrokIcon: 'GrokIcon'
 }))
 
 const AVAILABLE_SNAPSHOT = {

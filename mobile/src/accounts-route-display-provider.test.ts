@@ -72,7 +72,8 @@ vi.mock('./components/use-visible-usage-providers', () => ({
 }))
 vi.mock('./components/AgentIcons', () => ({
   ClaudeIcon: 'ClaudeIcon',
-  OpenAIIcon: 'OpenAIIcon'
+  OpenAIIcon: 'OpenAIIcon',
+  GrokIcon: 'GrokIcon'
 }))
 vi.mock('./components/CodexResetCreditAction', () => ({
   CodexResetCreditAction: 'CodexResetCreditAction'
