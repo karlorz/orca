@@ -27,6 +27,14 @@ function frameByteLength(raw: RawData): number {
 }
 
 function clearPendingConn(pendingConn: PendingConnRecord, router: OwnMobileRelayRouter): void {
+  releaseAttachReservation(pendingConn, router)
+  router.pendingConns.delete(pendingConn.connId)
+}
+
+function releaseAttachReservation(
+  pendingConn: PendingConnRecord,
+  router: OwnMobileRelayRouter
+): void {
   if (pendingConn.attachTimer) {
     clearTimeout(pendingConn.attachTimer)
     pendingConn.attachTimer = undefined
@@ -35,7 +43,6 @@ function clearPendingConn(pendingConn: PendingConnRecord, router: OwnMobileRelay
     pendingConn.phoneSocket.off('message', pendingConn.onPhoneMessage)
     pendingConn.onPhoneMessage = undefined
   }
-  router.pendingConns.delete(pendingConn.connId)
   router.connsByTicket.delete(pendingConn.connTicket)
 }
 
@@ -278,7 +285,10 @@ export function handleOwnMobileRelayHostDataSocket(
       return
     }
 
-    clearPendingConn(pendingConn, router)
+    // The encrypted resume-confirm RPC arrives after host-data attaches. Keep
+    // this record addressable by connId as its authorization basis until one
+    // peer closes, while releasing the one-shot attach ticket and buffer state.
+    releaseAttachReservation(pendingConn, router)
     pendingConn.hostSocket = ws
     const buffered = pendingConn.bufferedFrames ?? []
     pendingConn.bufferedFrames = undefined

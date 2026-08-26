@@ -281,6 +281,17 @@ describe('own mobile relay resume + revoke', () => {
         })
       )
 
+      // The phone sends pairing.getEndpoints only after E2EE authenticates,
+      // which is necessarily after host-data attaches. The basis must remain
+      // confirmable across that transition.
+      const confirm = await client.confirmResume(connId, randomBytes(16).toString('hex'))
+      expect(confirm).toMatchObject({
+        v: 1,
+        currentVersion: 1,
+        acceptedAs: 'current',
+        renewed: false
+      })
+
       // Splicing: phone -> host text
       const hostReceivedText = nextFrame(hostDataSocket)
       phoneSocket.send('hello-resume-phone')
