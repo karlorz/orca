@@ -4,7 +4,7 @@
 
 This is `karlorz/orca`, a fork of `stablyai/orca`. Follow these rules for all fork releases:
 
-0. **Branches.** Default and working branch is `fork-main`. GitHub `main` is a disposable mirror of `stablyai/orca` `main`, refreshed by `.github/workflows/fork-sync-main.yml` (needs repo secret `FORK_SYNC_TOKEN` with `repo` + `workflow`; `GITHUB_TOKEN` cannot update workflow files). Never use GitHub **Sync fork** (it would merge upstream into `fork-main`). Never commit product work on `main`. Record each landed fork feat in `config/fork-features.yml` (`node config/scripts/fork-features.mjs list`).
+0. **Branches.** Default and working branch is `fork-main`. GitHub `main` is a disposable mirror of `stablyai/orca` `main`, refreshed by `.github/workflows/fork-sync-main.yml` (needs repo secret `FORK_SYNC_TOKEN` with `repo` + `workflow`; `GITHUB_TOKEN` cannot update workflow files). The same job reports **desktop** (`v1.4.x`, including `-rc.N`) and **mobile** (`mobile-android-vX.Y.Z`) latest upstream releases separately, prerelease or stable. Never use GitHub **Sync fork** (it would merge upstream into `fork-main`). Never commit product work on `main`. Record each landed fork feat in `config/fork-features.yml` (`node config/scripts/fork-features.mjs list`).
 1. **Two trains, like upstream.** Desktop is `release-cut` / `v1.4.x`. Mobile Android is `mobile-android-v*`. Never put macOS DMG/ZIP on a mobile tag.
 2. **Keep upstream mobile marketing version.** `mobile/app.json` `expo.version` stays `0.0.44` while upstream's latest mobile tag is `mobile-android-v0.0.44`. Do not bump to 0.0.45. Increment `versionCode` only.
 3. **Fork mobile tags:** `mobile-android-v0.0.44-0`, `mobile-android-v0.0.44-1`, … (`*.*.*-N`). Never `fork-voice-v*`, never `-karlorz.N`.

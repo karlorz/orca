@@ -41,3 +41,14 @@ jobs:
             exit 1
           fi
           gh api --method POST "repos/${GH_REPO}/merge-upstream" -f branch="$MIRROR_BRANCH"
+
+      - name: Checkout fork-main for train report
+        uses: actions/checkout@v6
+        with:
+          ref: fork-main
+          persist-credentials: false
+
+      - name: Report latest upstream desktop and mobile trains
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        run: node config/scripts/fork-upstream-trains.mjs

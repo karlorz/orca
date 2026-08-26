@@ -57,9 +57,10 @@ features:
       - mobile/packages/expo-pet-speech
     wiki: projects/grok-desktop-pet/work/2026-08-25-pet-voice-fgs-hysteresis
   - id: fork-sync-main-mirror
-    title: Daily GitHub Action fast-forwards GitHub main from stablyai/orca
+    title: Daily GitHub Action fast-forwards GitHub main and reports desktop vs mobile trains
     kind: ci
     status: landed
     paths:
       - .github/workflows/fork-sync-main.yml
+      - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
