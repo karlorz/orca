@@ -118,7 +118,12 @@ function encodeTranscript(
   ])
 }
 
-export function createRelayHostChallenge(input: RelayHostChallengeCreateInput): RelayHostChallenge {
+export function createRelayHostChallenge(
+  input: RelayHostChallengeCreateInput
+): RelayHostChallenge & {
+  secret: Uint8Array
+  transcript: Uint8Array
+} {
   const issuedAt = (input.now ?? Date.now)()
   const expiresAt = issuedAt + MAX_HOST_PROOF_CHALLENGE_WINDOW_MS
   const challengeId = input.challengeId ?? randomBytes(16).toString('hex')
@@ -141,7 +146,9 @@ export function createRelayHostChallenge(input: RelayHostChallengeCreateInput): 
     relayEphemeralPublicKeyB64: canonicalBase64(ephemeral.publicKey),
     nonceB64: canonicalBase64(nonce),
     ciphertextB64: canonicalBase64(ciphertext),
-    expiresAt
+    expiresAt,
+    secret,
+    transcript
   }
 }
 
@@ -249,6 +256,13 @@ function validateTranscript(
   return true
 }
 
+export function computeRelayHostProofAck(secret: Uint8Array, transcript: Uint8Array): string {
+  return createHmac('sha256', secret)
+    .update(textEncoder.encode(`${HOST_PROOF_TRANSCRIPT_DOMAIN}\0ack\0`))
+    .update(transcript)
+    .digest('base64')
+}
+
 export function answerRelayHostChallenge(
   challenge: RelayHostChallenge,
   context: RelayHostProofContext
@@ -286,8 +300,5 @@ export function answerRelayHostChallenge(
     return null
   }
   const secret = plaintext.slice(secretStart)
-  return createHmac('sha256', secret)
-    .update(textEncoder.encode(`${HOST_PROOF_TRANSCRIPT_DOMAIN}\0ack\0`))
-    .update(transcript)
-    .digest('base64')
+  return computeRelayHostProofAck(secret, transcript)
 }

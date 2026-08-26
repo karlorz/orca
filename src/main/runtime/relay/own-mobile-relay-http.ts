@@ -1,9 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomBytes } from 'node:crypto'
+import type { Socket } from 'node:net'
+import { WebSocketServer, type WebSocket } from 'ws'
+import { handleOwnMobileRelayHostControlSocket } from './own-mobile-relay-control-handler'
 
 export type OwnMobileRelayListenOptions = {
   operatorAccessToken: string
   origin: string
+  identity?: { userId: string; profileId: string; organizationId: string }
+  silenceLimitMs?: number
 }
 
 export type OwnMobileRelayServer = {
@@ -11,12 +16,14 @@ export type OwnMobileRelayServer = {
   close: () => Promise<void>
 }
 
-type IssuedRelayToken = {
+export type OwnMobileRelayIssuedToken = {
   relayHostId: string
   hostPublicKeyB64: string
+  identity: { userId: string; profileId: string; organizationId: string }
 }
 
 const RELAY_TOKEN_TTL_MS = 60 * 60 * 1000
+const DEFAULT_SILENCE_LIMIT_MS = 15_000
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   const payload = Buffer.from(JSON.stringify(body))
@@ -57,10 +64,41 @@ function readJsonBody(request: IncomingMessage): Promise<unknown> {
 export function listenOwnMobileRelay(
   options: OwnMobileRelayListenOptions
 ): Promise<OwnMobileRelayServer> {
-  const issued = new Map<string, IssuedRelayToken>()
+  const issued = new Map<string, OwnMobileRelayIssuedToken>()
+  const activeSockets = new Set<WebSocket>()
   let advertisedOrigin = options.origin
+  const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
+
+  const wss = new WebSocketServer({ noServer: true })
+
   const server = createServer((request, response) => {
     void handleRequest(request, response)
+  })
+
+  server.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (url.pathname !== '/v1/host/control') {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+      socket.destroy()
+      return
+    }
+
+    const relayToken = bearerToken(request.headers.authorization)
+    const grant = relayToken ? issued.get(relayToken) : undefined
+    if (!grant) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+      socket.destroy()
+      return
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      activeSockets.add(ws)
+      ws.once('close', () => activeSockets.delete(ws))
+      handleOwnMobileRelayHostControlSocket(ws, grant, {
+        advertisedOrigin,
+        silenceLimitMs
+      })
+    })
   })
 
   async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -90,7 +128,12 @@ export function listenOwnMobileRelay(
       const relayToken = randomBytes(32).toString('base64url')
       issued.set(relayToken, {
         relayHostId: record.relayHostId,
-        hostPublicKeyB64: record.hostPublicKeyB64
+        hostPublicKeyB64: record.hostPublicKeyB64,
+        identity: options.identity ?? {
+          userId: 'lab-user',
+          profileId: 'lab-profile',
+          organizationId: ''
+        }
       })
       sendJson(response, 200, {
         relayToken,
@@ -144,7 +187,12 @@ export function listenOwnMobileRelay(
         origin: advertisedOrigin,
         close: () =>
           new Promise((closeResolve, closeReject) => {
-            server.close((error) => (error ? closeReject(error) : closeResolve()))
+            for (const socket of activeSockets) {
+              socket.terminate()
+            }
+            wss.close(() => {
+              server.close((error) => (error ? closeReject(error) : closeResolve()))
+            })
           })
       })
     })
