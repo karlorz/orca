@@ -12,14 +12,20 @@ import {
 import type { OwnMobileRelayRouter, PendingConnRecord } from './own-mobile-relay-splice-handler'
 import { registerOwnMobileRelayUpgrades } from './own-mobile-relay-http-upgrades'
 import { createOwnMobileRelayRequestHandler } from './own-mobile-relay-request-routes'
+import { createOwnMobileRelaySecurityStateMemory } from './own-mobile-relay-security-state-memory'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
+import { bootstrapOperatorAccount } from './own-mobile-relay-account'
+import { TEST_FAST_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay-password'
 
 export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
+  securityState?: OwnMobileRelaySecurityState
   clientId?: string
   origin: string
   listenHost?: string
   listenPort?: number
   silenceLimitMs?: number
+  passwordPolicy?: PasswordPolicy
 }
 
 export type OwnMobileRelayServer = {
@@ -28,26 +34,29 @@ export type OwnMobileRelayServer = {
   close: () => Promise<void>
 }
 
-export type OwnMobileRelayIssuedToken = {
-  relayHostId: string
-  hostPublicKeyB64: string
-  identity: { userId: string; profileId: string; organizationId: string }
-}
-
 const DEFAULT_SILENCE_LIMIT_MS = 15_000
 
-export function listenOwnMobileRelay(
+export async function listenOwnMobileRelay(
   options: OwnMobileRelayListenOptions
 ): Promise<OwnMobileRelayServer> {
-  const issued = new Map<string, OwnMobileRelayIssuedToken>()
   const activeSockets = new Set<WebSocket>()
   const authStore: OwnMobileRelayAuthStore = createOwnMobileRelayAuthStore()
   let advertisedOrigin = options.origin
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
-  const operator = options.operator
   const configuredClientId = options.clientId ?? 'orca-desktop'
   const listenHost = options.listenHost ?? '127.0.0.1'
   const listenPort = options.listenPort ?? 0
+
+  let securityState = options.securityState
+  const ownsSecurityState = !securityState
+  const passwordPolicy = options.passwordPolicy ?? TEST_FAST_PASSWORD_POLICY
+
+  if (!securityState) {
+    securityState = createOwnMobileRelaySecurityStateMemory()
+  }
+  if (options.operator) {
+    await bootstrapOperatorAccount(securityState, options.operator, passwordPolicy)
+  }
 
   const router: OwnMobileRelayRouter = {
     invites: new Map<string, OwnMobileRelayInviteRecord>(),
@@ -60,12 +69,12 @@ export function listenOwnMobileRelay(
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
 
   const requestHandler = createOwnMobileRelayRequestHandler({
-    operator,
+    securityState,
     configuredClientId,
     authStore,
-    issued,
     advertisedOriginCallback: () => advertisedOrigin,
-    router
+    router,
+    passwordPolicy
   })
 
   const server = createServer((request, response) => {
@@ -75,7 +84,7 @@ export function listenOwnMobileRelay(
   server.on(
     'upgrade',
     registerOwnMobileRelayUpgrades(wss, {
-      issued,
+      securityState,
       activeSockets,
       advertisedOriginCallback: () => advertisedOrigin,
       silenceLimitMs,
@@ -117,7 +126,20 @@ export function listenOwnMobileRelay(
               socket.terminate()
             }
             wss.close(() => {
-              server.close((error) => (error ? closeReject(error) : closeResolve()))
+              server.close(async (error) => {
+                if (ownsSecurityState && securityState) {
+                  try {
+                    await securityState.close()
+                  } catch {
+                    // Ignore adapter close error
+                  }
+                }
+                if (error) {
+                  closeReject(error)
+                } else {
+                  closeResolve()
+                }
+              })
             })
           })
       })

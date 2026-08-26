@@ -94,6 +94,27 @@ export function replacePasswordVerifierMemory(
   return { ok: true, account: toPublicAccount(ctx.account) }
 }
 
+export function upgradePasswordVerifierMemory(
+  ctx: MemoryStoreContext,
+  input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
+  now: number
+):
+  | { ok: true; account: SecurityStateAccountIdentity }
+  | { ok: false; error: 'version_mismatch' | 'not_found' } {
+  assertOpen(ctx)
+  if (!ctx.account) {
+    return { ok: false, error: 'not_found' }
+  }
+  if (ctx.account.verifierVersion !== input.expectedVerifierVersion) {
+    return { ok: false, error: 'version_mismatch' }
+  }
+  ctx.account.verifierVersion += 1
+  // authEpoch preserved unchanged
+  ctx.account.passwordRecord = input.newPasswordRecord
+  ctx.account.updatedAt = now
+  return { ok: true, account: toPublicAccount(ctx.account) }
+}
+
 export function issueAccessSessionMemory(
   ctx: MemoryStoreContext,
   input: SecurityStateIssueAccessSessionInput,

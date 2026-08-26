@@ -119,5 +119,82 @@ export function registerAccountAndVerifierTests(
       expect(internalRec?.authEpoch).toBe(2)
       expect(internalRec?.passwordRecord.verifier).toBe(newRecord.verifier)
     })
+
+    it('upgrades verifier version and updatedAt while preserving authEpoch and active session/grant validity', async () => {
+      const bootstrap = await state.bootstrapAccount({
+        email: 'admin@example.com',
+        userId: 'usr_1',
+        profileId: 'prf_1',
+        organizationId: 'org_1',
+        passwordRecord
+      })
+
+      const rawAccessToken = 'valid-access-token-123456789'
+      const session = await state.issueAccessSession({
+        rawAccessToken,
+        identity: {
+          userId: bootstrap.userId,
+          profileId: bootstrap.profileId,
+          organizationId: bootstrap.organizationId,
+          email: bootstrap.email,
+          cloudProfileId: bootstrap.profileId
+        },
+        ttlMs: 60_000
+      })
+
+      const rawRelayToken = 'valid-relay-token-123456789'
+      const grant = await state.issueRelayGrant({
+        rawRelayToken,
+        parentSessionId: session.sessionId,
+        relayHostId: 'relay-host-1',
+        hostPublicKeyB64: 'host-public-key-b64',
+        identity: {
+          userId: bootstrap.userId,
+          profileId: bootstrap.profileId,
+          organizationId: bootstrap.organizationId
+        },
+        ttlMs: 60_000
+      })
+      expect(grant).not.toBeNull()
+
+      const upgradedRecord = await derivePasswordRecord(
+        'correct-horse-battery-staple-1234',
+        TEST_FAST_PASSWORD_POLICY
+      )
+
+      const badVersionResult = await state.upgradePasswordVerifier({
+        expectedVerifierVersion: bootstrap.verifierVersion + 99,
+        newPasswordRecord: upgradedRecord
+      })
+      expect(badVersionResult.ok).toBe(false)
+      if (!badVersionResult.ok) {
+        expect(badVersionResult.error).toBe('version_mismatch')
+      }
+
+      const upgradeResult = await state.upgradePasswordVerifier({
+        expectedVerifierVersion: bootstrap.verifierVersion,
+        newPasswordRecord: upgradedRecord
+      })
+      expect(upgradeResult.ok).toBe(true)
+      if (upgradeResult.ok) {
+        expect(upgradeResult.account.verifierVersion).toBe(2)
+        expect(upgradeResult.account.authEpoch).toBe(1) // Auth epoch preserved!
+        expect(upgradeResult.account).not.toHaveProperty('passwordRecord')
+      }
+
+      const internalRec = await state.getAccountPasswordRecord()
+      expect(internalRec?.verifierVersion).toBe(2)
+      expect(internalRec?.authEpoch).toBe(1) // Auth epoch preserved!
+      expect(internalRec?.passwordRecord.verifier).toBe(upgradedRecord.verifier)
+
+      // Active session and grant remain valid after policy upgrade
+      const validatedSession = await state.lookupAccessSessionByToken(rawAccessToken)
+      expect(validatedSession).not.toBeNull()
+      expect(validatedSession?.sessionId).toBe(session.sessionId)
+
+      const validatedGrant = await state.validateRelayGrantByToken(rawRelayToken)
+      expect(validatedGrant).not.toBeNull()
+      expect(validatedGrant?.grantId).toBe(grant?.grantId)
+    })
   })
 }

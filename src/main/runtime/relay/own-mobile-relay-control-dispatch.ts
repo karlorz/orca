@@ -8,7 +8,7 @@ import {
   type OwnMobileRelayDeviceCredentialRecord,
   type OwnMobileRelayInviteRecord
 } from './own-mobile-relay-types'
-import type { OwnMobileRelayIssuedToken } from './own-mobile-relay-http'
+import type { SecurityStateRelayGrant } from './own-mobile-relay-security-state'
 
 export type OwnMobileRelayControlContext = {
   advertisedOrigin: string
@@ -22,7 +22,7 @@ export type OwnMobileRelayControlContext = {
 
 export function handleActiveControlMessage(
   ws: WebSocket,
-  grant: OwnMobileRelayIssuedToken,
+  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>,
   closeSocket: (code: number, reason?: string) => void
@@ -112,7 +112,7 @@ export function handleActiveControlMessage(
 
 function handleCredentialInstall(
   ws: WebSocket,
-  grant: OwnMobileRelayIssuedToken,
+  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
 ): void {
@@ -179,7 +179,7 @@ function handleCredentialInstall(
 
 function handleCredentialInstallStatus(
   ws: WebSocket,
-  grant: OwnMobileRelayIssuedToken,
+  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
 ): void {
@@ -220,7 +220,7 @@ function handleCredentialInstallStatus(
 
 function handleResumeConfirm(
   ws: WebSocket,
-  grant: OwnMobileRelayIssuedToken,
+  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
 ): void {

@@ -31,7 +31,8 @@ import {
   executeBootstrapAccountSqlite,
   executeGetAccountSqlite,
   executeGetAccountPasswordRecordSqlite,
-  executeReplacePasswordVerifierSqlite
+  executeReplacePasswordVerifierSqlite,
+  executeUpgradePasswordVerifierSqlite
 } from './own-mobile-relay-security-state-sqlite-account-ops'
 import {
   executeIssueAccessSessionSqlite,
@@ -147,6 +148,17 @@ export function openOwnMobileRelaySecurityStateSqlite(
     > {
       assertOpen()
       return executeReplacePasswordVerifierSqlite(ctx.db, input, now)
+    },
+
+    async upgradePasswordVerifier(
+      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
+      now = Date.now()
+    ): Promise<
+      | { ok: true; account: SecurityStateAccountIdentity }
+      | { ok: false; error: 'version_mismatch' | 'not_found' }
+    > {
+      assertOpen()
+      return executeUpgradePasswordVerifierSqlite(ctx.db, input, now)
     },
 
     async issueAccessSession(

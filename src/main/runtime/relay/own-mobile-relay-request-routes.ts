@@ -3,11 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { bearerToken, readJsonBody, sendJson } from './own-mobile-relay-http-utils'
 import type { OwnMobileRelayRouter } from './own-mobile-relay-splice-handler'
 import { handleResolvePost } from './own-mobile-relay-resolve-handler'
-import type {
-  OwnMobileRelayIssuedToken,
-  OwnMobileRelayListenOptions
-} from './own-mobile-relay-http'
 import type { OwnMobileRelayAuthStore } from './own-mobile-relay-auth'
+import type {
+  OwnMobileRelaySecurityState,
+  SecurityStateAccessSession
+} from './own-mobile-relay-security-state'
 import {
   handleAuthorizeGet,
   handleAuthorizePost,
@@ -17,16 +17,17 @@ import {
   handleRefreshPost,
   handleSessionPost
 } from './own-mobile-relay-auth'
+import type { PasswordPolicy } from './own-mobile-relay-password'
 
 const RELAY_TOKEN_TTL_MS = 60 * 60 * 1000
 
 export type OwnMobileRelayRequestContext = {
-  operator: OwnMobileRelayListenOptions['operator']
+  securityState: OwnMobileRelaySecurityState
   configuredClientId: string
   authStore: OwnMobileRelayAuthStore
-  issued: Map<string, OwnMobileRelayIssuedToken>
   advertisedOriginCallback: () => string
   router: OwnMobileRelayRouter
+  passwordPolicy?: PasswordPolicy
 }
 
 export function createOwnMobileRelayRequestHandler(
@@ -44,17 +45,14 @@ export function createOwnMobileRelayRequestHandler(
         return
       }
       if (request.method === 'POST') {
-        if (!context.operator) {
-          sendJson(response, 500, { error: 'operator_not_configured' })
-          return
-        }
         await handleAuthorizePost(
           request,
           url,
-          context.operator,
+          context.securityState,
           context.configuredClientId,
           context.authStore,
-          response
+          response,
+          context.passwordPolicy
         )
         return
       }
@@ -64,7 +62,7 @@ export function createOwnMobileRelayRequestHandler(
       if (body === undefined) {
         return
       }
-      handleSessionPost(body, context.authStore, response)
+      await handleSessionPost(body, context.securityState, context.authStore, response)
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/desktop/auth/refresh') {
@@ -72,14 +70,14 @@ export function createOwnMobileRelayRequestHandler(
       if (body === undefined) {
         return
       }
-      handleRefreshPost(body, context.authStore, response)
+      await handleRefreshPost(body, context.securityState, context.authStore, response)
       return
     }
     if (
       (request.method === 'GET' || request.method === 'POST') &&
       url.pathname === '/v1/desktop/auth/capabilities'
     ) {
-      const session = lookupSession(request, context.authStore)
+      const session = await lookupSession(request, context.securityState)
       if (!session) {
         sendJson(response, 401, { error: 'unauthorized' })
         return
@@ -88,7 +86,7 @@ export function createOwnMobileRelayRequestHandler(
       return
     }
     if (request.method === 'GET' && url.pathname === '/v1/desktop/auth/profile') {
-      const session = lookupSession(request, context.authStore)
+      const session = await lookupSession(request, context.securityState)
       if (!session) {
         sendJson(response, 401, { error: 'unauthorized' })
         return
@@ -97,7 +95,7 @@ export function createOwnMobileRelayRequestHandler(
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/desktop/auth/logout') {
-      const session = lookupSession(request, context.authStore)
+      const session = await lookupSession(request, context.securityState)
       if (!session) {
         sendJson(response, 401, { error: 'unauthorized' })
         return
@@ -109,11 +107,11 @@ export function createOwnMobileRelayRequestHandler(
         // Body is optional for logout
         body = null
       }
-      handleLogoutPost(session, body, context.authStore, response)
+      await handleLogoutPost(session, body, context.securityState, context.authStore, response)
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/desktop/auth/relay-token') {
-      const session = lookupSession(request, context.authStore)
+      const session = await lookupSession(request, context.securityState)
       if (!session) {
         sendJson(response, 401, { error: 'unauthorized' })
         return
@@ -127,25 +125,34 @@ export function createOwnMobileRelayRequestHandler(
         sendJson(response, 400, { error: 'invalid_request' })
         return
       }
-      const relayToken = randomBytes(32).toString('base64url')
-      context.issued.set(relayToken, {
+      const rawRelayToken = randomBytes(32).toString('base64url')
+      const issuedGrant = await context.securityState.issueRelayGrant({
+        rawRelayToken,
+        parentSessionId: session.sessionId,
         relayHostId: record.relayHostId,
         hostPublicKeyB64: record.hostPublicKeyB64,
         identity: {
           userId: session.identity.userId,
           profileId: session.identity.cloudProfileId,
           organizationId: session.identity.organizationId
-        }
+        },
+        ttlMs: RELAY_TOKEN_TTL_MS
       })
+      if (!issuedGrant) {
+        sendJson(response, 401, { error: 'unauthorized' })
+        return
+      }
       sendJson(response, 200, {
-        relayToken,
-        expiresAt: Date.now() + RELAY_TOKEN_TTL_MS
+        relayToken: rawRelayToken,
+        expiresAt: issuedGrant.expiresAt
       })
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/assign') {
       const relayToken = bearerToken(request.headers.authorization)
-      const grant = relayToken ? context.issued.get(relayToken) : undefined
+      const grant = relayToken
+        ? await context.securityState.validateRelayGrantByToken(relayToken)
+        : null
       if (!grant) {
         sendJson(response, 401, { error: 'unauthorized' })
         return
@@ -191,20 +198,13 @@ async function readJsonBodySafely(
   }
 }
 
-function lookupSession(
+async function lookupSession(
   request: IncomingMessage,
-  authStore: OwnMobileRelayAuthStore
-): ReturnType<OwnMobileRelayAuthStore['sessions']['get']> | undefined {
+  securityState: OwnMobileRelaySecurityState
+): Promise<SecurityStateAccessSession | null> {
   const access = bearerToken(request.headers.authorization)
   if (!access) {
-    return undefined
+    return null
   }
-  const session = authStore.sessions.get(access)
-  if (!session) {
-    return undefined
-  }
-  if (session.expiresAt <= Date.now()) {
-    return undefined
-  }
-  return session
+  return securityState.lookupAccessSessionByToken(access)
 }

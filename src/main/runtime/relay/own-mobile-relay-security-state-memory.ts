@@ -26,6 +26,7 @@ import {
   assertOpen,
   bootstrapAccountMemory,
   replacePasswordVerifierMemory,
+  upgradePasswordVerifierMemory,
   issueAccessSessionMemory,
   replaceAccessSessionMemory,
   issueRelayGrantMemory,
@@ -96,6 +97,16 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       | { ok: false; error: 'version_mismatch' | 'not_found' }
     > {
       return replacePasswordVerifierMemory(ctx, input, now)
+    },
+
+    async upgradePasswordVerifier(
+      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
+      now = Date.now()
+    ): Promise<
+      | { ok: true; account: SecurityStateAccountIdentity }
+      | { ok: false; error: 'version_mismatch' | 'not_found' }
+    > {
+      return upgradePasswordVerifierMemory(ctx, input, now)
     },
 
     async issueAccessSession(

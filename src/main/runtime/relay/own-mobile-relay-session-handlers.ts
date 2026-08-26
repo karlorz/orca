@@ -1,14 +1,19 @@
 import { randomBytes } from 'node:crypto'
 import type { ServerResponse } from 'node:http'
-import type { AuthSessionRecord, OwnMobileRelayAuthStore } from './own-mobile-relay-auth-store'
+import type { OwnMobileRelayAuthStore } from './own-mobile-relay-auth-store'
+import type {
+  OwnMobileRelaySecurityState,
+  SecurityStateAccessSession
+} from './own-mobile-relay-security-state'
 
 const SESSION_TTL_MS = 60 * 60 * 1000
 
-export function handleRefreshPost(
+export async function handleRefreshPost(
   body: unknown,
+  securityState: OwnMobileRelaySecurityState,
   store: OwnMobileRelayAuthStore,
   response: ServerResponse
-): void {
+): Promise<void> {
   if (!body || typeof body !== 'object') {
     response.writeHead(400, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_request' }))
@@ -23,48 +28,55 @@ export function handleRefreshPost(
     return
   }
 
-  const existingSession = store.refreshTokens.get(oldRefreshToken)
-  if (!existingSession) {
+  const ephemeral = store.refreshTokens.get(oldRefreshToken)
+  if (!ephemeral) {
     response.writeHead(401, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_grant' }))
     return
   }
 
-  store.refreshTokens.delete(oldRefreshToken)
-  store.sessions.delete(existingSession.accessToken)
-
   const newAccessToken = randomBytes(32).toString('base64url')
   const newRefreshToken = randomBytes(32).toString('base64url')
   const now = Date.now()
-  const expiresAt = now + SESSION_TTL_MS
 
-  const newSessionRecord: AuthSessionRecord = {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-    expiresAt,
-    identity: existingSession.identity
+  const issued = await securityState.replaceAccessSession({
+    oldSessionId: ephemeral.sessionId,
+    newRawAccessToken: newAccessToken,
+    ttlMs: SESSION_TTL_MS
+  })
+
+  if (!issued) {
+    store.refreshTokens.delete(oldRefreshToken)
+    response.writeHead(401, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ error: 'invalid_grant' }))
+    return
   }
 
-  store.sessions.set(newAccessToken, newSessionRecord)
-  store.refreshTokens.set(newRefreshToken, newSessionRecord)
+  // Rotate ephemeral refresh state only after durable success
+  store.refreshTokens.delete(oldRefreshToken)
+  store.refreshTokens.set(newRefreshToken, {
+    refreshToken: newRefreshToken,
+    sessionId: issued.sessionId,
+    cloudProfileId: ephemeral.cloudProfileId
+  })
 
   const payload = {
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
-    expiresAt,
+    expiresAt: issued.expiresAt,
     cloud: {
-      cloudProfileId: existingSession.identity.cloudProfileId,
-      userId: existingSession.identity.userId,
-      email: existingSession.identity.email,
+      cloudProfileId: ephemeral.cloudProfileId,
+      userId: issued.identity.userId,
+      email: issued.identity.email,
       displayName: undefined,
-      activeOrgId: existingSession.identity.organizationId || undefined,
+      activeOrgId: issued.identity.organizationId || undefined,
       activeOrgName: undefined,
       linkedAt: now
     },
-    organizations: existingSession.identity.organizationId
+    organizations: issued.identity.organizationId
       ? [
           {
-            orgId: existingSession.identity.organizationId,
+            orgId: issued.identity.organizationId,
             name: 'Personal',
             role: 'owner'
           }
@@ -86,7 +98,10 @@ export function handleRefreshPost(
   response.end(data)
 }
 
-export function handleCapabilities(session: AuthSessionRecord, response: ServerResponse): void {
+export function handleCapabilities(
+  session: SecurityStateAccessSession,
+  response: ServerResponse
+): void {
   const now = Date.now()
   const payload = {
     cloud: {
@@ -123,7 +138,7 @@ export function handleCapabilities(session: AuthSessionRecord, response: ServerR
   response.end(data)
 }
 
-export function handleProfile(session: AuthSessionRecord, response: ServerResponse): void {
+export function handleProfile(session: SecurityStateAccessSession, response: ServerResponse): void {
   const payload = {
     userId: session.identity.userId,
     cloudProfileId: session.identity.cloudProfileId,
@@ -140,21 +155,27 @@ export function handleProfile(session: AuthSessionRecord, response: ServerRespon
   response.end(data)
 }
 
-export function handleLogoutPost(
-  session: AuthSessionRecord,
+export async function handleLogoutPost(
+  session: SecurityStateAccessSession,
   body: unknown,
+  securityState: OwnMobileRelaySecurityState,
   store: OwnMobileRelayAuthStore,
   response: ServerResponse
-): void {
-  store.sessions.delete(session.accessToken)
-  store.refreshTokens.delete(session.refreshToken)
+): Promise<void> {
+  await securityState.revokeAccessSessionById(session.sessionId)
+
+  for (const [token, record] of store.refreshTokens.entries()) {
+    if (record.sessionId === session.sessionId) {
+      store.refreshTokens.delete(token)
+    }
+  }
 
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>
     if (typeof record.refreshToken === 'string') {
-      const extraSession = store.refreshTokens.get(record.refreshToken)
-      if (extraSession) {
-        store.sessions.delete(extraSession.accessToken)
+      const extra = store.refreshTokens.get(record.refreshToken)
+      if (extra) {
+        await securityState.revokeAccessSessionById(extra.sessionId)
         store.refreshTokens.delete(record.refreshToken)
       }
     }

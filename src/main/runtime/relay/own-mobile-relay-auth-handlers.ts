@@ -1,14 +1,18 @@
 import { randomBytes } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { OwnMobileRelayOperatorConfig } from './own-mobile-relay-types'
 import {
   type AuthorizationCodeRecord,
-  type AuthSessionRecord,
   type OwnMobileRelayAuthStore,
   isLoopbackCallbackUri,
-  safePasswordMatch,
   verifyS256CodeChallenge
 } from './own-mobile-relay-auth-store'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
+import {
+  verifyPasswordRecord,
+  derivePasswordRecord,
+  CURRENT_PASSWORD_POLICY,
+  type PasswordPolicy
+} from './own-mobile-relay-password'
 
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000
 const SESSION_TTL_MS = 60 * 60 * 1000
@@ -117,10 +121,11 @@ export function handleAuthorizeGet(
 export async function handleAuthorizePost(
   request: IncomingMessage,
   url: URL,
-  operator: OwnMobileRelayOperatorConfig,
+  securityState: OwnMobileRelaySecurityState,
   configuredClientId: string,
   store: OwnMobileRelayAuthStore,
-  response: ServerResponse
+  response: ServerResponse,
+  passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY
 ): Promise<void> {
   const validation = validateAuthorizeParams(url, configuredClientId)
   if (!validation.valid) {
@@ -141,10 +146,36 @@ export async function handleAuthorizePost(
   const email = body.get('email') ?? ''
   const password = body.get('password') ?? ''
 
-  if (email !== operator.email || !safePasswordMatch(password, operator.password)) {
+  const account = await securityState.getAccount()
+  const passwordRec = await securityState.getAccountPasswordRecord()
+
+  if (!account || !passwordRec || email !== account.email) {
     response.writeHead(401, { 'content-type': 'text/plain' })
     response.end('Unauthorized')
     return
+  }
+
+  const verifyResult = await verifyPasswordRecord(
+    password,
+    passwordRec.passwordRecord,
+    passwordPolicy
+  )
+  if (!verifyResult.valid) {
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
+
+  if (verifyResult.needsRehash) {
+    try {
+      const newRecord = await derivePasswordRecord(password, passwordPolicy)
+      await securityState.upgradePasswordVerifier({
+        expectedVerifierVersion: passwordRec.verifierVersion,
+        newPasswordRecord: newRecord
+      })
+    } catch {
+      // Non-fatal if upgrade fails; login still succeeds
+    }
   }
 
   const code = randomBytes(32).toString('base64url')
@@ -157,10 +188,10 @@ export async function handleAuthorizePost(
     nonce: validation.nonce,
     localProfileId: validation.localProfileId,
     identity: {
-      userId: operator.userId,
-      profileId: operator.profileId,
-      organizationId: operator.organizationId,
-      email: operator.email
+      userId: account.userId,
+      profileId: account.profileId,
+      organizationId: account.organizationId,
+      email: account.email
     },
     expiresAt: Date.now() + AUTH_CODE_TTL_MS,
     used: false
@@ -180,11 +211,12 @@ export async function handleAuthorizePost(
   response.end()
 }
 
-export function handleSessionPost(
+export async function handleSessionPost(
   body: unknown,
+  securityState: OwnMobileRelaySecurityState,
   store: OwnMobileRelayAuthStore,
   response: ServerResponse
-): void {
+): Promise<void> {
   if (!body || typeof body !== 'object') {
     response.writeHead(400, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_request' }))
@@ -225,33 +257,34 @@ export function handleSessionPost(
     return
   }
 
-  const accessToken = randomBytes(32).toString('base64url')
+  const rawAccessToken = randomBytes(32).toString('base64url')
   const refreshToken = randomBytes(32).toString('base64url')
   const now = Date.now()
-  const expiresAt = now + SESSION_TTL_MS
 
   const cloudProfileId = authCode.localProfileId || authCode.identity.profileId
 
-  const sessionRecord: AuthSessionRecord = {
-    accessToken,
-    refreshToken,
-    expiresAt,
+  const issuedSession = await securityState.issueAccessSession({
+    rawAccessToken,
     identity: {
       userId: authCode.identity.userId,
       profileId: authCode.identity.profileId,
       organizationId: authCode.identity.organizationId,
       email: authCode.identity.email,
       cloudProfileId
-    }
-  }
+    },
+    ttlMs: SESSION_TTL_MS
+  })
 
-  store.sessions.set(accessToken, sessionRecord)
-  store.refreshTokens.set(refreshToken, sessionRecord)
+  store.refreshTokens.set(refreshToken, {
+    refreshToken,
+    sessionId: issuedSession.sessionId,
+    cloudProfileId
+  })
 
   const payload = {
-    accessToken,
+    accessToken: rawAccessToken,
     refreshToken,
-    expiresAt,
+    expiresAt: issuedSession.expiresAt,
     cloud: {
       cloudProfileId,
       userId: authCode.identity.userId,

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
 import { computeRelayHostProofAck, createRelayHostChallenge } from './relay-host-proof'
-import type { OwnMobileRelayIssuedToken } from './own-mobile-relay-http'
+import type { SecurityStateRelayGrant } from './own-mobile-relay-security-state'
 import {
   handleActiveControlMessage,
   type OwnMobileRelayControlContext
@@ -11,7 +11,7 @@ export type { OwnMobileRelayControlContext }
 
 export function handleOwnMobileRelayHostControlSocket(
   ws: WebSocket,
-  grant: OwnMobileRelayIssuedToken,
+  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext
 ): void {
   let state: 'waiting-hello' | 'waiting-challenge-ack' | 'active' | 'closed' = 'waiting-hello'

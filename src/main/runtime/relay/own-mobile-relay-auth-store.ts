@@ -18,29 +18,20 @@ export type AuthorizationCodeRecord = {
   used: boolean
 }
 
-export type AuthSessionRecord = {
-  accessToken: string
+export type EphemeralRefreshTokenRecord = {
   refreshToken: string
-  expiresAt: number
-  identity: {
-    userId: string
-    profileId: string
-    organizationId: string
-    email: string
-    cloudProfileId: string
-  }
+  sessionId: string
+  cloudProfileId: string
 }
 
 export type OwnMobileRelayAuthStore = {
   codes: Map<string, AuthorizationCodeRecord>
-  sessions: Map<string, AuthSessionRecord>
-  refreshTokens: Map<string, AuthSessionRecord>
+  refreshTokens: Map<string, EphemeralRefreshTokenRecord>
 }
 
 export function createOwnMobileRelayAuthStore(): OwnMobileRelayAuthStore {
   return {
     codes: new Map(),
-    sessions: new Map(),
     refreshTokens: new Map()
   }
 }
@@ -54,15 +45,6 @@ export function isLoopbackCallbackUri(uri: string): boolean {
   } catch {
     return false
   }
-}
-
-export function safePasswordMatch(provided: string, expected: string): boolean {
-  const bufA = Buffer.from(provided, 'utf8')
-  const bufB = Buffer.from(expected, 'utf8')
-  if (bufA.byteLength !== bufB.byteLength) {
-    return false
-  }
-  return timingSafeEqual(bufA, bufB)
 }
 
 export function verifyS256CodeChallenge(codeVerifier: string, expectedChallenge: string): boolean {

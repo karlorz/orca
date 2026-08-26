@@ -8,10 +8,10 @@ import {
   type OwnMobileRelayRouter
 } from './own-mobile-relay-splice-handler'
 import { bearerToken } from './own-mobile-relay-http-utils'
-import type { OwnMobileRelayIssuedToken } from './own-mobile-relay-http'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
 
 export type OwnMobileRelayUpgradeContext = {
-  issued: Map<string, OwnMobileRelayIssuedToken>
+  securityState: OwnMobileRelaySecurityState
   activeSockets: Set<WebSocket>
   advertisedOriginCallback: () => string
   silenceLimitMs: number
@@ -22,11 +22,13 @@ export function registerOwnMobileRelayUpgrades(
   wss: WebSocketServer,
   context: OwnMobileRelayUpgradeContext
 ): (request: IncomingMessage, socket: Socket, head: Buffer) => void {
-  return (request, socket, head) => {
+  return async (request, socket, head) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (url.pathname === '/v1/host/control') {
       const relayToken = bearerToken(request.headers.authorization)
-      const grant = relayToken ? context.issued.get(relayToken) : undefined
+      const grant = relayToken
+        ? await context.securityState.validateRelayGrantByToken(relayToken)
+        : null
       if (!grant) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
         socket.destroy()

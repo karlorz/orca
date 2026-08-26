@@ -186,6 +186,13 @@ export type OwnMobileRelaySecurityState = {
     | { ok: true; account: SecurityStateAccountIdentity }
     | { ok: false; error: 'version_mismatch' | 'not_found' }
   >
+  upgradePasswordVerifier(
+    input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
+    now?: number
+  ): Promise<
+    | { ok: true; account: SecurityStateAccountIdentity }
+    | { ok: false; error: 'version_mismatch' | 'not_found' }
+  >
 
   issueAccessSession(
     input: SecurityStateIssueAccessSessionInput,

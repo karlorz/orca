@@ -231,3 +231,83 @@ export function executeReplacePasswordVerifierSqlite(
     throw err
   }
 }
+
+export function executeUpgradePasswordVerifierSqlite(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
+  now: number
+):
+  | { ok: true; account: SecurityStateAccountIdentity }
+  | { ok: false; error: 'version_mismatch' | 'not_found' } {
+  db.exec('BEGIN IMMEDIATE;')
+  try {
+    const existing = db
+      .prepare(
+        `SELECT singleton_id, account_id, email, user_id, profile_id, organization_id,
+                verifier_version, auth_epoch, created_at, updated_at
+         FROM operator_account WHERE singleton_id = 1`
+      )
+      .get() as SqliteAccountRow | undefined
+    if (!existing) {
+      db.exec('ROLLBACK;')
+      return { ok: false, error: 'not_found' }
+    }
+    if (Number(existing.verifier_version) !== input.expectedVerifierVersion) {
+      db.exec('ROLLBACK;')
+      return { ok: false, error: 'version_mismatch' }
+    }
+    const newVerifierVersion = Number(existing.verifier_version) + 1
+    const authEpoch = Number(existing.auth_epoch)
+
+    const updateStmt = db.prepare(`
+      UPDATE operator_account
+      SET verifier_version = ?,
+          password_version = ?,
+          password_verifier = ?,
+          password_salt = ?,
+          param_n = ?,
+          param_r = ?,
+          param_p = ?,
+          param_key_len = ?,
+          param_maxmem = ?,
+          updated_at = ?
+      WHERE singleton_id = 1 AND verifier_version = ?
+    `)
+    const result = updateStmt.run(
+      newVerifierVersion,
+      input.newPasswordRecord.version,
+      input.newPasswordRecord.verifier,
+      input.newPasswordRecord.salt,
+      input.newPasswordRecord.params.N,
+      input.newPasswordRecord.params.r,
+      input.newPasswordRecord.params.p,
+      input.newPasswordRecord.params.keyLen,
+      input.newPasswordRecord.params.maxmem,
+      now,
+      input.expectedVerifierVersion
+    )
+    if (result.changes === 0) {
+      db.exec('ROLLBACK;')
+      return { ok: false, error: 'version_mismatch' }
+    }
+    db.exec('COMMIT;')
+    return {
+      ok: true,
+      account: {
+        accountId: existing.account_id,
+        email: existing.email,
+        userId: existing.user_id,
+        profileId: existing.profile_id,
+        organizationId: existing.organization_id,
+        verifierVersion: newVerifierVersion,
+        authEpoch,
+        createdAt: Number(existing.created_at),
+        updatedAt: now
+      }
+    }
+  } catch (err) {
+    db.exec('ROLLBACK;')
+    throw err
+  }
+}
