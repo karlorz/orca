@@ -18,7 +18,6 @@ export type InternalSessionRecord = {
   accountId: string
   authEpoch: number
   accessTokenHash: string
-  refreshTokenHash: string
   expiresAt: number
   createdAt: number
   revokedAt?: number

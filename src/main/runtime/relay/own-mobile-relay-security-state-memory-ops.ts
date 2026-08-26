@@ -11,6 +11,7 @@ import type {
   SecurityStateAccountIdentity,
   SecurityStateIssueAccessSessionInput,
   SecurityStateIssuedAccessSession,
+  SecurityStateReplaceAccessSessionInput,
   SecurityStateIssueRelayGrantInput,
   SecurityStateIssuedRelayGrant
 } from './own-mobile-relay-security-state'
@@ -22,7 +23,6 @@ export type MemoryStoreContext = {
   account: InternalAccountRecord | null
   sessionsById: Map<string, InternalSessionRecord>
   sessionsByAccessHash: Map<string, string>
-  sessionsByRefreshHash: Map<string, string>
   grantsById: Map<string, InternalGrantRecord>
   grantsByTokenHash: Map<string, string>
   devicesByKey: Map<string, InternalDeviceRecord>
@@ -105,21 +105,18 @@ export function issueAccessSessionMemory(
   }
   const sessionId = randomBytes(16).toString('base64url')
   const accessTokenHash = sha256Base64Url(input.rawAccessToken)
-  const refreshTokenHash = sha256Base64Url(input.rawRefreshToken)
   const expiresAt = now + input.ttlMs
   const session: InternalSessionRecord = {
     sessionId,
     accountId: ctx.account.accountId,
     authEpoch: ctx.account.authEpoch,
     accessTokenHash,
-    refreshTokenHash,
     expiresAt,
     createdAt: now,
     identity: input.identity
   }
   ctx.sessionsById.set(sessionId, session)
   ctx.sessionsByAccessHash.set(accessTokenHash, sessionId)
-  ctx.sessionsByRefreshHash.set(refreshTokenHash, sessionId)
   return {
     sessionId,
     accountId: session.accountId,
@@ -129,41 +126,46 @@ export function issueAccessSessionMemory(
   }
 }
 
-export function rotateAccessSessionMemory(
+export function replaceAccessSessionMemory(
   ctx: MemoryStoreContext,
-  input: {
-    rawRefreshToken: string
-    newRawAccessToken: string
-    newRawRefreshToken: string
-    ttlMs: number
-  },
+  input: SecurityStateReplaceAccessSessionInput,
   now: number
 ): SecurityStateIssuedAccessSession | null {
   assertOpen(ctx)
-  const oldHash = sha256Base64Url(input.rawRefreshToken)
-  const sessionId = ctx.sessionsByRefreshHash.get(oldHash)
-  if (!sessionId) {
+  if (!ctx.account) {
     return null
   }
-  const session = ctx.sessionsById.get(sessionId)
-  if (!session || !isSessionValid(session, ctx.account, now)) {
+  const oldSession = ctx.sessionsById.get(input.oldSessionId)
+  if (!oldSession || !isSessionValid(oldSession, ctx.account, now)) {
     return null
   }
-  ctx.sessionsByAccessHash.delete(session.accessTokenHash)
-  ctx.sessionsByRefreshHash.delete(session.refreshTokenHash)
-  const newAccessHash = sha256Base64Url(input.newRawAccessToken)
-  const newRefreshHash = sha256Base64Url(input.newRawRefreshToken)
-  session.accessTokenHash = newAccessHash
-  session.refreshTokenHash = newRefreshHash
-  session.expiresAt = now + input.ttlMs
-  ctx.sessionsByAccessHash.set(newAccessHash, sessionId)
-  ctx.sessionsByRefreshHash.set(newRefreshHash, sessionId)
+
+  // Atomically revoke old session
+  oldSession.revokedAt = now
+  ctx.sessionsByAccessHash.delete(oldSession.accessTokenHash)
+
+  // Issue new session replacing old one
+  const newSessionId = randomBytes(16).toString('base64url')
+  const newAccessTokenHash = sha256Base64Url(input.newRawAccessToken)
+  const newExpiresAt = now + input.ttlMs
+  const newSession: InternalSessionRecord = {
+    sessionId: newSessionId,
+    accountId: ctx.account.accountId,
+    authEpoch: ctx.account.authEpoch,
+    accessTokenHash: newAccessTokenHash,
+    expiresAt: newExpiresAt,
+    createdAt: now,
+    identity: oldSession.identity
+  }
+  ctx.sessionsById.set(newSessionId, newSession)
+  ctx.sessionsByAccessHash.set(newAccessTokenHash, newSessionId)
+
   return {
-    sessionId,
-    accountId: session.accountId,
-    authEpoch: session.authEpoch,
-    expiresAt: session.expiresAt,
-    identity: session.identity
+    sessionId: newSessionId,
+    accountId: newSession.accountId,
+    authEpoch: newSession.authEpoch,
+    expiresAt: newSession.expiresAt,
+    identity: newSession.identity
   }
 }
 

@@ -53,7 +53,6 @@ export function cleanupExpiredRecords(
   sessions: {
     byId: Map<string, InternalSessionRecord>
     byAccess: Map<string, string>
-    byRefresh: Map<string, string>
   },
   grants: {
     byId: Map<string, InternalGrantRecord>
@@ -68,20 +67,22 @@ export function cleanupExpiredRecords(
   let expiredGrantsDeleted = 0
   let expiredDevicesDeleted = 0
 
+  let totalDeleted = 0
+
   for (const [sessionId, session] of sessions.byId.entries()) {
-    if (expiredSessionsDeleted >= maxBatch) {
+    if (totalDeleted >= maxBatch) {
       break
     }
     if (!isSessionValid(session, account, now)) {
       sessions.byId.delete(sessionId)
       sessions.byAccess.delete(session.accessTokenHash)
-      sessions.byRefresh.delete(session.refreshTokenHash)
       expiredSessionsDeleted += 1
+      totalDeleted += 1
     }
   }
 
   for (const [grantId, grant] of grants.byId.entries()) {
-    if (expiredGrantsDeleted >= maxBatch) {
+    if (totalDeleted >= maxBatch) {
       break
     }
     const parent = sessions.byId.get(grant.parentSessionId)
@@ -89,11 +90,12 @@ export function cleanupExpiredRecords(
       grants.byId.delete(grantId)
       grants.byToken.delete(grant.relayTokenHash)
       expiredGrantsDeleted += 1
+      totalDeleted += 1
     }
   }
 
   for (const [key, device] of devices.entries()) {
-    if (expiredDevicesDeleted >= maxBatch) {
+    if (totalDeleted >= maxBatch) {
       break
     }
     const isExpired =
@@ -103,6 +105,7 @@ export function cleanupExpiredRecords(
     if (isExpired) {
       devices.delete(key)
       expiredDevicesDeleted += 1
+      totalDeleted += 1
     }
   }
 

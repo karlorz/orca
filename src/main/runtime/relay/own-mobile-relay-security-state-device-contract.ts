@@ -35,7 +35,6 @@ export function registerDeviceAndEpochTests(
       const session = await state.issueAccessSession(
         {
           rawAccessToken: 'access-epoch-test',
-          rawRefreshToken: 'refresh-epoch-test',
           identity: {
             userId: 'usr_1',
             profileId: 'prf_1',
@@ -91,9 +90,6 @@ export function registerDeviceAndEpochTests(
       )
 
       expect(await state.lookupAccessSessionByToken('access-epoch-test', t0 + 2000)).toBeNull()
-      expect(
-        await state.lookupAccessSessionByRefreshToken('refresh-epoch-test', t0 + 2000)
-      ).toBeNull()
       expect(await state.validateRelayGrantByToken(rawRelayToken, t0 + 2000)).toBeNull()
 
       const match = await state.matchDeviceCredential('host_epoch_12345678', deviceHash, t0 + 2000)
@@ -187,7 +183,7 @@ export function registerDeviceAndEpochTests(
       expect(await state.matchDeviceCredential(hostId, rotatedHash, t0 + 3500)).toBeNull()
     })
 
-    it('deletes no more than the requested maxBatchSize while validity queries remain correct before cleanup runs', async () => {
+    it('caps total deletions across sessions, grants, and devices globally in cleanupExpired', async () => {
       await state.bootstrapAccount({
         email: 'admin@example.com',
         userId: 'usr_1',
@@ -197,11 +193,11 @@ export function registerDeviceAndEpochTests(
       })
 
       const t0 = 6_000_000
-      for (let i = 0; i < 5; i++) {
+      // Create 3 expired sessions
+      for (let i = 0; i < 3; i++) {
         await state.issueAccessSession(
           {
             rawAccessToken: `expired-access-${i}`,
-            rawRefreshToken: `expired-refresh-${i}`,
             identity: {
               userId: 'usr_1',
               profileId: 'prf_1',
@@ -215,15 +211,41 @@ export function registerDeviceAndEpochTests(
         )
       }
 
+      // Create 3 expired devices
+      for (let i = 0; i < 3; i++) {
+        await state.installDeviceCredential(
+          {
+            relayHostId: `host_cleanup_${i}`,
+            relayDeviceId: `dev_cleanup_${i}`,
+            reqId: `req_cleanup_${i}`,
+            newResumeTokenHash: `${i}`.repeat(43),
+            authorizationMode: 'relay-basis',
+            resumeTtlMs: 1000,
+            graceTtlMs: 1000
+          },
+          t0
+        )
+      }
+
       const queryTime = t0 + 2000
 
       expect(await state.lookupAccessSessionByToken('expired-access-0', queryTime)).toBeNull()
 
+      // Global cap test: maxBatchSize = 2 across ALL entities total
       const cleanup1 = await state.cleanupExpired({ maxBatchSize: 2, now: queryTime })
-      expect(cleanup1.expiredSessionsDeleted).toBeLessThanOrEqual(2)
+      const totalDeleted1 =
+        cleanup1.expiredSessionsDeleted +
+        cleanup1.expiredGrantsDeleted +
+        cleanup1.expiredDevicesDeleted
+      expect(totalDeleted1).toBe(2)
 
+      // Next batch cleanup deletes remaining expired entries up to global maxBatchSize
       const cleanup2 = await state.cleanupExpired({ maxBatchSize: 10, now: queryTime })
-      expect(cleanup2.expiredSessionsDeleted).toBeGreaterThanOrEqual(1)
+      const totalDeleted2 =
+        cleanup2.expiredSessionsDeleted +
+        cleanup2.expiredGrantsDeleted +
+        cleanup2.expiredDevicesDeleted
+      expect(totalDeleted2).toBe(4) // 3 + 3 = 6 total expired, 2 deleted in first pass, 4 in second
     })
 
     it('rejects subsequent operations consistently once closed', async () => {
@@ -241,7 +263,6 @@ export function registerDeviceAndEpochTests(
       await expect(
         state.issueAccessSession({
           rawAccessToken: 'acc',
-          rawRefreshToken: 'ref',
           identity: {
             userId: 'u',
             profileId: 'p',

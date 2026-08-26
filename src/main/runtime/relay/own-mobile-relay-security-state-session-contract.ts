@@ -33,12 +33,10 @@ export function registerSessionAndGrantTests(
       const t0 = 1_000_000
       const ttlMs = 3600_000
       const rawAccess = 'raw-access-token-xyz-12345'
-      const rawRefresh = 'raw-refresh-token-xyz-12345'
 
       const issued = await state.issueAccessSession(
         {
           rawAccessToken: rawAccess,
-          rawRefreshToken: rawRefresh,
           identity: {
             userId: 'usr_1',
             profileId: 'prf_1',
@@ -59,27 +57,30 @@ export function registerSessionAndGrantTests(
       expect(session?.sessionId).toBe(issued.sessionId)
       expect(session).not.toHaveProperty('rawAccessToken')
       expect(session).not.toHaveProperty('accessTokenHash')
+      expect(session).not.toHaveProperty('refreshToken')
+      expect(session).not.toHaveProperty('rawRefreshToken')
+      expect(session).not.toHaveProperty('refreshTokenHash')
 
       const expiredSession = await state.lookupAccessSessionByToken(rawAccess, t0 + ttlMs + 1)
       expect(expiredSession).toBeNull()
 
-      const refreshLookup = await state.lookupAccessSessionByRefreshToken(rawRefresh, t0 + 1000)
-      expect(refreshLookup?.sessionId).toBe(issued.sessionId)
-
-      const rotated = await state.rotateAccessSession(
+      // Atomic durable session replacement keyed by stable sessionId (ephemeral refresh lookup happens in caller)
+      const replaced = await state.replaceAccessSession(
         {
-          rawRefreshToken: rawRefresh,
+          oldSessionId: issued.sessionId,
           newRawAccessToken: 'new-access-token-67890',
-          newRawRefreshToken: 'new-refresh-token-67890',
           ttlMs
         },
         t0 + 2000
       )
-      expect(rotated).not.toBeNull()
-      expect(rotated?.expiresAt).toBe(t0 + 2000 + ttlMs)
+      expect(replaced).not.toBeNull()
+      expect(replaced?.sessionId).not.toBe(issued.sessionId)
+      expect(replaced?.expiresAt).toBe(t0 + 2000 + ttlMs)
+      expect(replaced?.identity.userId).toBe('usr_1')
 
+      // Old access is revoked/replaced
       expect(await state.lookupAccessSessionByToken(rawAccess, t0 + 3000)).toBeNull()
-      expect(await state.lookupAccessSessionByRefreshToken(rawRefresh, t0 + 3000)).toBeNull()
+      // New access is valid
       expect(
         await state.lookupAccessSessionByToken('new-access-token-67890', t0 + 3000)
       ).not.toBeNull()
@@ -98,7 +99,6 @@ export function registerSessionAndGrantTests(
       const session = await state.issueAccessSession(
         {
           rawAccessToken: 'access-token-1',
-          rawRefreshToken: 'refresh-token-1',
           identity: {
             userId: 'usr_1',
             profileId: 'prf_1',
@@ -171,7 +171,6 @@ export function registerSessionAndGrantTests(
       const session = await state.issueAccessSession(
         {
           rawAccessToken: 'access-for-logout',
-          rawRefreshToken: 'refresh-for-logout',
           identity: {
             userId: 'usr_1',
             profileId: 'prf_1',
@@ -203,7 +202,8 @@ export function registerSessionAndGrantTests(
 
       expect(await state.validateRelayGrantByToken(rawRelayToken, t0 + 100)).not.toBeNull()
 
-      const revoked = await state.revokeAccessSession(session.sessionId, t0 + 200)
+      // Explicit revocation by internal sessionId (logout workflow)
+      const revoked = await state.revokeAccessSessionById(session.sessionId, t0 + 200)
       expect(revoked).toBe(true)
 
       expect(await state.lookupAccessSessionByToken('access-for-logout', t0 + 300)).toBeNull()
@@ -211,6 +211,32 @@ export function registerSessionAndGrantTests(
       expect(
         await state.validateRelayGrantById(grant!.grantId, 'host_child_12345678', t0 + 300)
       ).toBeNull()
+
+      // Explicit revocation by raw access token
+      const session2 = await state.issueAccessSession(
+        {
+          rawAccessToken: 'access-for-token-revoke',
+          identity: {
+            userId: 'usr_1',
+            profileId: 'prf_1',
+            organizationId: 'org_1',
+            email: 'admin@example.com',
+            cloudProfileId: 'c_prf_1'
+          },
+          ttlMs: 3600_000
+        },
+        t0 + 400
+      )
+      expect(session2.sessionId).toBeDefined()
+      expect(
+        await state.lookupAccessSessionByToken('access-for-token-revoke', t0 + 450)
+      ).not.toBeNull()
+      const tokenRevoked = await state.revokeAccessSessionByToken(
+        'access-for-token-revoke',
+        t0 + 500
+      )
+      expect(tokenRevoked).toBe(true)
+      expect(await state.lookupAccessSessionByToken('access-for-token-revoke', t0 + 550)).toBeNull()
     })
   })
 }

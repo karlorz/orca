@@ -6,6 +6,7 @@ import type {
   SecurityStateAccessSession,
   SecurityStateIssueAccessSessionInput,
   SecurityStateIssuedAccessSession,
+  SecurityStateReplaceAccessSessionInput,
   SecurityStateRelayGrant,
   SecurityStateIssueRelayGrantInput,
   SecurityStateIssuedRelayGrant,
@@ -26,16 +27,15 @@ import {
   bootstrapAccountMemory,
   replacePasswordVerifierMemory,
   issueAccessSessionMemory,
-  rotateAccessSessionMemory,
+  replaceAccessSessionMemory,
   issueRelayGrantMemory,
   toPublicAccount,
   type MemoryStoreContext
 } from './own-mobile-relay-security-state-memory-ops'
 import {
   lookupAccessSessionByTokenMemory,
-  lookupAccessSessionByRefreshTokenMemory,
-  revokeAccessSessionMemory,
-  revokeAccessSessionByRefreshTokenMemory,
+  revokeAccessSessionByIdMemory,
+  revokeAccessSessionByTokenMemory,
   validateRelayGrantByTokenMemory,
   validateRelayGrantByIdMemory
 } from './own-mobile-relay-security-state-grant-ops'
@@ -52,7 +52,6 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
     account: null,
     sessionsById: new Map<string, InternalSessionRecord>(),
     sessionsByAccessHash: new Map<string, string>(),
-    sessionsByRefreshHash: new Map<string, string>(),
     grantsById: new Map<string, InternalGrantRecord>(),
     grantsByTokenHash: new Map<string, string>(),
     devicesByKey: new Map<string, InternalDeviceRecord>()
@@ -113,37 +112,19 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       return lookupAccessSessionByTokenMemory(ctx, rawAccessToken, now)
     },
 
-    async lookupAccessSessionByRefreshToken(
-      rawRefreshToken: string,
-      now = Date.now()
-    ): Promise<SecurityStateAccessSession | null> {
-      return lookupAccessSessionByRefreshTokenMemory(ctx, rawRefreshToken, now)
-    },
-
-    async rotateAccessSession(
-      input: {
-        rawRefreshToken: string
-        newRawAccessToken: string
-        newRawRefreshToken: string
-        ttlMs: number
-      },
+    async replaceAccessSession(
+      input: SecurityStateReplaceAccessSessionInput,
       now = Date.now()
     ): Promise<SecurityStateIssuedAccessSession | null> {
-      return rotateAccessSessionMemory(ctx, input, now)
+      return replaceAccessSessionMemory(ctx, input, now)
     },
 
-    async revokeAccessSession(
-      rawAccessTokenOrSessionId: string,
-      now = Date.now()
-    ): Promise<boolean> {
-      return revokeAccessSessionMemory(ctx, rawAccessTokenOrSessionId, now)
+    async revokeAccessSessionById(sessionId: string, now = Date.now()): Promise<boolean> {
+      return revokeAccessSessionByIdMemory(ctx, sessionId, now)
     },
 
-    async revokeAccessSessionByRefreshToken(
-      rawRefreshToken: string,
-      now = Date.now()
-    ): Promise<boolean> {
-      return revokeAccessSessionByRefreshTokenMemory(ctx, rawRefreshToken, now)
+    async revokeAccessSessionByToken(rawAccessToken: string, now = Date.now()): Promise<boolean> {
+      return revokeAccessSessionByTokenMemory(ctx, rawAccessToken, now)
     },
 
     async issueRelayGrant(
@@ -209,8 +190,7 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       return cleanupExpiredRecords(
         {
           byId: ctx.sessionsById,
-          byAccess: ctx.sessionsByAccessHash,
-          byRefresh: ctx.sessionsByRefreshHash
+          byAccess: ctx.sessionsByAccessHash
         },
         { byId: ctx.grantsById, byToken: ctx.grantsByTokenHash },
         ctx.devicesByKey,
@@ -224,7 +204,6 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       ctx.isClosed = true
       ctx.sessionsById.clear()
       ctx.sessionsByAccessHash.clear()
-      ctx.sessionsByRefreshHash.clear()
       ctx.grantsById.clear()
       ctx.grantsByTokenHash.clear()
       ctx.devicesByKey.clear()

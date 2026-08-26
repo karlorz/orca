@@ -37,7 +37,6 @@ export type SecurityStateAccessSession = {
 
 export type SecurityStateIssueAccessSessionInput = {
   readonly rawAccessToken: string
-  readonly rawRefreshToken: string
   readonly identity: {
     readonly userId: string
     readonly profileId: string
@@ -54,6 +53,12 @@ export type SecurityStateIssuedAccessSession = {
   readonly authEpoch: number
   readonly expiresAt: number
   readonly identity: SecurityStateAccessSession['identity']
+}
+
+export type SecurityStateReplaceAccessSessionInput = {
+  readonly oldSessionId: string
+  readonly newRawAccessToken: string
+  readonly ttlMs: number
 }
 
 export type SecurityStateRelayGrant = {
@@ -163,7 +168,7 @@ export type SecurityStateCleanupResult = {
 }
 
 export type OwnMobileRelaySecurityState = {
-  getAccount(now?: number): Promise<SecurityStateAccountIdentity | null>
+  getAccount(): Promise<SecurityStateAccountIdentity | null>
   bootstrapAccount(
     input: SecurityStateAccountBootstrapInput,
     now?: number
@@ -190,21 +195,12 @@ export type OwnMobileRelaySecurityState = {
     rawAccessToken: string,
     now?: number
   ): Promise<SecurityStateAccessSession | null>
-  lookupAccessSessionByRefreshToken(
-    rawRefreshToken: string,
-    now?: number
-  ): Promise<SecurityStateAccessSession | null>
-  rotateAccessSession(
-    input: {
-      rawRefreshToken: string
-      newRawAccessToken: string
-      newRawRefreshToken: string
-      ttlMs: number
-    },
+  replaceAccessSession(
+    input: SecurityStateReplaceAccessSessionInput,
     now?: number
   ): Promise<SecurityStateIssuedAccessSession | null>
-  revokeAccessSession(rawAccessTokenOrSessionId: string, now?: number): Promise<boolean>
-  revokeAccessSessionByRefreshToken(rawRefreshToken: string, now?: number): Promise<boolean>
+  revokeAccessSessionById(sessionId: string, now?: number): Promise<boolean>
+  revokeAccessSessionByToken(rawAccessToken: string, now?: number): Promise<boolean>
 
   issueRelayGrant(
     input: SecurityStateIssueRelayGrantInput,

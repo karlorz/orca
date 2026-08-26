@@ -29,55 +29,31 @@ export function lookupAccessSessionByTokenMemory(
   return toPublicAccessSession(session)
 }
 
-export function lookupAccessSessionByRefreshTokenMemory(
+export function revokeAccessSessionByIdMemory(
   ctx: MemoryStoreContext,
-  rawRefreshToken: string,
-  now: number
-): SecurityStateAccessSession | null {
-  assertOpen(ctx)
-  const hash = sha256Base64Url(rawRefreshToken)
-  const sessionId = ctx.sessionsByRefreshHash.get(hash)
-  if (!sessionId) {
-    return null
-  }
-  const session = ctx.sessionsById.get(sessionId)
-  if (!session || !isSessionValid(session, ctx.account, now)) {
-    return null
-  }
-  return toPublicAccessSession(session)
-}
-
-export function revokeAccessSessionMemory(
-  ctx: MemoryStoreContext,
-  rawAccessTokenOrSessionId: string,
+  sessionId: string,
   now: number
 ): boolean {
   assertOpen(ctx)
-  let session = ctx.sessionsById.get(rawAccessTokenOrSessionId)
-  if (!session) {
-    const hash = sha256Base64Url(rawAccessTokenOrSessionId)
-    const sessionId = ctx.sessionsByAccessHash.get(hash)
-    if (sessionId) {
-      session = ctx.sessionsById.get(sessionId)
-    }
-  }
+  const session = ctx.sessionsById.get(sessionId)
   if (!session) {
     return false
   }
   if (session.revokedAt === undefined) {
     session.revokedAt = now
+    ctx.sessionsByAccessHash.delete(session.accessTokenHash)
   }
   return true
 }
 
-export function revokeAccessSessionByRefreshTokenMemory(
+export function revokeAccessSessionByTokenMemory(
   ctx: MemoryStoreContext,
-  rawRefreshToken: string,
+  rawAccessToken: string,
   now: number
 ): boolean {
   assertOpen(ctx)
-  const hash = sha256Base64Url(rawRefreshToken)
-  const sessionId = ctx.sessionsByRefreshHash.get(hash)
+  const hash = sha256Base64Url(rawAccessToken)
+  const sessionId = ctx.sessionsByAccessHash.get(hash)
   if (!sessionId) {
     return false
   }
@@ -87,6 +63,7 @@ export function revokeAccessSessionByRefreshTokenMemory(
   }
   if (session.revokedAt === undefined) {
     session.revokedAt = now
+    ctx.sessionsByAccessHash.delete(hash)
   }
   return true
 }
