@@ -238,7 +238,7 @@ export default function AccountsScreen() {
           <>
             {USAGE_PROVIDERS.filter((provider) => visibleProviders.has(provider.id)).map(
               (provider) =>
-                provider.id === 'claude' || provider.id === 'codex' ? (
+                provider.managed ? (
                   <MobileAccountsManagedProviderSection
                     key={provider.id}
                     snapshot={snapshot}

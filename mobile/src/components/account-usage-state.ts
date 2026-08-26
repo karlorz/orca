@@ -56,12 +56,19 @@ type ProviderSnapshotField =
   | 'minimax'
   | 'grok'
 
-export type UsageProviderDescriptor = {
-  id: UsageProviderKey
-  label: string
-  snapshotField: ProviderSnapshotField
-  managed: boolean
-}
+export type UsageProviderDescriptor =
+  | {
+      id: ManagedAccountProviderKey
+      label: string
+      snapshotField: ManagedAccountProviderKey
+      managed: true
+    }
+  | {
+      id: Exclude<UsageProviderKey, ManagedAccountProviderKey>
+      label: string
+      snapshotField: ProviderSnapshotField
+      managed: false
+    }
 
 // Single source that maps the stable preference/wire id to its snapshot field,
 // label, and whether it supports account switching. Drives iteration order,

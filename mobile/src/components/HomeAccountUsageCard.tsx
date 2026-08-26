@@ -1,7 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native'
-import { Gauge } from 'lucide-react-native'
 import { colors, spacing, radii } from '../theme/mobile-theme'
-import { ClaudeIcon, GrokIcon, OpenAIIcon } from './AgentIcons'
+import { UsageProviderIcon } from './UsageProviderIcon'
 import {
   type AccountsSnapshot,
   type UsageProviderKey,
@@ -60,15 +59,7 @@ export function HomeAccountUsageCard({
         return (
           <View key={descriptor.id} style={styles.row}>
             <View style={styles.icon}>
-              {descriptor.id === 'claude' ? (
-                <ClaudeIcon size={18} />
-              ) : descriptor.id === 'codex' ? (
-                <OpenAIIcon size={18} color={colors.textPrimary} />
-              ) : descriptor.id === 'grok' ? (
-                <GrokIcon size={18} />
-              ) : (
-                <Gauge size={18} color={colors.textSecondary} />
-              )}
+              <UsageProviderIcon id={descriptor.id} size={18} mutedColor={colors.textSecondary} />
             </View>
             <View style={styles.info}>
               <Text style={styles.email} numberOfLines={1}>
