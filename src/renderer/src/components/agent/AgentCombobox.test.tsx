@@ -186,6 +186,17 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('<svg')
   })
 
+  it('uses the grok.com orbit-slash SVG instead of the xAI favicon PNG', () => {
+    const markup = renderToStaticMarkup(<AgentIcon agent="grok" />)
+
+    expect(markup).toContain('<svg')
+    expect(markup).toContain('viewBox="0 0 24 24"')
+    expect(markup).toContain('fill="currentColor"')
+    expect(markup).not.toContain('/shared/agent-icons/grok.png')
+    expect(markup).not.toContain('https://www.google.com/s2/favicons')
+    expect(markup).not.toContain('<img')
+  })
+
   it('uses the official OpenCode SVG mark instead of a remote favicon', () => {
     const markup = renderToStaticMarkup(<AgentIcon agent="opencode" />)
 

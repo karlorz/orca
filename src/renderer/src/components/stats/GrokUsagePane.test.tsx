@@ -66,6 +66,10 @@ vi.mock('../ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
 
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: () => null
+}))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     values

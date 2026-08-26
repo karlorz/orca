@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
@@ -42,7 +43,10 @@ export function GrokUsagePane(): React.JSX.Element {
       >
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <AgentIcon agent="grok" size={16} />
+              {paneTitle}
+            </h3>
             <p className="text-sm text-muted-foreground">
               {translate(
                 'auto.components.stats.GrokUsagePane.b2d3e4f5c6',
@@ -79,7 +83,10 @@ export function GrokUsagePane(): React.JSX.Element {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <AgentIcon agent="grok" size={16} />
+            {paneTitle}
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {formatUpdatedAt(grok?.updatedAt ?? null)}
             {grok?.error

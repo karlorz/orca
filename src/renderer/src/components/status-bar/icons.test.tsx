@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MiniMaxIcon } from './icons'
+import { GrokIcon, MiniMaxIcon } from './icons'
+
+describe('GrokIcon', () => {
+  it('renders the grok.com orbit-slash as a currentColor SVG', () => {
+    const markup = renderToStaticMarkup(<GrokIcon size={14} />)
+    expect(markup.startsWith('<svg')).toBe(true)
+    expect(markup).toContain('viewBox="0 0 24 24"')
+    expect(markup).toContain('fill="currentColor"')
+    expect(markup).toContain('width="14"')
+    expect(markup).not.toContain('agent-icons/grok.png')
+    expect(markup).not.toContain('x.ai')
+  })
+})
 
 describe('MiniMaxIcon', () => {
   it('renders the official MiniMax mark as an image', () => {
