@@ -1,11 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
-import {
-  handleOwnMobileRelayHostControlSocket,
-  type OwnMobileRelayInviteRecord
-} from './own-mobile-relay-control-handler'
+import { handleOwnMobileRelayHostControlSocket } from './own-mobile-relay-control-handler'
+import type {
+  OwnMobileRelayDeviceCredentialRecord,
+  OwnMobileRelayInviteRecord
+} from './own-mobile-relay-types'
 import {
   handleOwnMobileRelayHostDataSocket,
   handleOwnMobileRelayPhoneSocket,
@@ -80,6 +81,7 @@ export function listenOwnMobileRelay(
 
   const router: OwnMobileRelayRouter = {
     invites: new Map<string, OwnMobileRelayInviteRecord>(),
+    deviceCredentials: new Map<string, OwnMobileRelayDeviceCredentialRecord>(),
     pendingConns: new Map<string, PendingConnRecord>(),
     connsByTicket: new Map<string, PendingConnRecord>(),
     activeHosts: new Map<string, (msg: object) => void>()
@@ -113,6 +115,8 @@ export function listenOwnMobileRelay(
           advertisedOrigin,
           silenceLimitMs,
           invites: router.invites,
+          deviceCredentials: router.deviceCredentials,
+          pendingConns: router.pendingConns,
           onActive: (relayHostId, send) => {
             router.activeHosts.set(relayHostId, send)
           },
@@ -220,6 +224,58 @@ export function listenOwnMobileRelay(
         cellUrl: advertisedOrigin,
         assignmentEpoch: 1,
         lease: randomBytes(32).toString('base64url')
+      })
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/resolve') {
+      let body: unknown
+      try {
+        body = await readJsonBody(request)
+      } catch {
+        sendJson(response, 400, { error: 'invalid_json' })
+        return
+      }
+      const record = body as { v?: unknown; relayHostId?: unknown; resumeToken?: unknown }
+      if (
+        record.v !== 1 ||
+        typeof record.relayHostId !== 'string' ||
+        typeof record.resumeToken !== 'string'
+      ) {
+        sendJson(response, 400, { error: 'invalid_request' })
+        return
+      }
+
+      const tokenHash = createHash('sha256').update(record.resumeToken).digest('base64url')
+      const now = Date.now()
+      let matched = false
+
+      for (const cred of router.deviceCredentials.values()) {
+        if (cred.relayHostId === record.relayHostId) {
+          if (cred.currentResumeTokenHash === tokenHash && cred.resumeExpiresAt > now) {
+            matched = true
+            break
+          }
+          if (
+            cred.graceResumeTokenHash === tokenHash &&
+            cred.graceExpiresAt !== undefined &&
+            cred.graceExpiresAt > now
+          ) {
+            matched = true
+            break
+          }
+        }
+      }
+
+      if (!matched) {
+        sendJson(response, 401, { error: 'unauthorized' })
+        return
+      }
+
+      sendJson(response, 200, {
+        v: 1,
+        cellUrl: advertisedOrigin,
+        assignmentEpoch: 1,
+        leaseExpiresAt: Date.now() + 60_000
       })
       return
     }

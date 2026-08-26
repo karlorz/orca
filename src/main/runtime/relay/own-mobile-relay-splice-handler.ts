@@ -1,6 +1,9 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
-import type { OwnMobileRelayInviteRecord } from './own-mobile-relay-control-handler'
+import type {
+  OwnMobileRelayDeviceCredentialRecord,
+  OwnMobileRelayInviteRecord
+} from './own-mobile-relay-types'
 
 export type PendingConnRecord = {
   connId: string
@@ -8,12 +11,15 @@ export type PendingConnRecord = {
   relayHostId: string
   relayDeviceId: string
   expiresAt: number
+  kind: 'invite' | 'resume'
+  acceptedAs?: 'current' | 'grace'
   phoneSocket: WebSocket
   hostSocket?: WebSocket
 }
 
 export type OwnMobileRelayRouter = {
   invites: Map<string, OwnMobileRelayInviteRecord>
+  deviceCredentials: Map<string, OwnMobileRelayDeviceCredentialRecord>
   pendingConns: Map<string, PendingConnRecord>
   connsByTicket: Map<string, PendingConnRecord>
   activeHosts: Map<string, (msg: object) => void>
@@ -88,23 +94,87 @@ export function handleOwnMobileRelayPhoneSocket(
     }
 
     const invite = router.invites.get(authMsg.credential)
-    if (!invite) {
-      ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
-      ws.close(4401, 'invalid_invite')
+    if (invite) {
+      if (
+        invite.relayHostId !== relayHostId ||
+        invite.remainingAttempts <= 0 ||
+        invite.expiresAt <= Date.now()
+      ) {
+        invite.remainingAttempts -= 1
+        if (invite.remainingAttempts <= 0) {
+          router.invites.delete(authMsg.credential)
+        }
+        ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
+        ws.close(4401, 'invalid_invite')
+        return
+      }
+
+      const connId = randomBytes(16).toString('hex')
+      const connTicket = randomBytes(32).toString('base64url')
+      const expiresAt = Date.now() + ATTACH_DEADLINE_MS
+
+      pendingConn = {
+        connId,
+        connTicket,
+        relayHostId,
+        relayDeviceId: invite.relayDeviceId,
+        expiresAt,
+        kind: 'invite',
+        phoneSocket: ws
+      }
+      router.pendingConns.set(connId, pendingConn)
+      router.connsByTicket.set(connTicket, pendingConn)
+
+      // Notify desktop host control
+      hostSender({
+        type: 'conn-open',
+        connId,
+        connTicket,
+        kind: 'invite',
+        relayDeviceId: invite.relayDeviceId,
+        attachDeadlineMs: ATTACH_DEADLINE_MS
+      })
+
+      // Reply to phone
+      ws.send(
+        JSON.stringify({
+          type: 'relay-hello',
+          ok: true,
+          credentialKind: 'invite',
+          leaseExpiresAt: Date.now() + LEASE_TTL_MS
+        })
+      )
       return
     }
 
-    if (
-      invite.relayHostId !== relayHostId ||
-      invite.remainingAttempts <= 0 ||
-      invite.expiresAt <= Date.now()
-    ) {
-      invite.remainingAttempts -= 1
-      if (invite.remainingAttempts <= 0) {
-        router.invites.delete(authMsg.credential)
+    // Check resume token
+    const tokenHash = createHash('sha256').update(authMsg.credential).digest('base64url')
+    let matchedDevice: OwnMobileRelayDeviceCredentialRecord | null = null
+    let acceptedAs: 'current' | 'grace' | null = null
+
+    const now = Date.now()
+    for (const record of router.deviceCredentials.values()) {
+      if (record.relayHostId === relayHostId) {
+        if (record.currentResumeTokenHash === tokenHash && record.resumeExpiresAt > now) {
+          matchedDevice = record
+          acceptedAs = 'current'
+          break
+        }
+        if (
+          record.graceResumeTokenHash === tokenHash &&
+          record.graceExpiresAt !== undefined &&
+          record.graceExpiresAt > now
+        ) {
+          matchedDevice = record
+          acceptedAs = 'grace'
+          break
+        }
       }
+    }
+
+    if (!matchedDevice || !acceptedAs) {
       ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
-      ws.close(4401, 'invalid_invite')
+      ws.close(4401, 'invalid_resume_token')
       return
     }
 
@@ -116,8 +186,10 @@ export function handleOwnMobileRelayPhoneSocket(
       connId,
       connTicket,
       relayHostId,
-      relayDeviceId: invite.relayDeviceId,
+      relayDeviceId: matchedDevice.relayDeviceId,
       expiresAt,
+      kind: 'resume',
+      acceptedAs,
       phoneSocket: ws
     }
     router.pendingConns.set(connId, pendingConn)
@@ -128,8 +200,8 @@ export function handleOwnMobileRelayPhoneSocket(
       type: 'conn-open',
       connId,
       connTicket,
-      kind: 'invite',
-      relayDeviceId: invite.relayDeviceId,
+      kind: 'resume',
+      relayDeviceId: matchedDevice.relayDeviceId,
       attachDeadlineMs: ATTACH_DEADLINE_MS
     })
 
@@ -138,7 +210,7 @@ export function handleOwnMobileRelayPhoneSocket(
       JSON.stringify({
         type: 'relay-hello',
         ok: true,
-        credentialKind: 'invite',
+        credentialKind: 'resume',
         leaseExpiresAt: Date.now() + LEASE_TTL_MS
       })
     )
