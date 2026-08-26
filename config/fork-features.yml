@@ -73,3 +73,11 @@ features:
       - .github/workflows/fork-sync-main.yml
       - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
+  - id: own-mobile-relay-overlay
+    title: Packaged Sign in for Relay can default to sg01 own-auth/director (disabled until TLS hostname)
+    kind: product
+    status: landed
+    paths:
+      - src/main/orca-profiles/fork-own-relay-defaults.ts
+      - src/main/orca-profiles/profile-cloud-auth-config.ts
+    wiki: projects/orca/work/2026-08-26-self-hosted-mobile-relay-sg01

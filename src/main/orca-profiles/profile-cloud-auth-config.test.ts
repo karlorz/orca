@@ -64,6 +64,58 @@ describe('Orca cloud auth config', () => {
     })
   })
 
+  it('uses fork own-relay https origins in packaged builds when overlay is enabled', () => {
+    expect(
+      getOrcaCloudAuthConfig({}, true, {
+        enabled: true,
+        apiBaseUrl: 'https://auth.sg01.example',
+        relayDirectorUrl: 'https://relay.sg01.example',
+        clientId: 'orca-desktop'
+      })
+    ).toEqual({
+      configured: true,
+      config: {
+        apiBaseUrl: 'https://auth.sg01.example',
+        authorizeEndpoint: 'https://auth.sg01.example/v1/desktop/auth/authorize',
+        sessionEndpoint: 'https://auth.sg01.example/v1/desktop/auth/session',
+        refreshEndpoint: 'https://auth.sg01.example/v1/desktop/auth/refresh',
+        capabilitiesEndpoint: 'https://auth.sg01.example/v1/desktop/auth/capabilities',
+        profileEndpoint: 'https://auth.sg01.example/v1/desktop/auth/profile',
+        orgEndpoint: 'https://auth.sg01.example/v1/desktop/auth/org',
+        logoutEndpoint: 'https://auth.sg01.example/v1/desktop/auth/logout',
+        relayTokenEndpoint: 'https://auth.sg01.example/v1/desktop/auth/relay-token',
+        relayDirectorUrl: 'https://relay.sg01.example',
+        clientId: 'orca-desktop',
+        scope: 'openid profile email offline_access'
+      }
+    })
+  })
+
+  it('lets env override an enabled fork own-relay overlay', () => {
+    const state = getOrcaCloudAuthConfig(
+      {
+        ORCA_CLOUD_API_URL: 'https://login.onorca.dev',
+        ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+        ORCA_RELAY_URL: 'https://relay.onorca.dev'
+      },
+      true,
+      {
+        enabled: true,
+        apiBaseUrl: 'https://auth.sg01.example',
+        relayDirectorUrl: 'https://relay.sg01.example',
+        clientId: 'fork-client'
+      }
+    )
+    expect(state).toMatchObject({
+      configured: true,
+      config: {
+        apiBaseUrl: 'https://login.onorca.dev',
+        relayDirectorUrl: 'https://relay.onorca.dev',
+        clientId: 'orca-desktop'
+      }
+    })
+  })
+
   it('allows loopback HTTP endpoints for local desktop auth development', () => {
     const state = getOrcaCloudAuthConfig({
       ORCA_CLOUD_API_URL: 'http://localhost:4100',
