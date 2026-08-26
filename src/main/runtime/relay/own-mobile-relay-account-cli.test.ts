@@ -339,4 +339,83 @@ describe('own-mobile-relay-account-cli RED tests', () => {
     expect(account?.authEpoch).toBe(2)
     await verifyState.close()
   })
+
+  // RED Finding 3: promptSecretFromStreams restores raw mode/listeners and handles errors
+  it('RED Finding 3: promptSecretFromStreams cleans up listeners and rejects on stream error', async () => {
+    const { promptSecretFromStreams } = await import('./own-mobile-relay-account-cli')
+    const { EventEmitter } = await import('node:events')
+
+    class FakeStdin extends EventEmitter {
+      isTTY = true
+      isRaw = false
+      setRawMode(val: boolean) {
+        this.isRaw = val
+      }
+      resume() {}
+      pause() {}
+      setEncoding() {}
+    }
+
+    const fakeStdin = new FakeStdin()
+    let written = ''
+    const fakeStdout = {
+      write: (data: string) => {
+        written += data
+      }
+    }
+
+    const promise = promptSecretFromStreams(
+      'Enter password: ',
+      fakeStdin as unknown as NodeJS.ReadStream,
+      fakeStdout as unknown as NodeJS.WriteStream
+    )
+    expect(fakeStdin.isRaw).toBe(true)
+
+    // Emit error on stdin
+    fakeStdin.emit('error', new Error('stdin_read_failure'))
+
+    await expect(promise).rejects.toThrow('stdin_read_failure')
+    // Must restore raw mode
+    expect(fakeStdin.isRaw).toBe(false)
+    // Must remove data listener
+    expect(fakeStdin.listenerCount('data')).toBe(0)
+    expect(fakeStdin.listenerCount('error')).toBe(0)
+  })
+
+  it('RED Finding 3: promptSecretFromStreams handles EOF / end event without newline', async () => {
+    const { promptSecretFromStreams } = await import('./own-mobile-relay-account-cli')
+    const { EventEmitter } = await import('node:events')
+
+    class FakeStdin extends EventEmitter {
+      isTTY = true
+      isRaw = false
+      setRawMode(val: boolean) {
+        this.isRaw = val
+      }
+      resume() {}
+      pause() {}
+      setEncoding() {}
+    }
+
+    const fakeStdin = new FakeStdin()
+    let written = ''
+    const fakeStdout = {
+      write: (data: string) => {
+        written += data
+      }
+    }
+
+    const promise = promptSecretFromStreams(
+      'Enter password: ',
+      fakeStdin as unknown as NodeJS.ReadStream,
+      fakeStdout as unknown as NodeJS.WriteStream
+    )
+    fakeStdin.emit('data', 'mysecret')
+    fakeStdin.emit('end')
+
+    const result = await promise
+    expect(result).toBe('mysecret')
+    expect(fakeStdin.isRaw).toBe(false)
+    expect(fakeStdin.listenerCount('data')).toBe(0)
+  })
 })

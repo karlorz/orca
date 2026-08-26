@@ -161,18 +161,28 @@ export async function startOwnRelayServer(options: {
 
   let stepCallback: ((step: string) => void) | undefined
 
-  const server = await listenOwnMobileRelay({
-    securityState,
-    origin: config.origin,
-    authOrigin: config.authOrigin,
-    clientId: config.clientId,
-    listenHost: config.listenHost,
-    listenPort: config.listenPort,
-    silenceLimitMs: options.silenceLimitMs,
-    passwordPolicy,
-    throttle: options.throttle,
-    onStep: (step) => stepCallback?.(step)
-  })
+  let server
+  try {
+    server = await listenOwnMobileRelay({
+      securityState,
+      origin: config.origin,
+      authOrigin: config.authOrigin,
+      clientId: config.clientId,
+      listenHost: config.listenHost,
+      listenPort: config.listenPort,
+      silenceLimitMs: options.silenceLimitMs,
+      passwordPolicy,
+      throttle: options.throttle,
+      onStep: (step) => stepCallback?.(step)
+    })
+  } catch (err) {
+    try {
+      await securityState.close()
+    } catch {
+      // ignore
+    }
+    throw err
+  }
 
   const instance: OwnRelayServerInstance = {
     origin: server.origin,
@@ -197,6 +207,43 @@ export async function startOwnRelayServer(options: {
   return instance
 }
 
+export type RelayCliOptions = {
+  argv: string[]
+  env?: Record<string, string | undefined>
+}
+
+export type RelayCliResult = {
+  exitCode: number
+  stdout?: string
+  stderr?: string
+}
+
+export async function runRelayCli(options: RelayCliOptions): Promise<RelayCliResult> {
+  const [command, ...restArgs] = options.argv
+
+  if (command === 'account') {
+    return runAccountCli({
+      args: restArgs,
+      env: options.env
+    })
+  }
+
+  if (command === 'serve' || command === undefined) {
+    if (restArgs.length > 0) {
+      return {
+        exitCode: 1,
+        stderr: `[own-mobile-relay] Unexpected arguments for serve command: ${restArgs.join(' ')}\n`
+      }
+    }
+    return { exitCode: 0 }
+  }
+
+  return {
+    exitCode: 1,
+    stderr: `[own-mobile-relay] Unknown command: ${command}. Available commands: serve, account\n`
+  }
+}
+
 export async function main(): Promise<void> {
   try {
     checkRuntimeRequirements()
@@ -207,12 +254,11 @@ export async function main(): Promise<void> {
   }
 
   const rawArgs = process.argv.slice(2)
-  const command = rawArgs[0]
+  const [command, ...restArgs] = rawArgs
 
   if (command === 'account') {
-    const accountArgs = rawArgs.slice(1)
     const result = await runAccountCli({
-      args: accountArgs
+      args: restArgs
     })
     if (result.stdout) {
       process.stdout.write(result.stdout)
@@ -226,6 +272,13 @@ export async function main(): Promise<void> {
   if (command !== undefined && command !== 'serve') {
     process.stderr.write(
       `[own-mobile-relay] Unknown command: ${command}. Available commands: serve, account\n`
+    )
+    process.exit(1)
+  }
+
+  if (restArgs.length > 0) {
+    process.stderr.write(
+      `[own-mobile-relay] Unexpected arguments for serve command: ${restArgs.join(' ')}\n`
     )
     process.exit(1)
   }

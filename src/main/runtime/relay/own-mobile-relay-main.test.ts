@@ -7,6 +7,7 @@ import {
   startOwnRelayServer,
   checkRuntimeRequirements
 } from './own-mobile-relay-main'
+import * as sqliteModule from './own-mobile-relay-security-state-sqlite'
 import { openOwnMobileRelaySecurityStateSqlite } from './own-mobile-relay-security-state-sqlite'
 import { derivePasswordRecord, TEST_FAST_PASSWORD_POLICY } from './own-mobile-relay-password'
 
@@ -234,5 +235,59 @@ describe('own-mobile-relay-main RED tests', () => {
       'server_closed',
       'security_state_closed'
     ])
+  })
+
+  it('RED Finding 1: closes SQLite security state adapter when listenOwnMobileRelay rejects', async () => {
+    const dbPath = createTempDbPath()
+    const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const rec = await derivePasswordRecord('initial-secret-123', TEST_FAST_PASSWORD_POLICY)
+    await state.bootstrapAccount({
+      email: 'operator@example.com',
+      userId: 'user-1',
+      profileId: 'prof-1',
+      organizationId: '',
+      passwordRecord: rec
+    })
+    await state.close()
+
+    let closeCalled = false
+    const origOpen = sqliteModule.openOwnMobileRelaySecurityStateSqlite
+    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation((opts) => {
+      const realState = origOpen(opts)
+      const origClose = realState.close.bind(realState)
+      realState.close = async () => {
+        closeCalled = true
+        return origClose()
+      }
+      return realState
+    })
+
+    const testConfig = parseOwnRelayServeConfig({
+      ...baseValidEnv,
+      OWN_RELAY_STATE_PATH: dbPath,
+      OWN_RELAY_LISTEN_PORT: '8093'
+    })
+
+    await expect(
+      startOwnRelayServer({
+        config: {
+          ...testConfig,
+          listenHost: '256.256.256.256'
+        },
+        passwordPolicy: TEST_FAST_PASSWORD_POLICY
+      })
+    ).rejects.toThrow()
+
+    expect(closeCalled).toBe(true)
+  })
+
+  it('RED Finding 2: reject extraneous serve arguments', async () => {
+    // We can export and test a dispatchMain function or test main's argument validation
+    const { runRelayCli } = await import('./own-mobile-relay-main')
+    const res = await runRelayCli({
+      argv: ['serve', '--extra-flag', 'unexpected']
+    })
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain('Unexpected arguments for serve command')
   })
 })

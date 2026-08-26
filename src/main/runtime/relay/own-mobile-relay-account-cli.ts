@@ -27,60 +27,102 @@ export type AccountCliResult = {
   stderr: string
 }
 
+export function promptSecretFromStreams(
+  promptText: string,
+  stdin: {
+    isTTY?: boolean
+    isRaw?: boolean
+    setRawMode?: (mode: boolean) => void
+    resume: () => void
+    pause: () => void
+    setEncoding: (encoding: BufferEncoding) => unknown
+    on: (event: string, listener: (...args: unknown[]) => void) => unknown
+    removeListener: (event: string, listener: (...args: unknown[]) => void) => unknown
+  },
+  stdout: {
+    write: (chunk: string) => boolean | void
+  }
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!stdin.isTTY) {
+      reject(new Error('Interactive TTY required'))
+      return
+    }
+
+    const wasRaw = stdin.isRaw
+    stdin.setRawMode?.(true)
+    stdin.resume()
+    stdin.setEncoding('utf8')
+
+    stdout.write(promptText)
+
+    let password = ''
+    let cleanedUp = false
+
+    const cleanup = (): void => {
+      if (cleanedUp) {
+        return
+      }
+      cleanedUp = true
+      stdin.removeListener('data', onData)
+      stdin.removeListener('error', onError)
+      stdin.removeListener('end', onEnd)
+      stdin.setRawMode?.(wasRaw ?? false)
+      stdin.pause()
+    }
+
+    const onData = (chunk: unknown): void => {
+      const str =
+        typeof chunk === 'string'
+          ? chunk
+          : Buffer.isBuffer(chunk)
+            ? chunk.toString('utf8')
+            : String(chunk ?? '')
+      for (const char of str) {
+        if (char === '\r' || char === '\n' || char === '\u0004') {
+          cleanup()
+          stdout.write('\n')
+          resolve(password)
+          return
+        }
+        if (char === '\u0003') {
+          cleanup()
+          stdout.write('\n')
+          reject(new Error('Operation cancelled by user'))
+          return
+        }
+        if (char === '\u0008' || char === '\u007f') {
+          if (password.length > 0) {
+            password = password.slice(0, -1)
+          }
+        } else {
+          password += char
+        }
+      }
+    }
+
+    const onError = (err: unknown): void => {
+      cleanup()
+      stdout.write('\n')
+      reject(err instanceof Error ? err : new Error(String(err)))
+    }
+
+    const onEnd = (): void => {
+      cleanup()
+      stdout.write('\n')
+      resolve(password)
+    }
+
+    stdin.on('data', onData)
+    stdin.on('error', onError)
+    stdin.on('end', onEnd)
+  })
+}
+
 export const defaultConsolePrompt: AccountCliPromptInterface = {
   isTTY: () => Boolean(process.stdin.isTTY && process.stdout.isTTY),
   promptSecret: async (promptText: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const stdin = process.stdin
-      const stdout = process.stdout
-
-      if (!stdin.isTTY) {
-        reject(new Error('Interactive TTY required'))
-        return
-      }
-
-      const wasRaw = stdin.isRaw
-      stdin.setRawMode?.(true)
-      stdin.resume()
-      stdin.setEncoding('utf8')
-
-      stdout.write(promptText)
-
-      let password = ''
-
-      const onData = (chunk: string | Buffer): void => {
-        const str = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
-        for (const char of str) {
-          if (char === '\r' || char === '\n' || char === '\u0004') {
-            cleanup()
-            stdout.write('\n')
-            resolve(password)
-            return
-          }
-          if (char === '\u0003') {
-            cleanup()
-            stdout.write('\n')
-            reject(new Error('Operation cancelled by user'))
-            return
-          }
-          if (char === '\u0008' || char === '\u007f') {
-            if (password.length > 0) {
-              password = password.slice(0, -1)
-            }
-          } else {
-            password += char
-          }
-        }
-      }
-
-      const cleanup = (): void => {
-        stdin.removeListener('data', onData)
-        stdin.setRawMode?.(wasRaw ?? false)
-        stdin.pause()
-      }
-
-      stdin.on('data', onData)
-    })
+    return promptSecretFromStreams(promptText, process.stdin, process.stdout)
   }
 }
 
