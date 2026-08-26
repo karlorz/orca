@@ -1,3 +1,4 @@
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   SecurityStateDeviceInstallInput,
   SecurityStateDeviceInstallResult,
@@ -22,8 +23,7 @@ export type SqliteDeviceRow = {
 }
 
 export function executeInstallDeviceCredentialSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: SecurityStateDeviceInstallInput,
   now: number
 ): SecurityStateDeviceInstallResult {
@@ -118,8 +118,7 @@ export function executeInstallDeviceCredentialSqlite(
 }
 
 export function executeGetDeviceCredentialInstallStatusSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   relayHostId: string,
   relayDeviceId: string,
   reqId: string
@@ -154,8 +153,7 @@ export function executeGetDeviceCredentialInstallStatusSqlite(
 }
 
 export function executeMatchDeviceCredentialSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   relayHostId: string,
   tokenHash: string,
   now: number
@@ -203,8 +201,7 @@ export function executeMatchDeviceCredentialSqlite(
 }
 
 export function executeRevokeDeviceCredentialSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   relayHostId: string,
   relayDeviceId: string,
   now: number
@@ -226,8 +223,7 @@ export function executeRevokeDeviceCredentialSqlite(
 }
 
 export function executeCleanupExpiredSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   maxBatchSize: number,
   now: number
 ): SecurityStateCleanupResult {

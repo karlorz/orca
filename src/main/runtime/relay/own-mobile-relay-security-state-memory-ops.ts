@@ -124,6 +124,14 @@ export function issueAccessSessionMemory(
   if (!ctx.account) {
     throw new Error('account_not_initialized')
   }
+  if (
+    (input.expectedAccountId !== undefined && ctx.account.accountId !== input.expectedAccountId) ||
+    (input.expectedAuthEpoch !== undefined && ctx.account.authEpoch !== input.expectedAuthEpoch)
+  ) {
+    throw new Error(
+      `account_epoch_mismatch: expected account=${input.expectedAccountId ?? '*'}/epoch=${input.expectedAuthEpoch ?? '*'}, actual account=${ctx.account.accountId}/epoch=${ctx.account.authEpoch}`
+    )
+  }
   const sessionId = randomBytes(16).toString('base64url')
   const accessTokenHash = sha256Base64Url(input.rawAccessToken)
   const expiresAt = now + input.ttlMs

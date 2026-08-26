@@ -8,6 +8,8 @@ export type AuthorizationCodeRecord = {
   state?: string
   nonce?: string
   localProfileId?: string
+  accountId: string
+  authEpoch: number
   identity: {
     userId: string
     profileId: string

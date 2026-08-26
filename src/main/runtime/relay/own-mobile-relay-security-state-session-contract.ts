@@ -86,6 +86,106 @@ export function registerSessionAndGrantTests(
       ).not.toBeNull()
     })
 
+    it('guarded issuance requires matching expected accountId and authEpoch atomically', async () => {
+      const account = await state.bootstrapAccount({
+        email: 'guarded@example.com',
+        userId: 'usr_g1',
+        profileId: 'prf_g1',
+        organizationId: 'org_g1',
+        passwordRecord
+      })
+
+      const t0 = 1_500_000
+      const ttlMs = 3600_000
+
+      // Mismatched expected accountId fails
+      await expect(
+        state.issueAccessSession(
+          {
+            rawAccessToken: 'guarded-token-fail-1',
+            identity: {
+              userId: 'usr_g1',
+              profileId: 'prf_g1',
+              organizationId: 'org_g1',
+              email: 'guarded@example.com',
+              cloudProfileId: 'c_prf_g1'
+            },
+            ttlMs,
+            expectedAccountId: 'wrong-account-id',
+            expectedAuthEpoch: account.authEpoch
+          },
+          t0
+        )
+      ).rejects.toThrow(/account_epoch_mismatch/)
+
+      // Mismatched expected authEpoch fails
+      await expect(
+        state.issueAccessSession(
+          {
+            rawAccessToken: 'guarded-token-fail-2',
+            identity: {
+              userId: 'usr_g1',
+              profileId: 'prf_g1',
+              organizationId: 'org_g1',
+              email: 'guarded@example.com',
+              cloudProfileId: 'c_prf_g1'
+            },
+            ttlMs,
+            expectedAccountId: account.accountId,
+            expectedAuthEpoch: account.authEpoch + 99
+          },
+          t0
+        )
+      ).rejects.toThrow(/account_epoch_mismatch/)
+
+      // Matching expected accountId and authEpoch succeeds
+      const issued = await state.issueAccessSession(
+        {
+          rawAccessToken: 'guarded-token-success',
+          identity: {
+            userId: 'usr_g1',
+            profileId: 'prf_g1',
+            organizationId: 'org_g1',
+            email: 'guarded@example.com',
+            cloudProfileId: 'c_prf_g1'
+          },
+          ttlMs,
+          expectedAccountId: account.accountId,
+          expectedAuthEpoch: account.authEpoch
+        },
+        t0
+      )
+      expect(issued.sessionId).toBeDefined()
+      expect(issued.authEpoch).toBe(account.authEpoch)
+      expect(
+        await state.lookupAccessSessionByToken('guarded-token-success', t0 + 100)
+      ).not.toBeNull()
+
+      // Concurrent epoch race: If epoch advances, guarded issuance fails
+      await state.replacePasswordVerifier({
+        expectedVerifierVersion: account.verifierVersion,
+        newPasswordRecord: passwordRecord
+      })
+      await expect(
+        state.issueAccessSession(
+          {
+            rawAccessToken: 'guarded-token-stale-generation',
+            identity: {
+              userId: 'usr_g1',
+              profileId: 'prf_g1',
+              organizationId: 'org_g1',
+              email: 'guarded@example.com',
+              cloudProfileId: 'c_prf_g1'
+            },
+            ttlMs,
+            expectedAccountId: account.accountId,
+            expectedAuthEpoch: account.authEpoch // Old epoch!
+          },
+          t0 + 200
+        )
+      ).rejects.toThrow(/account_epoch_mismatch/)
+    })
+
     it('validates relay grants by raw token or internal ID, enforces expiry and parent session binding', async () => {
       await state.bootstrapAccount({
         email: 'admin@example.com',

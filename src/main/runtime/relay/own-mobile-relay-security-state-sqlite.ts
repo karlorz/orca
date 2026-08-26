@@ -1,5 +1,6 @@
 import { existsSync, chmodSync, openSync, closeSync } from 'node:fs'
 import { dirname } from 'node:path'
+import process from 'node:process'
 import { DatabaseSync } from 'node:sqlite'
 import type { PasswordRecord } from './own-mobile-relay-password'
 import type {
@@ -25,6 +26,7 @@ import {
   applySqlitePragmas,
   runSqliteMigrations,
   verifySqliteParentDirectorySecurity,
+  verifySqlitePathSecurity,
   verifySqliteQuickCheck
 } from './own-mobile-relay-security-state-sqlite-schema'
 import {
@@ -54,7 +56,7 @@ import {
   executeCleanupExpiredSqlite
 } from './own-mobile-relay-security-state-sqlite-device-ops'
 
-export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity }
+export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
 export type SqliteSecurityStateOptions = {
   dbPath: string
@@ -75,33 +77,45 @@ export function openOwnMobileRelaySecurityStateSqlite(
   const parentDir = dirname(dbPath)
   if (!testMode) {
     verifySqliteParentDirectorySecurity(parentDir)
+    verifySqlitePathSecurity(dbPath)
   }
 
-  const fileExists = existsSync(dbPath)
-  if (!fileExists) {
-    // Create file with 0600 permissions
-    const fd = openSync(dbPath, 'w', 0o600)
-    closeSync(fd)
-    try {
-      chmodSync(dbPath, 0o600)
-    } catch {
-      // Best effort chmod
-    }
-  }
-
-  const db = new DatabaseSync(dbPath)
-
+  const prevUmask = process.umask(0o077)
+  let db: DatabaseSync
   try {
-    applySqlitePragmas(db, busyTimeoutMs)
-    verifySqliteQuickCheck(db)
-    runSqliteMigrations(db)
-  } catch (err) {
-    try {
-      db.close()
-    } catch {
-      // Ignore close error on failed setup
+    const fileExists = existsSync(dbPath)
+    if (!fileExists) {
+      // Create file with 0600 permissions
+      const fd = openSync(dbPath, 'w', 0o600)
+      closeSync(fd)
+      try {
+        chmodSync(dbPath, 0o600)
+      } catch {
+        // Best effort chmod
+      }
     }
-    throw err
+
+    db = new DatabaseSync(dbPath)
+
+    try {
+      applySqlitePragmas(db, busyTimeoutMs)
+      verifySqliteQuickCheck(db)
+      runSqliteMigrations(db)
+    } catch (err) {
+      try {
+        db.close()
+      } catch {
+        // Ignore close error on failed setup
+      }
+      throw err
+    }
+
+    if (!testMode) {
+      // Re-verify main DB and sidecars after open/pragma execution
+      verifySqlitePathSecurity(dbPath)
+    }
+  } finally {
+    process.umask(prevUmask)
   }
 
   const ctx: SqliteDbContext = {

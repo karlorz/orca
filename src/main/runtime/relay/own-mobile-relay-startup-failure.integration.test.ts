@@ -1,5 +1,13 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  chmodSync,
+  statSync,
+  openSync,
+  closeSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -78,9 +86,13 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
 
   it('Scenario 5b: Unsupported future schema version prevents port binding', async () => {
     const dbPath = createTempDbPath()
+    const fd = openSync(dbPath, 'w', 0o600)
+    closeSync(fd)
+    chmodSync(dbPath, 0o600)
     const db = new DatabaseSync(dbPath)
     db.exec(`PRAGMA user_version = 999;`)
     db.close()
+    chmodSync(dbPath, 0o600)
     const targetPort = 49152 + Math.floor(Math.random() * 1000)
 
     const config = parseOwnRelayServeConfig({
@@ -171,6 +183,43 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
         passwordPolicy: TEST_FAST_PASSWORD_POLICY
       })
     ).rejects.toThrow(/insecure_parent_directory/)
+
+    const bound = await checkPortIsOpen(targetPort)
+    expect(bound).toBe(false)
+  })
+
+  it('Scenario 5d-2: Insecure existing DB file permissions (0644) prevent port binding and fail closed without file mutation', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const dbPath = createTempDbPath()
+    writeFileSync(dbPath, 'test-db-content')
+    chmodSync(dbPath, 0o644)
+    const targetPort = 49152 + Math.floor(Math.random() * 1000)
+
+    const config = parseOwnRelayServeConfig({
+      OWN_RELAY_STATE_PATH: dbPath,
+      OWN_RELAY_ORIGIN: 'http://127.0.0.1',
+      OWN_RELAY_AUTH_ORIGIN: 'http://127.0.0.1',
+      OWN_RELAY_CLIENT_ID: 'orca-desktop',
+      OWN_RELAY_LISTEN_PORT: String(targetPort),
+      OWN_RELAY_LISTEN_HOST: '127.0.0.1',
+      OWN_RELAY_OPERATOR_EMAIL: 'op@example.com',
+      OWN_RELAY_OPERATOR_PASSWORD: 'secure-password-123',
+      OWN_RELAY_OPERATOR_USER_ID: 'user-1',
+      OWN_RELAY_OPERATOR_PROFILE_ID: 'prof-1'
+    })
+
+    await expect(
+      startOwnRelayServer({
+        config,
+        passwordPolicy: TEST_FAST_PASSWORD_POLICY
+      })
+    ).rejects.toThrow(/insecure_database_permissions/)
+
+    // File permissions must not be mutated
+    const st = statSync(dbPath)
+    expect(st.mode & 0o777).toBe(0o644)
 
     const bound = await checkPortIsOpen(targetPort)
     expect(bound).toBe(false)

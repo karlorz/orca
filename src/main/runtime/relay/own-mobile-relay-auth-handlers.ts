@@ -138,6 +138,8 @@ export async function handleAuthorizePost(
     state: validation.state,
     nonce: validation.nonce,
     localProfileId: validation.localProfileId,
+    accountId: account.accountId,
+    authEpoch: account.authEpoch,
     identity: {
       userId: account.userId,
       profileId: account.profileId,
@@ -214,17 +216,26 @@ export async function handleSessionPost(
 
   const cloudProfileId = authCode.localProfileId || authCode.identity.profileId
 
-  const issuedSession = await securityState.issueAccessSession({
-    rawAccessToken,
-    identity: {
-      userId: authCode.identity.userId,
-      profileId: authCode.identity.profileId,
-      organizationId: authCode.identity.organizationId,
-      email: authCode.identity.email,
-      cloudProfileId
-    },
-    ttlMs: SESSION_TTL_MS
-  })
+  let issuedSession
+  try {
+    issuedSession = await securityState.issueAccessSession({
+      rawAccessToken,
+      identity: {
+        userId: authCode.identity.userId,
+        profileId: authCode.identity.profileId,
+        organizationId: authCode.identity.organizationId,
+        email: authCode.identity.email,
+        cloudProfileId
+      },
+      ttlMs: SESSION_TTL_MS,
+      expectedAccountId: authCode.accountId,
+      expectedAuthEpoch: authCode.authEpoch
+    })
+  } catch {
+    response.writeHead(400, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ error: 'invalid_grant' }))
+    return
+  }
 
   store.refreshTokens.set(refreshToken, {
     refreshToken,

@@ -45,6 +45,8 @@ export type SecurityStateIssueAccessSessionInput = {
     readonly cloudProfileId: string
   }
   readonly ttlMs: number
+  readonly expectedAccountId?: string
+  readonly expectedAuthEpoch?: number
 }
 
 export type SecurityStateIssuedAccessSession = {

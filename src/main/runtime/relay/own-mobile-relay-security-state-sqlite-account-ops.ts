@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import type { PasswordRecord } from './own-mobile-relay-password'
 import type {
   SecurityStateAccountBootstrapInput,
@@ -40,8 +41,7 @@ function mapAccountRow(row: SqliteAccountRow): SecurityStateAccountIdentity {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function executeGetAccountSqlite(db: any): SecurityStateAccountIdentity | null {
+export function executeGetAccountSqlite(db: DatabaseSync): SecurityStateAccountIdentity | null {
   const row = db
     .prepare(
       `SELECT singleton_id, account_id, email, user_id, profile_id, organization_id,
@@ -53,8 +53,7 @@ export function executeGetAccountSqlite(db: any): SecurityStateAccountIdentity |
 }
 
 export function executeBootstrapAccountSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: SecurityStateAccountBootstrapInput,
   now: number
 ): SecurityStateAccountIdentity {
@@ -112,8 +111,7 @@ export function executeBootstrapAccountSqlite(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function executeGetAccountPasswordRecordSqlite(db: any): {
+export function executeGetAccountPasswordRecordSqlite(db: DatabaseSync): {
   accountId: string
   verifierVersion: number
   authEpoch: number
@@ -151,8 +149,7 @@ export function executeGetAccountPasswordRecordSqlite(db: any): {
 }
 
 function executeMutatePasswordVerifierSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number,
   advanceAuthEpoch: boolean
@@ -236,8 +233,7 @@ function executeMutatePasswordVerifierSqlite(
 }
 
 export function executeReplacePasswordVerifierSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number
 ):
@@ -247,8 +243,7 @@ export function executeReplacePasswordVerifierSqlite(
 }
 
 export function executeUpgradePasswordVerifierSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number
 ):

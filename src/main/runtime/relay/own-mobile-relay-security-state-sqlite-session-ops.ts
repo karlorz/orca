@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   SecurityStateAccessSession,
   SecurityStateIssueAccessSessionInput,
@@ -23,8 +24,7 @@ export type SqliteSessionRow = {
 }
 
 export function executeIssueAccessSessionSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: SecurityStateIssueAccessSessionInput,
   now: number
 ): SecurityStateIssuedAccessSession {
@@ -35,6 +35,14 @@ export function executeIssueAccessSessionSqlite(
       .get() as { account_id: string; auth_epoch: number } | undefined
     if (!acc) {
       throw new Error('account_not_initialized')
+    }
+    if (
+      (input.expectedAccountId !== undefined && acc.account_id !== input.expectedAccountId) ||
+      (input.expectedAuthEpoch !== undefined && Number(acc.auth_epoch) !== input.expectedAuthEpoch)
+    ) {
+      throw new Error(
+        `account_epoch_mismatch: expected account=${input.expectedAccountId ?? '*'}/epoch=${input.expectedAuthEpoch ?? '*'}, actual account=${acc.account_id}/epoch=${acc.auth_epoch}`
+      )
     }
     const sessionId = randomBytes(16).toString('base64url')
     const accessTokenHash = sha256Base64Url(input.rawAccessToken)
@@ -77,8 +85,7 @@ export function executeIssueAccessSessionSqlite(
 }
 
 export function executeLookupAccessSessionByTokenSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   rawAccessToken: string,
   now: number
 ): SecurityStateAccessSession | null {
@@ -116,8 +123,7 @@ export function executeLookupAccessSessionByTokenSqlite(
 }
 
 export function executeReplaceAccessSessionSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: SecurityStateReplaceAccessSessionInput,
   now: number
 ): SecurityStateIssuedAccessSession | null {
@@ -202,8 +208,7 @@ export function executeReplaceAccessSessionSqlite(
 }
 
 export function executeRevokeAccessSessionByIdSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   sessionId: string,
   now: number
 ): boolean {
@@ -220,8 +225,7 @@ export function executeRevokeAccessSessionByIdSqlite(
 }
 
 export function executeRevokeAccessSessionByTokenSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   rawAccessToken: string,
   now: number
 ): boolean {

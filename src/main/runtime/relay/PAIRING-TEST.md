@@ -57,3 +57,8 @@ This document specifies the manual security verification procedures for the own-
       - `node own-mobile-relay.cjs account reset-password`: Prompts interactively with echo suppression for new password and confirmation.
       - Both CLI commands reject password arguments, options, and secret-bearing environment variables.
       - Both CLI commands increment `auth_epoch`, revoking all active desktop sessions and relay grants while preserving mobile device registrations.
+
+12. **Reverse Proxy & Throttle Security Policy**
+    - [ ] **Loopback Boundary**: The own-mobile-relay daemon binds exclusively to loopback (`127.0.0.1` / `::1`) behind a local reverse proxy (such as Caddy).
+    - [ ] **Untrusted Forwarded Headers**: Forwarded headers (`X-Forwarded-For`, `X-Real-IP`, etc.) are intentionally ignored and untrusted for authentication rate-limiting in the application daemon.
+    - [ ] **Dual-Key Throttling**: Authentication throttle enforces rate limits across two distinct buckets: `email` (global per-operator email bucket) and `email+IP` (socket remote IP). When behind a reverse proxy, the `email` bucket enforces strict brute-force protection across all incoming proxy connections, ensuring defense-in-depth regardless of socket remote address.

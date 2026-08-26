@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { DatabaseSync } from 'node:sqlite'
 import type {
   SecurityStateRelayGrant,
   SecurityStateIssueRelayGrantInput,
@@ -23,8 +24,7 @@ export type SqliteGrantRow = {
 }
 
 export function executeIssueRelayGrantSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   input: SecurityStateIssueRelayGrantInput,
   now: number
 ): SecurityStateIssuedRelayGrant | null {
@@ -112,8 +112,7 @@ function mapGrantRow(row: SqliteGrantRow): SecurityStateRelayGrant {
 }
 
 export function executeValidateRelayGrantByTokenSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   rawRelayToken: string,
   now: number
 ): SecurityStateRelayGrant | null {
@@ -140,8 +139,7 @@ export function executeValidateRelayGrantByTokenSqlite(
 }
 
 export function executeValidateRelayGrantByIdSqlite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  db: DatabaseSync,
   grantId: string,
   relayHostId: string | undefined,
   now: number

@@ -1,4 +1,5 @@
-import { statSync } from 'node:fs'
+import { statSync, existsSync } from 'node:fs'
+import type { DatabaseSync } from 'node:sqlite'
 
 export const CURRENT_SCHEMA_VERSION = 1
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
@@ -15,24 +16,51 @@ export function verifySqliteParentDirectorySecurity(dirPath: string): void {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applySqlitePragmas(db: any, busyTimeoutMs: number): void {
+export function verifySqlitePathSecurity(dbPath: string): void {
+  if (existsSync(dbPath)) {
+    const st = statSync(dbPath)
+    if (!st.isFile()) {
+      throw new Error(`not_a_regular_file: database path ${dbPath} is not a regular file`)
+    }
+    // Fail closed if group (0o070) or world (0o007) bits are set
+    if ((st.mode & 0o077) !== 0) {
+      throw new Error(
+        `insecure_database_permissions: database ${dbPath} has group/world permissions (${(st.mode & 0o777).toString(8)})`
+      )
+    }
+  }
+
+  // Check WAL and SHM sidecars if present
+  for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`]) {
+    if (existsSync(sidecar)) {
+      const stSidecar = statSync(sidecar)
+      if (!stSidecar.isFile()) {
+        throw new Error(`not_a_regular_file: sidecar path ${sidecar} is not a regular file`)
+      }
+      if ((stSidecar.mode & 0o077) !== 0) {
+        throw new Error(
+          `insecure_sidecar_permissions: sidecar ${sidecar} has group/world permissions (${(stSidecar.mode & 0o777).toString(8)})`
+        )
+      }
+    }
+  }
+}
+
+export function applySqlitePragmas(db: DatabaseSync, busyTimeoutMs: number): void {
   db.exec('PRAGMA foreign_keys = ON;')
   db.exec('PRAGMA journal_mode = WAL;')
   db.exec('PRAGMA synchronous = FULL;')
   db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function verifySqliteQuickCheck(db: any): void {
+export function verifySqliteQuickCheck(db: DatabaseSync): void {
   const result = db.prepare('PRAGMA quick_check(1);').get() as { quick_check?: string } | undefined
   if (!result || result.quick_check !== 'ok') {
     throw new Error(`database_corrupt: quick_check failed: ${JSON.stringify(result)}`)
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function runSqliteMigrations(db: any): void {
+export function runSqliteMigrations(db: DatabaseSync): void {
   const versionRow = db.prepare('PRAGMA user_version;').get() as
     | { user_version?: number }
     | undefined

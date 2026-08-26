@@ -19,35 +19,39 @@ describe('own-mobile-relay-bundle-pty.test.ts', () => {
     tempDirs.length = 0
   })
 
-  it('proves PTY interactive password change and reset with echo suppression against real bundle/entry', () => {
-    // Check if python3 with pty module is available (macOS / Linux standard)
-    const isSupported = process.platform !== 'win32'
-    if (!isSupported) {
-      // Explicit supported-platform condition
-      return
-    }
-
+  const isWindows = process.platform === 'win32'
+  let hasPythonPty = false
+  if (!isWindows) {
     try {
       execSync('python3 -c "import pty"', { stdio: 'ignore' })
+      hasPythonPty = true
     } catch {
-      // Python3 pty not available
-      return
+      hasPythonPty = false
     }
+  }
 
-    const rootDir = process.cwd()
-    const bundlePath = join(rootDir, 'dist-own-mobile-relay', 'own-mobile-relay.cjs')
-    // Build bundle if not built
-    if (!existsSync(bundlePath)) {
-      execSync(`node ${join(rootDir, 'scripts/build-own-mobile-relay.mjs')}`, { stdio: 'pipe' })
-    }
-    expect(existsSync(bundlePath)).toBe(true)
+  it.skipIf(isWindows || !hasPythonPty)(
+    'proves PTY interactive password change and reset with echo suppression against real bundle/entry',
+    () => {
+      // Deterministic prerequisite assertion: On macOS / Linux test environments with python3, PTY must execute
+      if (process.platform === 'darwin') {
+        expect(hasPythonPty).toBe(true)
+      }
 
-    const tempDir = mkdtempSync(join(tmpdir(), 'pty-durable-test-'))
-    tempDirs.push(tempDir)
-    const dbPath = join(tempDir, 'durable-test.db')
+      const rootDir = process.cwd()
+      const bundlePath = join(rootDir, 'dist-own-mobile-relay', 'own-mobile-relay.cjs')
+      // Build bundle if not built
+      if (!existsSync(bundlePath)) {
+        execSync(`node ${join(rootDir, 'scripts/build-own-mobile-relay.mjs')}`, { stdio: 'pipe' })
+      }
+      expect(existsSync(bundlePath)).toBe(true)
 
-    // Python test runner script that allocates a real pseudo-terminal and interacts with the bundle
-    const pythonScript = `
+      const tempDir = mkdtempSync(join(tmpdir(), 'pty-durable-test-'))
+      tempDirs.push(tempDir)
+      const dbPath = join(tempDir, 'durable-test.db')
+
+      // Python test runner script that allocates a real pseudo-terminal and interacts with the bundle
+      const pythonScript = `
 import pty, os, sys, subprocess
 
 db_path = sys.argv[1]
@@ -171,20 +175,21 @@ if 'Password reset successfully' not in out_str2:
 print('PTY_SMOKE_SUCCESS')
 `
 
-    const runResult = spawnSync(
-      'python3',
-      ['-c', pythonScript, dbPath, bundlePath, process.execPath],
-      { encoding: 'utf8' }
-    )
+      const runResult = spawnSync(
+        'python3',
+        ['-c', pythonScript, dbPath, bundlePath, process.execPath],
+        { encoding: 'utf8' }
+      )
 
-    if (runResult.status !== 0) {
-      throw new Error(`PTY test failed: ${runResult.stderr || runResult.stdout}`)
+      if (runResult.status !== 0) {
+        throw new Error(`PTY test failed: ${runResult.stderr || runResult.stdout}`)
+      }
+
+      expect(runResult.stdout).toContain('PTY_SMOKE_SUCCESS')
+      // Guarantee test runner output never contains fixture secrets
+      expect(runResult.stdout).not.toContain('initial-operator-password-123')
+      expect(runResult.stdout).not.toContain('new-secret-password-xyz999')
+      expect(runResult.stdout).not.toContain('brand-new-reset-secret-000')
     }
-
-    expect(runResult.stdout).toContain('PTY_SMOKE_SUCCESS')
-    // Guarantee test runner output never contains fixture secrets
-    expect(runResult.stdout).not.toContain('initial-operator-password-123')
-    expect(runResult.stdout).not.toContain('new-secret-password-xyz999')
-    expect(runResult.stdout).not.toContain('brand-new-reset-secret-000')
-  })
+  )
 })

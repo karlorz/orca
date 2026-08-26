@@ -202,6 +202,86 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
       }
     })
 
+    it('rejects stale authorization code when password epoch advances between authorization and exchange', async () => {
+      const server = await listenOwnMobileRelay({
+        operator: defaultOperator,
+        clientId: defaultClientId,
+        origin: 'http://127.0.0.1'
+      })
+      try {
+        const verifier = 'stale-epoch-verifier-string-12345678901234567890'
+        const challenge = Buffer.from(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+        ).toString('base64url')
+
+        // 1. Authorize to obtain an authorization code
+        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1`
+        const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: defaultOperator.email,
+            password: defaultOperator.password
+          }).toString(),
+          redirect: 'manual'
+        })
+        const location = new URL(loginRes.headers.get('location')!)
+        const code = location.searchParams.get('code')!
+        expect(code).toBeTruthy()
+
+        // 2. Change password, advancing authEpoch
+        const newPassword = 'new-secure-password-4567'
+        const changeRes = await fetch(`${server.origin}/v1/desktop/auth/password`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: server.origin
+          },
+          body: new URLSearchParams({
+            email: defaultOperator.email,
+            currentPassword: defaultOperator.password,
+            newPassword,
+            confirmPassword: newPassword
+          }).toString()
+        })
+        expect(changeRes.status).toBe(200)
+
+        // 3. Attempt code exchange with stale code - must be rejected generically with invalid_grant and NOT issue session at new epoch
+        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            nonce: 'n1',
+            redirectUri: 'http://127.0.0.1:4000/auth/callback',
+            state: 's1',
+            localProfileId: 'local-default'
+          })
+        })
+        expect(sessionRes.status).toBe(400)
+        const body = (await sessionRes.json()) as { error?: string }
+        expect(body.error).toBe('invalid_grant')
+
+        // 4. Second attempt must also fail (code was consumed/deleted)
+        const retryRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            nonce: 'n1',
+            redirectUri: 'http://127.0.0.1:4000/auth/callback',
+            state: 's1',
+            localProfileId: 'local-default'
+          })
+        })
+        expect(retryRes.status).toBe(400)
+      } finally {
+        await server.close()
+      }
+    })
+
     it('successfully exchanges valid code for session with relay.use capability flag', async () => {
       const server = await listenOwnMobileRelay({
         operator: defaultOperator,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, rm, readFile, chmod, stat } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -420,6 +420,67 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       // Set directory to secure mode (0o700)
       await chmod(dir, 0o700)
       expect(() => verifySqliteParentDirectorySecurity(dir)).not.toThrow()
+    })
+
+    it('rejects existing database with group or world permission bits in production mode without mutating permissions', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-insecure-db-'))
+      tempDirs.push(dir)
+      const dbPath = join(dir, 'security-state.db')
+
+      // Create an existing database with 0644 (world readable)
+      const fd = openSync(dbPath, 'w', 0o644)
+      closeSync(fd)
+      await chmod(dbPath, 0o644)
+
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: false })
+      }).rejects.toThrow(/insecure_database_permissions/)
+
+      // Verify file permissions were NOT silently mutated/chmod-fixed
+      const st644 = await stat(dbPath)
+      expect(st644.mode & 0o777).toBe(0o644)
+
+      // Change to 0660 (group readable/writable) and verify it still fails closed
+      await chmod(dbPath, 0o660)
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: false })
+      }).rejects.toThrow(/insecure_database_permissions/)
+      const st660 = await stat(dbPath)
+      expect(st660.mode & 0o777).toBe(0o660)
+    })
+
+    it('rejects non-regular database path in production mode', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-nonregular-'))
+      tempDirs.push(dir)
+
+      // Passing a directory path as the DB path
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({ dbPath: dir, testMode: false })
+      }).rejects.toThrow(/not_a_regular_file/)
+    })
+
+    it('rejects existing WAL/SHM sidecars with group/world permission bits in production mode', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-sidecars-'))
+      tempDirs.push(dir)
+      const dbPath = join(dir, 'security-state.db')
+      const walPath = `${dbPath}-wal`
+
+      // Create valid 0600 db file
+      const fd1 = openSync(dbPath, 'w', 0o600)
+      closeSync(fd1)
+      await chmod(dbPath, 0o600)
+
+      // Create insecure 0644 WAL sidecar
+      const fd2 = openSync(walPath, 'w', 0o644)
+      closeSync(fd2)
+      await chmod(walPath, 0o644)
+
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: false })
+      }).rejects.toThrow(/insecure_sidecar_permissions/)
+
+      const stWal = await stat(walPath)
+      expect(stWal.mode & 0o777).toBe(0o644)
     })
   })
 
