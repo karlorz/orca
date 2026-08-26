@@ -29,7 +29,6 @@ export type OwnMobileRelayListenOptions = {
   silenceLimitMs?: number
   passwordPolicy?: PasswordPolicy
   throttle?: AuthThrottle
-  onStep?: (step: string) => void
 }
 
 export type OwnMobileRelayServer = {
@@ -135,18 +134,14 @@ export async function listenOwnMobileRelay(
         close: () =>
           new Promise((closeResolve, closeReject) => {
             cleanupScheduler.stop()
-            options.onStep?.('cleanup_scheduler_stopped')
             for (const socket of activeSockets) {
               socket.terminate()
             }
-            options.onStep?.('sockets_terminated')
             wss.close(() => {
               server.close(async (error) => {
-                options.onStep?.('server_closed')
                 if (ownsSecurityState && securityState) {
                   try {
                     await securityState.close()
-                    options.onStep?.('security_state_closed')
                   } catch {
                     // Ignore adapter close error
                   }

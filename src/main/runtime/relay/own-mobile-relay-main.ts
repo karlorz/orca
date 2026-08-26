@@ -26,7 +26,6 @@ export type OwnRelayServerInstance = {
   origin: string
   boundPort: number
   close: () => Promise<void>
-  onStep?: (step: string) => void
 }
 
 export function checkRuntimeRequirements(nodeVersion = process.versions.node): void {
@@ -159,8 +158,6 @@ export async function startOwnRelayServer(options: {
     throw err
   }
 
-  let stepCallback: ((step: string) => void) | undefined
-
   let server
   try {
     server = await listenOwnMobileRelay({
@@ -172,8 +169,7 @@ export async function startOwnRelayServer(options: {
       listenPort: config.listenPort,
       silenceLimitMs: options.silenceLimitMs,
       passwordPolicy,
-      throttle: options.throttle,
-      onStep: (step) => stepCallback?.(step)
+      throttle: options.throttle
     })
   } catch (err) {
     try {
@@ -187,17 +183,10 @@ export async function startOwnRelayServer(options: {
   const instance: OwnRelayServerInstance = {
     origin: server.origin,
     boundPort: server.boundPort,
-    get onStep() {
-      return stepCallback
-    },
-    set onStep(fn: ((step: string) => void) | undefined) {
-      stepCallback = fn
-    },
     close: async () => {
       await server.close()
       try {
         await securityState.close()
-        stepCallback?.('security_state_closed')
       } catch {
         // ignore
       }

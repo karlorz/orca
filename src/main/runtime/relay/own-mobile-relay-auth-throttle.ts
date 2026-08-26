@@ -100,26 +100,20 @@ export function createAuthThrottle(options: AuthThrottleOptions = {}): AuthThrot
     return Math.max(1, Math.ceil(remainingMs / 1000))
   }
 
+  function getKeys(email: string, ip: string | undefined): [string, string] {
+    return [emailIpKey(email, ip), emailKey(email)]
+  }
+
   return {
     check(email: string, ip: string | undefined, now: number = Date.now()): ThrottleCheckResult {
-      const eipK = emailIpKey(email, ip)
-      const eK = emailKey(email)
-
-      const eipBucket = buckets.get(eipK)
-      if (eipBucket) {
-        pruneBucket(eipBucket, now)
-        eipBucket.lastAccessed = now
-        if (eipBucket.timestamps.length >= maxFailures) {
-          return { allowed: false, retryAfterSeconds: getRetryAfter(eipBucket, now) }
-        }
-      }
-
-      const eBucket = buckets.get(eK)
-      if (eBucket) {
-        pruneBucket(eBucket, now)
-        eBucket.lastAccessed = now
-        if (eBucket.timestamps.length >= maxFailures) {
-          return { allowed: false, retryAfterSeconds: getRetryAfter(eBucket, now) }
+      for (const key of getKeys(email, ip)) {
+        const bucket = buckets.get(key)
+        if (bucket) {
+          pruneBucket(bucket, now)
+          bucket.lastAccessed = now
+          if (bucket.timestamps.length >= maxFailures) {
+            return { allowed: false, retryAfterSeconds: getRetryAfter(bucket, now) }
+          }
         }
       }
 
@@ -127,35 +121,25 @@ export function createAuthThrottle(options: AuthThrottleOptions = {}): AuthThrot
     },
 
     recordFailure(email: string, ip: string | undefined, now: number = Date.now()): void {
-      const eipK = emailIpKey(email, ip)
-      const eK = emailKey(email)
-
+      const keys = getKeys(email, ip)
       let needed = 0
-      if (!buckets.has(eipK)) {
-        needed++
-      }
-      if (!buckets.has(eK)) {
-        needed++
+      for (const key of keys) {
+        if (!buckets.has(key)) {
+          needed++
+        }
       }
       ensureCapacity(now, needed)
 
-      let eipBucket = buckets.get(eipK)
-      if (!eipBucket) {
-        eipBucket = { timestamps: [], lastAccessed: now }
-        buckets.set(eipK, eipBucket)
+      for (const key of keys) {
+        let bucket = buckets.get(key)
+        if (!bucket) {
+          bucket = { timestamps: [], lastAccessed: now }
+          buckets.set(key, bucket)
+        }
+        pruneBucket(bucket, now)
+        bucket.timestamps.push(now)
+        bucket.lastAccessed = now
       }
-      pruneBucket(eipBucket, now)
-      eipBucket.timestamps.push(now)
-      eipBucket.lastAccessed = now
-
-      let eBucket = buckets.get(eK)
-      if (!eBucket) {
-        eBucket = { timestamps: [], lastAccessed: now }
-        buckets.set(eK, eBucket)
-      }
-      pruneBucket(eBucket, now)
-      eBucket.timestamps.push(now)
-      eBucket.lastAccessed = now
     },
 
     recordSuccess(email: string, ip: string | undefined): void {

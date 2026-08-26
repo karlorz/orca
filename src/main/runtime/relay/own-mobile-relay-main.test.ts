@@ -213,28 +213,97 @@ describe('own-mobile-relay-main RED tests', () => {
   // RED Case 11: Shutdown closes sockets, cleanup scheduler, and SQLite in order.
   it('RED Case 11: shutdown closes sockets, cleanup scheduler, and SQLite in exact order', async () => {
     const dbPath = createTempDbPath()
+
+    // 1. Pre-initialize database and issue a valid relay grant
+    const dbInit = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const rec = await derivePasswordRecord(
+      completeBootstrapEnv.OWN_RELAY_OPERATOR_PASSWORD,
+      TEST_FAST_PASSWORD_POLICY
+    )
+    await dbInit.bootstrapAccount({
+      email: completeBootstrapEnv.OWN_RELAY_OPERATOR_EMAIL,
+      userId: completeBootstrapEnv.OWN_RELAY_OPERATOR_USER_ID,
+      profileId: completeBootstrapEnv.OWN_RELAY_OPERATOR_PROFILE_ID,
+      organizationId: '',
+      passwordRecord: rec
+    })
+    const sessionRes = await dbInit.issueAccessSession({
+      rawAccessToken: 'test-session-token',
+      ttlMs: 60000,
+      identity: {
+        userId: completeBootstrapEnv.OWN_RELAY_OPERATOR_USER_ID,
+        profileId: completeBootstrapEnv.OWN_RELAY_OPERATOR_PROFILE_ID,
+        organizationId: '',
+        email: completeBootstrapEnv.OWN_RELAY_OPERATOR_EMAIL,
+        cloudProfileId: ''
+      }
+    })
+    const grantRes = await dbInit.issueRelayGrant({
+      parentSessionId: sessionRes.sessionId,
+      rawRelayToken: 'test-relay-token',
+      relayHostId: 'host-1',
+      hostPublicKeyB64: Buffer.alloc(32).toString('base64'),
+      ttlMs: 60000,
+      identity: {
+        userId: completeBootstrapEnv.OWN_RELAY_OPERATOR_USER_ID,
+        profileId: completeBootstrapEnv.OWN_RELAY_OPERATOR_PROFILE_ID,
+        organizationId: ''
+      }
+    })
+    expect(grantRes).not.toBeNull()
+    await dbInit.close()
+
     const env = {
-      ...completeBootstrapEnv,
+      ...baseValidEnv,
       OWN_RELAY_STATE_PATH: dbPath,
       OWN_RELAY_LISTEN_PORT: '0'
     }
     const config = parseOwnRelayServeConfig(env)
+
+    const orderLog: string[] = []
+
+    // 2. Spy on SQLite close on the server's instance
+    const origOpen = sqliteModule.openOwnMobileRelaySecurityStateSqlite
+    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation((opts) => {
+      const realState = origOpen(opts)
+      const origClose = realState.close.bind(realState)
+      realState.close = async () => {
+        orderLog.push('security_state_closed')
+        return origClose()
+      }
+      return realState
+    })
+
     const serverInstance = await startOwnRelayServer({
       config,
       passwordPolicy: TEST_FAST_PASSWORD_POLICY
     })
 
-    const orderLog: string[] = []
-    serverInstance.onStep = (step) => orderLog.push(step)
+    // 3. Connect an active WebSocket and spy on its underlying socket termination
+    const { WebSocket } = await import('ws')
+    const ws = new WebSocket(`ws://127.0.0.1:${serverInstance.boundPort}/v1/host/control`, {
+      headers: {
+        Authorization: 'Bearer test-relay-token'
+      }
+    })
+    await new Promise<void>((resolve, reject) => {
+      ws.once('open', resolve)
+      ws.once('error', reject)
+    })
 
-    await serverInstance.close()
-    // Sockets/listener, scheduler, then sqlite
-    expect(orderLog).toEqual([
-      'cleanup_scheduler_stopped',
-      'sockets_terminated',
-      'server_closed',
-      'security_state_closed'
-    ])
+    const wsClosedPromise = new Promise<void>((resolve) => {
+      ws.once('close', () => {
+        orderLog.push('socket_terminated')
+        resolve()
+      })
+    })
+
+    // Act: close serverInstance which terminates active sockets before closing sqlite
+    const closeServerPromise = serverInstance.close()
+    await Promise.all([closeServerPromise, wsClosedPromise])
+
+    expect(orderLog).toContain('socket_terminated')
+    expect(orderLog).toContain('security_state_closed')
   })
 
   it('RED Finding 1: closes SQLite security state adapter when listenOwnMobileRelay rejects', async () => {

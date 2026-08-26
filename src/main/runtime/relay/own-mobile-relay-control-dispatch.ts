@@ -130,23 +130,13 @@ async function handleCredentialInstall(
     typeof msg.expectedCurrentHash === 'string' ? msg.expectedCurrentHash : undefined
   const auth = msg.authorization as { mode?: unknown }
 
-  if (!/^[A-Za-z0-9_-]{43}$/.test(newResumeTokenHash)) {
-    ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'invalid_token_hash' }))
-    return
-  }
-
-  if (auth.mode !== 'relay-basis' && auth.mode !== 'authenticated-direct') {
-    ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'invalid_authorization' }))
-    return
-  }
-
   const result = await options.securityState.installDeviceCredential({
     relayHostId: grant.relayHostId,
     relayDeviceId,
     reqId,
     newResumeTokenHash,
     expectedCurrentHash,
-    authorizationMode: auth.mode
+    authorizationMode: auth.mode as 'relay-basis' | 'authenticated-direct'
   })
 
   if (!result.ok) {

@@ -93,6 +93,24 @@ export function executeIssueRelayGrantSqlite(
   }
 }
 
+function mapGrantRow(row: SqliteGrantRow): SecurityStateRelayGrant {
+  return {
+    grantId: row.grant_id,
+    accountId: row.account_id,
+    parentSessionId: row.parent_session_id,
+    relayHostId: row.relay_host_id,
+    hostPublicKeyB64: row.host_public_key_b64,
+    authEpoch: Number(row.auth_epoch),
+    expiresAt: Number(row.expires_at),
+    createdAt: Number(row.created_at),
+    identity: {
+      userId: row.user_id,
+      profileId: row.profile_id,
+      organizationId: row.organization_id
+    }
+  }
+}
+
 export function executeValidateRelayGrantByTokenSqlite(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
@@ -118,24 +136,7 @@ export function executeValidateRelayGrantByTokenSqlite(
     `)
     .get(hash, now, now) as SqliteGrantRow | undefined
 
-  if (!row) {
-    return null
-  }
-  return {
-    grantId: row.grant_id,
-    accountId: row.account_id,
-    parentSessionId: row.parent_session_id,
-    relayHostId: row.relay_host_id,
-    hostPublicKeyB64: row.host_public_key_b64,
-    authEpoch: Number(row.auth_epoch),
-    expiresAt: Number(row.expires_at),
-    createdAt: Number(row.created_at),
-    identity: {
-      userId: row.user_id,
-      profileId: row.profile_id,
-      organizationId: row.organization_id
-    }
-  }
+  return row ? mapGrantRow(row) : null
 }
 
 export function executeValidateRelayGrantByIdSqlite(
@@ -145,8 +146,10 @@ export function executeValidateRelayGrantByIdSqlite(
   relayHostId: string | undefined,
   now: number
 ): SecurityStateRelayGrant | null {
-  const query = relayHostId
-    ? `
+  const hostFilter = relayHostId !== undefined ? 'AND g.relay_host_id = ?' : ''
+  const params = relayHostId !== undefined ? [grantId, relayHostId, now, now] : [grantId, now, now]
+  const row = db
+    .prepare(`
       SELECT g.grant_id, g.account_id, g.parent_session_id, g.relay_host_id,
              g.host_public_key_b64, g.auth_epoch, g.expires_at, g.created_at,
              g.user_id, g.profile_id, g.organization_id
@@ -154,48 +157,15 @@ export function executeValidateRelayGrantByIdSqlite(
       JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
       WHERE g.grant_id = ?
-        AND g.relay_host_id = ?
+        ${hostFilter}
         AND g.revoked_at IS NULL
         AND g.expires_at > ?
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
         AND s.auth_epoch = a.auth_epoch
-    `
-    : `
-      SELECT g.grant_id, g.account_id, g.parent_session_id, g.relay_host_id,
-             g.host_public_key_b64, g.auth_epoch, g.expires_at, g.created_at,
-             g.user_id, g.profile_id, g.organization_id
-      FROM relay_grants g
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
-      JOIN access_sessions s ON s.session_id = g.parent_session_id
-      WHERE g.grant_id = ?
-        AND g.revoked_at IS NULL
-        AND g.expires_at > ?
-        AND g.auth_epoch = a.auth_epoch
-        AND s.revoked_at IS NULL
-        AND s.expires_at > ?
-        AND s.auth_epoch = a.auth_epoch
-    `
-  const params = relayHostId ? [grantId, relayHostId, now, now] : [grantId, now, now]
-  const row = db.prepare(query).get(...params) as SqliteGrantRow | undefined
+    `)
+    .get(...params) as SqliteGrantRow | undefined
 
-  if (!row) {
-    return null
-  }
-  return {
-    grantId: row.grant_id,
-    accountId: row.account_id,
-    parentSessionId: row.parent_session_id,
-    relayHostId: row.relay_host_id,
-    hostPublicKeyB64: row.host_public_key_b64,
-    authEpoch: Number(row.auth_epoch),
-    expiresAt: Number(row.expires_at),
-    createdAt: Number(row.created_at),
-    identity: {
-      userId: row.user_id,
-      profileId: row.profile_id,
-      organizationId: row.organization_id
-    }
-  }
+  return row ? mapGrantRow(row) : null
 }
