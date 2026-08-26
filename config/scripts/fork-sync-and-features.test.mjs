@@ -19,10 +19,12 @@ describe('fork-sync-main workflow', () => {
     const job = workflow.jobs['sync-main']
     expect(job.if).toBe("github.repository == 'karlorz/orca'")
 
+    expect(job.steps[0].env.GH_TOKEN).toBe('${{ secrets.FORK_SYNC_TOKEN }}')
     const script = job.steps[0].run
     expect(script).toContain('MIRROR_BRANCH=main')
     expect(script).toContain('merge-upstream')
     expect(script).toContain('-f branch=')
+    expect(script).toContain('FORK_SYNC_TOKEN')
     expect(script).not.toMatch(/MIRROR_BRANCH=fork-main/)
     expect(script).not.toMatch(/git push .*fork-main/)
   })

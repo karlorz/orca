@@ -26,10 +26,15 @@ jobs:
     steps:
       - name: Fast-forward main from stablyai/orca
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "Missing repo secret FORK_SYNC_TOKEN (classic PAT: repo + workflow)." >&2
+            echo "GITHUB_TOKEN cannot update workflow files on main." >&2
+            exit 1
+          fi
           MIRROR_BRANCH=main
           if [[ "$MIRROR_BRANCH" == "fork-main" ]]; then
             echo "Refusing to sync fork-main" >&2
