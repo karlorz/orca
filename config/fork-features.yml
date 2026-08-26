@@ -56,6 +56,15 @@ features:
       - mobile/src/pet-speak
       - mobile/packages/expo-pet-speech
     wiki: projects/grok-desktop-pet/work/2026-08-25-pet-voice-fgs-hysteresis
+  - id: mobile-all-usage-providers
+    title: Mobile Settings Account usage switches including opt-in Grok
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/components
+      - mobile/app/account-usage-settings.tsx
+      - mobile/src/home/MobileHomeAccountUsageCards.tsx
+    wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
   - id: fork-sync-main-mirror
     title: Daily GitHub Action fast-forwards GitHub main and reports desktop vs mobile trains
     kind: ci
