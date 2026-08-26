@@ -1,0 +1,65 @@
+# Fork-only feature inventory for karlorz/orca.
+# Working branch is fork-main. GitHub `main` is a disposable upstream mirror.
+# Add a row when a feat lands on fork-main. Do not file upstream issues/PRs.
+fork:
+  workingBranch: fork-main
+  mirrorBranch: main
+  defaultBranch: fork-main
+  upstream: stablyai/orca
+  upstreamBranch: main
+  syncWorkflow: .github/workflows/fork-sync-main.yml
+features:
+  - id: herdr-agent-picker
+    title: Herdr as a hook-free selectable agent
+    kind: product
+    status: landed
+    paths:
+      - src/renderer
+  - id: herdr-right-click-mouse
+    title: Cross-platform right-click mouse ownership routing
+    kind: product
+    status: landed
+    paths:
+      - src
+  - id: pet-voice-sink
+    title: Pet Cantonese voice sink over mobile RPC
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/packages/expo-pet-speech
+      - src/main/runtime
+  - id: pet-voice-rate
+    title: Honor pet speech rate on Android TTS
+    kind: product
+    status: landed
+    paths:
+      - mobile/packages/expo-pet-speech
+  - id: hermes-es2023-array
+    title: Hermes-safe Array polyfills so fork APKs open on Android 11+
+    kind: product
+    status: landed
+    paths:
+      - mobile
+  - id: fork-mobile-android-tags
+    title: Mobile tags stay 0.0.44-N; APK-only fork workflow
+    kind: release
+    status: landed
+    paths:
+      - .github/workflows/fork-mobile-voice-release.yml
+      - mobile/app.json
+  - id: pet-voice-fgs-hysteresis
+    title: Keep pet-voice FGS through 5-minute Tailscale reconnects
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/packages/expo-pet-speech
+    wiki: projects/grok-desktop-pet/work/2026-08-25-pet-voice-fgs-hysteresis
+  - id: fork-sync-main-mirror
+    title: Daily GitHub Action fast-forwards GitHub main from stablyai/orca
+    kind: ci
+    status: landed
+    paths:
+      - .github/workflows/fork-sync-main.yml
+      - config/fork-features.yml

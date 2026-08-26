@@ -1,0 +1,38 @@
+name: Sync fork main from upstream
+
+# GitHub "Sync fork" follows the default branch. Default is fork-main, so that
+# button must not be used. This job is the only allowed mirror path: it
+# fast-forwards GitHub `main` from stablyai/orca and never touches fork-main.
+#
+# Cron is daily 04:17 UTC (minute 17 avoids stacking with other fork schedules).
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync-main:
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fast-forward main from stablyai/orca
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          MIRROR_BRANCH=main
+          if [[ "$MIRROR_BRANCH" == "fork-main" ]]; then
+            echo "Refusing to sync fork-main" >&2
+            exit 1
+          fi
+          gh api --method POST "repos/${GH_REPO}/merge-upstream" -f branch="$MIRROR_BRANCH"
