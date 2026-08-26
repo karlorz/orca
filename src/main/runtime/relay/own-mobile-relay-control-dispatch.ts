@@ -32,6 +32,10 @@ export function handleActiveControlMessage(
     return
   }
 
+  if (msg.type === 'pong' && typeof msg.t === 'number') {
+    return
+  }
+
   if (
     msg.type === 'invite-create' &&
     typeof msg.reqId === 'string' &&

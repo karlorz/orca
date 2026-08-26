@@ -21,10 +21,7 @@ function frameByteLength(raw: RawData): number {
   if (Buffer.isBuffer(raw)) {
     return raw.length
   }
-  if (Array.isArray(raw)) {
-    return raw.reduce((sum, b) => sum + b.length, 0)
-  }
-  return raw.byteLength
+  return Array.isArray(raw) ? raw.reduce((sum, b) => sum + b.length, 0) : raw.byteLength
 }
 
 function clearPendingConn(pendingConn: PendingConnRecord, router: OwnMobileRelayRouter): void {
@@ -107,6 +104,9 @@ export function handleOwnMobileRelayPhoneSocket(
 ): void {
   const hostSender = router.activeHosts.get(relayHostId)
   if (!hostSender) {
+    process.stderr.write(
+      `[own-mobile-relay] phone-4404 host_not_found relayHostId=${relayHostId}\n`
+    )
     ws.close(4404, 'host_not_found')
     return
   }

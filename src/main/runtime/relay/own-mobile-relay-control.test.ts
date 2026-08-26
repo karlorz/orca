@@ -128,7 +128,7 @@ describe('own mobile relay host-control', () => {
     }
   })
 
-  it('answers client pings and terminates after silence watchdog limit', async () => {
+  it('keeps RelayControlClient alive via ping/pong for >3x silenceLimitMs', async () => {
     const hostKeys = nacl.box.keyPair()
     const keypair: E2EEKeypair = {
       publicKey: hostKeys.publicKey,
@@ -142,11 +142,11 @@ describe('own mobile relay host-control', () => {
       organizationId: TEST_OPERATOR.organizationId
     }
 
-    // Test with short silence limit (100ms) to test silence watchdog
+    const silenceLimitMs = 80
     const server = await listenOwnMobileRelay({
       operator: TEST_OPERATOR,
       origin: 'http://127.0.0.1',
-      silenceLimitMs: 100
+      silenceLimitMs
     })
 
     try {
@@ -181,9 +181,65 @@ describe('own mobile relay host-control', () => {
       await client.connect()
       expect(client.isLive()).toBe(true)
 
-      // Wait for silence watchdog to terminate socket
-      await vi.waitFor(() => expect(onClose).toHaveBeenCalledWith(4401), { timeout: 1000 })
-      expect(client.isLive()).toBe(false)
+      // Wait > 3x silenceLimitMs: client must stay isLive() because server pings and client pongs
+      await new Promise((resolve) => setTimeout(resolve, silenceLimitMs * 3 + 50))
+      expect(onClose).not.toHaveBeenCalled()
+      expect(client.isLive()).toBe(true)
+
+      client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('closes with 4401 on silence watchdog timeout when peer sends no frames', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+
+    const silenceLimitMs = 80
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      silenceLimitMs
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      // Connect raw WebSocket to /v1/host/control with valid Bearer and send no frames
+      const wsUrl = `${server.origin.replace(/^http/, 'ws')}/v1/host/control`
+      const { WebSocket } = await import('ws')
+      const ws = new WebSocket(wsUrl, {
+        headers: {
+          authorization: `Bearer ${relayToken}`
+        }
+      })
+
+      const closeEventPromise = new Promise<{ code: number; reason: string }>((resolve) => {
+        ws.on('close', (code, reason) => {
+          resolve({ code, reason: reason.toString() })
+        })
+      })
+
+      const { code } = await closeEventPromise
+      expect(code).toBe(4401)
     } finally {
       await server.close()
     }

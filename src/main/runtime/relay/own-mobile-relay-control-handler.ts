@@ -18,6 +18,7 @@ export function handleOwnMobileRelayHostControlSocket(
   let expectedChallengeId: string | null = null
   let expectedProof: string | null = null
   let silenceTimer: NodeJS.Timeout | null = null
+  let pingTimer: NodeJS.Timeout | null = null
 
   function resetSilenceWatchdog(): void {
     if (silenceTimer) {
@@ -30,10 +31,20 @@ export function handleOwnMobileRelayHostControlSocket(
   }
 
   function closeSocket(code: number, reason?: string): void {
+    if (state === 'closed') {
+      return
+    }
+    process.stderr.write(
+      `[own-mobile-relay] control-close code=${code} reason=${reason ?? 'none'}\n`
+    )
     state = 'closed'
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
+    }
+    if (pingTimer) {
+      clearInterval(pingTimer)
+      pingTimer = null
     }
     options.onClose?.(grant.relayHostId)
     ws.close(code, reason)
@@ -141,6 +152,14 @@ export function handleOwnMobileRelayHostControlSocket(
       state = 'active'
       const controlResumeSecret = randomBytes(32).toString('base64url')
       const leaseExpiresAt = Date.now() + 60_000
+
+      const pingIntervalMs = Math.max(10, Math.floor(options.silenceLimitMs / 3))
+      pingTimer = setInterval(() => {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping', t: Date.now() }))
+        }
+      }, pingIntervalMs)
+      pingTimer.unref?.()
 
       options.onActive?.(grant.relayHostId, (outMsg: object) => {
         if (ws.readyState === ws.OPEN) {
