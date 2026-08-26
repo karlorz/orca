@@ -293,6 +293,28 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
         }
       })
 
+      // Finding 2: Explicitly POST /v1/resolve after reopen and assert correct durable resolution result
+      const resolveRes = await fetch(`${origin2}/v1/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          v: 1,
+          relayHostId,
+          resumeToken: rawResumeToken
+        })
+      })
+      expect(resolveRes.status).toBe(200)
+      const resolveBody = (await resolveRes.json()) as {
+        v: number
+        cellUrl: string
+        assignmentEpoch: number
+      }
+      expect(resolveBody).toMatchObject({
+        v: 1,
+        cellUrl: origin2,
+        assignmentEpoch: 1
+      })
+
       // Phone connects with resume token and resumes session
       const phoneWsUrl = `${origin2.replace('http://', 'ws://')}/v1/connect/${relayHostId}`
       phoneSocket = new WebSocket(phoneWsUrl)
@@ -356,6 +378,7 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
     const relayHostId = deriveRelayHostId(hostKeypair.publicKey)
 
     let loggedOutAccessToken: string
+    let validRelayTokenForHost: string
 
     try {
       // 1a. Sign in session A (to be logged out)
@@ -402,7 +425,7 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
       })
       expect(logoutRes.status).toBe(200)
 
-      // 1b. Sign in session B (active, used to issue expired records directly to state)
+      // 1b. Sign in session B (active, used to issue valid relay grant for host control on restart)
       const verifierB = 'test-verifier-b-123456789012345678901234567890'
       const challengeB = Buffer.from(
         await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifierB))
@@ -427,7 +450,7 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
       })
       const codeB = new URL(loginResB.headers.get('location')!).searchParams.get('code')!
 
-      await fetch(`${origin1}/v1/desktop/auth/session`, {
+      const sessionResB = await fetch(`${origin1}/v1/desktop/auth/session`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -436,6 +459,21 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
           redirectUri: 'http://127.0.0.1:4000/auth/callback'
         })
       })
+      const { accessToken: tokenB } = (await sessionResB.json()) as { accessToken: string }
+
+      const tokenRes = await fetch(`${origin1}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${tokenB}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64
+        })
+      })
+      const tokenBody = (await tokenRes.json()) as { relayToken: string }
+      validRelayTokenForHost = tokenBody.relayToken
     } finally {
       await serverInstance1.close()
     }
@@ -513,6 +551,8 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
     })
     const origin2 = `http://127.0.0.1:${serverInstance2.boundPort}`
 
+    let hostControlClient: RelayControlClient | undefined
+
     try {
       // 2a. Logged-out session denied after restart
       const loggedOutRes = await fetch(`${origin2}/v1/desktop/auth/capabilities`, {
@@ -537,7 +577,54 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
       })
       expect(expiredGrantRes.status).toBe(401)
 
-      // 2d. Expired device resume token denied on phone resume after restart
+      // 2d. Expired device resume token denied on POST /v1/resolve with 401
+      const resolveExpiredRes = await fetch(`${origin2}/v1/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          v: 1,
+          relayHostId,
+          resumeToken: expiredResumeToken
+        })
+      })
+      expect(resolveExpiredRes.status).toBe(401)
+
+      // Finding 1 (CRITICAL): Establish active host control after restart so host is present in router
+      const assignRes = await fetch(`${origin2}/v1/assign`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${validRelayTokenForHost}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ v: 1, relayHostId })
+      })
+      expect(assignRes.status).toBe(200)
+      const assign = (await assignRes.json()) as { cellUrl: string; assignmentEpoch: number }
+
+      hostControlClient = new RelayControlClient({
+        cellUrl: assign.cellUrl,
+        relayJwt: validRelayTokenForHost,
+        relayHostId,
+        assignmentEpoch: assign.assignmentEpoch,
+        identity: {
+          userId: operatorUserId,
+          profileId: operatorProfileId,
+          organizationId: operatorOrgId
+        },
+        keypair: {
+          publicKey: hostKeypair.publicKey,
+          secretKey: hostKeypair.secretKey,
+          publicKeyB64: hostPublicKeyB64
+        },
+        appVersion: '0.0.0-test',
+        onClose: vi.fn(),
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn()
+      })
+      await hostControlClient.connect()
+      expect(hostControlClient.isLive()).toBe(true)
+
+      // 2e. Phone connects to active host with EXPIRED resume token -> rejected specifically by auth with 4401 invalid_resume_token
       const phoneWsUrl = `${origin2.replace('http://', 'ws://')}/v1/connect/${relayHostId}`
       const phoneSocket = new WebSocket(phoneWsUrl)
       await waitForOpen(phoneSocket)
@@ -551,8 +638,10 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
         })
       )
       const closeResult = await closePromise
-      expect(closeResult.code).toBe(4404)
+      expect(closeResult.code).toBe(4401)
+      expect(closeResult.reason).toBe('invalid_resume_token')
     } finally {
+      hostControlClient?.closeNow()
       await serverInstance2.close()
     }
   })

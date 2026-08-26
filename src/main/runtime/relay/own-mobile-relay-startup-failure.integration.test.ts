@@ -176,15 +176,14 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
     expect(bound).toBe(false)
   })
 
-  it('Scenario 5e: Missing state path or auth origin prevents port binding', async () => {
-    const targetPort = 49152 + Math.floor(Math.random() * 1000)
+  it('Scenario 5e: Missing state path or auth origin fails synchronously in configuration validation before server startup', () => {
+    // Finding 7: Validate pre-listen configuration parse errors reject before any server initialization
     expect(() =>
       parseOwnRelayServeConfig({
         OWN_RELAY_STATE_PATH: undefined,
         OWN_RELAY_ORIGIN: 'http://127.0.0.1',
         OWN_RELAY_AUTH_ORIGIN: 'http://127.0.0.1',
-        OWN_RELAY_CLIENT_ID: 'orca-desktop',
-        OWN_RELAY_LISTEN_PORT: String(targetPort)
+        OWN_RELAY_CLIENT_ID: 'orca-desktop'
       })
     ).toThrow(/Missing required environment variable: OWN_RELAY_STATE_PATH/)
 
@@ -193,13 +192,9 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
         OWN_RELAY_STATE_PATH: createTempDbPath(),
         OWN_RELAY_ORIGIN: 'http://127.0.0.1',
         OWN_RELAY_AUTH_ORIGIN: undefined,
-        OWN_RELAY_CLIENT_ID: 'orca-desktop',
-        OWN_RELAY_LISTEN_PORT: String(targetPort)
+        OWN_RELAY_CLIENT_ID: 'orca-desktop'
       })
     ).toThrow(/Missing required environment variable: OWN_RELAY_AUTH_ORIGIN/)
-
-    const bound = await checkPortIsOpen(targetPort)
-    expect(bound).toBe(false)
   })
 
   it('Scenario 5f: Incomplete bootstrap variables prevent port binding', async () => {

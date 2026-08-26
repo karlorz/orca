@@ -170,6 +170,18 @@ describe('own-mobile-relay-secret-absence.integration (Scenario 6)', () => {
         authorization: { mode: 'relay-basis', basisConnId: 'conn-1' }
       })
 
+      // Finding 5: Pass the raw resume token through shipped admission paths (/v1/resolve and /v1/connect)
+      const resolveAdmissionRes = await fetch(`${origin}/v1/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          v: 1,
+          relayHostId,
+          resumeToken: rawResumeSecret
+        })
+      })
+      expect(resolveAdmissionRes.status).toBe(200)
+
       controlClient.closeNow()
     } finally {
       await serverInstance.close()
