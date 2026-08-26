@@ -1,32 +1,40 @@
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import {
-  GRACE_TOKEN_TTL_MS,
   INVITE_MAX_ATTEMPTS,
   INVITE_TOKEN_TTL_MS,
-  RESUME_TOKEN_TTL_MS,
-  type OwnMobileRelayDeviceCredentialRecord,
   type OwnMobileRelayInviteRecord
 } from './own-mobile-relay-types'
-import type { SecurityStateRelayGrant } from './own-mobile-relay-security-state'
+import type {
+  OwnMobileRelaySecurityState,
+  SecurityStateRelayGrant
+} from './own-mobile-relay-security-state'
+
+export type OwnMobileRelayPendingConnContext = {
+  relayDeviceId: string
+  acceptedAs?: 'current' | 'grace'
+  currentVersion?: number
+  resumeExpiresAt?: number
+  graceExpiresAt?: number
+}
 
 export type OwnMobileRelayControlContext = {
   advertisedOrigin: string
   silenceLimitMs: number
+  securityState: OwnMobileRelaySecurityState
   invites?: Map<string, OwnMobileRelayInviteRecord>
-  deviceCredentials?: Map<string, OwnMobileRelayDeviceCredentialRecord>
-  pendingConns?: Map<string, { relayDeviceId: string; acceptedAs?: 'current' | 'grace' }>
+  pendingConns?: Map<string, OwnMobileRelayPendingConnContext>
   onActive?: (relayHostId: string, send: (msg: object) => void) => void
   onClose?: (relayHostId: string, sender?: (msg: object) => void) => void
 }
 
-export function handleActiveControlMessage(
+export async function handleActiveControlMessage(
   ws: WebSocket,
   grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>,
   closeSocket: (code: number, reason?: string) => void
-): void {
+): Promise<void> {
   if (msg.type === 'ping' && typeof msg.t === 'number') {
     ws.send(JSON.stringify({ type: 'pong', t: msg.t }))
     return
@@ -72,7 +80,7 @@ export function handleActiveControlMessage(
     typeof msg.authorization === 'object' &&
     msg.authorization !== null
   ) {
-    handleCredentialInstall(ws, grant, options, msg)
+    await handleCredentialInstall(ws, grant, options, msg)
     return
   }
 
@@ -82,7 +90,7 @@ export function handleActiveControlMessage(
     typeof msg.reqId === 'string' &&
     typeof msg.relayDeviceId === 'string'
   ) {
-    handleCredentialInstallStatus(ws, grant, options, msg)
+    await handleCredentialInstallStatus(ws, grant, options, msg)
     return
   }
 
@@ -92,7 +100,7 @@ export function handleActiveControlMessage(
     typeof msg.reqId === 'string' &&
     typeof msg.basisConnId === 'string'
   ) {
-    handleResumeConfirm(ws, grant, options, msg)
+    handleResumeConfirm(ws, options, msg)
     return
   }
 
@@ -101,8 +109,7 @@ export function handleActiveControlMessage(
     typeof msg.reqId === 'string' &&
     typeof msg.relayDeviceId === 'string'
   ) {
-    const deviceKey = `${grant.relayHostId}:${msg.relayDeviceId}`
-    options.deviceCredentials?.delete(deviceKey)
+    await options.securityState.revokeDeviceCredential(grant.relayHostId, msg.relayDeviceId)
     ws.send(JSON.stringify({ type: 'device-revoked', reqId: msg.reqId }))
     return
   }
@@ -110,16 +117,18 @@ export function handleActiveControlMessage(
   closeSocket(4401, 'unknown_control_message')
 }
 
-function handleCredentialInstall(
+async function handleCredentialInstall(
   ws: WebSocket,
   grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
-): void {
+): Promise<void> {
   const reqId = msg.reqId as string
   const relayDeviceId = msg.relayDeviceId as string
   const newResumeTokenHash = msg.newResumeTokenHash as string
-  const auth = msg.authorization as { mode?: string }
+  const expectedCurrentHash =
+    typeof msg.expectedCurrentHash === 'string' ? msg.expectedCurrentHash : undefined
+  const auth = msg.authorization as { mode?: unknown }
 
   if (!/^[A-Za-z0-9_-]{43}$/.test(newResumeTokenHash)) {
     ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'invalid_token_hash' }))
@@ -131,96 +140,59 @@ function handleCredentialInstall(
     return
   }
 
-  const credentialsMap = options.deviceCredentials
-  const deviceKey = `${grant.relayHostId}:${relayDeviceId}`
-  const existing = credentialsMap?.get(deviceKey)
-
-  if (
-    typeof msg.expectedCurrentHash === 'string' &&
-    existing?.currentResumeTokenHash !== msg.expectedCurrentHash
-  ) {
-    ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'hash-mismatch' }))
-    return
-  }
-
-  const now = Date.now()
-  const currentVersion = existing ? existing.currentVersion + 1 : 1
-  const resumeExpiresAt = now + RESUME_TOKEN_TTL_MS
-
-  const record: OwnMobileRelayDeviceCredentialRecord = {
+  const result = await options.securityState.installDeviceCredential({
     relayHostId: grant.relayHostId,
     relayDeviceId,
-    lastInstallReqId: reqId,
-    currentResumeTokenHash: newResumeTokenHash,
-    currentVersion,
-    resumeExpiresAt,
+    reqId,
+    newResumeTokenHash,
+    expectedCurrentHash,
     authorizationMode: auth.mode
-  }
+  })
 
-  if (existing) {
-    record.graceResumeTokenHash = existing.currentResumeTokenHash
-    record.graceExpiresAt = now + GRACE_TOKEN_TTL_MS
+  if (!result.ok) {
+    ws.send(JSON.stringify({ type: 'control-error', reqId, code: result.code }))
+    return
   }
-
-  credentialsMap?.set(deviceKey, record)
 
   ws.send(
     JSON.stringify({
       type: 'device-credential-installed',
       v: 1,
-      reqId,
-      authorizationMode: record.authorizationMode,
-      currentVersion: record.currentVersion,
-      resumeExpiresAt: record.resumeExpiresAt,
-      ...(record.graceExpiresAt !== undefined ? { graceExpiresAt: record.graceExpiresAt } : {})
+      reqId: result.installed.reqId,
+      authorizationMode: result.installed.authorizationMode,
+      currentVersion: result.installed.currentVersion,
+      resumeExpiresAt: result.installed.resumeExpiresAt,
+      ...(result.installed.graceExpiresAt !== undefined
+        ? { graceExpiresAt: result.installed.graceExpiresAt }
+        : {})
     })
   )
 }
 
-function handleCredentialInstallStatus(
+async function handleCredentialInstallStatus(
   ws: WebSocket,
   grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
-): void {
+): Promise<void> {
   const reqId = msg.reqId as string
   const relayDeviceId = msg.relayDeviceId as string
-  const deviceKey = `${grant.relayHostId}:${relayDeviceId}`
-  const record = options.deviceCredentials?.get(deviceKey)
-
-  if (!record) {
-    ws.send(
-      JSON.stringify({
-        type: 'device-credential-install-status-result',
-        v: 1,
-        reqId,
-        state: 'not-found'
-      })
-    )
-    return
-  }
+  const status = await options.securityState.getDeviceCredentialInstallStatus(
+    grant.relayHostId,
+    relayDeviceId,
+    reqId
+  )
 
   ws.send(
     JSON.stringify({
-      type: 'device-credential-install-status-result',
-      v: 1,
-      reqId,
-      state: 'committed',
-      result: {
-        v: 1,
-        reqId: record.lastInstallReqId,
-        authorizationMode: record.authorizationMode,
-        currentVersion: record.currentVersion,
-        resumeExpiresAt: record.resumeExpiresAt,
-        ...(record.graceExpiresAt !== undefined ? { graceExpiresAt: record.graceExpiresAt } : {})
-      }
+      ...status,
+      type: 'device-credential-install-status-result'
     })
   )
 }
 
 function handleResumeConfirm(
   ws: WebSocket,
-  grant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext,
   msg: Record<string, unknown>
 ): void {
@@ -228,15 +200,12 @@ function handleResumeConfirm(
   const basisConnId = msg.basisConnId as string
   const pendingConn = options.pendingConns?.get(basisConnId)
 
-  if (!pendingConn) {
+  if (
+    !pendingConn ||
+    pendingConn.currentVersion === undefined ||
+    pendingConn.resumeExpiresAt === undefined
+  ) {
     ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'conn-not-found' }))
-    return
-  }
-
-  const deviceKey = `${grant.relayHostId}:${pendingConn.relayDeviceId}`
-  const record = options.deviceCredentials?.get(deviceKey)
-  if (!record) {
-    ws.send(JSON.stringify({ type: 'control-error', reqId, code: 'device-not-found' }))
     return
   }
 
@@ -245,11 +214,13 @@ function handleResumeConfirm(
       type: 'device-resume-confirmed',
       v: 1,
       reqId,
-      currentVersion: record.currentVersion,
+      currentVersion: pendingConn.currentVersion,
       acceptedAs: pendingConn.acceptedAs ?? 'current',
       renewed: false,
-      resumeExpiresAt: record.resumeExpiresAt,
-      ...(record.graceExpiresAt !== undefined ? { graceExpiresAt: record.graceExpiresAt } : {})
+      resumeExpiresAt: pendingConn.resumeExpiresAt,
+      ...(pendingConn.graceExpiresAt !== undefined
+        ? { graceExpiresAt: pendingConn.graceExpiresAt }
+        : {})
     })
   )
 }

@@ -59,15 +59,16 @@ async function setupRelayClient(
       relayDeviceId: string
       attachDeadlineMs: number
     }) => void
-  }
+  },
+  customKeypair?: E2EEKeypair
 ) {
-  const hostKeys = nacl.box.keyPair()
-  const keypair: E2EEKeypair = {
-    publicKey: hostKeys.publicKey,
-    secretKey: hostKeys.secretKey,
-    publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+  const hostKeys = customKeypair ? null : nacl.box.keyPair()
+  const keypair: E2EEKeypair = customKeypair ?? {
+    publicKey: hostKeys!.publicKey,
+    secretKey: hostKeys!.secretKey,
+    publicKeyB64: Buffer.from(hostKeys!.publicKey).toString('base64')
   }
-  const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+  const relayHostId = deriveRelayHostId(keypair.publicKey)
   const identity = {
     userId: TEST_OPERATOR.userId,
     profileId: TEST_OPERATOR.profileId,

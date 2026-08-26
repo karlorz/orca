@@ -46,6 +46,9 @@ export type PendingConnRecord = {
   expiresAt: number
   kind: 'invite' | 'resume'
   acceptedAs?: 'current' | 'grace'
+  currentVersion?: number
+  resumeExpiresAt?: number
+  graceExpiresAt?: number
   phoneSocket: WebSocket
   hostSocket?: WebSocket
   bufferedFrames?: OwnMobileRelayBufferedFrame[]
@@ -56,7 +59,6 @@ export type PendingConnRecord = {
 
 export type OwnMobileRelayRouter = {
   invites: Map<string, OwnMobileRelayInviteRecord>
-  deviceCredentials: Map<string, OwnMobileRelayDeviceCredentialRecord>
   pendingConns: Map<string, PendingConnRecord>
   connsByTicket: Map<string, PendingConnRecord>
   activeHosts: Map<string, (msg: object) => void>

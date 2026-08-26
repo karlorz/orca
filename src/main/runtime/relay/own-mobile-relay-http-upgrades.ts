@@ -45,8 +45,8 @@ export function registerOwnMobileRelayUpgrades(
         handleOwnMobileRelayHostControlSocket(ws, grant, {
           advertisedOrigin: context.advertisedOriginCallback(),
           silenceLimitMs: context.silenceLimitMs,
+          securityState: context.securityState,
           invites: context.router.invites,
-          deviceCredentials: context.router.deviceCredentials,
           pendingConns: context.router.pendingConns,
           onActive: (relayHostId, send) => {
             context.router.activeHosts.set(relayHostId, send)
@@ -73,7 +73,7 @@ export function registerOwnMobileRelayUpgrades(
         }
         ws.once('close', cleanup)
         ws.once('error', cleanup)
-        handleOwnMobileRelayPhoneSocket(ws, relayHostId, context.router)
+        handleOwnMobileRelayPhoneSocket(ws, relayHostId, context.router, context.securityState)
       })
       return
     }

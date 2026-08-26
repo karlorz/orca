@@ -2,12 +2,11 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
 import type {
   OwnMobileRelayBufferedFrame,
-  OwnMobileRelayDeviceCredentialRecord,
   OwnMobileRelayRouter,
   PendingConnRecord
 } from './own-mobile-relay-types'
-import { matchOwnMobileRelayDeviceCredential } from './own-mobile-relay-device-credential-match'
 import { spliceOwnMobileRelaySockets } from './own-mobile-relay-socket-splice'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
 
 export type { OwnMobileRelayBufferedFrame, OwnMobileRelayRouter, PendingConnRecord }
 
@@ -86,7 +85,8 @@ function setupPendingBuffering(
 export function handleOwnMobileRelayPhoneSocket(
   ws: WebSocket,
   relayHostId: string,
-  router: OwnMobileRelayRouter
+  router: OwnMobileRelayRouter,
+  securityState: OwnMobileRelaySecurityState
 ): void {
   const hostSender = router.activeHosts.get(relayHostId)
   if (!hostSender) {
@@ -114,7 +114,7 @@ export function handleOwnMobileRelayPhoneSocket(
   })
   ws.once('close', cleanup)
 
-  ws.once('message', (raw: RawData, isBinary: boolean) => {
+  ws.once('message', async (raw: RawData, isBinary: boolean) => {
     if (isBinary) {
       ws.close(4401, 'binary_frame_rejected')
       return
@@ -144,7 +144,9 @@ export function handleOwnMobileRelayPhoneSocket(
     let relayDeviceId = ''
     let kind: 'invite' | 'resume' = 'invite'
     let acceptedAs: 'current' | 'grace' | undefined
-    let resumeCredential: OwnMobileRelayDeviceCredentialRecord | undefined
+    let currentVersion: number | undefined
+    let resumeExpiresAt: number | undefined
+    let graceExpiresAt: number | undefined
 
     if (invite) {
       if (
@@ -163,11 +165,7 @@ export function handleOwnMobileRelayPhoneSocket(
       relayDeviceId = invite.relayDeviceId
     } else {
       const tokenHash = createHash('sha256').update(parsed.credential).digest('base64url')
-      const match = matchOwnMobileRelayDeviceCredential(
-        router.deviceCredentials,
-        relayHostId,
-        tokenHash
-      )
+      const match = await securityState.matchDeviceCredential(relayHostId, tokenHash)
       if (!match) {
         ws.send(JSON.stringify({ type: 'relay-hello', ok: false, code: 4401 }))
         ws.close(4401, 'invalid_resume_token')
@@ -176,7 +174,9 @@ export function handleOwnMobileRelayPhoneSocket(
       relayDeviceId = match.device.relayDeviceId
       kind = 'resume'
       acceptedAs = match.acceptedAs
-      resumeCredential = match.device
+      currentVersion = match.device.currentVersion
+      resumeExpiresAt = match.device.resumeExpiresAt
+      graceExpiresAt = match.device.graceExpiresAt
     }
 
     pendingConn = {
@@ -187,6 +187,9 @@ export function handleOwnMobileRelayPhoneSocket(
       expiresAt: Date.now() + ATTACH_DEADLINE_MS,
       kind,
       acceptedAs,
+      currentVersion,
+      resumeExpiresAt,
+      graceExpiresAt,
       phoneSocket: ws,
       bufferedFrames: [],
       bufferedBytes: 0
@@ -208,14 +211,15 @@ export function handleOwnMobileRelayPhoneSocket(
         ok: true,
         credentialKind: kind,
         leaseExpiresAt: Date.now() + LEASE_TTL_MS,
-        ...(kind === 'resume' && resumeCredential && acceptedAs
+        ...(kind === 'resume' &&
+        currentVersion !== undefined &&
+        acceptedAs &&
+        resumeExpiresAt !== undefined
           ? {
-              acceptedCredentialVersion: resumeCredential.currentVersion,
+              acceptedCredentialVersion: currentVersion,
               acceptedAs,
-              resumeExpiresAt: resumeCredential.resumeExpiresAt,
-              ...(acceptedAs === 'grace' && resumeCredential.graceExpiresAt !== undefined
-                ? { graceExpiresAt: resumeCredential.graceExpiresAt }
-                : {})
+              resumeExpiresAt,
+              ...(acceptedAs === 'grace' && graceExpiresAt !== undefined ? { graceExpiresAt } : {})
             }
           : {})
       })

@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import type { ServerResponse } from 'node:http'
-import type { OwnMobileRelayRouter } from './own-mobile-relay-splice-handler'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
 
-export function handleResolvePost(
+export async function handleResolvePost(
   record: unknown,
   advertisedOrigin: string,
-  router: OwnMobileRelayRouter,
+  securityState: OwnMobileRelaySecurityState,
   response: ServerResponse
-): void {
+): Promise<void> {
   const req = record as { v?: unknown; relayHostId?: unknown; resumeToken?: unknown }
   if (
     !req ||
@@ -25,27 +25,9 @@ export function handleResolvePost(
   }
 
   const tokenHash = createHash('sha256').update(req.resumeToken).digest('base64url')
-  const now = Date.now()
-  let matched = false
+  const match = await securityState.matchDeviceCredential(req.relayHostId, tokenHash)
 
-  for (const cred of router.deviceCredentials.values()) {
-    if (cred.relayHostId === req.relayHostId) {
-      if (cred.currentResumeTokenHash === tokenHash && cred.resumeExpiresAt > now) {
-        matched = true
-        break
-      }
-      if (
-        cred.graceResumeTokenHash === tokenHash &&
-        cred.graceExpiresAt !== undefined &&
-        cred.graceExpiresAt > now
-      ) {
-        matched = true
-        break
-      }
-    }
-  }
-
-  if (!matched) {
+  if (!match) {
     const payload = Buffer.from(JSON.stringify({ error: 'unauthorized' }))
     response.writeHead(401, {
       'content-type': 'application/json',

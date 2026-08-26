@@ -207,7 +207,7 @@ export function handleOwnMobileRelayHostControlSocket(
     }
 
     if (state === 'active') {
-      handleActiveControlMessage(ws, grant, options, msg, closeSocket)
+      void handleActiveControlMessage(ws, grant, options, msg, closeSocket)
       return
     }
 

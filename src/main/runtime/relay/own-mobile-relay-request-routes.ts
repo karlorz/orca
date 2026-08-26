@@ -179,7 +179,12 @@ export function createOwnMobileRelayRequestHandler(
       if (body === undefined) {
         return
       }
-      handleResolvePost(body, context.advertisedOriginCallback(), context.router, response)
+      await handleResolvePost(
+        body,
+        context.advertisedOriginCallback(),
+        context.securityState,
+        response
+      )
       return
     }
     sendJson(response, 404, { error: 'not_found' })
@@ -189,7 +194,7 @@ export function createOwnMobileRelayRequestHandler(
 async function readJsonBodySafely(
   request: IncomingMessage,
   response: ServerResponse
-): Promise<unknown | undefined> {
+): Promise<unknown> {
   try {
     return await readJsonBody(request)
   } catch {
