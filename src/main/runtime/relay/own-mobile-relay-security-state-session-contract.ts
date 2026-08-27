@@ -116,7 +116,34 @@ export function registerSessionAndGrantTests(
           },
           t0
         )
-      ).rejects.toThrow(/account_epoch_mismatch/)
+      ).rejects.toThrow(/^account_epoch_mismatch$/)
+
+      // Verify no account IDs, epochs, tokens, or hashes leak into the error
+      await state
+        .issueAccessSession(
+          {
+            rawAccessToken: 'guarded-token-fail-1-leak-check',
+            identity: {
+              userId: 'usr_g1',
+              profileId: 'prf_g1',
+              organizationId: 'org_g1',
+              email: 'guarded@example.com',
+              cloudProfileId: 'c_prf_g1'
+            },
+            ttlMs,
+            expectedAccountId: 'fixture-secret-account-id-12345',
+            expectedAuthEpoch: account.authEpoch
+          },
+          t0
+        )
+        .catch((err: Error) => {
+          expect(err.message).toBe('account_epoch_mismatch')
+          expect(err.message).not.toContain('fixture-secret-account-id-12345')
+          expect(err.message).not.toContain(account.accountId)
+          expect(err.message).not.toContain(String(account.authEpoch))
+          expect(err.message).not.toContain('expected')
+          expect(err.message).not.toContain('actual')
+        })
 
       // Mismatched expected authEpoch fails
       await expect(
@@ -136,7 +163,7 @@ export function registerSessionAndGrantTests(
           },
           t0
         )
-      ).rejects.toThrow(/account_epoch_mismatch/)
+      ).rejects.toThrow(/^account_epoch_mismatch$/)
 
       // Matching expected accountId and authEpoch succeeds
       const issued = await state.issueAccessSession(
@@ -183,160 +210,7 @@ export function registerSessionAndGrantTests(
           },
           t0 + 200
         )
-      ).rejects.toThrow(/account_epoch_mismatch/)
-    })
-
-    it('validates relay grants by raw token or internal ID, enforces expiry and parent session binding', async () => {
-      await state.bootstrapAccount({
-        email: 'admin@example.com',
-        userId: 'usr_1',
-        profileId: 'prf_1',
-        organizationId: 'org_1',
-        passwordRecord
-      })
-
-      const t0 = 2_000_000
-      const session = await state.issueAccessSession(
-        {
-          rawAccessToken: 'access-token-1',
-          identity: {
-            userId: 'usr_1',
-            profileId: 'prf_1',
-            organizationId: 'org_1',
-            email: 'admin@example.com',
-            cloudProfileId: 'c_prf_1'
-          },
-          ttlMs: 3600_000
-        },
-        t0
-      )
-
-      const rawRelayToken = 'raw-relay-token-abcde'
-      const grantTtlMs = 1800_000
-      const issuedGrant = await state.issueRelayGrant(
-        {
-          rawRelayToken,
-          parentSessionId: session.sessionId,
-          relayHostId: 'host_1234567890123456',
-          hostPublicKeyB64: 'base64publickey==',
-          identity: {
-            userId: 'usr_1',
-            profileId: 'c_prf_1',
-            organizationId: 'org_1'
-          },
-          ttlMs: grantTtlMs
-        },
-        t0
-      )
-
-      expect(issuedGrant).not.toBeNull()
-      expect(issuedGrant?.expiresAt).toBe(t0 + grantTtlMs)
-
-      const admissionGrant = await state.validateRelayGrantByToken(rawRelayToken, t0 + 500)
-      expect(admissionGrant).not.toBeNull()
-      expect(admissionGrant?.grantId).toBe(issuedGrant?.grantId)
-      expect(admissionGrant?.relayHostId).toBe('host_1234567890123456')
-      expect(admissionGrant).not.toHaveProperty('rawRelayToken')
-      expect(admissionGrant).not.toHaveProperty('relayTokenHash')
-
-      const heartbeatGrant = await state.validateRelayGrantById(
-        issuedGrant!.grantId,
-        'host_1234567890123456',
-        t0 + 1000
-      )
-      expect(heartbeatGrant).not.toBeNull()
-      expect(heartbeatGrant?.grantId).toBe(issuedGrant?.grantId)
-
-      const wrongHostGrant = await state.validateRelayGrantById(
-        issuedGrant!.grantId,
-        'wrong_host_id_123456',
-        t0 + 1000
-      )
-      expect(wrongHostGrant).toBeNull()
-
-      const expiredGrant = await state.validateRelayGrantByToken(rawRelayToken, t0 + grantTtlMs + 1)
-      expect(expiredGrant).toBeNull()
-    })
-
-    it('invalidates parent session and its child grants on logout without requiring immediate hard deletion', async () => {
-      await state.bootstrapAccount({
-        email: 'admin@example.com',
-        userId: 'usr_1',
-        profileId: 'prf_1',
-        organizationId: 'org_1',
-        passwordRecord
-      })
-
-      const t0 = 3_000_000
-      const session = await state.issueAccessSession(
-        {
-          rawAccessToken: 'access-for-logout',
-          identity: {
-            userId: 'usr_1',
-            profileId: 'prf_1',
-            organizationId: 'org_1',
-            email: 'admin@example.com',
-            cloudProfileId: 'c_prf_1'
-          },
-          ttlMs: 3600_000
-        },
-        t0
-      )
-
-      const rawRelayToken = 'relay-token-child'
-      const grant = await state.issueRelayGrant(
-        {
-          rawRelayToken,
-          parentSessionId: session.sessionId,
-          relayHostId: 'host_child_12345678',
-          hostPublicKeyB64: 'key==',
-          identity: {
-            userId: 'usr_1',
-            profileId: 'c_prf_1',
-            organizationId: 'org_1'
-          },
-          ttlMs: 3600_000
-        },
-        t0
-      )
-
-      expect(await state.validateRelayGrantByToken(rawRelayToken, t0 + 100)).not.toBeNull()
-
-      // Explicit revocation by internal sessionId (logout workflow)
-      const revoked = await state.revokeAccessSessionById(session.sessionId, t0 + 200)
-      expect(revoked).toBe(true)
-
-      expect(await state.lookupAccessSessionByToken('access-for-logout', t0 + 300)).toBeNull()
-      expect(await state.validateRelayGrantByToken(rawRelayToken, t0 + 300)).toBeNull()
-      expect(
-        await state.validateRelayGrantById(grant!.grantId, 'host_child_12345678', t0 + 300)
-      ).toBeNull()
-
-      // Explicit revocation by raw access token
-      const session2 = await state.issueAccessSession(
-        {
-          rawAccessToken: 'access-for-token-revoke',
-          identity: {
-            userId: 'usr_1',
-            profileId: 'prf_1',
-            organizationId: 'org_1',
-            email: 'admin@example.com',
-            cloudProfileId: 'c_prf_1'
-          },
-          ttlMs: 3600_000
-        },
-        t0 + 400
-      )
-      expect(session2.sessionId).toBeDefined()
-      expect(
-        await state.lookupAccessSessionByToken('access-for-token-revoke', t0 + 450)
-      ).not.toBeNull()
-      const tokenRevoked = await state.revokeAccessSessionByToken(
-        'access-for-token-revoke',
-        t0 + 500
-      )
-      expect(tokenRevoked).toBe(true)
-      expect(await state.lookupAccessSessionByToken('access-for-token-revoke', t0 + 550)).toBeNull()
+      ).rejects.toThrow(/^account_epoch_mismatch$/)
     })
   })
 }

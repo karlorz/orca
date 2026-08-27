@@ -6,7 +6,8 @@ import {
   chmodSync,
   statSync,
   openSync,
-  closeSync
+  closeSync,
+  existsSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -223,6 +224,68 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
 
     const bound = await checkPortIsOpen(targetPort)
     expect(bound).toBe(false)
+  })
+
+  it('Scenario 5d-3: Post-open sidecar permission failure closes DB handle, fails closed, and binds no port', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const dbPath = createTempDbPath()
+    const targetPort = 49152 + Math.floor(Math.random() * 1000)
+
+    const config = parseOwnRelayServeConfig({
+      OWN_RELAY_STATE_PATH: dbPath,
+      OWN_RELAY_ORIGIN: 'http://127.0.0.1',
+      OWN_RELAY_AUTH_ORIGIN: 'http://127.0.0.1',
+      OWN_RELAY_CLIENT_ID: 'orca-desktop',
+      OWN_RELAY_LISTEN_PORT: String(targetPort),
+      OWN_RELAY_LISTEN_HOST: '127.0.0.1',
+      OWN_RELAY_OPERATOR_EMAIL: 'op@example.com',
+      OWN_RELAY_OPERATOR_PASSWORD: 'secure-password-123',
+      OWN_RELAY_OPERATOR_USER_ID: 'user-1',
+      OWN_RELAY_OPERATOR_PROFILE_ID: 'prof-1'
+    })
+
+    // To simulate post-open permission failure during server startup, we can make sidecar insecure
+    // via injected seam if openOwnMobileRelaySecurityStateSqlite supports it, or spy
+    const sqliteModule = await import('./own-mobile-relay-security-state-sqlite')
+    const origOpen = sqliteModule.openOwnMobileRelaySecurityStateSqlite
+    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation((opts) => {
+      return origOpen({
+        ...opts,
+        injectedFs: {
+          postOpenHook: () => {
+            const walPath = `${dbPath}-wal`
+            if (existsSync(walPath)) {
+              chmodSync(walPath, 0o644)
+            } else {
+              const fd = openSync(walPath, 'w', 0o644)
+              closeSync(fd)
+              chmodSync(walPath, 0o644)
+            }
+          }
+        }
+      })
+    })
+
+    await expect(
+      startOwnRelayServer({
+        config,
+        passwordPolicy: TEST_FAST_PASSWORD_POLICY
+      })
+    ).rejects.toThrow(/insecure_sidecar_permissions/)
+
+    // Port must not be bound
+    const bound = await checkPortIsOpen(targetPort)
+    expect(bound).toBe(false)
+
+    // DB file handle must be released: immediate open/exclusive succeeds
+    expect(() => {
+      const dbEx = new DatabaseSync(dbPath)
+      dbEx.exec('BEGIN EXCLUSIVE;')
+      dbEx.exec('COMMIT;')
+      dbEx.close()
+    }).not.toThrow()
   })
 
   it('Scenario 5e: Missing state path or auth origin fails synchronously in configuration validation before server startup', () => {

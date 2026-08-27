@@ -58,10 +58,16 @@ import {
 
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
+export type SqliteSecurityFsHook = {
+  chmodSync?: (path: string, mode: number) => void
+  postOpenHook?: () => void | Promise<void>
+}
+
 export type SqliteSecurityStateOptions = {
   dbPath: string
   testMode?: boolean
   busyTimeoutMs?: number
+  injectedFs?: SqliteSecurityFsHook
 }
 
 export type SqliteDbContext = {
@@ -72,7 +78,7 @@ export type SqliteDbContext = {
 export function openOwnMobileRelaySecurityStateSqlite(
   options: SqliteSecurityStateOptions
 ): OwnMobileRelaySecurityState {
-  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = options
+  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS, injectedFs } = options
 
   const parentDir = dirname(dbPath)
   if (!testMode) {
@@ -88,10 +94,10 @@ export function openOwnMobileRelaySecurityStateSqlite(
       // Create file with 0600 permissions
       const fd = openSync(dbPath, 'w', 0o600)
       closeSync(fd)
-      try {
+      if (injectedFs?.chmodSync) {
+        injectedFs.chmodSync(dbPath, 0o600)
+      } else {
         chmodSync(dbPath, 0o600)
-      } catch {
-        // Best effort chmod
       }
     }
 
@@ -101,6 +107,18 @@ export function openOwnMobileRelaySecurityStateSqlite(
       applySqlitePragmas(db, busyTimeoutMs)
       verifySqliteQuickCheck(db)
       runSqliteMigrations(db)
+
+      if (injectedFs?.postOpenHook) {
+        const res = injectedFs.postOpenHook()
+        if (res && typeof (res as Promise<void>).then === 'function') {
+          throw new Error('postOpenHook must be synchronous in SQLite open')
+        }
+      }
+
+      if (!testMode) {
+        // Re-verify main DB and sidecars after open/pragma execution
+        verifySqlitePathSecurity(dbPath)
+      }
     } catch (err) {
       try {
         db.close()
@@ -108,11 +126,6 @@ export function openOwnMobileRelaySecurityStateSqlite(
         // Ignore close error on failed setup
       }
       throw err
-    }
-
-    if (!testMode) {
-      // Re-verify main DB and sidecars after open/pragma execution
-      verifySqlitePathSecurity(dbPath)
     }
   } finally {
     process.umask(prevUmask)

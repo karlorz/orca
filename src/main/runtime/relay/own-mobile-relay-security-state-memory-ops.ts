@@ -128,9 +128,7 @@ export function issueAccessSessionMemory(
     (input.expectedAccountId !== undefined && ctx.account.accountId !== input.expectedAccountId) ||
     (input.expectedAuthEpoch !== undefined && ctx.account.authEpoch !== input.expectedAuthEpoch)
   ) {
-    throw new Error(
-      `account_epoch_mismatch: expected account=${input.expectedAccountId ?? '*'}/epoch=${input.expectedAuthEpoch ?? '*'}, actual account=${ctx.account.accountId}/epoch=${ctx.account.authEpoch}`
-    )
+    throw new Error('account_epoch_mismatch')
   }
   const sessionId = randomBytes(16).toString('base64url')
   const accessTokenHash = sha256Base64Url(input.rawAccessToken)

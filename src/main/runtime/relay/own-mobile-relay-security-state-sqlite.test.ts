@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, rm, readFile, chmod, stat } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -481,6 +481,70 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
 
       const stWal = await stat(walPath)
       expect(stWal.mode & 0o777).toBe(0o644)
+    })
+
+    it('closes database handle and rethrows error when post-open sidecar security check fails', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-postopen-'))
+      tempDirs.push(dir)
+      const dbPath = join(dir, 'security-state.db')
+      const walPath = `${dbPath}-wal`
+
+      // 1. Injected hook to make WAL insecure right after open / pragmas / migrations run
+      // When verifySqlitePathSecurity fails post-open, db handle must be closed.
+      const injectedFs = {
+        postOpenHook: () => {
+          // Change WAL sidecar permissions to 0644 to force post-open failure
+          if (existsSync(walPath)) {
+            chmodSync(walPath, 0o644)
+          } else {
+            const fd = openSync(walPath, 'w', 0o644)
+            closeSync(fd)
+            chmodSync(walPath, 0o644)
+          }
+        }
+      }
+
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({
+          dbPath,
+          testMode: false,
+          injectedFs
+        })
+      }).rejects.toThrow(/insecure_sidecar_permissions/)
+
+      // 2. Prove handle was closed: immediate exclusive access / rename / open works
+      // If the handle was leaked, exclusive operations or deleting/renaming can fail on platforms,
+      // and in Node.js sqlite we can open a new DatabaseSync in exclusive mode immediately.
+      expect(() => {
+        const dbEx = new DatabaseSync(dbPath)
+        dbEx.exec('BEGIN EXCLUSIVE;')
+        dbEx.exec('COMMIT;')
+        dbEx.close()
+      }).not.toThrow()
+    })
+
+    it('fails closed when explicit file creation or mode establishment fails without auto-removal', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-fail-create-'))
+      tempDirs.push(dir)
+      const dbPath = join(dir, 'security-state.db')
+
+      // Injected fs that simulates chmodSync failure on newly created DB file
+      const injectedFs = {
+        chmodSync: () => {
+          throw new Error('EPERM: operation not permitted, chmod')
+        }
+      }
+
+      await expect(async () => {
+        await openOwnMobileRelaySecurityStateSqlite({
+          dbPath,
+          testMode: false,
+          injectedFs
+        })
+      }).rejects.toThrow(/EPERM: operation not permitted, chmod/)
+
+      // DB file created before chmod failure must remain on disk for diagnosis (not auto-deleted)
+      expect(existsSync(dbPath)).toBe(true)
     })
   })
 

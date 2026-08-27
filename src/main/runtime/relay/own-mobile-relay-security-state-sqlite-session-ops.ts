@@ -40,9 +40,7 @@ export function executeIssueAccessSessionSqlite(
       (input.expectedAccountId !== undefined && acc.account_id !== input.expectedAccountId) ||
       (input.expectedAuthEpoch !== undefined && Number(acc.auth_epoch) !== input.expectedAuthEpoch)
     ) {
-      throw new Error(
-        `account_epoch_mismatch: expected account=${input.expectedAccountId ?? '*'}/epoch=${input.expectedAuthEpoch ?? '*'}, actual account=${acc.account_id}/epoch=${acc.auth_epoch}`
-      )
+      throw new Error('account_epoch_mismatch')
     }
     const sessionId = randomBytes(16).toString('base64url')
     const accessTokenHash = sha256Base64Url(input.rawAccessToken)
