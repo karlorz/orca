@@ -12,7 +12,7 @@ describe('fork-sync-main workflow', () => {
   it('exists and only fast-forwards karlorz/orca main from stablyai/orca', () => {
     expect(existsSync(workflowPath)).toBe(true)
     const workflow = parse(readFileSync(workflowPath, 'utf8'))
-    expect(workflow.on.schedule).toEqual([{ cron: '17 4 * * *' }])
+    expect(workflow.on.schedule).toEqual([{ cron: '17 1 * * *' }])
     expect(workflow.on.workflow_dispatch).toEqual({})
     expect(workflow.permissions.contents).toBe('write')
 
@@ -38,8 +38,18 @@ describe('fork-sync-main workflow', () => {
     const scripts = job.steps.map((step) => JSON.stringify(step)).join('\n')
     expect(scripts).toContain('fork-sync-fork-main.mjs')
     expect(scripts).toContain('--write')
+    expect(scripts).toContain('fork-sync-upstream-tags.mjs')
+    expect(scripts).toContain('fork-next-desktop-tag.mjs')
     expect(scripts).not.toMatch(/MIRROR_BRANCH=fork-main/)
     expect(scripts).not.toMatch(/merge-upstream/)
+
+    // Auto-cut must skip bases the fork already tagged; --write alone would
+    // re-cut v<base>-(N+1) on every daily run.
+    const autoCutStep = job.steps.find((step) =>
+      String(step.run ?? '').includes('fork-next-desktop-tag.mjs')
+    )
+    expect(autoCutStep.run).toContain('--auto')
+    expect(autoCutStep.run).not.toContain('--write')
   })
 })
 

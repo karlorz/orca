@@ -5,11 +5,15 @@ name: Sync fork main from upstream
 #   1. Fast-forwards GitHub `main` from stablyai/orca via merge-upstream
 #      (upstream has no fork-main, so merge-upstream cannot target it).
 #   2. Merges stablyai/orca `main` into `fork-main` with git merge --no-ff.
-# Conflicts fail closed. Cron is daily 04:17 UTC.
+#   3. Mirrors upstream `v*` tags into karlorz/orca without overwriting existing tags.
+#   4. Auto-cuts next fork desktop tag (v<base>-0) if a new upstream desktop base appeared.
+# Conflicts fail closed.
+# GitHub cron is UTC-only: 01:17 UTC = 09:17 HKT (UTC+8, no DST), timed after
+# upstream's usual evening-UTC release window. workflow_dispatch = manual invoke.
 
 on:
   schedule:
-    - cron: '17 4 * * *'
+    - cron: '17 1 * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -75,6 +79,18 @@ jobs:
           git config user.name 'fork-sync'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           node config/scripts/fork-sync-fork-main.mjs --write
+
+      - name: Mirror upstream v* tags
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        run: node config/scripts/fork-sync-upstream-tags.mjs --write
+
+      - name: Auto-cut fork desktop tag for new upstream base
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        # --auto cuts v<base>-0 only when no fork tag covers that base yet;
+        # otherwise it exits 0 with a skip line (daily no-op stays green).
+        run: node config/scripts/fork-next-desktop-tag.mjs --auto
 
       - name: Report latest upstream desktop and mobile trains
         env:

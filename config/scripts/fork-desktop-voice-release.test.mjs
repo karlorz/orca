@@ -15,9 +15,9 @@ const readWorkflow = (path) => {
 }
 
 describe('fork desktop voice release workflow', () => {
-  it('exists, is fenced to karlorz/orca, and triggers only on desktop-v*.*.*-* tags', () => {
+  it('exists, is fenced to karlorz/orca, and triggers only on v*.*.*-[0-9]* tags', () => {
     const workflow = readWorkflow(workflowPath)
-    expect(workflow.on.push.tags).toEqual(['desktop-v*.*.*-*'])
+    expect(workflow.on.push.tags).toEqual(['v*.*.*-[0-9]*'])
     const scripts = JSON.stringify(workflow)
     expect(scripts).toContain("github.repository == 'karlorz/orca'")
     expect(scripts).not.toContain('stablyai/orca')
@@ -25,8 +25,16 @@ describe('fork desktop voice release workflow', () => {
     expect(scripts).toContain('macos-')
     expect(scripts).toContain('--prerelease')
     expect(scripts).toContain('--latest=false')
+    expect(scripts).toContain('fork-desktop-build-version.mjs')
+    expect(scripts).toContain('FORK_DESKTOP_TAG')
     expect(scripts).not.toContain('orca-mobile.apk')
     expect(scripts).not.toContain('MAC_CERTS')
+  })
+
+  it('verifies tag matches v<x.y.z>-<N> shape and checks fork-main ancestry', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+$')
+    expect(rawYaml).toContain('merge-base --is-ancestor')
   })
 
   it('does not share the mobile tag pattern or publish DMG onto mobile releases', () => {
