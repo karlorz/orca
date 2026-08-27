@@ -57,12 +57,16 @@ describe('own mobile relay password management', () => {
           confirmPassword: 'new-valid-secret-password-456'
         }).toString()
 
-        const resNoOrigin = await fetch(`${server.origin}/v1/desktop/auth/password`, {
+        const resNullOrigin = await fetch(`${server.origin}/v1/desktop/auth/password`, {
           method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin: 'null'
+          },
           body: validBody
         })
-        expect(resNoOrigin.status).toBe(403)
+        expect(resNullOrigin.status).not.toBe(403)
+        expect([200, 401]).toContain(resNullOrigin.status)
 
         const resWrongOrigin = await fetch(`${server.origin}/v1/desktop/auth/password`, {
           method: 'POST',

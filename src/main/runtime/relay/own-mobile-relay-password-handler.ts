@@ -37,14 +37,65 @@ function sendPasswordPageResponse(
   response.end(html)
 }
 
-function isAllowedPasswordOrigin(
-  originHeader: string | undefined,
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (typeof raw !== 'string') {
+    return undefined
+  }
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.toLowerCase() === 'null') {
+    return undefined
+  }
+  return trimmed.replace(/\/$/, '')
+}
+
+function originFromUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined
+  }
+  try {
+    return new URL(url).origin
+  } catch {
+    return undefined
+  }
+}
+
+function hostMatchesAllowed(
+  hostHeader: string | string[] | undefined,
   allowedOrigins: string[]
 ): boolean {
-  if (!originHeader) {
+  const host = firstHeader(hostHeader)
+  if (!host) {
     return false
   }
-  return allowedOrigins.includes(originHeader)
+  return allowedOrigins.some((origin) => {
+    try {
+      const allowed = new URL(origin)
+      return allowed.host === host || allowed.hostname === host.split(':')[0]
+    } catch {
+      return false
+    }
+  })
+}
+
+function isAllowedPasswordOrigin(
+  originHeader: string | string[] | undefined,
+  refererHeader: string | string[] | undefined,
+  hostHeader: string | string[] | undefined,
+  allowedOrigins: string[]
+): boolean {
+  const origin = firstHeader(originHeader)
+  if (origin && allowedOrigins.includes(origin)) {
+    return true
+  }
+  const refererOrigin = originFromUrl(firstHeader(refererHeader))
+  if (refererOrigin && allowedOrigins.includes(refererOrigin)) {
+    return true
+  }
+  if (!origin && hostMatchesAllowed(hostHeader, allowedOrigins)) {
+    return true
+  }
+  return false
 }
 
 export async function handlePasswordPost(
@@ -56,11 +107,17 @@ export async function handlePasswordPost(
   passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY,
   advertisedOrigin?: string
 ): Promise<void> {
-  const originHeader = request.headers.origin
   const allowedOrigins = [configuredOrigin, advertisedOrigin].filter((value): value is string =>
     Boolean(value)
   )
-  if (!isAllowedPasswordOrigin(originHeader, allowedOrigins)) {
+  if (
+    !isAllowedPasswordOrigin(
+      request.headers.origin,
+      request.headers.referer,
+      request.headers.host,
+      allowedOrigins
+    )
+  ) {
     response.writeHead(403, { 'content-type': 'text/plain' })
     response.end('Forbidden')
     return
