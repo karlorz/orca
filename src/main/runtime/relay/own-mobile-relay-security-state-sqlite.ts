@@ -20,15 +20,7 @@ import type {
   SecurityStateDeviceMatchResult,
   SecurityStateCleanupResult
 } from './own-mobile-relay-security-state'
-import {
-  CURRENT_SCHEMA_VERSION,
-  DEFAULT_BUSY_TIMEOUT_MS,
-  applySqlitePragmas,
-  runSqliteMigrations,
-  verifySqliteParentDirectorySecurity,
-  verifySqlitePathSecurity,
-  verifySqliteQuickCheck
-} from './own-mobile-relay-security-state-sqlite-schema'
+import * as schemaModule from './own-mobile-relay-security-state-sqlite-schema'
 import {
   executeBootstrapAccountSqlite,
   executeGetAccountSqlite,
@@ -56,18 +48,16 @@ import {
   executeCleanupExpiredSqlite
 } from './own-mobile-relay-security-state-sqlite-device-ops'
 
+const CURRENT_SCHEMA_VERSION = schemaModule.CURRENT_SCHEMA_VERSION
+const verifySqliteParentDirectorySecurity = schemaModule.verifySqliteParentDirectorySecurity
+const verifySqlitePathSecurity = schemaModule.verifySqlitePathSecurity
+
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
 export type SqliteSecurityStateOptions = {
   dbPath: string
   testMode?: boolean
   busyTimeoutMs?: number
-}
-
-export type SqliteSecurityInternalHooks = {
-  chmodSync?: (path: string, mode: number) => void
-  onDbHandle?: (db: DatabaseSync) => void
-  postOpenHook?: () => void
 }
 
 export type SqliteDbContext = {
@@ -78,19 +68,12 @@ export type SqliteDbContext = {
 export function openOwnMobileRelaySecurityStateSqlite(
   options: SqliteSecurityStateOptions
 ): OwnMobileRelaySecurityState {
-  return openOwnMobileRelaySecurityStateSqliteInternal(options)
-}
-
-export function openOwnMobileRelaySecurityStateSqliteInternal(
-  options: SqliteSecurityStateOptions,
-  internalHooks?: SqliteSecurityInternalHooks
-): OwnMobileRelaySecurityState {
-  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = options
+  const { dbPath, testMode = false, busyTimeoutMs = schemaModule.DEFAULT_BUSY_TIMEOUT_MS } = options
 
   const parentDir = dirname(dbPath)
   if (!testMode) {
-    verifySqliteParentDirectorySecurity(parentDir)
-    verifySqlitePathSecurity(dbPath)
+    schemaModule.verifySqliteParentDirectorySecurity(parentDir)
+    schemaModule.verifySqlitePathSecurity(dbPath)
   }
 
   const prevUmask = process.umask(0o077)
@@ -101,28 +84,19 @@ export function openOwnMobileRelaySecurityStateSqliteInternal(
       // Create file with 0600 permissions
       const fd = openSync(dbPath, 'w', 0o600)
       closeSync(fd)
-      if (internalHooks?.chmodSync) {
-        internalHooks.chmodSync(dbPath, 0o600)
-      } else {
-        chmodSync(dbPath, 0o600)
-      }
+      chmodSync(dbPath, 0o600)
     }
 
     db = new DatabaseSync(dbPath)
-    internalHooks?.onDbHandle?.(db)
 
     try {
-      applySqlitePragmas(db, busyTimeoutMs)
-      verifySqliteQuickCheck(db)
-      runSqliteMigrations(db)
-
-      if (internalHooks?.postOpenHook) {
-        internalHooks.postOpenHook()
-      }
+      schemaModule.applySqlitePragmas(db, busyTimeoutMs)
+      schemaModule.verifySqliteQuickCheck(db)
+      schemaModule.runSqliteMigrations(db)
 
       if (!testMode) {
         // Re-verify main DB and sidecars after open/pragma execution
-        verifySqlitePathSecurity(dbPath)
+        schemaModule.verifySqlitePathSecurity(dbPath)
       }
     } catch (err) {
       try {

@@ -70,4 +70,3 @@ This document specifies the manual security verification procedures for the own-
     - [ ] **Retain Bootstrap Configuration**: Retain the protected bootstrap configuration (`OWN_RELAY_OPERATOR_EMAIL`, `OWN_RELAY_OPERATOR_PASSWORD`, `OWN_RELAY_OPERATOR_USER_ID`, `OWN_RELAY_OPERATOR_PROFILE_ID`) in the environment/unit for test account initialization.
     - [ ] **Start and Verify Health**: Start the service and verify healthy startup (`systemctl start own-mobile-relay` and probe `/v1/health` or loopback port).
     - [ ] **Expect Re-Sign-In / Re-Pair**: Because the database was reset, any prior desktop sessions, grants, and mobile device credentials are gone; perform desktop sign-in and mobile re-pairing.
-

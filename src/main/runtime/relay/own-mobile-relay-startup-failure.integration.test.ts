@@ -246,32 +246,19 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
       OWN_RELAY_OPERATOR_PROFILE_ID: 'prof-1'
     })
 
-    let capturedDbInstance: DatabaseSync | null = null
+    const capturedDbInstances: DatabaseSync[] = []
 
-    // Simulate post-open permission failure via internal test helper without expanding production API
-    const testHelper = await import('./own-mobile-relay-security-state-sqlite-test-helper')
-    const sqliteModule = await import('./own-mobile-relay-security-state-sqlite')
-    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation((opts) => {
-      let threw = false
-      let caughtError: unknown
-      let helperRes: ReturnType<typeof testHelper.openOwnMobileRelaySecurityStateSqliteForTest>
-      try {
-        helperRes = testHelper.openOwnMobileRelaySecurityStateSqliteForTest(opts, {
-          onDbHandle: (handle) => {
-            capturedDbInstance = handle
-          },
-          postOpenHook: () => {
-            testHelper.makeInsecureWalSidecar(walPath)
-          }
-        })
-      } catch (err) {
-        threw = true
-        caughtError = err
-      }
-      if (threw) {
-        throw caughtError
-      }
-      return helperRes!.state
+    // Spy on DatabaseSync.prototype.prepare to capture handle and create insecure WAL sidecar during database opening
+    const origPrepare = DatabaseSync.prototype.prepare
+    vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+      this: DatabaseSync,
+      sql: string
+    ) {
+      capturedDbInstances.push(this)
+      const fd = openSync(walPath, 'w', 0o644)
+      closeSync(fd)
+      chmodSync(walPath, 0o644)
+      return origPrepare.call(this, sql)
     })
 
     await expect(
@@ -286,9 +273,10 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
     expect(bound).toBe(false)
 
     // 2. DB handle must be released: invoking method on DatabaseSync throws "database is not open"
-    expect(capturedDbInstance).not.toBeNull()
+    expect(capturedDbInstances.length).toBeGreaterThan(0)
+    const captured = capturedDbInstances[0]
     expect(() => {
-      capturedDbInstance!.exec('PRAGMA schema_version;')
+      captured.exec('PRAGMA schema_version;')
     }).toThrow(/database is not open/)
   })
 
