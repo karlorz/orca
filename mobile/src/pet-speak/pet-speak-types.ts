@@ -4,11 +4,15 @@ export type PetSpeakPayload = {
   lang?: string
   event_id?: string
   rate?: number
+  seq?: number
+  epoch?: string
+  replayed?: boolean
 }
 
 export type PetSpeakSubscribeResult = {
   type: 'ready'
   subscriptionId: string
+  epoch?: string
 }
 
 import type {

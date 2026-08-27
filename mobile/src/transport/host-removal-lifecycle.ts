@@ -2,6 +2,7 @@ import {
   clearWatermark,
   forgetHostNotificationSession
 } from '../notifications/notification-reconnect-catchup'
+import { clearPetSpeakWatermark } from '../pet-speak/pet-speak-watermark'
 import { removeHost } from './host-store'
 
 export async function removeHostAndCloseClient(
@@ -17,4 +18,5 @@ export async function removeHostAndCloseClient(
   // re-pair of the same host would inherit a watermark for a counter it never saw.
   forgetHostNotificationSession(hostId)
   void clearWatermark(hostId)
+  void clearPetSpeakWatermark(hostId)
 }

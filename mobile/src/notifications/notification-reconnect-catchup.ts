@@ -1,4 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  createWatermarkStore,
+  createSeenGuard,
+  type PersistedWatermark,
+  type LoadedWatermark,
+  coerceSeq
+} from '../storage/watermark-storage'
+
+export type { PersistedWatermark, LoadedWatermark }
+export { coerceSeq }
 
 // Why: the reconnect catch-up watermark + dedup helpers for #8129, extracted
 // from mobile-notifications.ts so that file stays under its max-lines budget.
@@ -22,69 +32,15 @@ const WATERMARK_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsWatermark:'
 // Pre-#8591 installs wrote the seq alone. Read once to migrate; never written.
 const LEGACY_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
 
-function watermarkStorageKey(hostId: string): string {
-  return WATERMARK_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
-}
+const notificationWatermarkStore = createWatermarkStore({
+  prefix: WATERMARK_STORAGE_KEY_PREFIX,
+  legacyPrefix: LEGACY_SEQ_STORAGE_KEY_PREFIX
+})
 
-// A null epoch means "the counter this seq came from is unknown" — a legacy
-// watermark, or nothing stored. It can never be assumed to be the live counter.
-export type PersistedWatermark = { seq: number; epoch: string | null }
-// `stored` is the record's existence, independent of its seq: it answers "has this
-// device ever been subscribed to this host", which is what a cold open needs to tell
-// a returning device from a first pairing. A seq of 0 is a real answer, not an absence.
-export type LoadedWatermark = PersistedWatermark & { stored: boolean }
-
-function coerceSeq(value: unknown): number {
-  const parsed = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-export async function loadWatermark(hostId: string): Promise<LoadedWatermark> {
-  try {
-    const raw = await AsyncStorage.getItem(watermarkStorageKey(hostId))
-    if (raw != null) {
-      const parsed = JSON.parse(raw) as { seq?: unknown; epoch?: unknown }
-      const epoch =
-        typeof parsed.epoch === 'string' && parsed.epoch.length > 0 ? parsed.epoch : null
-      return { seq: coerceSeq(parsed.seq), epoch, stored: true }
-    }
-  } catch {
-    // Unreadable or malformed: fall through to the legacy key rather than throw.
-  }
-  try {
-    const legacy = await AsyncStorage.getItem(
-      LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
-    )
-    return { seq: coerceSeq(legacy), epoch: null, stored: legacy != null }
-  } catch {
-    return { seq: 0, epoch: null, stored: false }
-  }
-}
-
-export async function clearWatermark(hostId: string): Promise<void> {
-  // Why both keys: loadWatermark falls back to the legacy one, so removing only the
-  // current key would let a re-paired host resurrect a pre-#8591 seq from a counter
-  // lifetime that is long gone — the exact stale cut this fix removes.
-  await Promise.all([
-    AsyncStorage.removeItem(watermarkStorageKey(hostId)).catch(() => {}),
-    AsyncStorage.removeItem(LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)).catch(
-      () => {}
-    )
-  ])
-}
-
-export async function saveWatermark(hostId: string, watermark: PersistedWatermark): Promise<void> {
-  try {
-    await AsyncStorage.setItem(watermarkStorageKey(hostId), JSON.stringify(watermark))
-  } catch {
-    // Why: persisting the watermark is best-effort. If it fails (or lags), the
-    // stored value stays BELOW what we delivered, so a later cold start can
-    // re-fetch — and, once the in-memory seen-set is gone, re-show — an already
-    // delivered notification. That's the accepted at-least-once trade-off;
-    // within a live session the in-memory watermark is authoritative, so only
-    // post-restart reconnects are affected.
-  }
-}
+export const loadWatermark = (hostId: string) => notificationWatermarkStore.loadWatermark(hostId)
+export const clearWatermark = (hostId: string) => notificationWatermarkStore.clearWatermark(hostId)
+export const saveWatermark = (hostId: string, watermark: PersistedWatermark) =>
+  notificationWatermarkStore.saveWatermark(hostId, watermark)
 
 // Why: bounded in-memory dedup window for notificationIds/dismiss ids observed
 // on the current connection. The desktop already dedupes by seq on replay, but
@@ -100,26 +56,7 @@ export function createSeenNotificationGuard(): {
   add: (id: string) => void
   clear: () => void
 } {
-  const seen = new Set<string>()
-  return {
-    has(id: string): boolean {
-      return seen.has(id)
-    },
-    add(id: string): void {
-      seen.add(id)
-      if (seen.size > RECENTLY_SEEN_CAP) {
-        // Why: insertion order; the oldest entries are first. Drop one to stay
-        // bounded without disturbing the more-recently-relevant keys.
-        const first = seen.values().next().value
-        if (first !== undefined) {
-          seen.delete(first)
-        }
-      }
-    },
-    clear(): void {
-      seen.clear()
-    }
-  }
+  return createSeenGuard(RECENTLY_SEEN_CAP)
 }
 
 // Why (#8591): app/index.tsx tears the notification subscription down on every

@@ -212,7 +212,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
             currentSubs.get(entry.hostId)?.client !== entry.client
           ) {
             currentSubs.get(entry.hostId)?.unsub()
-            const unsub = subscribeToPetSpeak(entry.client, handlerOptionsProp)
+            const unsub = subscribeToPetSpeak(entry.client, handlerOptionsProp, entry.hostId)
             currentSubs.set(entry.hostId, { client: entry.client, unsub })
             subscriptionChanged = true
           }

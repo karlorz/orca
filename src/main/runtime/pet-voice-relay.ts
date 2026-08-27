@@ -2,6 +2,7 @@ import { type Socket, connect as netConnect } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { PetVoiceLogger } from './pet-voice-logger'
 
 export type AudioSessionState = 'live' | 'dead'
 
@@ -33,6 +34,8 @@ export type PetVoiceRelayOptions = {
   reconnectBaseDelayMs?: number
   reconnectMaxDelayMs?: number
   onSpeak?: (event: PetSpeakEvent) => void
+  logger?: PetVoiceLogger
+  reporterId?: string
 }
 
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1000
@@ -52,6 +55,8 @@ export class PetVoiceRelay {
   private readonly reconnectBaseDelayMs: number
   private readonly reconnectMaxDelayMs: number
   private readonly listeners = new Set<(event: PetSpeakEvent) => void>()
+  private readonly logger: PetVoiceLogger
+  private readonly reporterId: string
 
   private audioSessionState: AudioSessionState = 'dead'
   private subscriberSocket: Socket | null = null
@@ -66,12 +71,22 @@ export class PetVoiceRelay {
     this.reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS
     this.currentReconnectDelayMs = this.reconnectBaseDelayMs
+    this.logger = options.logger ?? new PetVoiceLogger()
+    this.reporterId = options.reporterId ?? `orca-${process.pid}`
 
     if (options.onSpeak) {
       this.listeners.add(options.onSpeak)
     }
 
     this.startSubscriber()
+  }
+
+  getReporterId(): string {
+    return this.reporterId
+  }
+
+  getLogger(): PetVoiceLogger {
+    return this.logger
   }
 
   getAudioSessionState(): AudioSessionState {
@@ -91,6 +106,11 @@ export class PetVoiceRelay {
     }
     const newState: AudioSessionState = activeSubscriptionCount > 0 ? 'live' : 'dead'
     this.audioSessionState = newState
+    this.logger.logPresenceChange({
+      state: newState,
+      activeCount: activeSubscriptionCount,
+      reporter: this.reporterId
+    })
     // Always push. A failed unix write used to stick pet on the opposite
     // session while we no-op'd later same-state reports.
     await this.sendConfigPresence(newState)
@@ -100,7 +120,8 @@ export class PetVoiceRelay {
     await this.sendOneShotMessage({
       kind: 'config',
       audio_session: state,
-      speak: false
+      speak: false,
+      reporter: this.reporterId
     })
   }
 
@@ -175,11 +196,13 @@ export class PetVoiceRelay {
     try {
       const onConnect = (): void => {
         this.currentReconnectDelayMs = this.reconnectBaseDelayMs
+        this.logger.logSubscriberConnect({ socketPath: this.petSocketPath })
         try {
           const subscribePayload = `${JSON.stringify({
             kind: 'subscribe',
             channel: 'speak-intent',
-            speak: false
+            speak: false,
+            reporter: this.reporterId
           })}\n`
           sock.write(subscribePayload)
         } catch {
@@ -199,17 +222,18 @@ export class PetVoiceRelay {
         this.handleSubscriberData(chunk)
       })
 
-      const cleanupAndReconnect = (): void => {
+      const cleanupAndReconnect = (reason?: string): void => {
         if (this.subscriberSocket !== sock) {
           return
         }
+        this.logger.logSubscriberDisconnect({ reason })
         this.subscriberSocket = null
         sock.destroy()
         this.scheduleReconnect()
       }
 
-      sock.on('error', cleanupAndReconnect)
-      sock.on('end', cleanupAndReconnect)
+      sock.on('error', (err) => cleanupAndReconnect(err ? String(err) : 'error'))
+      sock.on('end', () => cleanupAndReconnect('end'))
     } catch {
       this.scheduleReconnect()
     }
@@ -277,16 +301,27 @@ export class PetVoiceRelay {
       rate: parsePetSpeakRate(message.rate)
     }
 
+    this.logger.logSpeakIntent({
+      event_id: eventId,
+      charsCount: textChars.length,
+      rate: event.rate
+    })
+
     for (const listener of this.listeners) {
       try {
         listener(event)
       } catch (err) {
+        this.logger.logEmitError({
+          event_id: eventId,
+          error: err instanceof Error ? err.message : String(err)
+        })
         console.error('[pet-voice-relay] Listener error:', err)
       }
     }
   }
 
   async sendSpeakComplete(eventId: string, outcome: PetSpeakOutcome): Promise<void> {
+    this.logger.logSpeakComplete({ event_id: eventId, outcome })
     await this.sendOneShotMessage({
       kind: 'speak-complete',
       event_id: eventId,
@@ -301,6 +336,7 @@ export class PetVoiceRelay {
     }
 
     const delay = this.currentReconnectDelayMs
+    this.logger.logReconnectDelay({ delayMs: delay })
     this.currentReconnectDelayMs = Math.min(
       this.currentReconnectDelayMs * 2,
       this.reconnectMaxDelayMs
@@ -325,5 +361,6 @@ export class PetVoiceRelay {
       sock.destroy()
     }
     this.listeners.clear()
+    this.logger.close()
   }
 }

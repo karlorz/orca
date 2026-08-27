@@ -12,6 +12,7 @@ import {
 } from './pet-speak-adapters'
 import { type PetSpeakPayload, isValidPetSpeakPayload } from './pet-speak-payload-validation'
 import type { PetSpeakHandlerOptions } from './pet-speak-types'
+import { createSeenGuard } from '../storage/watermark-storage'
 
 export {
   type PetSpeakPayload,
@@ -38,9 +39,9 @@ export class PetSpeakHandler {
   private readonly tts: TtsAdapter
   private readonly mediaSession: MediaSessionAdapter
   private readonly nativeAdapter: PetSpeechNativeAdapter | null
-  private readonly seenEventIds = new Set<string>()
+  private readonly seenEventIds: ReturnType<typeof createSeenGuard>
+  private readonly seenSeqs: ReturnType<typeof createSeenGuard>
   private readonly inFlightPromises = new Map<string, Promise<void>>()
-  private readonly maxSeenEvents: number
   private readonly maxQueueCapacity: number
   private readonly onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
   private queue: QueuedItem[] = []
@@ -58,7 +59,9 @@ export class PetSpeakHandler {
         : Platform.OS === 'android'
           ? getPetSpeechNativeAdapter()
           : null
-    this.maxSeenEvents = options?.maxSeenEvents ?? 256
+    const maxSeen = options?.maxSeenEvents ?? 256
+    this.seenEventIds = createSeenGuard(maxSeen)
+    this.seenSeqs = createSeenGuard(maxSeen)
     this.maxQueueCapacity = options?.maxQueueCapacity ?? 16
     this.onComplete = options?.onComplete
   }
@@ -68,8 +71,21 @@ export class PetSpeakHandler {
       return
     }
 
+    if (event.replayed) {
+      console.log('[pet-speak] replayed', event.seq, event.event_id)
+    }
+
     const eventId = event.event_id!.trim()
     const text = event.text.trim()
+
+    // Deduplication by seq/epoch if present
+    if (event.seq !== undefined && event.epoch) {
+      const seqKey = `${event.epoch}:${event.seq}`
+      if (this.seenSeqs.has(seqKey)) {
+        return
+      }
+      this.seenSeqs.add(seqKey)
+    }
 
     const inFlight = this.inFlightPromises.get(eventId)
     if (inFlight) {
@@ -80,7 +96,7 @@ export class PetSpeakHandler {
     }
 
     if (this.disposed) {
-      this.recordSeenId(eventId)
+      this.seenEventIds.add(eventId)
       if (this.onComplete) {
         await this.onComplete(eventId, 'cancelled').catch(() => {})
       }
@@ -89,14 +105,14 @@ export class PetSpeakHandler {
 
     const currentTotal = (this.activeItem ? 1 : 0) + this.queue.length
     if (currentTotal >= this.maxQueueCapacity) {
-      this.recordSeenId(eventId)
+      this.seenEventIds.add(eventId)
       if (this.onComplete) {
         await this.onComplete(eventId, 'cancelled').catch(() => {})
       }
       return
     }
 
-    this.recordSeenId(eventId)
+    this.seenEventIds.add(eventId)
 
     const handlePromise = new Promise<void>((resolve, reject) => {
       this.queue.push({
@@ -114,16 +130,6 @@ export class PetSpeakHandler {
     })
 
     return handlePromise
-  }
-
-  private recordSeenId(id: string): void {
-    this.seenEventIds.add(id)
-    if (this.seenEventIds.size > this.maxSeenEvents) {
-      const first = this.seenEventIds.values().next().value
-      if (first) {
-        this.seenEventIds.delete(first)
-      }
-    }
   }
 
   private async processQueue(): Promise<void> {
