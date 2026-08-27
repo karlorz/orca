@@ -29,6 +29,7 @@ vi.mock('./updater-prerelease-feed', () => {
     tagHrefPattern: /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/,
     desktopTagPattern: /^v?\d+\.\d+\.\d+(?:-rc\.\d+(?:\.perf)?)?$/
   }
+  // Note: vi.mock is hoisted above top-level imports, so we keep minimum self-contained regex matching here.
   return {
     KARLORZ_FORK_RELEASE_FEED,
     STABLYAI_RELEASE_FEED,

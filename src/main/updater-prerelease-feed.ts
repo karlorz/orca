@@ -40,11 +40,13 @@ export function getReleaseDownloadUrl(tag: string): string {
 }
 
 function getPlatformManifestName(): string {
-  return process.platform === 'darwin'
-    ? 'latest-mac.yml'
-    : process.platform === 'linux'
-      ? 'latest-linux.yml'
-      : 'latest.yml'
+  if (process.platform === 'darwin') {
+    return 'latest-mac.yml'
+  }
+  if (process.platform === 'linux') {
+    return 'latest-linux.yml'
+  }
+  return 'latest.yml'
 }
 
 function getReleaseManifestUrl(
@@ -74,8 +76,13 @@ type ReleaseFeedTag = {
 export function isPerfPrereleaseTag(tag: string): boolean {
   const version = normalizeTagToVersion(tag)
   const match = version.match(/^\d+\.\d+\.\d+-([0-9A-Za-z-.]+)(?:\+[0-9A-Za-z-.]+)?$/)
-  const id = match?.[1]?.split('.') ?? []
-  return id.length === 3 && id[0] === 'rc' && /^\d+$/.test(id[1]) && id[2] === 'perf'
+  const identifiers = match?.[1]?.split('.') ?? []
+  return (
+    identifiers.length === 3 &&
+    identifiers[0] === 'rc' &&
+    /^\d+$/.test(identifiers[1]) &&
+    identifiers[2] === 'perf'
+  )
 }
 
 async function fetchReleaseFeedTags(

@@ -84,6 +84,9 @@ describe('release channel', () => {
     expect(getReleaseNotesUrlForVersion('1.4.190-0')).toBe(
       'https://github.com/karlorz/orca/releases/tag/v1.4.190-0'
     )
+    expect(getReleaseNotesUrlForVersion('1.4.190-fork.voice.1.1.abcdef1')).toBe(
+      'https://github.com/karlorz/orca/releases'
+    )
     expect(getReleaseNotesUrlForVersion(null)).toBe('https://github.com/stablyai/orca/releases')
   })
 

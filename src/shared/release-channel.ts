@@ -31,13 +31,22 @@ export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
 export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
 
-/** The canonical fork tag/version identifier pattern (e.g. 1.4.190-4 or 1.4.190-fork.voice...). */
+/** The canonical fork tag/version identifier pattern (e.g. 1.4.190-4). */
 const FORK_CANONICAL_VERSION = /^\d+\.\d+\.\d+-\d+$/
+/** Legacy fork desktop identifier (e.g. 1.4.190-fork.voice.42.1.abcdef1). */
 const FORK_LEGACY_VERSION = /^\d+\.\d+\.\d+-fork\.voice\./
+
+export function isCanonicalForkDesktopVersion(version: string): boolean {
+  return FORK_CANONICAL_VERSION.test(normalizeTagToVersion(version))
+}
+
+export function isLegacyForkDesktopVersion(version: string): boolean {
+  return FORK_LEGACY_VERSION.test(normalizeTagToVersion(version))
+}
 
 export function isForkDesktopVersion(version: string): boolean {
   const normalized = normalizeTagToVersion(version)
-  return FORK_CANONICAL_VERSION.test(normalized) || FORK_LEGACY_VERSION.test(normalized)
+  return isCanonicalForkDesktopVersion(normalized) || isLegacyForkDesktopVersion(normalized)
 }
 
 /** The dev channels, each published to its own repo rather than the main one. */
@@ -257,8 +266,11 @@ export function getReleaseNotesUrlForVersion(version: string | null): string {
     return `https://github.com/${MAIN_RELEASE_REPO}/releases`
   }
   const normalized = normalizeTagToVersion(version)
-  if (isForkDesktopVersion(normalized)) {
+  if (isCanonicalForkDesktopVersion(normalized)) {
     return `https://github.com/${KARLORZ_FORK_REPO}/releases/tag/v${normalized}`
+  }
+  if (isLegacyForkDesktopVersion(normalized)) {
+    return `https://github.com/${KARLORZ_FORK_REPO}/releases`
   }
   const channel = getVersionChannel(normalized)
   const repo = channel ? getReleaseRepoForChannel(channel) : MAIN_RELEASE_REPO

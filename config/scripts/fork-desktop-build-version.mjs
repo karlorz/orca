@@ -17,10 +17,6 @@ export function parseForkDesktopTag(tag) {
   }
 }
 
-export function parseForkDesktopTagBase(tag) {
-  return parseForkDesktopTag(tag).baseVersion
-}
-
 export function resolveForkDesktopBuildIdentity(env = process.env, argv = process.argv) {
   const rawTag = env.FORK_DESKTOP_TAG || argv[2] || ''
   if (!rawTag) {
@@ -28,8 +24,6 @@ export function resolveForkDesktopBuildIdentity(env = process.env, argv = proces
   }
 
   const { baseVersion, suffix, canonicalVersion } = parseForkDesktopTag(rawTag)
-  const runNumber = env.GITHUB_RUN_NUMBER ?? '1'
-  const runAttempt = env.GITHUB_RUN_ATTEMPT ?? '1'
 
   let sha = env.GITHUB_SHA ?? env.ORCA_BUILD_COMMIT ?? ''
   if (!sha) {
@@ -46,8 +40,6 @@ export function resolveForkDesktopBuildIdentity(env = process.env, argv = proces
     version: canonicalVersion,
     baseVersion,
     suffix,
-    runNumber,
-    runAttempt,
     sha,
     shortSha
   }

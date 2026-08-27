@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import { isForkDesktopVersion } from '../shared/release-channel'
 
 /** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
@@ -236,9 +237,7 @@ export function createUpdaterMocks(): UpdaterMocks {
         STABLYAI_RELEASE_FEED,
         KARLORZ_FORK_RELEASE_FEED,
         selectReleaseFeed: (currentVersion: string) =>
-          currentVersion.includes('fork.voice') || /^v?\d+\.\d+\.\d+-\d+$/.test(currentVersion)
-            ? KARLORZ_FORK_RELEASE_FEED
-            : STABLYAI_RELEASE_FEED,
+          isForkDesktopVersion(currentVersion) ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED,
         fetchNewerReleaseTagsWithReadiness: async (...args: unknown[]) => {
           const result = await fetchNewerReleaseTagsMock(...args)
           return Array.isArray(result)
