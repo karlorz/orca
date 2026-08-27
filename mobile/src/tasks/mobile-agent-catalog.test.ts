@@ -19,7 +19,8 @@ function parseDesktopAutoPickOrder(): string[] {
 }
 
 function parseDesktopConfiguredAgents(): string[] {
-  const source = readDesktopSharedFile('tui-agent-config.ts')
+  // Fork split the table out of tui-agent-config.ts for the max-lines lint.
+  const source = readDesktopSharedFile('tui-agent-config-table.ts')
   const match = source.match(/TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {([\s\S]*?)^}/m)
   expect(match).not.toBeNull()
   return Array.from(

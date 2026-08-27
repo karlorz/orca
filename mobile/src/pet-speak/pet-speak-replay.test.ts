@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import {
-  loadPetSpeakWatermark,
-  savePetSpeakWatermark,
-  clearPetSpeakWatermark
-} from './pet-speak-watermark'
+import { loadPetSpeakWatermark, savePetSpeakWatermark } from './pet-speak-watermark'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
 import type { RpcClient } from '../transport/rpc-client'
-import type { PetSpeakPayload } from './pet-speak-payload-validation'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
