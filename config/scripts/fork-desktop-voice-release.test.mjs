@@ -37,6 +37,11 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('merge-base --is-ancestor')
   })
 
+  it('passes generated canonical version from fork-desktop-build-version to electron-builder', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}')
+  })
+
   it('stages latest-mac.yml and optional blockmaps in desktop-artifacts', () => {
     const rawYaml = readFileSync(workflowPath, 'utf8')
     expect(rawYaml).toContain('dist/latest-mac.yml')

@@ -98,8 +98,10 @@ function setPlatformForTest(platform: NodeJS.Platform): void {
 }
 
 describe('selectReleaseFeed', () => {
-  it('selects karlorz feed for fork.voice versions', () => {
+  it('selects karlorz feed for fork.voice and canonical numeric fork versions', () => {
     expect(selectReleaseFeed('1.4.190-fork.voice.1.1.abcdef1')).toEqual(KARLORZ_FORK_RELEASE_FEED)
+    expect(selectReleaseFeed('1.4.190-4')).toEqual(KARLORZ_FORK_RELEASE_FEED)
+    expect(selectReleaseFeed('1.4.190-0')).toEqual(KARLORZ_FORK_RELEASE_FEED)
   })
 
   it('selects stablyai feed for upstream versions', () => {
@@ -125,6 +127,31 @@ describe('fetchNewerForkDesktopReleaseTag', () => {
 
   afterEach(() => {
     setPlatformForTest(ORIGINAL_PLATFORM)
+  })
+
+  it('canonical 1.4.190-4 discovers manifest 1.4.190-5 from tag v1.4.190-5, and equal/older do not update', async () => {
+    respondWithForkAtom(['v1.4.190-5', 'v1.4.190-4', 'v1.4.190-0'], {
+      'v1.4.190-5': '1.4.190-5',
+      'v1.4.190-4': '1.4.190-4',
+      'v1.4.190-0': '1.4.190-0'
+    })
+
+    const newerTag = await fetchNewerForkDesktopReleaseTag('1.4.190-4')
+    expect(newerTag).toBe('v1.4.190-5')
+
+    const sameTag = await fetchNewerForkDesktopReleaseTag('1.4.190-5')
+    expect(sameTag).toBeNull()
+  })
+
+  it('legacy fork.voice discovery of same-base canonical tag returns null due to semver sort (manual install accepted)', async () => {
+    respondWithForkAtom(['v1.4.190-4', 'v1.4.190-0'], {
+      'v1.4.190-4': '1.4.190-4',
+      'v1.4.190-0': '1.4.190-0'
+    })
+
+    // 1.4.190-fork.voice.* semver-sorts higher than 1.4.190-4, so compareVersions <= 0
+    const tag = await fetchNewerForkDesktopReleaseTag('1.4.190-fork.voice.1.1.abcdef1')
+    expect(tag).toBeNull()
   })
 
   it('filters out mobile tags, legacy desktop-v* tags, and bare upstream tags', async () => {

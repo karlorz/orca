@@ -89,11 +89,11 @@ describe('fork voice build versioning', () => {
 })
 
 describe('fork voice electron-builder config gate', () => {
-  it('when ORCA_FORK_VOICE_BUILD=1, points to karlorz/orca prerelease and ad-hoc unsigned mode with explicit zip artifactName', () => {
+  it('when ORCA_FORK_VOICE_BUILD=1, points to karlorz/orca prerelease and ad-hoc unsigned mode with canonical X.Y.Z-N version', () => {
     withEnv(
       {
         ORCA_FORK_VOICE_BUILD: '1',
-        ORCA_FORK_VOICE_BUILD_VERSION: '1.4.178-fork.voice.1.1.abcdef1'
+        ORCA_FORK_VOICE_BUILD_VERSION: '1.4.190-4'
       },
       (config) => {
         expect(config.publish).toEqual({
@@ -103,7 +103,7 @@ describe('fork voice electron-builder config gate', () => {
           releaseType: 'prerelease'
         })
         expect(config.extraMetadata).toEqual({
-          version: '1.4.178-fork.voice.1.1.abcdef1'
+          version: '1.4.190-4'
         })
         expect(config.mac.identity).toBe('-')
         expect(config.mac.hardenedRuntime).toBe(false)
@@ -115,7 +115,7 @@ describe('fork voice electron-builder config gate', () => {
     )
   })
 
-  it('fails closed when ORCA_FORK_VOICE_BUILD=1 but ORCA_FORK_VOICE_BUILD_VERSION is missing or malformed', () => {
+  it('fails closed when ORCA_FORK_VOICE_BUILD=1 but ORCA_FORK_VOICE_BUILD_VERSION is missing, malformed, or legacy fork.voice', () => {
     expect(() => {
       withEnv({ ORCA_FORK_VOICE_BUILD: '1' }, () => {})
     }).toThrow('Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION')
@@ -123,6 +123,16 @@ describe('fork voice electron-builder config gate', () => {
     expect(() => {
       withEnv(
         { ORCA_FORK_VOICE_BUILD: '1', ORCA_FORK_VOICE_BUILD_VERSION: 'invalid-version' },
+        () => {}
+      )
+    }).toThrow('Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION')
+
+    expect(() => {
+      withEnv(
+        {
+          ORCA_FORK_VOICE_BUILD: '1',
+          ORCA_FORK_VOICE_BUILD_VERSION: '1.4.190-fork.voice.1.1.abcdef1'
+        },
         () => {}
       )
     }).toThrow('Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION')

@@ -32,8 +32,11 @@ vi.mock('./updater-prerelease-feed', () => {
   return {
     KARLORZ_FORK_RELEASE_FEED,
     STABLYAI_RELEASE_FEED,
-    selectReleaseFeed: (currentVersion: string) =>
-      currentVersion.includes('fork.voice') ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED,
+    selectReleaseFeed: (currentVersion: string) => {
+      const isFork =
+        currentVersion.includes('fork.voice') || /^v?\d+\.\d+\.\d+-\d+$/.test(currentVersion)
+      return isFork ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED
+    },
     fetchNewerForkDesktopReleaseTag: fetchNewerForkDesktopReleaseTagMock,
     fetchNewerReleaseTagsWithReadiness: vi.fn(),
     getReleaseDownloadUrl: (tag: string) =>
@@ -52,8 +55,8 @@ describe('updater fork feed selection', () => {
   })
 
   it('pins a karlorz release URL when a newer fork tag is resolved', async () => {
-    appMock.getVersion.mockReturnValue('1.4.190-fork.voice.1.1.abcdef1')
-    fetchNewerForkDesktopReleaseTagMock.mockResolvedValue('v1.4.190-2')
+    appMock.getVersion.mockReturnValue('1.4.190-4')
+    fetchNewerForkDesktopReleaseTagMock.mockResolvedValue('v1.4.190-5')
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -61,7 +64,7 @@ describe('updater fork feed selection', () => {
     const mainWindow = { webContents: { send: vi.fn() } }
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
 
-    // Setup does NOT pin releases/latest/download for fork.voice build
+    // Setup does NOT pin releases/latest/download for canonical fork build
     expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalledWith(
       expect.objectContaining({
         url: 'https://github.com/stablyai/orca/releases/latest/download'
@@ -74,14 +77,14 @@ describe('updater fork feed selection', () => {
       expect(fetchNewerForkDesktopReleaseTagMock).toHaveBeenCalled()
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
-        url: 'https://github.com/karlorz/orca/releases/download/v1.4.190-2'
+        url: 'https://github.com/karlorz/orca/releases/download/v1.4.190-5'
       })
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
   })
 
   it('does not pin releases/latest/download when fork resolver returns null', async () => {
-    appMock.getVersion.mockReturnValue('1.4.190-fork.voice.1.1.abcdef1')
+    appMock.getVersion.mockReturnValue('1.4.190-4')
     fetchNewerForkDesktopReleaseTagMock.mockResolvedValue(null)
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 

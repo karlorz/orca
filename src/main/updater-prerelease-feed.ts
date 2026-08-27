@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
+import { isForkDesktopVersion } from '../shared/release-channel'
 
 export type ReleaseFeedConfig = {
   repoAtomUrl: string
@@ -24,7 +25,7 @@ export const KARLORZ_FORK_RELEASE_FEED: ReleaseFeedConfig = {
 }
 
 export function selectReleaseFeed(currentVersion: string): ReleaseFeedConfig {
-  return currentVersion.includes('fork.voice') ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED
+  return isForkDesktopVersion(currentVersion) ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED
 }
 
 const FETCH_TIMEOUT_MS = 5000
@@ -39,13 +40,11 @@ export function getReleaseDownloadUrl(tag: string): string {
 }
 
 function getPlatformManifestName(): string {
-  if (process.platform === 'darwin') {
-    return 'latest-mac.yml'
-  }
-  if (process.platform === 'linux') {
-    return 'latest-linux.yml'
-  }
-  return 'latest.yml'
+  return process.platform === 'darwin'
+    ? 'latest-mac.yml'
+    : process.platform === 'linux'
+      ? 'latest-linux.yml'
+      : 'latest.yml'
 }
 
 function getReleaseManifestUrl(
@@ -75,13 +74,8 @@ type ReleaseFeedTag = {
 export function isPerfPrereleaseTag(tag: string): boolean {
   const version = normalizeTagToVersion(tag)
   const match = version.match(/^\d+\.\d+\.\d+-([0-9A-Za-z-.]+)(?:\+[0-9A-Za-z-.]+)?$/)
-  const identifiers = match?.[1]?.split('.') ?? []
-  return (
-    identifiers.length === 3 &&
-    identifiers[0] === 'rc' &&
-    /^\d+$/.test(identifiers[1]) &&
-    identifiers[2] === 'perf'
-  )
+  const id = match?.[1]?.split('.') ?? []
+  return id.length === 3 && id[0] === 'rc' && /^\d+$/.test(id[1]) && id[2] === 'perf'
 }
 
 async function fetchReleaseFeedTags(

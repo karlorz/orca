@@ -25,10 +25,20 @@ export const HOURLY_RELEASE_REPO = 'stablyai/orca-hourly'
 export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
 export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
 export const MAIN_RELEASE_REPO = 'stablyai/orca'
+export const KARLORZ_FORK_REPO = 'karlorz/orca'
 
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
 export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
+
+/** The canonical fork tag/version identifier pattern (e.g. 1.4.190-4 or 1.4.190-fork.voice...). */
+const FORK_CANONICAL_VERSION = /^\d+\.\d+\.\d+-\d+$/
+const FORK_LEGACY_VERSION = /^\d+\.\d+\.\d+-fork\.voice\./
+
+export function isForkDesktopVersion(version: string): boolean {
+  const normalized = normalizeTagToVersion(version)
+  return FORK_CANONICAL_VERSION.test(normalized) || FORK_LEGACY_VERSION.test(normalized)
+}
 
 /** The dev channels, each published to its own repo rather than the main one. */
 const DEDICATED_REPO_CHANNELS = ['hourly', 'daily', 'adhoc'] as const
@@ -243,11 +253,16 @@ export function getVersionChannel(version: string): ReleaseChannel | null {
  * — /latest also breaks when GitHub's API is degraded).
  */
 export function getReleaseNotesUrlForVersion(version: string | null): string {
-  const channel = version ? getVersionChannel(version) : null
+  if (!version) {
+    return `https://github.com/${MAIN_RELEASE_REPO}/releases`
+  }
+  const normalized = normalizeTagToVersion(version)
+  if (isForkDesktopVersion(normalized)) {
+    return `https://github.com/${KARLORZ_FORK_REPO}/releases/tag/v${normalized}`
+  }
+  const channel = getVersionChannel(normalized)
   const repo = channel ? getReleaseRepoForChannel(channel) : MAIN_RELEASE_REPO
-  return version
-    ? `https://github.com/${repo}/releases/tag/v${normalizeTagToVersion(version)}`
-    : `https://github.com/${repo}/releases`
+  return `https://github.com/${repo}/releases/tag/v${normalized}`
 }
 
 /**

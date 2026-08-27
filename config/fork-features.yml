@@ -118,4 +118,3 @@ features:
       - src/main/updater-prerelease-feed.ts
       - src/main/updater.ts
       - .github/workflows/fork-desktop-voice-release.yml
-

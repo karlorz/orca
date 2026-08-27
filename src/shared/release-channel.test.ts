@@ -75,6 +75,15 @@ describe('release channel', () => {
     expect(getReleaseNotesUrlForVersion('1.4.160-adhoc.20260728140533')).toBe(
       'https://github.com/stablyai/orca-adhoc/releases/tag/v1.4.160-adhoc.20260728140533'
     )
+    expect(getReleaseNotesUrlForVersion('1.4.190-4')).toBe(
+      'https://github.com/karlorz/orca/releases/tag/v1.4.190-4'
+    )
+    expect(getReleaseNotesUrlForVersion('v1.4.190-4')).toBe(
+      'https://github.com/karlorz/orca/releases/tag/v1.4.190-4'
+    )
+    expect(getReleaseNotesUrlForVersion('1.4.190-0')).toBe(
+      'https://github.com/karlorz/orca/releases/tag/v1.4.190-0'
+    )
     expect(getReleaseNotesUrlForVersion(null)).toBe('https://github.com/stablyai/orca/releases')
   })
 

@@ -28,7 +28,7 @@ const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
 const isForkVoiceBuild = process.env.ORCA_FORK_VOICE_BUILD === '1'
 if (isForkVoiceBuild) {
   const version = process.env.ORCA_FORK_VOICE_BUILD_VERSION
-  if (!version || !/^(\d+\.\d+\.\d+)-fork\.voice\.\d+\.\d+\.[0-9a-fA-F]{7,}$/.test(version)) {
+  if (!version || !/^(\d+\.\d+\.\d+)-\d+$/.test(version)) {
     throw new Error(
       `Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION for fork voice build: ${version}`
     )

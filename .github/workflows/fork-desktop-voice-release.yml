@@ -62,7 +62,7 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - name: Resolve fork.voice version
+      - name: Resolve fork build version
         id: version
         env:
           FORK_DESKTOP_TAG: ${{ github.ref_name }}

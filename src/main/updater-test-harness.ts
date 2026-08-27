@@ -236,7 +236,9 @@ export function createUpdaterMocks(): UpdaterMocks {
         STABLYAI_RELEASE_FEED,
         KARLORZ_FORK_RELEASE_FEED,
         selectReleaseFeed: (currentVersion: string) =>
-          currentVersion.includes('fork.voice') ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED,
+          currentVersion.includes('fork.voice') || /^v?\d+\.\d+\.\d+-\d+$/.test(currentVersion)
+            ? KARLORZ_FORK_RELEASE_FEED
+            : STABLYAI_RELEASE_FEED,
         fetchNewerReleaseTagsWithReadiness: async (...args: unknown[]) => {
           const result = await fetchNewerReleaseTagsMock(...args)
           return Array.isArray(result)
