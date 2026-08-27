@@ -35,6 +35,7 @@ This document specifies the manual security verification procedures for the own-
 
 8. **LAN Independence**
    - [ ] Phone and desktop operate across distinct network boundaries through the relay without direct LAN connectivity.
+   - [ ] **Same-Mac emulator (test-only, do not leave enabled):** Anywhere pairing has no Relay-only mode; the emulator prefers LAN/Tailscale on unpackaged desktop port **6769**. To force sg01 Relay, temporarily block 6769 on the Mac, confirm the emulator has ESTAB to the Relay origin `:443` and a `relay-basis` device row, then **unblock**. Packaged Orca LAN (**6768**) and Relay `:443` stay open. Scripts: `projects/orca/work/2026-08-27-own-relay-durable-security-state/scripts/block-unpackaged-lan-ws.sh` and `unblock-unpackaged-lan-ws.sh` (sudo/osascript). Do not keep the pf rule as a project default.
 
 9. **Log Redaction & Privacy**
    - [ ] Relay access logs redact sensitive credential parameters, token hashes, and payload contents.

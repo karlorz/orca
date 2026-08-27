@@ -307,12 +307,10 @@ export function executeCleanupExpiredSqlite(
       }[]
 
       if (expiredDevices.length > 0) {
-        const delStmt = db.prepare(
-          'DELETE FROM device_credentials WHERE relay_host_id = ? AND relay_device_id = ?'
-        )
-        for (const dev of expiredDevices) {
-          delStmt.run(dev.relay_host_id, dev.relay_device_id)
-        }
+        const placeholders = expiredDevices.map(() => '(?, ?)').join(',')
+        db.prepare(
+          `DELETE FROM device_credentials WHERE (relay_host_id, relay_device_id) IN (${placeholders})`
+        ).run(...expiredDevices.flatMap((dev) => [dev.relay_host_id, dev.relay_device_id]))
         expiredDevicesDeleted = expiredDevices.length
         remainingBudget -= expiredDevicesDeleted
       }

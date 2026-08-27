@@ -243,33 +243,15 @@ export async function main(): Promise<void> {
   }
 
   const rawArgs = process.argv.slice(2)
-  const [command, ...restArgs] = rawArgs
-
-  if (command === 'account') {
-    const result = await runAccountCli({
-      args: restArgs
-    })
-    if (result.stdout) {
-      process.stdout.write(result.stdout)
-    }
-    if (result.stderr) {
-      process.stderr.write(result.stderr)
-    }
-    process.exit(result.exitCode)
+  const cli = await runRelayCli({ argv: rawArgs })
+  if (cli.stdout) {
+    process.stdout.write(cli.stdout)
   }
-
-  if (command !== undefined && command !== 'serve') {
-    process.stderr.write(
-      `[own-mobile-relay] Unknown command: ${command}. Available commands: serve, account\n`
-    )
-    process.exit(1)
+  if (cli.stderr) {
+    process.stderr.write(cli.stderr)
   }
-
-  if (restArgs.length > 0) {
-    process.stderr.write(
-      `[own-mobile-relay] Unexpected arguments for serve command: ${restArgs.join(' ')}\n`
-    )
-    process.exit(1)
+  if (cli.exitCode !== 0 || rawArgs[0] === 'account') {
+    process.exit(cli.exitCode)
   }
 
   let config: OwnRelayServeConfig

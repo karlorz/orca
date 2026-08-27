@@ -21,10 +21,6 @@ const SESSION_TTL_MS = 60 * 60 * 1000
 
 export { validateAuthorizeParams, renderLoginForm } from './own-mobile-relay-auth-params'
 
-export async function readUrlEncodedBody(request: IncomingMessage): Promise<URLSearchParams> {
-  return readUrlEncodedBodySafely(request)
-}
-
 export function handleAuthorizeGet(
   url: URL,
   configuredClientId: string,

@@ -8,6 +8,39 @@ import type {
 
 const SESSION_TTL_MS = 60 * 60 * 1000
 
+function buildDesktopAuthBody(
+  identity: SecurityStateAccessSession['identity'],
+  cloudProfileId: string,
+  now: number
+) {
+  return {
+    cloud: {
+      cloudProfileId,
+      userId: identity.userId,
+      email: identity.email,
+      displayName: undefined,
+      activeOrgId: identity.organizationId || undefined,
+      activeOrgName: undefined,
+      linkedAt: now
+    },
+    organizations: identity.organizationId
+      ? [
+          {
+            orgId: identity.organizationId,
+            name: 'Personal',
+            role: 'owner'
+          }
+        ]
+      : [],
+    capabilities: {
+      flags: {
+        'relay.use': true
+      },
+      refreshedAt: now
+    }
+  }
+}
+
 export async function handleRefreshPost(
   body: unknown,
   securityState: OwnMobileRelaySecurityState,
@@ -64,30 +97,7 @@ export async function handleRefreshPost(
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
     expiresAt: issued.expiresAt,
-    cloud: {
-      cloudProfileId: ephemeral.cloudProfileId,
-      userId: issued.identity.userId,
-      email: issued.identity.email,
-      displayName: undefined,
-      activeOrgId: issued.identity.organizationId || undefined,
-      activeOrgName: undefined,
-      linkedAt: now
-    },
-    organizations: issued.identity.organizationId
-      ? [
-          {
-            orgId: issued.identity.organizationId,
-            name: 'Personal',
-            role: 'owner'
-          }
-        ]
-      : [],
-    capabilities: {
-      flags: {
-        'relay.use': true
-      },
-      refreshedAt: now
-    }
+    ...buildDesktopAuthBody(issued.identity, ephemeral.cloudProfileId, now)
   }
 
   const data = Buffer.from(JSON.stringify(payload))
@@ -103,32 +113,7 @@ export function handleCapabilities(
   response: ServerResponse
 ): void {
   const now = Date.now()
-  const payload = {
-    cloud: {
-      cloudProfileId: session.identity.cloudProfileId,
-      userId: session.identity.userId,
-      email: session.identity.email,
-      displayName: undefined,
-      activeOrgId: session.identity.organizationId || undefined,
-      activeOrgName: undefined,
-      linkedAt: now
-    },
-    organizations: session.identity.organizationId
-      ? [
-          {
-            orgId: session.identity.organizationId,
-            name: 'Personal',
-            role: 'owner'
-          }
-        ]
-      : [],
-    capabilities: {
-      flags: {
-        'relay.use': true
-      },
-      refreshedAt: now
-    }
-  }
+  const payload = buildDesktopAuthBody(session.identity, session.identity.cloudProfileId, now)
 
   const data = Buffer.from(JSON.stringify(payload))
   response.writeHead(200, {

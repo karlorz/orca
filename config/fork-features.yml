@@ -81,6 +81,14 @@ features:
       - src/main/orca-profiles/fork-own-relay-defaults.ts
       - src/main/orca-profiles/profile-cloud-auth-config.ts
     wiki: projects/orca/work/2026-08-26-self-hosted-mobile-relay-sg01
+  - id: own-mobile-relay-durable-security-state
+    title: Durable SQLite account, session, grant, and device state for own Relay
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/relay
+      - scripts/build-own-mobile-relay.mjs
+    wiki: projects/orca/work/2026-08-27-own-relay-durable-security-state
 
   - id: pet-voice-android-rate-step
     title: Android pet TTS plays one 語速 step faster than Mac
