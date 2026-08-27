@@ -66,11 +66,12 @@ features:
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
   - id: fork-sync-main-mirror
-    title: Daily GitHub Action fast-forwards GitHub main and reports desktop vs mobile trains
+    title: Daily GitHub Action mirrors main, merges upstream main into fork-main, and reports trains
     kind: ci
     status: landed
     paths:
       - .github/workflows/fork-sync-main.yml
+      - config/scripts/fork-sync-fork-main.mjs
       - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
   - id: own-mobile-relay-overlay

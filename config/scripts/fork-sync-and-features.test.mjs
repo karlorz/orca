@@ -26,7 +26,20 @@ describe('fork-sync-main workflow', () => {
     expect(script).toContain('-f branch=')
     expect(script).toContain('FORK_SYNC_TOKEN')
     expect(script).not.toMatch(/MIRROR_BRANCH=fork-main/)
-    expect(script).not.toMatch(/git push .*fork-main/)
+    expect(script).not.toMatch(/merge-upstream.*fork-main/)
+  })
+
+  it('merges stablyai/orca main into fork-main after the main mirror job', () => {
+    const workflow = parse(readFileSync(workflowPath, 'utf8'))
+    const job = workflow.jobs['sync-fork-main']
+    expect(job).toBeTruthy()
+    expect(job.if).toBe("github.repository == 'karlorz/orca'")
+    expect(job.needs).toBe('sync-main')
+    const scripts = job.steps.map((step) => JSON.stringify(step)).join('\n')
+    expect(scripts).toContain('fork-sync-fork-main.mjs')
+    expect(scripts).toContain('--write')
+    expect(scripts).not.toMatch(/MIRROR_BRANCH=fork-main/)
+    expect(scripts).not.toMatch(/merge-upstream/)
   })
 })
 

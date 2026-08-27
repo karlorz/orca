@@ -74,7 +74,7 @@ describe('selectLatestTrains', () => {
 })
 
 describe('fork-sync-main workflow trains', () => {
-  it('reports desktop and mobile trains and still never writes fork-main', () => {
+  it('reports desktop and mobile trains from the main mirror job without merge-upstream on fork-main', () => {
     expect(existsSync(workflowPath)).toBe(true)
     const workflow = parse(readFileSync(workflowPath, 'utf8'))
     const job = workflow.jobs['sync-main']
@@ -82,6 +82,6 @@ describe('fork-sync-main workflow trains', () => {
     expect(scripts).toContain('fork-upstream-trains.mjs')
     expect(scripts).toContain('MIRROR_BRANCH=main')
     expect(scripts).not.toMatch(/MIRROR_BRANCH=fork-main/)
-    expect(scripts).not.toMatch(/git push .*fork-main/)
+    expect(scripts).not.toMatch(/merge-upstream.*fork-main/)
   })
 })

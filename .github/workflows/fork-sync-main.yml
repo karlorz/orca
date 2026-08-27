@@ -1,10 +1,11 @@
 name: Sync fork main from upstream
 
-# GitHub "Sync fork" follows the default branch. Default is fork-main, so that
-# button must not be used. This job is the only allowed mirror path: it
-# fast-forwards GitHub `main` from stablyai/orca and never touches fork-main.
-#
-# Cron is daily 04:17 UTC (minute 17 avoids stacking with other fork schedules).
+# GitHub "Sync fork" follows the default branch and can re-mirror deleted
+# branches — never use that button. This workflow:
+#   1. Fast-forwards GitHub `main` from stablyai/orca via merge-upstream
+#      (upstream has no fork-main, so merge-upstream cannot target it).
+#   2. Merges stablyai/orca `main` into `fork-main` with git merge --no-ff.
+# Conflicts fail closed. Cron is daily 04:17 UTC.
 
 on:
   schedule:
@@ -47,6 +48,33 @@ jobs:
         with:
           ref: fork-main
           persist-credentials: false
+
+      - name: Report latest upstream desktop and mobile trains
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        run: node config/scripts/fork-upstream-trains.mjs
+
+  sync-fork-main:
+    needs: sync-main
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout fork-main
+        uses: actions/checkout@v6
+        with:
+          ref: fork-main
+          fetch-depth: 0
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
+
+      - name: Merge stablyai/orca main into fork-main
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name 'fork-sync'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node config/scripts/fork-sync-fork-main.mjs --write
 
       - name: Report latest upstream desktop and mobile trains
         env:
