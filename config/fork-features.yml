@@ -48,6 +48,13 @@ features:
     paths:
       - .github/workflows/fork-mobile-voice-release.yml
       - mobile/app.json
+  - id: fork-desktop-voice-release
+    title: Unsigned macOS desktop prereleases on desktop-v1.4.178-N tags
+    kind: release
+    status: landed
+    paths:
+      - .github/workflows/fork-desktop-voice-release.yml
+      - config/electron-builder.config.cjs
   - id: pet-voice-fgs-hysteresis
     title: Keep pet-voice FGS through 5-minute Tailscale reconnects
     kind: product

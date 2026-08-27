@@ -1,0 +1,143 @@
+name: Fork Desktop macOS Release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*.*.*-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-desktop-voice-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify desktop tag and fork-main ancestry
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REF_NAME" =~ ^refs/tags/desktop-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "Only tags matching desktop-v<x.y.z>-<N> are allowed: $REF_NAME" >&2
+            exit 1
+          fi
+          git fetch "${SERVER_URL}/karlorz/orca.git" fork-main:refs/remotes/fork/fork-main
+          if ! git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/fork/fork-main; then
+            echo "Commit $TARGET_SHA is not reachable from fork-main" >&2
+            exit 1
+          fi
+
+  build-mac:
+    needs: [verify]
+    if: github.repository == 'karlorz/orca'
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Resolve fork.voice version
+        id: version
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: node config/scripts/fork-voice-build-version.mjs
+
+      - name: Build unsigned macOS arm64
+        env:
+          ORCA_FORK_VOICE_BUILD: '1'
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          pnpm run build:desktop
+          pnpm run build:computer-macos
+          pnpm run build:keyboard-layout-macos
+          pnpm run build:notification-status-macos
+          pnpm run ensure:electron-runtime
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
+
+      - name: Stage mac artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p desktop-artifacts
+          shopt -s nullglob
+          if [[ ! -f dist/orca-macos-arm64.dmg ]]; then
+            echo "Expected dist/orca-macos-arm64.dmg" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          cp dist/orca-macos-arm64.dmg desktop-artifacts/
+          if [[ -f dist/orca-macos-arm64.zip ]]; then
+            cp dist/orca-macos-arm64.zip desktop-artifacts/
+          fi
+          (cd desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
+
+      - name: Upload mac artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-artifacts
+          path: desktop-artifacts/*
+          if-no-files-found: error
+
+  publish-release:
+    needs: [verify, build-mac]
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download mac artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: desktop-artifacts
+          path: desktop-artifacts
+
+      - name: Create draft then publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" --repo karlorz/orca >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists. Refusing overwrite." >&2
+            exit 1
+          fi
+          cat << 'EOF' > release-notes.md
+          ### Orca Desktop macOS Development Release
+
+          - Fork desktop train only (unsigned / ad-hoc; not notarized)
+          - Separate from upstream v1.4.x cuts and from mobile-android tags
+          - Never attach these DMG/ZIP files to a mobile-android tag
+          EOF
+          gh release create "$TAG_NAME" \
+            --repo karlorz/orca \
+            --target "$TARGET_SHA" \
+            --draft \
+            --prerelease \
+            --title "$TAG_NAME" \
+            --notes-file release-notes.md \
+            desktop-artifacts/*
+          gh release edit "$TAG_NAME" --repo karlorz/orca --draft=false --prerelease --latest=false

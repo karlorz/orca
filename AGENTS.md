@@ -8,6 +8,7 @@ This is `karlorz/orca`, a fork of `stablyai/orca`. Follow these rules for all fo
 1. **Two trains, like upstream.** Desktop is `release-cut` / `v1.4.x`. Mobile Android is `mobile-android-v*`. Never put macOS DMG/ZIP on a mobile tag.
 2. **Keep upstream mobile marketing version.** `mobile/app.json` `expo.version` stays `0.0.44` while upstream's latest mobile tag is `mobile-android-v0.0.44`. Do not bump to 0.0.45. Increment `versionCode` only.
 3. **Fork mobile tags:** `mobile-android-v0.0.44-0`, `mobile-android-v0.0.44-1`, … (`*.*.*-N`). Never `fork-voice-v*`, never `-karlorz.N`.
+3b. **Fork desktop tags:** `desktop-v1.4.178-0`, `desktop-v1.4.178-1`, … from `fork-main`. Never a bare `v1.4.x` (upstream Cut Release). Unsigned/ad-hoc macOS via `fork-desktop-voice-release.yml`. Never put DMG/ZIP on a mobile tag.
 4. **Never rewrite a published tag.** If CI fails or you need changes, use a new suffix (`-1`, `-2`, …).
 5. **Push only to fork remote.** Never push tags, commits, or branches to `stablyai/orca` (upstream). Only push to `fork` (`https://github.com/karlorz/orca.git`).
 6. **CI publishes as prerelease, not draft.** `--draft --prerelease`, verify assets, then `gh release edit --draft=false --prerelease --latest=false`. Operator switches Latest in the GitHub UI (uncheck Pre-release first).
