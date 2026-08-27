@@ -68,7 +68,12 @@ vi.mock('./updater-nudge', () => ({
 }))
 vi.mock('./updater-prerelease-feed', () => ({
   fetchNewerReleaseTagsWithReadiness: vi.fn().mockResolvedValue({ tags: [], state: 'no-newer' }),
-  getReleaseDownloadUrl: vi.fn(() => 'https://example.invalid/download')
+  fetchNewerForkDesktopReleaseTag: vi.fn().mockResolvedValue(null),
+  getReleaseDownloadUrl: vi.fn(() => 'https://example.invalid/download'),
+  getReleaseDownloadUrlForFeed: vi.fn(() => 'https://example.invalid/download'),
+  selectReleaseFeed: vi.fn(() => ({})),
+  STABLYAI_RELEASE_FEED: {},
+  KARLORZ_FORK_RELEASE_FEED: {}
 }))
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: vi.fn(),

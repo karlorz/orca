@@ -2,18 +2,40 @@ import { net } from 'electron'
 import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 
-const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
-const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
+export type ReleaseFeedConfig = {
+  repoAtomUrl: string
+  releaseDownloadBase: string
+  tagHrefPattern: RegExp
+  desktopTagPattern: RegExp
+}
+
+export const STABLYAI_RELEASE_FEED: ReleaseFeedConfig = {
+  repoAtomUrl: 'https://github.com/stablyai/orca/releases.atom',
+  releaseDownloadBase: 'https://github.com/stablyai/orca/releases/download',
+  tagHrefPattern: /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/,
+  desktopTagPattern: /^v?\d+\.\d+\.\d+(?:-rc\.\d+(?:\.perf)?)?$/
+}
+
+export const KARLORZ_FORK_RELEASE_FEED: ReleaseFeedConfig = {
+  repoAtomUrl: 'https://github.com/karlorz/orca/releases.atom',
+  releaseDownloadBase: 'https://github.com/karlorz/orca/releases/download',
+  tagHrefPattern: /href="https:\/\/github\.com\/karlorz\/orca\/releases\/tag\/([^"]+)"/,
+  desktopTagPattern: /^v\d+\.\d+\.\d+-\d+$/
+}
+
+export function selectReleaseFeed(currentVersion: string): ReleaseFeedConfig {
+  return currentVersion.includes('fork.voice') ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED
+}
+
 const FETCH_TIMEOUT_MS = 5000
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
 
-// Why: GitHub's atom feed lists every release (prerelease or stable) in a
-// single flat list. Each entry has a /releases/tag/<tag> URL we can mine
-// without any channel filtering.
-const TAG_HREF_RE = /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/g
+export function getReleaseDownloadUrlForFeed(feed: ReleaseFeedConfig, tag: string): string {
+  return `${feed.releaseDownloadBase}/${encodeURIComponent(tag)}`
+}
 
 export function getReleaseDownloadUrl(tag: string): string {
-  return `${RELEASES_DOWNLOAD_BASE}/${encodeURIComponent(tag)}`
+  return getReleaseDownloadUrlForFeed(STABLYAI_RELEASE_FEED, tag)
 }
 
 function getPlatformManifestName(): string {
@@ -26,12 +48,19 @@ function getPlatformManifestName(): string {
   return 'latest.yml'
 }
 
-function getReleaseManifestUrl(tag: string): string {
-  return `${getReleaseDownloadUrl(tag)}/${getPlatformManifestName()}`
+function getReleaseManifestUrl(
+  tag: string,
+  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
+): string {
+  return `${getReleaseDownloadUrlForFeed(feed, tag)}/${getPlatformManifestName()}`
 }
 
-function getReleaseAssetUrl(tag: string, assetName: string): string {
-  return `${getReleaseDownloadUrl(tag)}/${encodeURIComponent(assetName)}`
+function getReleaseAssetUrl(
+  tag: string,
+  assetName: string,
+  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
+): string {
+  return `${getReleaseDownloadUrlForFeed(feed, tag)}/${encodeURIComponent(assetName)}`
 }
 
 export function normalizeTagToVersion(tag: string): string {
@@ -55,16 +84,24 @@ export function isPerfPrereleaseTag(tag: string): boolean {
   )
 }
 
-async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
+async function fetchReleaseFeedTags(
+  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
+): Promise<ReleaseFeedTag[] | null> {
   try {
-    const res = await net.fetch(ATOM_FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+    const res = await net.fetch(feed.repoAtomUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) {
       return null
     }
     const body = await res.text()
     const tags: ReleaseFeedTag[] = []
+    const pattern = new RegExp(
+      feed.tagHrefPattern.source,
+      feed.tagHrefPattern.flags.includes('g')
+        ? feed.tagHrefPattern.flags
+        : `${feed.tagHrefPattern.flags}g`
+    )
 
-    for (const match of body.matchAll(TAG_HREF_RE)) {
+    for (const match of body.matchAll(pattern)) {
       const tag = match[1]
       const version = normalizeTagToVersion(tag)
       if (isValidVersion(version)) {
@@ -103,13 +140,34 @@ function getManifestAssetNames(manifestText: string): string[] {
   return [...names]
 }
 
+function getManifestVersion(manifestText: string): string | null {
+  try {
+    const parsed = parse(manifestText) as { version?: unknown } | null
+    if (typeof parsed?.version === 'string' && parsed.version.trim()) {
+      return parsed.version.trim()
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
 
-async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<ReleaseReadiness> {
+type ManifestReadinessResult = {
+  readiness: ReleaseReadiness
+  manifestVersion?: string | null
+}
+
+async function isReleaseAssetAvailable(
+  tag: string,
+  assetName: string,
+  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
+): Promise<ReleaseReadiness> {
   try {
     const assetUrl = assetName.startsWith('http')
       ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
+      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName, feed)
     const res = await net.fetch(assetUrl, {
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
@@ -120,40 +178,76 @@ async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<
   }
 }
 
-async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadiness> {
+async function getPlatformManifestReadiness(
+  tag: string,
+  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
+): Promise<ManifestReadinessResult> {
   try {
     // Why: cancelled/draft releases can appear in GitHub's atom feed before
     // they have updater manifests or the ZIP/exe/AppImage assets referenced by
     // those manifests. Pinning to those tags makes download clicks 404.
-    const manifestUrl = getReleaseManifestUrl(tag)
+    const manifestUrl = getReleaseManifestUrl(tag, feed)
     const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (res.status === 404) {
-      return 'not-ready'
+      return { readiness: 'not-ready' }
     }
     if (!res.ok) {
-      return 'unavailable'
+      return { readiness: 'unavailable' }
     }
     const manifestText = await res.text()
+    const manifestVersion = getManifestVersion(manifestText)
     let assetNames: string[]
     try {
       assetNames = getManifestAssetNames(manifestText)
     } catch {
-      return 'not-ready'
+      return { readiness: 'not-ready', manifestVersion }
     }
     if (assetNames.length === 0) {
-      return 'not-ready'
+      return { readiness: 'not-ready', manifestVersion }
     }
     const assetResults = await Promise.all(
-      assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName))
+      assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName, feed))
     )
-    return assetResults.includes('not-ready')
+    const readiness = assetResults.includes('not-ready')
       ? 'not-ready'
       : assetResults.includes('unavailable')
         ? 'unavailable'
         : 'ready'
+    return { readiness, manifestVersion }
   } catch {
-    return 'unavailable'
+    return { readiness: 'unavailable' }
   }
+}
+
+export async function fetchNewerForkDesktopReleaseTag(
+  currentVersion: string,
+  feed: ReleaseFeedConfig = KARLORZ_FORK_RELEASE_FEED
+): Promise<string | null> {
+  const tags = await fetchReleaseFeedTags(feed)
+  if (!tags) {
+    return null
+  }
+
+  const forkDesktopCandidates = tags.filter(({ tag }) => feed.desktopTagPattern.test(tag))
+  if (forkDesktopCandidates.length === 0) {
+    return null
+  }
+
+  const probeCandidates = forkDesktopCandidates.slice(0, MAX_MANIFEST_PROBE_CANDIDATES)
+  for (const { tag } of probeCandidates) {
+    const probe = await getPlatformManifestReadiness(tag, feed)
+    if (
+      probe.readiness === 'ready' &&
+      probe.manifestVersion &&
+      isValidVersion(probe.manifestVersion)
+    ) {
+      if (compareVersions(probe.manifestVersion, currentVersion) > 0) {
+        return tag
+      }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -234,7 +328,7 @@ export async function fetchNewerReleaseTagsWithReadiness(
     probeCandidates.map(async ({ tag, version }) => ({
       tag,
       version,
-      readiness: await getPlatformManifestReadiness(tag)
+      readiness: (await getPlatformManifestReadiness(tag)).readiness
     }))
   )
 
