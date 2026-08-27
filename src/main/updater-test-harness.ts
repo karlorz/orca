@@ -244,7 +244,7 @@ export function createUpdaterMocks(): UpdaterMocks {
         getReleaseDownloadUrl: (tag: string) =>
           `https://github.com/stablyai/orca/releases/download/${tag}`,
         getReleaseDownloadUrlForFeed: (
-          feed: { releaseDownloadBase?: string } | unknown,
+          feed: { releaseDownloadBase?: string } | null | undefined,
           tag: string
         ) =>
           `${(feed as { releaseDownloadBase?: string })?.releaseDownloadBase ?? 'https://github.com/stablyai/orca/releases/download'}/${tag}`
