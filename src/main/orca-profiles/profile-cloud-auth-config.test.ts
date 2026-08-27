@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { FORK_OWN_MOBILE_RELAY } from './fork-own-relay-defaults'
 import {
   allowsPlaintextOrcaCloudSession,
   getOrcaCloudAuthConfig,
@@ -44,8 +45,42 @@ describe('Orca cloud auth config', () => {
     })
   })
 
-  it('uses first-party production endpoints without runtime env in packaged builds', () => {
+  it('uses self-hosted fork own-relay origins in packaged builds by default', () => {
+    expect(FORK_OWN_MOBILE_RELAY).toEqual({
+      enabled: true,
+      apiBaseUrl: 'https://orca-auth.karldigi.dev',
+      relayDirectorUrl: 'https://orca-relay.karldigi.dev',
+      clientId: 'orca-desktop'
+    })
+
     expect(getOrcaCloudAuthConfig({}, true)).toEqual({
+      configured: true,
+      config: {
+        apiBaseUrl: 'https://orca-auth.karldigi.dev',
+        authorizeEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/authorize',
+        sessionEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/session',
+        refreshEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/refresh',
+        capabilitiesEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/capabilities',
+        profileEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/profile',
+        orgEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/org',
+        logoutEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/logout',
+        relayTokenEndpoint: 'https://orca-auth.karldigi.dev/v1/desktop/auth/relay-token',
+        relayDirectorUrl: 'https://orca-relay.karldigi.dev',
+        clientId: 'orca-desktop',
+        scope: 'openid profile email offline_access'
+      }
+    })
+  })
+
+  it('uses first-party production endpoints without runtime env in packaged builds when overlay is disabled', () => {
+    expect(
+      getOrcaCloudAuthConfig({}, true, {
+        enabled: false,
+        apiBaseUrl: '',
+        relayDirectorUrl: '',
+        clientId: 'orca-desktop'
+      })
+    ).toEqual({
       configured: true,
       config: {
         apiBaseUrl: 'https://login.onorca.dev',
