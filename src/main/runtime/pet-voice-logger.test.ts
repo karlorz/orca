@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { PetVoiceLogger, type PetVoiceLogEvent } from './pet-voice-logger'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +28,10 @@ describe('PetVoiceLogger', () => {
       logger.flush()
 
       const content = readFileSync(logPath, 'utf8')
-      const lines = content.trim().split('\n').map((l) => JSON.parse(l) as PetVoiceLogEvent)
+      const lines = content
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l) as PetVoiceLogEvent)
       expect(lines.length).toBe(7)
       expect(lines[0]?.kind).toBe('subscriber-connect')
       expect(lines[1]?.kind).toBe('speak-intent')

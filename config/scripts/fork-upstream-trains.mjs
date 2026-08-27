@@ -58,7 +58,7 @@ function formatTrainLine(train, entry) {
   return `${train}: ${entry.tag} (${channel}) ${entry.url}`
 }
 
-function loadUpstreamReleases() {
+export function loadUpstreamReleases() {
   const result = spawnSync(
     'gh',
     [

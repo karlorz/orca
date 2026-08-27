@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
+import { PetSpeakReplayBuffer } from './pet-speak-replay'
 import type { PetSpeakEvent } from './pet-voice-relay'
 
 describe('PetSpeakReplayBuffer', () => {

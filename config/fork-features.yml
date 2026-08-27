@@ -49,12 +49,14 @@ features:
       - .github/workflows/fork-mobile-voice-release.yml
       - mobile/app.json
   - id: fork-desktop-voice-release
-    title: Unsigned macOS desktop prereleases on desktop-v1.4.178-N tags
+    title: Unsigned macOS desktop prereleases on v1.4.190-N tags
     kind: release
     status: landed
     paths:
       - .github/workflows/fork-desktop-voice-release.yml
       - config/electron-builder.config.cjs
+      - config/scripts/fork-desktop-build-version.mjs
+      - config/scripts/fork-next-desktop-tag.mjs
   - id: pet-voice-fgs-hysteresis
     title: Keep pet-voice FGS through 5-minute Tailscale reconnects
     kind: product
@@ -73,12 +75,14 @@ features:
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
   - id: fork-sync-main-mirror
-    title: Daily GitHub Action mirrors main, merges upstream main into fork-main, and reports trains
+    title: Daily GitHub Action mirrors main, merges upstream main into fork-main, mirrors v* tags, and auto-cuts desktop tags
     kind: ci
     status: landed
     paths:
       - .github/workflows/fork-sync-main.yml
       - config/scripts/fork-sync-fork-main.mjs
+      - config/scripts/fork-sync-upstream-tags.mjs
+      - config/scripts/fork-next-desktop-tag.mjs
       - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
   - id: own-mobile-relay-overlay

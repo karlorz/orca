@@ -18,9 +18,10 @@ function release(tag, { prerelease = false, draft = false, publishedAt }) {
 }
 
 describe('classifyReleaseTrain', () => {
-  it('splits desktop v* from mobile-android-v* and ignores fork mobile suffixes', () => {
+  it('splits desktop v* from mobile-android-v* and ignores fork mobile suffixes and desktop numeric suffixes', () => {
     expect(classifyReleaseTrain('v1.4.188')).toBe('desktop')
     expect(classifyReleaseTrain('v1.4.184-rc.0')).toBe('desktop')
+    expect(classifyReleaseTrain('v1.4.190-0')).toBe('ignore')
     expect(classifyReleaseTrain('mobile-android-v0.0.44')).toBe('mobile')
     expect(classifyReleaseTrain('mobile-android-v0.0.44-2')).toBe('ignore')
     expect(classifyReleaseTrain('fork-voice-v0.0.45.4')).toBe('ignore')

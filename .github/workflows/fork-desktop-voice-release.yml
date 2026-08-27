@@ -1,9 +1,14 @@
 name: Fork Desktop macOS Release
 
+# Fork desktop tags are v<base>-<N> (e.g. v1.4.190-0, v1.4.190-1).
+# Base is the newest upstream desktop tag (rc counts, -rc.N dropped).
+# Tags are pushed by config/scripts/fork-next-desktop-tag.mjs --write (attended or fork-sync auto-cut).
+# Tag-triggered only, no schedule.
+
 on:
   push:
     tags:
-      - 'desktop-v*.*.*-*'
+      - 'v*.*.*-[0-9]*'
 
 permissions:
   contents: read
@@ -30,8 +35,8 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
-          if [[ ! "$REF_NAME" =~ ^refs/tags/desktop-v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
-            echo "Only tags matching desktop-v<x.y.z>-<N> are allowed: $REF_NAME" >&2
+          if [[ ! "$REF_NAME" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "Only tags matching v<x.y.z>-<N> are allowed: $REF_NAME" >&2
             exit 1
           fi
           git fetch "${SERVER_URL}/karlorz/orca.git" fork-main:refs/remotes/fork/fork-main
@@ -59,10 +64,11 @@ jobs:
       - name: Resolve fork.voice version
         id: version
         env:
+          FORK_DESKTOP_TAG: ${{ github.ref_name }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: node config/scripts/fork-voice-build-version.mjs
+        run: node config/scripts/fork-desktop-build-version.mjs
 
       - name: Build unsigned macOS arm64
         env:
@@ -129,6 +135,7 @@ jobs:
           ### Orca Desktop macOS Development Release
 
           - Fork desktop train only (unsigned / ad-hoc; not notarized)
+          - Tracks upstream desktop train tag matching the base version
           - Separate from upstream v1.4.x cuts and from mobile-android tags
           - Never attach these DMG/ZIP files to a mobile-android tag
           EOF
