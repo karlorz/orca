@@ -6,7 +6,8 @@ import {
   chmodSync,
   statSync,
   openSync,
-  closeSync
+  closeSync,
+  existsSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -247,37 +248,50 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
     })
 
     const capturedDbInstances: DatabaseSync[] = []
+    let sidecarChmodded = false
 
-    // Spy on DatabaseSync.prototype.prepare to capture handle and create insecure WAL sidecar during database opening
-    const origPrepare = DatabaseSync.prototype.prepare
-    vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+    // Spy on DatabaseSync.prototype.exec to capture handle and chmod WAL sidecar after migrations
+    const origExec = DatabaseSync.prototype.exec
+    const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
       this: DatabaseSync,
       sql: string
     ) {
-      capturedDbInstances.push(this)
-      const fd = openSync(walPath, 'w', 0o644)
-      closeSync(fd)
-      chmodSync(walPath, 0o644)
-      return origPrepare.call(this, sql)
+      const res = origExec.call(this, sql)
+      if (!sidecarChmodded && sql.includes('PRAGMA user_version = 1;')) {
+        sidecarChmodded = true
+        capturedDbInstances.push(this)
+        if (existsSync(walPath)) {
+          chmodSync(walPath, 0o644)
+        } else {
+          const fd = openSync(walPath, 'w', 0o644)
+          closeSync(fd)
+          chmodSync(walPath, 0o644)
+        }
+      }
+      return res
     })
 
-    await expect(
-      startOwnRelayServer({
-        config,
-        passwordPolicy: TEST_FAST_PASSWORD_POLICY
-      })
-    ).rejects.toThrow(/insecure_sidecar_permissions/)
+    try {
+      await expect(
+        startOwnRelayServer({
+          config,
+          passwordPolicy: TEST_FAST_PASSWORD_POLICY
+        })
+      ).rejects.toThrow(/insecure_sidecar_permissions/)
 
-    // 1. Port must not be bound
-    const bound = await checkPortIsOpen(targetPort)
-    expect(bound).toBe(false)
+      // 1. Port must not be bound
+      const bound = await checkPortIsOpen(targetPort)
+      expect(bound).toBe(false)
 
-    // 2. DB handle must be released: invoking method on DatabaseSync throws "database is not open"
-    expect(capturedDbInstances.length).toBeGreaterThan(0)
-    const captured = capturedDbInstances[0]
-    expect(() => {
-      captured.exec('PRAGMA schema_version;')
-    }).toThrow(/database is not open/)
+      // 2. DB handle must be released: invoking method on DatabaseSync throws "database is not open"
+      expect(capturedDbInstances.length).toBeGreaterThan(0)
+      const captured = capturedDbInstances[0]
+      expect(() => {
+        captured.exec('PRAGMA schema_version;')
+      }).toThrow(/database is not open/)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('Scenario 5e: Missing state path or auth origin fails synchronously in configuration validation before server startup', () => {

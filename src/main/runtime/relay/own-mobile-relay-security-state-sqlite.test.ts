@@ -493,36 +493,59 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       const walPath = `${dbPath}-wal`
 
       const capturedDbInstances: DatabaseSync[] = []
+      let sidecarChmodded = false
 
-      // Spy on DatabaseSync.prototype.prepare to capture the instance and create an insecure WAL sidecar before post-open checks
-      const origPrepare = DatabaseSync.prototype.prepare
-      vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (
+      // Spy on DatabaseSync.prototype.exec to capture the instance and chmod WAL sidecar after migrations
+      const origExec = DatabaseSync.prototype.exec
+      const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
         this: DatabaseSync,
         sql: string
       ) {
-        capturedDbInstances.push(this)
-        const fd = openSync(walPath, 'w', 0o644)
-        closeSync(fd)
-        chmodSync(walPath, 0o644)
-        return origPrepare.call(this, sql)
+        const res = origExec.call(this, sql)
+        if (!sidecarChmodded && sql.includes('PRAGMA user_version = 1;')) {
+          sidecarChmodded = true
+          capturedDbInstances.push(this)
+          if (existsSync(walPath)) {
+            chmodSync(walPath, 0o644)
+          } else {
+            const fd = openSync(walPath, 'w', 0o644)
+            closeSync(fd)
+            chmodSync(walPath, 0o644)
+          }
+        }
+        return res
       })
 
-      await expect(async () => {
-        openOwnMobileRelaySecurityStateSqlite({
-          dbPath,
-          testMode: false
-        })
-      }).rejects.toThrow(/insecure_sidecar_permissions/)
+      try {
+        await expect(async () => {
+          openOwnMobileRelaySecurityStateSqlite({
+            dbPath,
+            testMode: false
+          })
+        }).rejects.toThrow(/insecure_sidecar_permissions/)
 
-      // 1. Honest resource release: invoking any method on the created DatabaseSync instance must throw "database is not open"
-      expect(capturedDbInstances.length).toBeGreaterThan(0)
-      const captured = capturedDbInstances[0]
-      expect(() => {
-        captured.exec('PRAGMA schema_version;')
-      }).toThrow(/database is not open/)
+        // 1. Honest resource release: invoking any method on the created DatabaseSync instance must throw "database is not open"
+        expect(capturedDbInstances.length).toBeGreaterThan(0)
+        const captured = capturedDbInstances[0]
+        expect(() => {
+          captured.exec('PRAGMA schema_version;')
+        }).toThrow(/database is not open/)
+      } finally {
+        spy.mockRestore()
+      }
     })
 
-    it('fails closed when explicit file creation or mode establishment fails', async () => {
+    it('fails closed when explicit file creation or mode establishment fails', async (ctx) => {
+      if (process.platform === 'win32') {
+        ctx.skip()
+        return
+      }
+      // Root (euid 0) ignores POSIX directory permissions (0500) and can create files regardless.
+      if (typeof process.geteuid === 'function' && process.geteuid() === 0) {
+        ctx.skip()
+        return
+      }
+
       // In POSIX, a directory without write permission prevents creating new files
       const parentDir = await mkdtemp(join(tmpdir(), 'orca-sec-fail-create-parent-'))
       tempDirs.push(parentDir)

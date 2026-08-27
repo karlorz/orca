@@ -20,7 +20,15 @@ import type {
   SecurityStateDeviceMatchResult,
   SecurityStateCleanupResult
 } from './own-mobile-relay-security-state'
-import * as schemaModule from './own-mobile-relay-security-state-sqlite-schema'
+import {
+  CURRENT_SCHEMA_VERSION,
+  DEFAULT_BUSY_TIMEOUT_MS,
+  applySqlitePragmas,
+  runSqliteMigrations,
+  verifySqliteParentDirectorySecurity,
+  verifySqlitePathSecurity,
+  verifySqliteQuickCheck
+} from './own-mobile-relay-security-state-sqlite-schema'
 import {
   executeBootstrapAccountSqlite,
   executeGetAccountSqlite,
@@ -48,10 +56,6 @@ import {
   executeCleanupExpiredSqlite
 } from './own-mobile-relay-security-state-sqlite-device-ops'
 
-const CURRENT_SCHEMA_VERSION = schemaModule.CURRENT_SCHEMA_VERSION
-const verifySqliteParentDirectorySecurity = schemaModule.verifySqliteParentDirectorySecurity
-const verifySqlitePathSecurity = schemaModule.verifySqlitePathSecurity
-
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
 export type SqliteSecurityStateOptions = {
@@ -68,12 +72,12 @@ export type SqliteDbContext = {
 export function openOwnMobileRelaySecurityStateSqlite(
   options: SqliteSecurityStateOptions
 ): OwnMobileRelaySecurityState {
-  const { dbPath, testMode = false, busyTimeoutMs = schemaModule.DEFAULT_BUSY_TIMEOUT_MS } = options
+  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = options
 
   const parentDir = dirname(dbPath)
   if (!testMode) {
-    schemaModule.verifySqliteParentDirectorySecurity(parentDir)
-    schemaModule.verifySqlitePathSecurity(dbPath)
+    verifySqliteParentDirectorySecurity(parentDir)
+    verifySqlitePathSecurity(dbPath)
   }
 
   const prevUmask = process.umask(0o077)
@@ -90,13 +94,13 @@ export function openOwnMobileRelaySecurityStateSqlite(
     db = new DatabaseSync(dbPath)
 
     try {
-      schemaModule.applySqlitePragmas(db, busyTimeoutMs)
-      schemaModule.verifySqliteQuickCheck(db)
-      schemaModule.runSqliteMigrations(db)
+      applySqlitePragmas(db, busyTimeoutMs)
+      verifySqliteQuickCheck(db)
+      runSqliteMigrations(db)
 
       if (!testMode) {
         // Re-verify main DB and sidecars after open/pragma execution
-        schemaModule.verifySqlitePathSecurity(dbPath)
+        verifySqlitePathSecurity(dbPath)
       }
     } catch (err) {
       try {
