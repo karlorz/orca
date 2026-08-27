@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './index'
 import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { PetSpeakEvent } from '../../pet-voice-relay'
 import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
 
 describe('pet.speak.subscribe RPC with replay and emit failure', () => {
@@ -58,7 +57,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
       }))
     } as unknown as OrcaRuntimeService
 
-    const done = subscribeMethod.handler(
+    subscribeMethod.handler(
       { last_seen_seq: 1, epoch: 'epoch-1' },
       { runtime: mockRuntime, connectionId: 'conn-1' } as unknown as RpcContext,
       (event) => emitted.push(event)
@@ -107,7 +106,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
       registerSubscriptionCleanup: vi.fn((_id: string, cleanup: () => void) => {
         registeredCleanup = cleanup
       }),
-      cleanupSubscription: vi.fn((id: string) => {
+      cleanupSubscription: vi.fn((_id: string) => {
         registeredCleanup?.()
       }),
       getPetVoiceSubscriptionTracker: vi.fn(() => ({
@@ -122,7 +121,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
       }
     })
 
-    const done = subscribeMethod.handler(
+    subscribeMethod.handler(
       {},
       { runtime: mockRuntime, connectionId: 'conn-dead' } as unknown as RpcContext,
       emit
@@ -141,7 +140,10 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
     })
 
     // Should call tracker release or cleanupSubscription, and handlePetSpeakComplete with voice-unavailable
-    expect(mockRuntime.handlePetSpeakComplete).toHaveBeenCalledWith('ev-dead-1', 'voice-unavailable')
+    expect(mockRuntime.handlePetSpeakComplete).toHaveBeenCalledWith(
+      'ev-dead-1',
+      'voice-unavailable'
+    )
     expect(trackerRelease).toHaveBeenCalled()
   })
 })
