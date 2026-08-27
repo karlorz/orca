@@ -71,10 +71,10 @@ describe('own-mobile-relay-password', () => {
     }
   })
 
-  it('rejects passwords shorter than 14 or longer than 1024 code units, and accepts valid long passphrases without composition rules', async () => {
-    expect(validatePasswordCandidate('short-pw')).toBe(false)
-    expect(validatePasswordCandidate('1234567890123')).toBe(false) // 13 chars
-    expect(validatePasswordCandidate('12345678901234')).toBe(true) // 14 chars (minimum)
+  it('rejects empty or over-1024 passwords and accepts one or more code units without composition rules', async () => {
+    expect(validatePasswordCandidate('')).toBe(false)
+    expect(validatePasswordCandidate('a')).toBe(true)
+    expect(validatePasswordCandidate('short-pw')).toBe(true)
 
     const longPassphrase = 'all lowercase passphrase without numbers or symbols is valid'
     expect(validatePasswordCandidate(longPassphrase)).toBe(true)
@@ -85,7 +85,7 @@ describe('own-mobile-relay-password', () => {
     const tooLongPassphrase = 'a'.repeat(1025)
     expect(validatePasswordCandidate(tooLongPassphrase)).toBe(false)
 
-    await expect(derivePasswordRecord('short-pw')).rejects.toThrow(/password length/i)
+    await expect(derivePasswordRecord('')).rejects.toThrow(/password length/i)
   })
 
   it('reports that rehash is required after successful verification for an older supported policy or differing parameters', async () => {

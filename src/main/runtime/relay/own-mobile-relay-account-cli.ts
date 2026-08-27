@@ -6,6 +6,8 @@ import {
   verifyPasswordRecord,
   validatePasswordCandidate,
   CURRENT_PASSWORD_POLICY,
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
   type PasswordPolicy
 } from './own-mobile-relay-password'
 
@@ -245,7 +247,9 @@ export async function runAccountCli(options: AccountCliOptions): Promise<Account
     }
 
     if (!validatePasswordCandidate(newPassword)) {
-      err('[own-mobile-relay] New password must be between 14 and 1024 characters.\n')
+      err(
+        `[own-mobile-relay] New password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters.\n`
+      )
       return { exitCode: 1, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }
     }
 

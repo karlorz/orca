@@ -17,7 +17,7 @@ function scryptPromise(
   })
 }
 
-export const MIN_PASSWORD_LENGTH = 14
+export const MIN_PASSWORD_LENGTH = 1
 export const MAX_PASSWORD_LENGTH = 1024
 export const MIN_SALT_LENGTH_BYTES = 16
 

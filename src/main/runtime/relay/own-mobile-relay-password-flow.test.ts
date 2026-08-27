@@ -163,8 +163,8 @@ describe('own mobile relay password management', () => {
           body: new URLSearchParams({
             email: defaultOperator.email,
             currentPassword: defaultOperator.password,
-            newPassword: 'short',
-            confirmPassword: 'short'
+            newPassword: '',
+            confirmPassword: ''
           }).toString()
         })
         expect(resTooShort.status).toBe(400)

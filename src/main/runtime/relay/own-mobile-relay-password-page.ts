@@ -1,3 +1,5 @@
+import { MIN_PASSWORD_LENGTH } from './own-mobile-relay-password'
+
 export type PasswordPageFeedback = {
   status?: 'success' | 'error'
   message?: string
@@ -70,12 +72,12 @@ export function renderPasswordChangePage(feedback?: PasswordPageFeedback): strin
       </div>
       <div class="field">
         <label for="newPassword">New Password</label>
-        <input type="password" id="newPassword" name="newPassword" required minlength="14" autocomplete="new-password" />
-        <div class="help-text">Must be at least 14 characters.</div>
+        <input type="password" id="newPassword" name="newPassword" required minlength="${MIN_PASSWORD_LENGTH}" autocomplete="new-password" />
+        <div class="help-text">Must be at least ${MIN_PASSWORD_LENGTH} character${MIN_PASSWORD_LENGTH === 1 ? '' : 's'}.</div>
       </div>
       <div class="field">
         <label for="confirmPassword">Confirm New Password</label>
-        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="14" autocomplete="new-password" />
+        <input type="password" id="confirmPassword" name="confirmPassword" required minlength="${MIN_PASSWORD_LENGTH}" autocomplete="new-password" />
       </div>
       <button type="submit">Update Password</button>
     </form>

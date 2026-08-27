@@ -5,6 +5,8 @@ import {
   derivePasswordRecord,
   validatePasswordCandidate,
   CURRENT_PASSWORD_POLICY,
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
   type PasswordPolicy
 } from './own-mobile-relay-password'
 import { PASSWORD_PAGE_HEADERS, renderPasswordChangePage } from './own-mobile-relay-password-page'
@@ -111,7 +113,7 @@ export async function handlePasswordPost(
   if (!validatePasswordCandidate(newPassword)) {
     sendPasswordPageResponse(response, 400, {
       status: 'error',
-      message: 'New password must be between 14 and 1024 characters.'
+      message: `New password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters.`
     })
     return
   }
