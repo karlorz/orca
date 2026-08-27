@@ -55,7 +55,10 @@ type UpdaterModuleFactories = {
     fetchNewerReleaseTagsWithReadiness: (...args: unknown[]) => Promise<unknown>
     fetchNewerForkDesktopReleaseTag: (...args: unknown[]) => Promise<unknown>
     getReleaseDownloadUrl: (tag: string) => string
-    getReleaseDownloadUrlForFeed: (feed: unknown, tag: string) => string
+    getReleaseDownloadUrlForFeed: (
+      feed: { releaseDownloadBase?: string } | null | undefined,
+      tag: string
+    ) => string
     selectReleaseFeed: (currentVersion: string) => unknown
     STABLYAI_RELEASE_FEED: unknown
     KARLORZ_FORK_RELEASE_FEED: unknown
