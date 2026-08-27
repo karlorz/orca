@@ -1,48 +1,8 @@
-import { statSync, existsSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import { statSync, existsSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
 export const CURRENT_SCHEMA_VERSION = 1
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
-
-export type StorageArtifactSnapshot = {
-  path: string
-  exists: boolean
-  bytes: Buffer
-  mode: number
-}
-
-export function captureStorageArtifacts(basePath: string): StorageArtifactSnapshot[] {
-  const candidatePaths = [basePath, `${basePath}-wal`, `${basePath}-shm`, `${basePath}-journal`]
-  return candidatePaths.map((targetPath) => {
-    if (!existsSync(targetPath)) {
-      return { path: targetPath, exists: false, bytes: Buffer.alloc(0), mode: 0 }
-    }
-    const st = statSync(targetPath)
-    return {
-      path: targetPath,
-      exists: true,
-      mode: st.mode & 0o777,
-      bytes: readFileSync(targetPath)
-    }
-  })
-}
-
-export function restoreStorageArtifacts(snapshots: StorageArtifactSnapshot[]): void {
-  for (const item of snapshots) {
-    if (!item.exists) {
-      if (existsSync(item.path)) {
-        try {
-          unlinkSync(item.path)
-        } catch {
-          // Best effort removal of sidecar created after snapshot
-        }
-      }
-    } else {
-      writeFileSync(item.path, item.bytes)
-      chmodSync(item.path, item.mode)
-    }
-  }
-}
 
 export function verifySqliteParentDirectorySecurity(dirPath: string): void {
   const st = statSync(dirPath)

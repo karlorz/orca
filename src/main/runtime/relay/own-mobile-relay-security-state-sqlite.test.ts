@@ -1,14 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, rm, readFile, chmod, stat } from 'node:fs/promises'
-import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  openSync,
-  closeSync,
-  chmodSync,
-  statSync
-} from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -16,8 +8,14 @@ import { registerOwnMobileRelaySecurityStateContractTests } from './own-mobile-r
 import {
   openOwnMobileRelaySecurityStateSqlite,
   verifySqliteParentDirectorySecurity,
-  CURRENT_SCHEMA_VERSION
+  CURRENT_SCHEMA_VERSION,
+  type SqliteSecurityStateOptions
 } from './own-mobile-relay-security-state-sqlite'
+import {
+  openOwnMobileRelaySecurityStateSqliteInternal,
+  type SqliteSecurityInternalHooks
+} from './own-mobile-relay-security-state-sqlite'
+import { makeInsecureWalSidecar } from './own-mobile-relay-security-state-sqlite-test-helper'
 import {
   derivePasswordRecord,
   TEST_FAST_PASSWORD_POLICY,
@@ -491,55 +489,30 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       expect(stWal.mode & 0o777).toBe(0o644)
     })
 
-    it('closes database handle and preserves rejected DB/WAL/SHM artifacts without mutation on post-open failure', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-postopen-'))
+    it('closes database handle normally on post-open security failure and binds no memory fallback', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-fail-post-open-'))
       tempDirs.push(dir)
       const dbPath = join(dir, 'security-state.db')
       const walPath = `${dbPath}-wal`
-      const shmPath = `${dbPath}-shm`
 
       let capturedDbInstance: DatabaseSync | null = null
-      let capturedBeforeBytes: { db: Buffer; wal: Buffer; shm: Buffer | null } | null = null
-      let capturedBeforeModes: { db: number; wal: number; shm: number | null } | null = null
 
-      const testSeam = {
+      const internalHooks: SqliteSecurityInternalHooks = {
         onDbHandle: (handle: DatabaseSync) => {
           capturedDbInstance = handle
         },
         postOpenHook: () => {
-          // Ensure WAL and SHM sidecars exist with mock transaction content and make WAL 0644
-          if (!existsSync(walPath)) {
-            const fd = openSync(walPath, 'w', 0o644)
-            writeFileSync(fd, Buffer.from('TEST-WAL-PERSISTED-PAYLOAD-FOR-FAILURE-DIAGNOSIS'))
-            closeSync(fd)
-          }
-          chmodSync(walPath, 0o644)
-
-          if (existsSync(shmPath)) {
-            chmodSync(shmPath, 0o600)
-          }
-
-          // Capture exact bytes and modes immediately before the failure path triggers
-          capturedBeforeBytes = {
-            db: readFileSync(dbPath),
-            wal: readFileSync(walPath),
-            shm: existsSync(shmPath) ? readFileSync(shmPath) : null
-          }
-          capturedBeforeModes = {
-            db: statSync(dbPath).mode & 0o777,
-            wal: statSync(walPath).mode & 0o777,
-            shm: existsSync(shmPath) ? statSync(shmPath).mode & 0o777 : null
-          }
+          makeInsecureWalSidecar(walPath)
         }
       }
 
       await expect(async () => {
-        await openOwnMobileRelaySecurityStateSqlite(
+        openOwnMobileRelaySecurityStateSqliteInternal(
           {
             dbPath,
             testMode: false
           },
-          testSeam
+          internalHooks
         )
       }).rejects.toThrow(/insecure_sidecar_permissions/)
 
@@ -548,62 +521,54 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       expect(() => {
         capturedDbInstance!.exec('PRAGMA schema_version;')
       }).toThrow(/database is not open/)
-
-      // 2. Exact preservation: rejected DB, WAL, and SHM paths, bytes, type, and mode remain unchanged
-      expect(existsSync(dbPath)).toBe(true)
-      expect(statSync(dbPath).isFile()).toBe(true)
-      expect(statSync(dbPath).mode & 0o777).toBe(capturedBeforeModes!.db)
-      expect(readFileSync(dbPath).equals(capturedBeforeBytes!.db)).toBe(true)
-
-      expect(existsSync(walPath)).toBe(true)
-      expect(statSync(walPath).isFile()).toBe(true)
-      expect(statSync(walPath).mode & 0o777).toBe(0o644)
-      expect(readFileSync(walPath).equals(capturedBeforeBytes!.wal)).toBe(true)
-
-      if (capturedBeforeBytes!.shm !== null) {
-        expect(existsSync(shmPath)).toBe(true)
-        expect(statSync(shmPath).isFile()).toBe(true)
-        expect(statSync(shmPath).mode & 0o777).toBe(capturedBeforeModes!.shm)
-        expect(readFileSync(shmPath).equals(capturedBeforeBytes!.shm)).toBe(true)
-      }
     })
 
-    it('fails closed when explicit file creation or mode establishment fails without auto-removal', async () => {
+    it('fails closed when explicit file creation or mode establishment fails', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'orca-sec-fail-create-'))
       tempDirs.push(dir)
       const dbPath = join(dir, 'security-state.db')
 
-      // Injected fs that simulates chmodSync failure on newly created DB file
-      const testSeam = {
+      const internalHooks: SqliteSecurityInternalHooks = {
         chmodSync: () => {
           throw new Error('EPERM: operation not permitted, chmod')
         }
       }
 
       await expect(async () => {
-        await openOwnMobileRelaySecurityStateSqlite(
+        openOwnMobileRelaySecurityStateSqliteInternal(
           {
             dbPath,
             testMode: false
           },
-          testSeam
+          internalHooks
         )
       }).rejects.toThrow(/EPERM: operation not permitted, chmod/)
 
-      // DB file created before chmod failure must remain on disk for diagnosis (not auto-deleted)
       expect(existsSync(dbPath)).toBe(true)
     })
 
-    it('proves exported SqliteSecurityStateOptions has no injectedFs and postOpenHook is synchronous', () => {
+    it('proves exported SqliteSecurityStateOptions has no test hooks and exported opener takes one argument', () => {
       // API / Type contract verification: options must only contain dbPath, testMode, busyTimeoutMs
-      const prodOptions: { dbPath: string; testMode?: boolean; busyTimeoutMs?: number } = {
+      const prodOptions: SqliteSecurityStateOptions = {
         dbPath: '/tmp/nonexistent.db',
         testMode: true,
         busyTimeoutMs: 1000
       }
-      // @ts-expect-error - injectedFs must not be present on production SqliteSecurityStateOptions
+      // @ts-expect-error - injectedFs or testSeam must not be present on production SqliteSecurityStateOptions
       prodOptions.injectedFs = {}
+      // @ts-expect-error - testSeam must not be present on production SqliteSecurityStateOptions
+      prodOptions.testSeam = {}
       expect(prodOptions.dbPath).toBe('/tmp/nonexistent.db')
+
+      // Exported production opener is a 1-argument function
+      expect(openOwnMobileRelaySecurityStateSqlite.length).toBe(1)
+    })
+
+    it('proves production schema module has no snapshot/restore functions', async () => {
+      const schemaModule =
+        (await import('./own-mobile-relay-security-state-sqlite-schema')) as Record<string, unknown>
+      expect(schemaModule.captureStorageArtifacts).toBeUndefined()
+      expect(schemaModule.restoreStorageArtifacts).toBeUndefined()
     })
   })
 

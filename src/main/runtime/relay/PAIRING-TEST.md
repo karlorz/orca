@@ -62,3 +62,12 @@ This document specifies the manual security verification procedures for the own-
     - [ ] **Loopback Boundary**: The own-mobile-relay daemon binds exclusively to loopback (`127.0.0.1` / `::1`) behind a local reverse proxy (such as Caddy).
     - [ ] **Untrusted Forwarded Headers**: Forwarded headers (`X-Forwarded-For`, `X-Real-IP`, etc.) are intentionally ignored and untrusted for authentication rate-limiting in the application daemon.
     - [ ] **Dual-Key Throttling**: Authentication throttle enforces rate limits across two distinct buckets: `email` (global per-operator email bucket) and `email+IP` (socket remote IP). When behind a reverse proxy, the `email` bucket enforces strict brute-force protection across all incoming proxy connections, ensuring defense-in-depth regardless of socket remote address.
+
+13. **Test-Stage Disposable Database Reset Procedure**
+    - [ ] **Stop Service**: Ensure the relay daemon is completely stopped before any storage reset (`systemctl stop own-mobile-relay` or terminate foreground process).
+    - [ ] **Optional Protected Backup**: If needed for offline inspection, create a restricted timestamped backup (`cp security-state.db security-state.db.bak-$(date +%s)` with `0600` permissions).
+    - [ ] **Remove DB and Sidecars Together**: Remove the main database along with any WAL, SHM, and journal files (`rm -f security-state.db security-state.db-wal security-state.db-shm security-state.db-journal`).
+    - [ ] **Retain Bootstrap Configuration**: Retain the protected bootstrap configuration (`OWN_RELAY_OPERATOR_EMAIL`, `OWN_RELAY_OPERATOR_PASSWORD`, `OWN_RELAY_OPERATOR_USER_ID`, `OWN_RELAY_OPERATOR_PROFILE_ID`) in the environment/unit for test account initialization.
+    - [ ] **Start and Verify Health**: Start the service and verify healthy startup (`systemctl start own-mobile-relay` and probe `/v1/health` or loopback port).
+    - [ ] **Expect Re-Sign-In / Re-Pair**: Because the database was reset, any prior desktop sessions, grants, and mobile device credentials are gone; perform desktop sign-in and mobile re-pairing.
+

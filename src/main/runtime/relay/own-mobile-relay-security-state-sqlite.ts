@@ -24,8 +24,6 @@ import {
   CURRENT_SCHEMA_VERSION,
   DEFAULT_BUSY_TIMEOUT_MS,
   applySqlitePragmas,
-  captureStorageArtifacts,
-  restoreStorageArtifacts,
   runSqliteMigrations,
   verifySqliteParentDirectorySecurity,
   verifySqlitePathSecurity,
@@ -60,16 +58,16 @@ import {
 
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
-export type SqliteSecurityTestSeam = {
-  chmodSync?: (path: string, mode: number) => void
-  onDbHandle?: (db: DatabaseSync) => void
-  postOpenHook?: () => void
-}
-
 export type SqliteSecurityStateOptions = {
   dbPath: string
   testMode?: boolean
   busyTimeoutMs?: number
+}
+
+export type SqliteSecurityInternalHooks = {
+  chmodSync?: (path: string, mode: number) => void
+  onDbHandle?: (db: DatabaseSync) => void
+  postOpenHook?: () => void
 }
 
 export type SqliteDbContext = {
@@ -78,8 +76,14 @@ export type SqliteDbContext = {
 }
 
 export function openOwnMobileRelaySecurityStateSqlite(
+  options: SqliteSecurityStateOptions
+): OwnMobileRelaySecurityState {
+  return openOwnMobileRelaySecurityStateSqliteInternal(options)
+}
+
+export function openOwnMobileRelaySecurityStateSqliteInternal(
   options: SqliteSecurityStateOptions,
-  testSeam?: SqliteSecurityTestSeam
+  internalHooks?: SqliteSecurityInternalHooks
 ): OwnMobileRelaySecurityState {
   const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = options
 
@@ -97,23 +101,23 @@ export function openOwnMobileRelaySecurityStateSqlite(
       // Create file with 0600 permissions
       const fd = openSync(dbPath, 'w', 0o600)
       closeSync(fd)
-      if (testSeam?.chmodSync) {
-        testSeam.chmodSync(dbPath, 0o600)
+      if (internalHooks?.chmodSync) {
+        internalHooks.chmodSync(dbPath, 0o600)
       } else {
         chmodSync(dbPath, 0o600)
       }
     }
 
     db = new DatabaseSync(dbPath)
-    testSeam?.onDbHandle?.(db)
+    internalHooks?.onDbHandle?.(db)
 
     try {
       applySqlitePragmas(db, busyTimeoutMs)
       verifySqliteQuickCheck(db)
       runSqliteMigrations(db)
 
-      if (testSeam?.postOpenHook) {
-        testSeam.postOpenHook()
+      if (internalHooks?.postOpenHook) {
+        internalHooks.postOpenHook()
       }
 
       if (!testMode) {
@@ -121,14 +125,11 @@ export function openOwnMobileRelaySecurityStateSqlite(
         verifySqlitePathSecurity(dbPath)
       }
     } catch (err) {
-      // Snapshot exact disk artifacts before closing connection to prevent WAL checkpoint/mutation
-      const snapshots = captureStorageArtifacts(dbPath)
       try {
         db.close()
       } catch {
         // Ignore close error on failed setup
       }
-      restoreStorageArtifacts(snapshots)
       throw err
     }
   } finally {
