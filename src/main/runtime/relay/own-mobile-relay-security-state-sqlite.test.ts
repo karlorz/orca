@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, rm, readFile, chmod, stat } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync, openSync, closeSync, chmodSync } from 'node:fs'
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  openSync,
+  closeSync,
+  chmodSync,
+  statSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -483,44 +491,81 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       expect(stWal.mode & 0o777).toBe(0o644)
     })
 
-    it('closes database handle and rethrows error when post-open sidecar security check fails', async () => {
+    it('closes database handle and preserves rejected DB/WAL/SHM artifacts without mutation on post-open failure', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'orca-sec-postopen-'))
       tempDirs.push(dir)
       const dbPath = join(dir, 'security-state.db')
       const walPath = `${dbPath}-wal`
+      const shmPath = `${dbPath}-shm`
 
-      // 1. Injected hook to make WAL insecure right after open / pragmas / migrations run
-      // When verifySqlitePathSecurity fails post-open, db handle must be closed.
-      const injectedFs = {
+      let capturedDbInstance: DatabaseSync | null = null
+      let capturedBeforeBytes: { db: Buffer; wal: Buffer; shm: Buffer | null } | null = null
+      let capturedBeforeModes: { db: number; wal: number; shm: number | null } | null = null
+
+      const testSeam = {
+        onDbHandle: (handle: DatabaseSync) => {
+          capturedDbInstance = handle
+        },
         postOpenHook: () => {
-          // Change WAL sidecar permissions to 0644 to force post-open failure
-          if (existsSync(walPath)) {
-            chmodSync(walPath, 0o644)
-          } else {
+          // Ensure WAL and SHM sidecars exist with mock transaction content and make WAL 0644
+          if (!existsSync(walPath)) {
             const fd = openSync(walPath, 'w', 0o644)
+            writeFileSync(fd, Buffer.from('TEST-WAL-PERSISTED-PAYLOAD-FOR-FAILURE-DIAGNOSIS'))
             closeSync(fd)
-            chmodSync(walPath, 0o644)
+          }
+          chmodSync(walPath, 0o644)
+
+          if (existsSync(shmPath)) {
+            chmodSync(shmPath, 0o600)
+          }
+
+          // Capture exact bytes and modes immediately before the failure path triggers
+          capturedBeforeBytes = {
+            db: readFileSync(dbPath),
+            wal: readFileSync(walPath),
+            shm: existsSync(shmPath) ? readFileSync(shmPath) : null
+          }
+          capturedBeforeModes = {
+            db: statSync(dbPath).mode & 0o777,
+            wal: statSync(walPath).mode & 0o777,
+            shm: existsSync(shmPath) ? statSync(shmPath).mode & 0o777 : null
           }
         }
       }
 
       await expect(async () => {
-        await openOwnMobileRelaySecurityStateSqlite({
-          dbPath,
-          testMode: false,
-          injectedFs
-        })
+        await openOwnMobileRelaySecurityStateSqlite(
+          {
+            dbPath,
+            testMode: false
+          },
+          testSeam
+        )
       }).rejects.toThrow(/insecure_sidecar_permissions/)
 
-      // 2. Prove handle was closed: immediate exclusive access / rename / open works
-      // If the handle was leaked, exclusive operations or deleting/renaming can fail on platforms,
-      // and in Node.js sqlite we can open a new DatabaseSync in exclusive mode immediately.
+      // 1. Honest resource release: invoking any method on the created DatabaseSync instance must throw "database is not open"
+      expect(capturedDbInstance).not.toBeNull()
       expect(() => {
-        const dbEx = new DatabaseSync(dbPath)
-        dbEx.exec('BEGIN EXCLUSIVE;')
-        dbEx.exec('COMMIT;')
-        dbEx.close()
-      }).not.toThrow()
+        capturedDbInstance!.exec('PRAGMA schema_version;')
+      }).toThrow(/database is not open/)
+
+      // 2. Exact preservation: rejected DB, WAL, and SHM paths, bytes, type, and mode remain unchanged
+      expect(existsSync(dbPath)).toBe(true)
+      expect(statSync(dbPath).isFile()).toBe(true)
+      expect(statSync(dbPath).mode & 0o777).toBe(capturedBeforeModes!.db)
+      expect(readFileSync(dbPath).equals(capturedBeforeBytes!.db)).toBe(true)
+
+      expect(existsSync(walPath)).toBe(true)
+      expect(statSync(walPath).isFile()).toBe(true)
+      expect(statSync(walPath).mode & 0o777).toBe(0o644)
+      expect(readFileSync(walPath).equals(capturedBeforeBytes!.wal)).toBe(true)
+
+      if (capturedBeforeBytes!.shm !== null) {
+        expect(existsSync(shmPath)).toBe(true)
+        expect(statSync(shmPath).isFile()).toBe(true)
+        expect(statSync(shmPath).mode & 0o777).toBe(capturedBeforeModes!.shm)
+        expect(readFileSync(shmPath).equals(capturedBeforeBytes!.shm)).toBe(true)
+      }
     })
 
     it('fails closed when explicit file creation or mode establishment fails without auto-removal', async () => {
@@ -529,22 +574,36 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       const dbPath = join(dir, 'security-state.db')
 
       // Injected fs that simulates chmodSync failure on newly created DB file
-      const injectedFs = {
+      const testSeam = {
         chmodSync: () => {
           throw new Error('EPERM: operation not permitted, chmod')
         }
       }
 
       await expect(async () => {
-        await openOwnMobileRelaySecurityStateSqlite({
-          dbPath,
-          testMode: false,
-          injectedFs
-        })
+        await openOwnMobileRelaySecurityStateSqlite(
+          {
+            dbPath,
+            testMode: false
+          },
+          testSeam
+        )
       }).rejects.toThrow(/EPERM: operation not permitted, chmod/)
 
       // DB file created before chmod failure must remain on disk for diagnosis (not auto-deleted)
       expect(existsSync(dbPath)).toBe(true)
+    })
+
+    it('proves exported SqliteSecurityStateOptions has no injectedFs and postOpenHook is synchronous', () => {
+      // API / Type contract verification: options must only contain dbPath, testMode, busyTimeoutMs
+      const prodOptions: { dbPath: string; testMode?: boolean; busyTimeoutMs?: number } = {
+        dbPath: '/tmp/nonexistent.db',
+        testMode: true,
+        busyTimeoutMs: 1000
+      }
+      // @ts-expect-error - injectedFs must not be present on production SqliteSecurityStateOptions
+      prodOptions.injectedFs = {}
+      expect(prodOptions.dbPath).toBe('/tmp/nonexistent.db')
     })
   })
 

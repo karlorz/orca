@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   rmSync,
   writeFileSync,
+  readFileSync,
   chmodSync,
   statSync,
   openSync,
@@ -231,6 +232,7 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
       return
     }
     const dbPath = createTempDbPath()
+    const walPath = `${dbPath}-wal`
     const targetPort = 49152 + Math.floor(Math.random() * 1000)
 
     const config = parseOwnRelayServeConfig({
@@ -246,27 +248,33 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
       OWN_RELAY_OPERATOR_PROFILE_ID: 'prof-1'
     })
 
-    // To simulate post-open permission failure during server startup, we can make sidecar insecure
-    // via injected seam if openOwnMobileRelaySecurityStateSqlite supports it, or spy
+    let capturedDbInstance: DatabaseSync | null = null
+    let capturedBeforeBytes: Buffer | null = null
+
+    // Simulate post-open permission failure via internal test seam
     const sqliteModule = await import('./own-mobile-relay-security-state-sqlite')
     const origOpen = sqliteModule.openOwnMobileRelaySecurityStateSqlite
-    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation((opts) => {
-      return origOpen({
-        ...opts,
-        injectedFs: {
+    vi.spyOn(sqliteModule, 'openOwnMobileRelaySecurityStateSqlite').mockImplementation(
+      (opts, testSeam) => {
+        return origOpen(opts, {
+          ...testSeam,
+          onDbHandle: (handle) => {
+            capturedDbInstance = handle
+            testSeam?.onDbHandle?.(handle)
+          },
           postOpenHook: () => {
-            const walPath = `${dbPath}-wal`
-            if (existsSync(walPath)) {
-              chmodSync(walPath, 0o644)
-            } else {
+            if (!existsSync(walPath)) {
               const fd = openSync(walPath, 'w', 0o644)
+              writeFileSync(fd, Buffer.from('TEST-WAL-INTEGRATION-FAILURE-PRESERVATION'))
               closeSync(fd)
-              chmodSync(walPath, 0o644)
             }
+            chmodSync(walPath, 0o644)
+            capturedBeforeBytes = readFileSync(walPath)
+            testSeam?.postOpenHook?.()
           }
-        }
-      })
-    })
+        })
+      }
+    )
 
     await expect(
       startOwnRelayServer({
@@ -275,17 +283,21 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
       })
     ).rejects.toThrow(/insecure_sidecar_permissions/)
 
-    // Port must not be bound
+    // 1. Port must not be bound
     const bound = await checkPortIsOpen(targetPort)
     expect(bound).toBe(false)
 
-    // DB file handle must be released: immediate open/exclusive succeeds
+    // 2. DB handle must be released: invoking method on DatabaseSync throws "database is not open"
+    expect(capturedDbInstance).not.toBeNull()
     expect(() => {
-      const dbEx = new DatabaseSync(dbPath)
-      dbEx.exec('BEGIN EXCLUSIVE;')
-      dbEx.exec('COMMIT;')
-      dbEx.close()
-    }).not.toThrow()
+      capturedDbInstance!.exec('PRAGMA schema_version;')
+    }).toThrow(/database is not open/)
+
+    // 3. Rejected WAL artifact must remain present with exact bytes and mode
+    expect(existsSync(walPath)).toBe(true)
+    expect(statSync(walPath).isFile()).toBe(true)
+    expect(statSync(walPath).mode & 0o777).toBe(0o644)
+    expect(readFileSync(walPath).equals(capturedBeforeBytes!)).toBe(true)
   })
 
   it('Scenario 5e: Missing state path or auth origin fails synchronously in configuration validation before server startup', () => {

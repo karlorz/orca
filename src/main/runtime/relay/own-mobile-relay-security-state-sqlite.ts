@@ -24,6 +24,8 @@ import {
   CURRENT_SCHEMA_VERSION,
   DEFAULT_BUSY_TIMEOUT_MS,
   applySqlitePragmas,
+  captureStorageArtifacts,
+  restoreStorageArtifacts,
   runSqliteMigrations,
   verifySqliteParentDirectorySecurity,
   verifySqlitePathSecurity,
@@ -58,16 +60,16 @@ import {
 
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
-export type SqliteSecurityFsHook = {
+export type SqliteSecurityTestSeam = {
   chmodSync?: (path: string, mode: number) => void
-  postOpenHook?: () => void | Promise<void>
+  onDbHandle?: (db: DatabaseSync) => void
+  postOpenHook?: () => void
 }
 
 export type SqliteSecurityStateOptions = {
   dbPath: string
   testMode?: boolean
   busyTimeoutMs?: number
-  injectedFs?: SqliteSecurityFsHook
 }
 
 export type SqliteDbContext = {
@@ -76,9 +78,10 @@ export type SqliteDbContext = {
 }
 
 export function openOwnMobileRelaySecurityStateSqlite(
-  options: SqliteSecurityStateOptions
+  options: SqliteSecurityStateOptions,
+  testSeam?: SqliteSecurityTestSeam
 ): OwnMobileRelaySecurityState {
-  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS, injectedFs } = options
+  const { dbPath, testMode = false, busyTimeoutMs = DEFAULT_BUSY_TIMEOUT_MS } = options
 
   const parentDir = dirname(dbPath)
   if (!testMode) {
@@ -94,25 +97,23 @@ export function openOwnMobileRelaySecurityStateSqlite(
       // Create file with 0600 permissions
       const fd = openSync(dbPath, 'w', 0o600)
       closeSync(fd)
-      if (injectedFs?.chmodSync) {
-        injectedFs.chmodSync(dbPath, 0o600)
+      if (testSeam?.chmodSync) {
+        testSeam.chmodSync(dbPath, 0o600)
       } else {
         chmodSync(dbPath, 0o600)
       }
     }
 
     db = new DatabaseSync(dbPath)
+    testSeam?.onDbHandle?.(db)
 
     try {
       applySqlitePragmas(db, busyTimeoutMs)
       verifySqliteQuickCheck(db)
       runSqliteMigrations(db)
 
-      if (injectedFs?.postOpenHook) {
-        const res = injectedFs.postOpenHook()
-        if (res && typeof (res as Promise<void>).then === 'function') {
-          throw new Error('postOpenHook must be synchronous in SQLite open')
-        }
+      if (testSeam?.postOpenHook) {
+        testSeam.postOpenHook()
       }
 
       if (!testMode) {
@@ -120,11 +121,14 @@ export function openOwnMobileRelaySecurityStateSqlite(
         verifySqlitePathSecurity(dbPath)
       }
     } catch (err) {
+      // Snapshot exact disk artifacts before closing connection to prevent WAL checkpoint/mutation
+      const snapshots = captureStorageArtifacts(dbPath)
       try {
         db.close()
       } catch {
         // Ignore close error on failed setup
       }
+      restoreStorageArtifacts(snapshots)
       throw err
     }
   } finally {
