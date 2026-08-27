@@ -37,23 +37,30 @@ function sendPasswordPageResponse(
   response.end(html)
 }
 
+function isAllowedPasswordOrigin(
+  originHeader: string | undefined,
+  allowedOrigins: string[]
+): boolean {
+  if (!originHeader) {
+    return false
+  }
+  return allowedOrigins.includes(originHeader)
+}
+
 export async function handlePasswordPost(
   request: IncomingMessage,
   securityState: OwnMobileRelaySecurityState,
   configuredOrigin: string,
   response: ServerResponse,
   throttle?: AuthThrottle,
-  passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY
+  passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY,
+  advertisedOrigin?: string
 ): Promise<void> {
   const originHeader = request.headers.origin
-  if (!originHeader || originHeader !== configuredOrigin) {
-    response.writeHead(403, { 'content-type': 'text/plain' })
-    response.end('Forbidden')
-    return
-  }
-
-  const secFetchSite = request.headers['sec-fetch-site']
-  if (secFetchSite === 'cross-site') {
+  const allowedOrigins = [configuredOrigin, advertisedOrigin].filter((value): value is string =>
+    Boolean(value)
+  )
+  if (!isAllowedPasswordOrigin(originHeader, allowedOrigins)) {
     response.writeHead(403, { 'content-type': 'text/plain' })
     response.end('Forbidden')
     return

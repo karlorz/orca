@@ -59,7 +59,8 @@ export function createOwnMobileRelayRequestHandler(
           authOrigin,
           response,
           context.throttle,
-          context.passwordPolicy
+          context.passwordPolicy,
+          context.advertisedOriginCallback()
         )
         return
       }

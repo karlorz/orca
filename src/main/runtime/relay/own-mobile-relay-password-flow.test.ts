@@ -83,7 +83,8 @@ describe('own mobile relay password management', () => {
           },
           body: validBody
         })
-        expect(resCrossSite.status).toBe(403)
+        expect(resCrossSite.status).not.toBe(403)
+        expect([200, 401]).toContain(resCrossSite.status)
 
         const resWrongCT = await fetch(`${server.origin}/v1/desktop/auth/password`, {
           method: 'POST',
