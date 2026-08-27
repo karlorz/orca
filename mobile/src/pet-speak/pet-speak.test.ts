@@ -291,6 +291,8 @@ describe('subscribeToPetSpeak', () => {
       mediaSession: mockMediaSession
     })
 
+    await new Promise((r) => setTimeout(r, 10))
+
     expect(mockClient.subscribe).toHaveBeenCalledWith(
       'pet.speak.subscribe',
       {},

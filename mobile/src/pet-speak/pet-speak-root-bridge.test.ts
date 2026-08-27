@@ -213,8 +213,8 @@ describe('PetSpeakRootBridge', () => {
     })
 
     // Host A is connected -> exactly 1 voice subscription
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined)
-    expect(mockSubscribeToPetSpeak).not.toHaveBeenCalledWith(clientB, undefined)
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined, 'host-a')
+    expect(mockSubscribeToPetSpeak).not.toHaveBeenCalledWith(clientB, undefined, 'host-b')
     expect(unsubs['host-a']).toBeDefined()
 
     // 1. Route navigation: Home -> Session -> Settings -> Home
@@ -243,7 +243,7 @@ describe('PetSpeakRootBridge', () => {
       await Promise.resolve()
     })
     expect(mockSubscribeToPetSpeak).toHaveBeenCalledTimes(2)
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined)
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined, 'host-b')
     expect(unsubs['host-b']).toBeDefined()
 
     // 3. Host B disconnects -> cleans up subscription for host-b exactly once
@@ -267,7 +267,7 @@ describe('PetSpeakRootBridge', () => {
       await Promise.resolve()
     })
     expect(unsubs['host-a']).toHaveBeenCalledTimes(1) // Old client cleaned up
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA2, undefined)
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA2, undefined, 'host-a')
 
     const unsubA2 = mockSubscribeToPetSpeak.mock.results[2]?.value
 
@@ -371,10 +371,10 @@ describe('PetSpeakRootBridge', () => {
     })
 
     // All 4 hosts must be subscribed to pet.speak
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined)
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined)
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientC, undefined)
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientD, undefined)
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined, 'host-a')
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined, 'host-b')
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientC, undefined, 'host-c')
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientD, undefined, 'host-d')
     expect(mockSubscribeToPetSpeak).toHaveBeenCalledTimes(4)
 
     await act(async () => {
@@ -459,8 +459,8 @@ describe('PetSpeakRootBridge', () => {
     })
 
     // Both A and B initially connected and subscribed
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined)
-    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined)
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientA, undefined, 'host-a')
+    expect(mockSubscribeToPetSpeak).toHaveBeenCalledWith(clientB, undefined, 'host-b')
     expect(mockSubscribeToPetSpeak).toHaveBeenCalledTimes(2)
 
     // Now trigger load 1 (slow, returns A+B)

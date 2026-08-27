@@ -46,13 +46,16 @@ type CapturedPetSocket = { socket: MockPetSocket | null }
 function captureSubscriberConnectFn(): {
   captured: CapturedPetSocket
   connectFn: PetVoiceRelayOptions['connectFn']
+  subscribeLines: string[]
 } {
   const captured: CapturedPetSocket = { socket: null }
+  const subscribeLines: string[] = []
   const connectFn: PetVoiceRelayOptions['connectFn'] = vi.fn(
     (_path: string, onConnect?: () => void) => {
       const sock = createMockPetSocket((data) => {
         if (data.includes('subscribe')) {
           captured.socket = sock
+          subscribeLines.push(data)
         }
       })
       if (onConnect) {
@@ -61,7 +64,7 @@ function captureSubscriberConnectFn(): {
       return sock as unknown as Socket
     }
   )
-  return { captured, connectFn }
+  return { captured, connectFn, subscribeLines }
 }
 
 function emitCapturedSpeakIntent(captured: CapturedPetSocket, payload: unknown): void {
@@ -87,7 +90,8 @@ describe('PetVoiceRelay', () => {
 
     const relay = new PetVoiceRelay({
       connectFn: mockConnect,
-      petSocketPath: '/tmp/test-pet.sock'
+      petSocketPath: '/tmp/test-pet.sock',
+      reporterId: 'orca-custom-123'
     })
 
     expect(relay.getAudioSessionState()).toBe('dead')
@@ -95,7 +99,9 @@ describe('PetVoiceRelay', () => {
     // First voice subscription arrives -> live
     await relay.onVoiceSubscriptionPresenceChange(1)
     expect(relay.getAudioSessionState()).toBe('live')
-    expect(sentConfigLines).toContain('{"kind":"config","audio_session":"live","speak":false}\n')
+    expect(sentConfigLines).toContain(
+      '{"kind":"config","audio_session":"live","speak":false,"reporter":"orca-custom-123"}\n'
+    )
 
     // Second subscription arrives -> remains live
     await relay.onVoiceSubscriptionPresenceChange(2)
@@ -108,21 +114,28 @@ describe('PetVoiceRelay', () => {
     // Last subscription cleans up -> dead
     await relay.onVoiceSubscriptionPresenceChange(0)
     expect(relay.getAudioSessionState()).toBe('dead')
-    expect(sentConfigLines).toContain('{"kind":"config","audio_session":"dead","speak":false}\n')
+    expect(sentConfigLines).toContain(
+      '{"kind":"config","audio_session":"dead","speak":false,"reporter":"orca-custom-123"}\n'
+    )
 
     relay.destroy()
   })
 
-  it('forwards speak-intent to connected subscribers when audio_session is live', async () => {
-    const { captured, connectFn } = captureSubscriberConnectFn()
+  it('forwards speak-intent to connected subscribers when audio_session is live and sends reporter in subscribe payload', async () => {
+    const { captured, connectFn, subscribeLines } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
       connectFn,
-      petSocketPath: '/tmp/test-pet.sock'
+      petSocketPath: '/tmp/test-pet.sock',
+      reporterId: 'orca-sub-test'
     })
 
     // Give nextTick a turn to connect
     await new Promise((r) => process.nextTick(r))
+
+    expect(subscribeLines).toContain(
+      '{"kind":"subscribe","channel":"speak-intent","speak":false,"reporter":"orca-sub-test"}\n'
+    )
 
     const emittedEvents: PetSpeakEvent[] = []
     relay.onSpeak((event) => {
@@ -288,7 +301,7 @@ describe('PetVoiceRelay', () => {
     relay.destroy()
   })
 
-  it('writes audio_session live to a real unix pet.sock (not a nextTick mock)', async () => {
+  it('writes audio_session live with reporter to a real unix pet.sock (not a nextTick mock)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pet-voice-relay-'))
     const petSocketPath = join(dir, 'pet.sock')
     const received: string[] = []
@@ -303,18 +316,35 @@ describe('PetVoiceRelay', () => {
     })
 
     try {
-      const relay = new PetVoiceRelay({
+      const relay1 = new PetVoiceRelay({
         petSocketPath,
         reconnectBaseDelayMs: 20,
-        reconnectMaxDelayMs: 50
+        reconnectMaxDelayMs: 50,
+        reporterId: 'orca-pid-1'
       })
       await new Promise((r) => setTimeout(r, 40))
-      await relay.onVoiceSubscriptionPresenceChange(1)
+      await relay1.onVoiceSubscriptionPresenceChange(1)
+      await relay1.onVoiceSubscriptionPresenceChange(0)
       await new Promise((r) => setTimeout(r, 80))
-      const joined = received.join('')
-      expect(joined).toContain('"audio_session":"live"')
-      expect(joined).toContain('"kind":"config"')
-      relay.destroy()
+      const joined1 = received.join('')
+      expect(joined1).toContain('"audio_session":"live"')
+      expect(joined1).toContain('"kind":"config"')
+      expect(joined1).toContain('"reporter":"orca-pid-1"')
+      relay1.destroy()
+
+      // Second instance has different reporterId
+      const relay2 = new PetVoiceRelay({
+        petSocketPath,
+        reconnectBaseDelayMs: 20,
+        reconnectMaxDelayMs: 50,
+        reporterId: 'orca-pid-2'
+      })
+      await new Promise((r) => setTimeout(r, 40))
+      await relay2.onVoiceSubscriptionPresenceChange(1)
+      await new Promise((r) => setTimeout(r, 80))
+      const joined2 = received.join('')
+      expect(joined2).toContain('"reporter":"orca-pid-2"')
+      relay2.destroy()
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       rmSync(dir, { recursive: true, force: true })

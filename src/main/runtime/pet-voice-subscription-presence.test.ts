@@ -347,7 +347,8 @@ describe('PetVoiceSubscriptionTracker', () => {
     const deadConfigLine = `${JSON.stringify({
       kind: 'config',
       audio_session: 'dead',
-      speak: false
+      speak: false,
+      reporter: petVoiceRelay.getReporterId()
     })}\n`
 
     expect(writtenLines).toContain(deadConfigLine)

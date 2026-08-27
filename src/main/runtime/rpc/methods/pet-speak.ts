@@ -1,7 +1,13 @@
 import { z } from 'zod'
 import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
 
 let petSpeakSubscriptionSeq = 0
+
+const PetSpeakSubscribeParams = z.object({
+  last_seen_seq: z.number().int().min(0, 'last_seen_seq must be a non-negative integer').optional(),
+  epoch: z.string().optional()
+})
 
 const PetSpeakUnsubscribeParams = z.object({
   subscriptionId: z
@@ -21,31 +27,73 @@ const PetSpeakCompleteParams = z.object({
 export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'pet.speak.subscribe',
-    params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    params: PetSpeakSubscribeParams,
+    handler: async (params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
-        const unsubscribe =
-          runtime.onPetSpeakDispatched?.((event) => {
-            emit(event)
-          }) ?? (() => {})
-
+        let isDisposed = false
         const seq = ++petSpeakSubscriptionSeq
         const subscriptionId = `pet-speak-${connectionId ?? 'inproc'}-${seq}`
         const tracker = runtime.getPetVoiceSubscriptionTracker?.()
         const releaseTracker = tracker?.registerSubscription(subscriptionId)
 
+        const teardown = (eventId?: string) => {
+          if (isDisposed) {
+            return
+          }
+          isDisposed = true
+          releaseTracker?.()
+          unsubscribe()
+          if (eventId && runtime.handlePetSpeakComplete) {
+            void runtime.handlePetSpeakComplete(eventId, 'voice-unavailable').catch(() => {})
+          }
+          resolve()
+        }
+
+        const safeEmit = (data: unknown, eventId?: string): boolean => {
+          if (isDisposed) {
+            return false
+          }
+          try {
+            emit(data)
+            return true
+          } catch {
+            teardown(eventId)
+            return false
+          }
+        }
+
+        const unsubscribe =
+          runtime.onPetSpeakDispatched?.((event: ReplayablePetSpeakEvent) => {
+            safeEmit(event, event.event_id)
+          }) ?? (() => {})
+
         runtime.registerSubscriptionCleanup(
           subscriptionId,
           () => {
-            releaseTracker?.()
-            unsubscribe()
-            emit({ type: 'end' })
-            resolve()
+            if (isDisposed) {
+              return
+            }
+            safeEmit({ type: 'end' })
+            teardown()
           },
           connectionId
         )
 
-        emit({ type: 'ready', subscriptionId })
+        // 1. Emit ready frame with subscriptionId and epoch
+        const epoch = runtime.getPetSpeakEpoch?.()
+        if (!safeEmit({ type: 'ready', subscriptionId, epoch })) {
+          return
+        }
+
+        // 2. Replay missed events if client is catching up
+        if (params?.last_seen_seq !== undefined && params?.epoch && runtime.getMissedPetSpeakSince) {
+          const missed = runtime.getMissedPetSpeakSince(params.last_seen_seq, params.epoch)
+          for (const event of missed) {
+            if (!safeEmit(event, event.event_id)) {
+              return
+            }
+          }
+        }
       })
     }
   }),

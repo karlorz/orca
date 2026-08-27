@@ -1196,6 +1196,10 @@ import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
 } from './mobile-notification-replay'
+import {
+  PetSpeakReplayBuffer,
+  type ReplayablePetSpeakEvent
+} from './pet-speak-replay'
 import type { PetSpeakEvent, PetSpeakOutcome } from './pet-voice-relay'
 import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
@@ -3356,7 +3360,7 @@ export class OrcaRuntimeService {
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
-  private petSpeakListeners = new Set<(event: PetSpeakEvent) => void>()
+  private petSpeakListeners = new Set<(event: ReplayablePetSpeakEvent) => void>()
   private petVoiceSubscriptionTracker: PetVoiceSubscriptionTracker | null = null
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
   // Why a separate map: `connected` is a wire field that any inventory gap
@@ -14642,7 +14646,12 @@ export class OrcaRuntimeService {
     return this.petVoiceSubscriptionTracker
   }
 
-  onPetSpeakDispatched(listener: (event: PetSpeakEvent) => void): () => void {
+  // Why: bounded replay buffer for pet.speak streaming subscription catch-up.
+  // Every dispatched pet.speak event is recorded with a monotonic seq so a
+  // reconnecting client can fetch exactly the events it missed within TTL (45s).
+  private readonly petSpeakReplay = new PetSpeakReplayBuffer()
+
+  onPetSpeakDispatched(listener: (event: ReplayablePetSpeakEvent) => void): () => void {
     this.petSpeakListeners.add(listener)
     return () => {
       this.petSpeakListeners.delete(listener)
@@ -14650,7 +14659,16 @@ export class OrcaRuntimeService {
   }
 
   dispatchPetSpeak(event: PetSpeakEvent): void {
-    notifyRuntimeListeners(this.petSpeakListeners, (listener) => listener(event), 'pet-speak')
+    const recorded = this.petSpeakReplay.record(event)
+    notifyRuntimeListeners(this.petSpeakListeners, (listener) => listener(recorded), 'pet-speak')
+  }
+
+  getMissedPetSpeakSince(lastSeenSeq: number, epoch?: string): ReplayablePetSpeakEvent[] {
+    return this.petSpeakReplay.getMissedSince(lastSeenSeq, epoch)
+  }
+
+  getPetSpeakEpoch(): string {
+    return this.petSpeakReplay.epoch
   }
 
   private petSpeakCompleteHandler:
