@@ -535,7 +535,9 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       }
     })
 
-    it('fails closed when explicit file creation or mode establishment fails', async (ctx) => {
+    // Note: Post-creation chmodSync failure is not directly injectable without a production test seam;
+    // fail-closed behavior relies on un-caught syscall propagation in openOwnMobileRelaySecurityStateSqlite.
+    it('fails closed when explicit file creation is denied by directory permissions', async (ctx) => {
       if (process.platform === 'win32') {
         ctx.skip()
         return

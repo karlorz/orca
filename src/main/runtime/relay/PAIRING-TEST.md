@@ -65,7 +65,15 @@ This document specifies the manual security verification procedures for the own-
 
 13. **Test-Stage Disposable Database Reset Procedure**
     - [ ] **Stop Service**: Ensure the relay daemon is completely stopped before any storage reset (`systemctl stop own-mobile-relay` or terminate foreground process).
-    - [ ] **Optional Protected Backup**: If needed for offline inspection, create a restricted timestamped backup directory with mode `0700` and copy all existing SQLite database artifacts (`.db`, `-wal`, `-shm`, `-journal`) into it (`mkdir -m 0700 -p /var/backups/relay-$(date +%s) && cp -p /path/to/security-state.db* /var/backups/relay-$(date +%s)/`).
+    - [ ] **Optional Protected Backup**: If needed for offline inspection, create a restricted timestamped backup directory with mode `0700` and copy only the exact existing SQLite database artifacts (`.db`, `-wal`, `-shm`, `-journal`) into it without failing if optional sidecars are absent:
+      ```bash
+      BACKUP_DIR="/var/backups/relay-$(date +%s)"
+      mkdir -m 0700 -p "$BACKUP_DIR"
+      for ext in "" "-wal" "-shm" "-journal"; do
+        src="/path/to/security-state.db${ext}"
+        [ -f "$src" ] && cp -p "$src" "$BACKUP_DIR/"
+      done
+      ```
     - [ ] **Remove DB and Sidecars Together**: Remove the main database along with any WAL, SHM, and journal files (`rm -f security-state.db security-state.db-wal security-state.db-shm security-state.db-journal`).
     - [ ] **Retain Bootstrap Configuration**: Retain the protected bootstrap configuration (`OWN_RELAY_OPERATOR_EMAIL`, `OWN_RELAY_OPERATOR_PASSWORD`, `OWN_RELAY_OPERATOR_USER_ID`, `OWN_RELAY_OPERATOR_PROFILE_ID`) in the environment/unit for test account initialization.
     - [ ] **Start and Verify Health**: Start the service and verify healthy startup (`systemctl start own-mobile-relay` and probe `/health` or loopback port).
