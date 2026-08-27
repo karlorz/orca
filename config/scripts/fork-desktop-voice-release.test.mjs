@@ -37,6 +37,13 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('merge-base --is-ancestor')
   })
 
+  it('stages latest-mac.yml and optional blockmaps in desktop-artifacts', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('dist/latest-mac.yml')
+    expect(rawYaml).toContain('cp dist/latest-mac.yml desktop-artifacts/')
+    expect(rawYaml).toContain('dist/*.blockmap')
+  })
+
   it('does not share the mobile tag pattern or publish DMG onto mobile releases', () => {
     const desktop = readWorkflow(workflowPath)
     const mobile = readWorkflow(mobileWorkflowPath)

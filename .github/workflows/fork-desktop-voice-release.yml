@@ -83,7 +83,9 @@ jobs:
           pnpm run build:keyboard-layout-macos
           pnpm run build:notification-status-macos
           pnpm run ensure:electron-runtime
-          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
+          # --publish never: tag pushes default to onTagOrDraft and demand GH_TOKEN;
+          # our publish-release job owns release creation.
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64 --publish never
 
       - name: Stage mac artifacts
         run: |
@@ -95,10 +97,19 @@ jobs:
             ls -la dist || true
             exit 1
           fi
+          if [[ ! -f dist/latest-mac.yml ]]; then
+            echo "Expected dist/latest-mac.yml" >&2
+            ls -la dist || true
+            exit 1
+          fi
           cp dist/orca-macos-arm64.dmg desktop-artifacts/
+          cp dist/latest-mac.yml desktop-artifacts/
           if [[ -f dist/orca-macos-arm64.zip ]]; then
             cp dist/orca-macos-arm64.zip desktop-artifacts/
           fi
+          for blockmap in dist/*.blockmap; do
+            cp "$blockmap" desktop-artifacts/
+          done
           (cd desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
 
       - name: Upload mac artifacts

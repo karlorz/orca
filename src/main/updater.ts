@@ -62,8 +62,12 @@ import {
   statusesEqual
 } from './updater-fallback'
 import {
+  fetchNewerForkDesktopReleaseTag,
   fetchNewerReleaseTagsWithReadiness,
-  getReleaseDownloadUrl
+  getReleaseDownloadUrl,
+  getReleaseDownloadUrlForFeed,
+  KARLORZ_FORK_RELEASE_FEED,
+  selectReleaseFeed
 } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 import {
@@ -1363,6 +1367,25 @@ async function pinDefaultReleaseFeed(
   const isPerfCheck = variant === 'perf'
   const includePrerelease =
     isPerfCheck || includePrereleaseActive || isPrereleaseVersion(currentVersion)
+  const feedConfig = selectReleaseFeed(currentVersion)
+  const isForkFeed = feedConfig === KARLORZ_FORK_RELEASE_FEED
+
+  if (isForkFeed) {
+    clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
+    const forkTag = await fetchNewerForkDesktopReleaseTag(currentVersion, feedConfig)
+    if (forkTag) {
+      const url = getReleaseDownloadUrlForFeed(feedConfig, forkTag)
+      console.info(
+        `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+      )
+      autoUpdater.setFeedURL({ provider: 'generic', url })
+      return 'ready'
+    }
+    console.info('[updater] fork release feed unresolved; keeping previous feed')
+    return 'ready'
+  }
+
   const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
     currentVersion,
     includePrerelease ? 2 : 1,
@@ -2224,10 +2247,13 @@ export function setupAutoUpdater(
 
   // Why: generic provider avoids the native GitHub provider's RC-channel filtering; per-check repinning to a concrete /releases/download/<tag>/ URL avoids /latest redirect drift between check and download.
   if (activeUpdateSource === 'release') {
-    autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/latest/download'
-    })
+    const defaultFeed = selectReleaseFeed(app.getVersion())
+    if (defaultFeed !== KARLORZ_FORK_RELEASE_FEED) {
+      autoUpdater.setFeedURL({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/latest/download'
+      })
+    }
   }
 
   if (autoUpdaterInitialized) {

@@ -88,7 +88,12 @@ vi.mock('./updater-prerelease-feed', () => ({
     tags: ['v1.0.61'],
     state: 'ready'
   }),
-  getReleaseDownloadUrl: vi.fn()
+  fetchNewerForkDesktopReleaseTag: vi.fn().mockResolvedValue(null),
+  getReleaseDownloadUrl: vi.fn(),
+  getReleaseDownloadUrlForFeed: vi.fn(),
+  selectReleaseFeed: vi.fn(() => ({})),
+  STABLYAI_RELEASE_FEED: {},
+  KARLORZ_FORK_RELEASE_FEED: {}
 }))
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: vi.fn(),

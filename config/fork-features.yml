@@ -110,3 +110,12 @@ features:
       - mobile/packages/expo-pet-speech
     wiki: projects/grok-desktop-pet/work/2026-08-27-android-pet-tts-rate
 
+  - id: fork-desktop-auto-update-feed
+    title: Fork desktop apps auto-update from karlorz/orca prereleases
+    kind: ci
+    status: in-progress
+    paths:
+      - src/main/updater-prerelease-feed.ts
+      - src/main/updater.ts
+      - .github/workflows/fork-desktop-voice-release.yml
+
