@@ -83,6 +83,7 @@ class ExpoPetSpeechModule : Module() {
 
             val validEventId = eventId!!.trim()
             val validText = text!!.trim()
+            val rate = PetSpeechRate.parse(options["rate"])
 
             val context = appContext.reactContext
             if (context == null) {
@@ -135,10 +136,9 @@ class ExpoPetSpeechModule : Module() {
                         return@createTtsEngine
                     }
 
-                    val rate = PetSpeechRate.parse(options["rate"])
-                    if (tts.setSpeechRate(rate) == TextToSpeech.ERROR) {
-                        tts.setSpeechRate(PetSpeechRate.DEFAULT)
-                    }
+                    // synthesizeToFile often ignores setSpeechRate (especially CJK engines).
+                    // Keep engine rate at 1.0 and apply the pet multiplier during MediaPlayer playback.
+                    tts.setSpeechRate(1.0f)
 
                     val utteranceId = "utterance_${owner.id}_$validEventId"
 
@@ -150,7 +150,7 @@ class ExpoPetSpeechModule : Module() {
                                 engineLifecycle.onSynthesisComplete()
                                 mainHandler.post {
                                     if (resourceOwnerRegistry.isCurrent(owner)) {
-                                        startServicePlayback(context, owner, validEventId, validText, tempFilePath)
+                                        startServicePlayback(context, owner, validEventId, validText, tempFilePath, rate)
                                     } else {
                                         owner.teardown()
                                     }
@@ -316,7 +316,8 @@ class ExpoPetSpeechModule : Module() {
         owner: PetSpeechResourceOwner,
         eventId: String,
         text: String,
-        tempFilePath: String
+        tempFilePath: String,
+        rate: Float
     ) {
         val startIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
             putExtra(PetSpeechForegroundService.EXTRA_OWNER_ID, owner.id)
@@ -370,7 +371,7 @@ class ExpoPetSpeechModule : Module() {
                         }
                     }
 
-                    foregroundService.playSpeech(owner.id, eventId, text, tempFilePath) { id, outcome ->
+                    foregroundService.playSpeech(owner.id, eventId, text, tempFilePath, rate) { id, outcome ->
                         owner.settle(outcome)
                     }
                 }

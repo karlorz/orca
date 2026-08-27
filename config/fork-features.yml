@@ -81,3 +81,12 @@ features:
       - src/main/orca-profiles/fork-own-relay-defaults.ts
       - src/main/orca-profiles/profile-cloud-auth-config.ts
     wiki: projects/orca/work/2026-08-26-self-hosted-mobile-relay-sg01
+
+  - id: pet-voice-android-rate-step
+    title: Android pet TTS plays one 語速 step faster than Mac
+    kind: product
+    status: landed
+    paths:
+      - mobile/packages/expo-pet-speech
+    wiki: projects/grok-desktop-pet/work/2026-08-27-android-pet-tts-rate
+

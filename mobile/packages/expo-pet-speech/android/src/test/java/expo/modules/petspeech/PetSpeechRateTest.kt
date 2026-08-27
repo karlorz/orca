@@ -20,4 +20,13 @@ class PetSpeechRateTest {
         assertEquals(2.0f, PetSpeechRate.parse(2), 0.0001f)
         assertEquals(0.8f, PetSpeechRate.parse("0.8"), 0.0001f)
     }
+
+    @Test
+    fun androidPlaybackIsOneMenuStepFaster() {
+        assertEquals(1.0f, PetSpeechRate.androidPlaybackSpeed(0.8f), 0.0001f)
+        assertEquals(1.2f, PetSpeechRate.androidPlaybackSpeed(1.0f), 0.0001f)
+        assertEquals(1.5f, PetSpeechRate.androidPlaybackSpeed(1.2f), 0.0001f)
+        assertEquals(2.0f, PetSpeechRate.androidPlaybackSpeed(1.5f), 0.0001f)
+        assertEquals(2.5f, PetSpeechRate.androidPlaybackSpeed(2.0f), 0.0001f)
+    }
 }

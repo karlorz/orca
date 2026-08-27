@@ -11,6 +11,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.PlaybackParams
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -182,6 +183,7 @@ class PetSpeechForegroundService : Service() {
         eventId: String,
         text: String,
         tempFilePath: String,
+        rate: Float = PetSpeechRate.DEFAULT,
         onOutcome: (String, PetSpeechOutcome) -> Unit
     ) {
         // Reset player and focus for incoming utterance
@@ -200,7 +202,7 @@ class PetSpeechForegroundService : Service() {
                     }
                 }
                 is PetSpeechStateMachine.Action.PlayAudioFile -> {
-                    playAudio(action.filePath)
+                    playAudio(action.filePath, PetSpeechRate.androidPlaybackSpeed(rate))
                 }
                 is PetSpeechStateMachine.Action.AbandonAudioFocus -> {
                     abandonSpeechAudioFocus()
@@ -315,7 +317,7 @@ class PetSpeechForegroundService : Service() {
         }
     }
 
-    private fun playAudio(filePath: String) {
+    private fun playAudio(filePath: String, rate: Float) {
         try {
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
@@ -334,6 +336,14 @@ class PetSpeechForegroundService : Service() {
                     true
                 }
                 prepare()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        playbackParams = PlaybackParams()
+                            .setSpeed(rate)
+                            .setPitch(1.0f)
+                    } catch (_: Exception) {
+                    }
+                }
                 start()
             }
         } catch (_: Exception) {
