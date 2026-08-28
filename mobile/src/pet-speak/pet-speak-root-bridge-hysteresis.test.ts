@@ -275,6 +275,181 @@ describe('PetSpeakRootBridge reconnect hysteresis', () => {
     expect(releaseSessionMock).toHaveBeenCalledTimes(1)
   })
 
+  it('holds voice session and keeps reconnecting notification through reconnecting -> connecting -> handshaking oscillation', async () => {
+    const clientA = makeFakeClient('connected')
+    openHostLogicalClientMock.mockReturnValue(clientA)
+    loadHostCatalogMock.mockResolvedValue([hostCatalogEntry(HOST_A)])
+
+    const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+    const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+    const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+    const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+    await act(async () => {
+      create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            isAndroid: true,
+            ensureNotificationPermissions: ensurePermissionsMock,
+            acquireVoiceSession: acquireSessionMock,
+            releaseVoiceSession: releaseSessionMock,
+            updateVoiceSessionNotification: updateNotificationMock
+          })
+        )
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(acquireSessionMock).toHaveBeenCalledTimes(1)
+
+    // Socket drops -> reconnecting
+    await act(async () => {
+      clientA.emitState('reconnecting')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+    expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+
+    // First redial fires -> connecting
+    await act(async () => {
+      clientA.emitState('connecting')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // TLS/handshake phase -> handshaking
+    await act(async () => {
+      clientA.emitState('handshaking')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // Handshake fails / dial fails -> reconnecting again
+    await act(async () => {
+      clientA.emitState('reconnecting')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // Recovers after 2 minutes of oscillation
+    await act(async () => {
+      vi.advanceTimersByTime(2 * 60 * 1000)
+      clientA.emitState('connected')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(updateNotificationMock).toHaveBeenCalledWith('Pet voice connected')
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('anchors grace clock at the first loss of connected so oscillation does not reset or extend grace', async () => {
+    const clientA = makeFakeClient('connected')
+    openHostLogicalClientMock.mockReturnValue(clientA)
+    loadHostCatalogMock.mockResolvedValue([hostCatalogEntry(HOST_A)])
+
+    const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+    const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+    const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+    const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+    await act(async () => {
+      create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            isAndroid: true,
+            ensureNotificationPermissions: ensurePermissionsMock,
+            acquireVoiceSession: acquireSessionMock,
+            releaseVoiceSession: releaseSessionMock,
+            updateVoiceSessionNotification: updateNotificationMock
+          })
+        )
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // T = 0: loss of connection
+    await act(async () => {
+      clientA.emitState('reconnecting')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // T = 2 min: redial to connecting
+    await act(async () => {
+      vi.advanceTimersByTime(2 * 60 * 1000)
+      clientA.emitState('connecting')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // T = 4 min: oscillates to handshaking then reconnecting
+    await act(async () => {
+      vi.advanceTimersByTime(2 * 60 * 1000)
+      clientA.emitState('handshaking')
+      await Promise.resolve()
+      clientA.emitState('reconnecting')
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).not.toHaveBeenCalled()
+
+    // T = 5 min (1 more minute, 5 min total from T=0): grace should expire and release
+    await act(async () => {
+      vi.advanceTimersByTime(1 * 60 * 1000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases immediately when host transitions to auth-failed', async () => {
+    const clientA = makeFakeClient('connected')
+    openHostLogicalClientMock.mockReturnValue(clientA)
+    loadHostCatalogMock.mockResolvedValue([hostCatalogEntry(HOST_A)])
+
+    const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+    const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+    const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+    const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+    await act(async () => {
+      create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            isAndroid: true,
+            ensureNotificationPermissions: ensurePermissionsMock,
+            acquireVoiceSession: acquireSessionMock,
+            releaseVoiceSession: releaseSessionMock,
+            updateVoiceSessionNotification: updateNotificationMock
+          })
+        )
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      clientA.emitState('auth-failed')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(releaseSessionMock).toHaveBeenCalledTimes(1)
+  })
+
   it('releases immediately when reconnecting host becomes disconnected', async () => {
     const clientA = makeFakeClient('connected')
     openHostLogicalClientMock.mockReturnValue(clientA)

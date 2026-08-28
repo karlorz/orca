@@ -153,6 +153,33 @@ describe('decidePetVoiceHoldAction', () => {
     })
   })
 
+  it('holds session and sets reconnecting notification when 0 connected but >=1 connecting or handshaking via stillTryingCount', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: 'Pet voice connected'
+    }
+    const actionConnecting = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      stillTryingCount: 1,
+      now: 5000
+    })
+
+    expect(actionConnecting).toEqual({
+      type: 'update-notification',
+      notificationText: 'Orca Pet — Reconnecting...',
+      nextState: {
+        isSessionHeld: true,
+        isAcquiring: false,
+        reconnectingSince: 5000,
+        lastNotificationText: 'Orca Pet — Reconnecting...'
+      }
+    })
+  })
+
   it('releases immediately when 0 connected and 0 reconnecting (e.g. disconnected or auth-failed)', () => {
     const state: PetVoiceHoldState = {
       isSessionHeld: true,

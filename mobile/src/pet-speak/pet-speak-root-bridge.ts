@@ -132,9 +132,13 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
 
       const connectedCount = currentSubs.size
       let reconnectingCount = 0
+      let stillTryingCount = 0
       for (const state of hostStates.values()) {
         if (state === 'reconnecting') {
           reconnectingCount++
+        }
+        if (state === 'reconnecting' || state === 'connecting' || state === 'handshaking') {
+          stillTryingCount++
         }
       }
 
@@ -142,6 +146,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
         state: holdStateRef.current,
         connectedCount,
         reconnectingCount,
+        stillTryingCount,
         now
       })
 
