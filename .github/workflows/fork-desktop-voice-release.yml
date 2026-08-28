@@ -83,6 +83,7 @@ jobs:
           fi
 
       - name: Trust fork self-signed identity
+        timeout-minutes: 2
         env:
           CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}

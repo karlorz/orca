@@ -31,7 +31,43 @@ if ! extract_cert; then
   exit 1
 fi
 
-security add-trusted-cert -r trustRoot -p codeSign "$pem"
+# User-domain add-trusted-cert waits for a GUI on GitHub macos runners
+# (v1.4.190-7 hung until the 90m job timeout). Admin store + a 30s bound.
+python3 - "$pem" <<'PY'
+import subprocess
+import sys
+
+pem = sys.argv[1]
+commands = (
+    (
+        "sudo",
+        "security",
+        "authorizationdb",
+        "write",
+        "com.apple.trust-settings.admin",
+        "allow",
+    ),
+    (
+        "sudo",
+        "security",
+        "add-trusted-cert",
+        "-d",
+        "-r",
+        "trustRoot",
+        "-p",
+        "codeSign",
+        "-k",
+        "/Library/Keychains/System.keychain",
+        pem,
+    ),
+)
+for command in commands:
+    try:
+        subprocess.run(command, check=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        print("Timed out trusting the self-signed identity (GUI prompt?)", file=sys.stderr)
+        sys.exit(1)
+PY
 
 kc="$workdir/fork-codesign.keychain-db"
 if [[ ! -f "$kc" ]]; then
