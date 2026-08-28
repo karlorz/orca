@@ -26,6 +26,16 @@ const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
 const isForkVoiceBuild = process.env.ORCA_FORK_VOICE_BUILD === '1'
+const isForkSelfSigned = isForkVoiceBuild && Boolean(process.env.CSC_LINK)
+function forkMacSigningIdentity() {
+  if (!isForkVoiceBuild) {
+    return {}
+  }
+  if (!isForkSelfSigned) {
+    return { identity: '-' }
+  }
+  return process.env.CSC_NAME ? { identity: process.env.CSC_NAME } : {}
+}
 if (isForkVoiceBuild) {
   const version = process.env.ORCA_FORK_VOICE_BUILD_VERSION
   if (!version || !/^(\d+\.\d+\.\d+)-\d+$/.test(version)) {
@@ -392,7 +402,7 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
-    ...(isForkVoiceBuild ? { identity: '-' } : {}),
+    ...forkMacSigningIdentity(),
     extendInfo: {
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',
@@ -480,7 +490,7 @@ module.exports = {
   },
   // Why: release builds should fail if signing is unavailable instead of
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
-  forceCodeSigning: isMacRelease,
+  forceCodeSigning: isMacRelease || isForkSelfSigned,
   dmg: {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
@@ -625,14 +635,14 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
     return
   }
   const codeSigningInfo =
-    isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
+    (isMacRelease || isForkSelfSigned) && process.env.CSC_LINK && packager?.codeSigningInfo?.value
       ? await packager.codeSigningInfo.value
       : null
   const identity =
     process.env.ORCA_COMPUTER_MACOS_SIGN_IDENTITY ??
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
-    (isMacRelease ? null : '-')
+    (isMacRelease || isForkSelfSigned ? null : '-')
   if (!identity) {
     throw new Error('Missing signing identity for Orca Computer Use helper app')
   }
@@ -652,13 +662,13 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
     return
   }
   const codeSigningInfo =
-    isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
+    (isMacRelease || isForkSelfSigned) && process.env.CSC_LINK && packager?.codeSigningInfo?.value
       ? await packager.codeSigningInfo.value
       : null
   const identity =
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
-    (isMacRelease ? null : '-')
+    (isMacRelease || isForkSelfSigned ? null : '-')
   if (!identity) {
     throw new Error(`Missing signing identity for ${helperName} helper`)
   }

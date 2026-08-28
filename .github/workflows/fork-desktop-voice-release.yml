@@ -71,11 +71,33 @@ jobs:
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: node config/scripts/fork-desktop-build-version.mjs
 
-      - name: Build unsigned macOS arm64
+      - name: Require fork self-signed identity
+        env:
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CSC_LINK:-}" || -z "${CSC_KEY_PASSWORD:-}" ]]; then
+            echo "Missing GitHub secrets ORCA_FORK_CSC_LINK and/or ORCA_FORK_CSC_KEY_PASSWORD" >&2
+            exit 1
+          fi
+
+      - name: Trust fork self-signed identity
+        env:
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+          CSC_NAME: Orca Fork (karlorz)
+        run: bash config/scripts/fork-macos-trust-self-signed-identity.sh
+
+      - name: Build self-signed macOS arm64
         env:
           ORCA_FORK_VOICE_BUILD: '1'
           ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
           ORCA_BUILD_COMMIT: ${{ github.sha }}
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+          CSC_NAME: Orca Fork (karlorz)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
         run: |
           set -euo pipefail
           pnpm run build:desktop
@@ -86,6 +108,22 @@ jobs:
           # --publish never: tag pushes default to onTagOrDraft and demand GH_TOKEN;
           # our publish-release job owns release creation.
           pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64 --publish never
+          app="$(find dist -name 'Orca.app' -type d | head -n 1)"
+          if [[ -z "$app" ]]; then
+            echo "Packed Orca.app not found under dist/" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          dump="$(codesign -dv --verbose=2 "$app" 2>&1)"
+          echo "$dump"
+          if echo "$dump" | grep -q 'flags=0x2(adhoc)'; then
+            echo "Packed app is still ad-hoc" >&2
+            exit 1
+          fi
+          if ! echo "$dump" | grep -q 'Authority=Orca Fork (karlorz)'; then
+            echo "Packed app is not signed by Orca Fork (karlorz)" >&2
+            exit 1
+          fi
 
       - name: Stage mac artifacts
         run: |
@@ -146,7 +184,7 @@ jobs:
           cat << 'EOF' > release-notes.md
           ### Orca Desktop macOS Development Release
 
-          - Fork desktop train only (unsigned / ad-hoc; not notarized)
+          - Fork desktop train only (self-signed; not notarized)
           - Tracks upstream desktop train tag matching the base version
           - Separate from upstream v1.4.x cuts and from mobile-android tags
           - Never attach these DMG/ZIP files to a mobile-android tag

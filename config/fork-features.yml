@@ -49,7 +49,7 @@ features:
       - .github/workflows/fork-mobile-voice-release.yml
       - mobile/app.json
   - id: fork-desktop-voice-release
-    title: Unsigned macOS desktop prereleases on v1.4.190-N tags
+    title: Self-signed macOS desktop prereleases on v1.4.190-N tags
     kind: release
     status: landed
     paths:
@@ -118,3 +118,12 @@ features:
       - src/main/updater-prerelease-feed.ts
       - src/main/updater.ts
       - .github/workflows/fork-desktop-voice-release.yml
+  - id: fork-desktop-self-signed-ci
+    title: Stable self-signed macOS identity so Squirrel can apply fork updates
+    kind: ci
+    status: landed
+    paths:
+      - config/electron-builder.config.cjs
+      - config/scripts/fork-macos-trust-self-signed-identity.sh
+      - .github/workflows/fork-desktop-voice-release.yml
+    wiki: projects/orca/work/2026-08-28-fork-desktop-self-signed-ci
