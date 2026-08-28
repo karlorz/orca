@@ -40,6 +40,7 @@ describe('fork-sync-main workflow', () => {
     expect(scripts).toContain('--write')
     expect(scripts).toContain('fork-sync-upstream-tags.mjs')
     expect(scripts).toContain('fork-next-desktop-tag.mjs')
+    expect(scripts).toContain('fork-next-mobile-tag.mjs')
     expect(scripts).not.toMatch(/MIRROR_BRANCH=fork-main/)
     expect(scripts).not.toMatch(/merge-upstream/)
 

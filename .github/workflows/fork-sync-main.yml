@@ -7,6 +7,7 @@ name: Sync fork main from upstream
 #   2. Merges stablyai/orca `main` into `fork-main` with git merge --no-ff.
 #   3. Mirrors upstream `v*` tags into karlorz/orca without overwriting existing tags.
 #   4. Auto-cuts next fork desktop tag (v<base>-0) if a new upstream desktop base appeared.
+#   5. Reports next attended fork mobile tag (no auto-cut).
 # Conflicts fail closed.
 # GitHub cron is UTC-only: 01:17 UTC = 09:17 HKT (UTC+8, no DST), timed after
 # upstream's usual evening-UTC release window. workflow_dispatch = manual invoke.
@@ -91,6 +92,13 @@ jobs:
         # --auto cuts v<base>-0 only when no fork tag covers that base yet;
         # otherwise it exits 0 with a skip line (daily no-op stays green).
         run: node config/scripts/fork-next-desktop-tag.mjs --auto
+
+      - name: Report next fork mobile tag (attended; do not auto-cut)
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+        # Dry-run only. Mobile tags require an app.json marketing/versionCode
+        # bump before push; auto-cut burned suffixes on 2026-08-28.
+        run: node config/scripts/fork-next-mobile-tag.mjs
 
       - name: Report latest upstream desktop and mobile trains
         env:
