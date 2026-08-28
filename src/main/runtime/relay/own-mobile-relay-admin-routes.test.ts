@@ -122,6 +122,83 @@ describe('OwnMobileRelay /admin HTML', () => {
     }
   })
 
+  it('accepts login POST without Origin when Sec-Fetch-Site is same-origin', async () => {
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+    try {
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'sec-fetch-site': 'same-origin'
+        },
+        body: new URLSearchParams({
+          email: TEST_OPERATOR.email,
+          password: TEST_OPERATOR.password
+        }).toString()
+      })
+      expect(login.status).toBe(303)
+      expect(login.headers.location).toBe('/admin')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('accepts login POST without Origin when Referer is on the auth origin', async () => {
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+    try {
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          referer: 'http://127.0.0.1/admin/login'
+        },
+        body: new URLSearchParams({
+          email: TEST_OPERATOR.email,
+          password: TEST_OPERATOR.password
+        }).toString()
+      })
+      expect(login.status).toBe(303)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('still forbids login POST with a foreign Origin even if Referer matches', async () => {
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+    try {
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'https://evil.example',
+          referer: 'http://127.0.0.1/admin/login'
+        },
+        body: new URLSearchParams({
+          email: TEST_OPERATOR.email,
+          password: TEST_OPERATOR.password
+        }).toString()
+      })
+      expect(login.status).toBe(403)
+    } finally {
+      await server.close()
+    }
+  })
+
   it('rejects pairing revoke without Origin and accepts matching Origin', async () => {
     const server = await listenOwnMobileRelay({
       operator: TEST_OPERATOR,

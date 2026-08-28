@@ -66,11 +66,46 @@ function clearOperatorCookie(): string {
   return `${OPERATOR_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/admin; Max-Age=0`
 }
 
-function originAllowed(request: IncomingMessage, authOrigin: string): boolean {
-  const origin = Array.isArray(request.headers.origin)
-    ? request.headers.origin[0]
-    : request.headers.origin
-  return typeof origin === 'string' && origin === authOrigin
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (typeof raw !== 'string') {
+    return undefined
+  }
+  const trimmed = raw.trim()
+  return trimmed || undefined
+}
+
+function canonicalizeOrigin(value: string): string {
+  return value.trim().replace(/\/+$/, '')
+}
+
+function originHeader(request: IncomingMessage): string | undefined {
+  const origin = firstHeaderValue(request.headers.origin)
+  if (!origin || origin === 'null') {
+    return undefined
+  }
+  return canonicalizeOrigin(origin)
+}
+
+function isAdminCsrfAllowed(request: IncomingMessage, authOrigin: string): boolean {
+  const allowed = canonicalizeOrigin(authOrigin)
+  const origin = originHeader(request)
+  if (origin) {
+    return origin === allowed
+  }
+  const fetchSite = firstHeaderValue(request.headers['sec-fetch-site'])
+  if (fetchSite === 'same-origin') {
+    return true
+  }
+  const referer = firstHeaderValue(request.headers.referer)
+  if (!referer) {
+    return false
+  }
+  try {
+    return canonicalizeOrigin(new URL(referer).origin) === allowed
+  } catch {
+    return false
+  }
 }
 
 export async function handleAdminRequest(
@@ -95,9 +130,12 @@ export async function handleAdminRequest(
   }
 
   if (request.method === 'POST' && pathname === '/admin/login') {
-    if (!originAllowed(request, authOrigin)) {
-      response.writeHead(403, { 'content-type': 'text/plain' })
-      response.end('Forbidden')
+    if (!isAdminCsrfAllowed(request, authOrigin)) {
+      sendHtml(
+        response,
+        403,
+        renderAdminLogin('Open this page on the auth origin and sign in from that form.')
+      )
       return
     }
     let body: URLSearchParams
@@ -214,9 +252,12 @@ export async function handleAdminRequest(
   const deviceRevoke = pathname.match(/^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/revoke$/)
   const grantRevoke = pathname.match(/^\/admin\/pairing\/grants\/([^/]+)\/revoke$/)
   if (request.method === 'POST' && (deviceRevoke || grantRevoke)) {
-    if (!originAllowed(request, authOrigin)) {
-      response.writeHead(403, { 'content-type': 'text/plain' })
-      response.end('Forbidden')
+    if (!isAdminCsrfAllowed(request, authOrigin)) {
+      sendHtml(
+        response,
+        403,
+        renderAdminLogin('Open this page on the auth origin and sign in from that form.')
+      )
       return
     }
     if (deviceRevoke) {
