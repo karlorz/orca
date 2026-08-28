@@ -141,7 +141,7 @@ describe('fork voice electron-builder config gate', () => {
     }).toThrow('Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION')
   })
 
-  it('when ORCA_FORK_VOICE_BUILD=1 and CSC_LINK is set, pins the self-signed identity and forces signing without notarizing', () => {
+  it('when ORCA_FORK_VOICE_BUILD=1 and CSC_LINK is set, skips electron-builder identity lookup and does not notarize', () => {
     withEnv(
       {
         ORCA_FORK_VOICE_BUILD: '1',
@@ -150,8 +150,8 @@ describe('fork voice electron-builder config gate', () => {
         CSC_NAME: 'Orca Fork (karlorz)'
       },
       (config) => {
-        expect(config.mac.identity).toBe('Orca Fork (karlorz)')
-        expect(config.forceCodeSigning).toBe(true)
+        expect(config.mac.identity).toBeNull()
+        expect(config.forceCodeSigning).toBe(false)
         expect(config.mac.hardenedRuntime).toBe(false)
         expect(config.mac.notarize).toBe(false)
         expect(config.publish).toEqual({

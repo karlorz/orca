@@ -34,7 +34,9 @@ function forkMacSigningIdentity() {
   if (!isForkSelfSigned) {
     return { identity: '-' }
   }
-  return process.env.CSC_NAME ? { identity: process.env.CSC_NAME } : {}
+  // Skip electron-builder's find-identity -v: a self-signed cert stays
+  // CSSMERR_TP_NOT_TRUSTED on CI. afterPack codesigns with CSC_NAME instead.
+  return { identity: null }
 }
 if (isForkVoiceBuild) {
   const version = process.env.ORCA_FORK_VOICE_BUILD_VERSION
@@ -347,6 +349,10 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      signForkSelfSignedApp(
+        context.appOutDir,
+        context.packager.appInfo.productFilename
+      )
     }
   },
   win: {
@@ -490,7 +496,7 @@ module.exports = {
   },
   // Why: release builds should fail if signing is unavailable instead of
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
-  forceCodeSigning: isMacRelease || isForkSelfSigned,
+  forceCodeSigning: isMacRelease,
   dmg: {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
@@ -610,6 +616,24 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   }
 }
 
+function signForkSelfSignedApp(appOutDir, productFilename) {
+  if (!isForkSelfSigned) {
+    return
+  }
+  const identity = process.env.CSC_NAME
+  if (!identity) {
+    throw new Error('Missing CSC_NAME for fork self-signed pack')
+  }
+  const appPath = join(appOutDir, `${productFilename}.app`)
+  if (!existsSync(appPath)) {
+    throw new Error(`Missing packed app at ${appPath}`)
+  }
+  execFileSync('codesign', ['--force', '--deep', '--sign', identity, appPath], {
+    stdio: 'inherit'
+  })
+  execFileSync('codesign', ['--verify', appPath], { stdio: 'inherit' })
+}
+
 function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
   if (electronPlatformName !== 'darwin') {
     return
@@ -649,9 +673,13 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   // Why: TCC grants attach to this nested app's code identity. Sign it before
   // the outer Orca.app is sealed so production builds preserve that identity.
   execFileSync('codesign', codesignArgs(identity, helperAppPath), { stdio: 'inherit' })
-  execFileSync('codesign', ['--verify', '--deep', '--strict', helperAppPath], {
-    stdio: 'inherit'
-  })
+  execFileSync(
+    'codesign',
+    isMacRelease
+      ? ['--verify', '--deep', '--strict', helperAppPath]
+      : ['--verify', helperAppPath],
+    { stdio: 'inherit' }
+  )
 }
 
 async function signMacStandaloneHelper(helperPath, helperName, packager) {
@@ -679,7 +707,11 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
   }
   args.push(helperPath)
   execFileSync('codesign', args, { stdio: 'inherit' })
-  execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
+  execFileSync(
+    'codesign',
+    isMacRelease ? ['--verify', '--strict', helperPath] : ['--verify', helperPath],
+    { stdio: 'inherit' }
+  )
 }
 
 function codesignArgs(identity, targetPath) {
