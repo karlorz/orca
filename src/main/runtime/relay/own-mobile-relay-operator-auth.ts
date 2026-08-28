@@ -10,6 +10,7 @@ import {
 } from './own-mobile-relay-password'
 import { bearerToken, sendJson } from './own-mobile-relay-http-utils'
 import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import { emitAudit } from './own-mobile-relay-audit-emit'
 
 const OPERATOR_SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
@@ -36,29 +37,34 @@ export async function loginOperatorAccount(
   if (context.throttle) {
     const throttleCheck = context.throttle.check(email, remoteIp)
     if (!throttleCheck.allowed) {
-      await context.auditLog?.append({
-        at: Date.now(),
-        type: 'operator.login.throttled',
-        fields: { actor, reason: 'rate_limited' }
+      await emitAudit(context.auditLog, 'operator.login.throttled', {
+        actor,
+        reason: 'rate_limited'
       })
       return { ok: false, status: 429, retryAfterSeconds: throttleCheck.retryAfterSeconds }
     }
   }
 
-  const account = await context.securityState.getAccount()
-  const passwordRec = await context.securityState.getAccountPasswordRecord()
+  const [account, passwordRec] = await Promise.all([
+    context.securityState.getAccount(),
+    context.securityState.getAccountPasswordRecord()
+  ])
   const policy = context.passwordPolicy ?? CURRENT_PASSWORD_POLICY
-  const verifyResult =
-    account && passwordRec && password && email === account.email
-      ? await verifyPasswordRecord(password, passwordRec.passwordRecord, policy)
-      : { valid: false, needsRehash: false }
-
-  if (!account || !passwordRec || !verifyResult.valid) {
+  if (!account || !passwordRec || !password || email !== account.email) {
     context.throttle?.recordFailure(email, remoteIp)
-    await context.auditLog?.append({
-      at: Date.now(),
-      type: 'operator.login.failed',
-      fields: { actor, reason: 'invalid_credentials' }
+    await emitAudit(context.auditLog, 'operator.login.failed', {
+      actor,
+      reason: 'invalid_credentials'
+    })
+    return { ok: false, status: 401 }
+  }
+
+  const verifyResult = await verifyPasswordRecord(password, passwordRec.passwordRecord, policy)
+  if (!verifyResult.valid) {
+    context.throttle?.recordFailure(email, remoteIp)
+    await emitAudit(context.auditLog, 'operator.login.failed', {
+      actor,
+      reason: 'invalid_credentials'
     })
     return { ok: false, status: 401 }
   }
@@ -82,10 +88,9 @@ export async function loginOperatorAccount(
     rawToken,
     ttlMs: OPERATOR_SESSION_TTL_MS
   })
-  await context.auditLog?.append({
-    at: Date.now(),
-    type: 'operator.login.success',
-    fields: { actor: email, sessionId: session.sessionId }
+  await emitAudit(context.auditLog, 'operator.login.success', {
+    actor: email,
+    sessionId: session.sessionId
   })
   return { ok: true, token: rawToken, expiresAt: session.expiresAt }
 }
@@ -139,16 +144,6 @@ export async function handleOperatorLogoutPost(
   }
 
   await context.securityState.revokeOperatorSession(token)
-
-  if (context.auditLog) {
-    await context.auditLog.append({
-      at: Date.now(),
-      type: 'operator.logout',
-      fields: {
-        sessionId: session.sessionId
-      }
-    })
-  }
-
+  await emitAudit(context.auditLog, 'operator.logout', { sessionId: session.sessionId })
   sendJson(response, 200, { ok: true })
 }

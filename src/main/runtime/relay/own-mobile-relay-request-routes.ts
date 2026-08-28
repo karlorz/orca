@@ -60,14 +60,15 @@ function operatorRouteContext(
 export function createOwnMobileRelayRequestHandler(
   context: OwnMobileRelayRequestContext
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
+  const operatorContext = operatorRouteContext(context)
   return async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (url.pathname.startsWith('/v1/operator/')) {
-      await handleOperatorRequest(request, response, url, operatorRouteContext(context))
+      await handleOperatorRequest(request, response, url, operatorContext)
       return
     }
     if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
-      await handleAdminRequest(request, response, url, operatorRouteContext(context))
+      await handleAdminRequest(request, response, url, operatorContext)
       return
     }
     if (request.method === 'GET' && url.pathname === '/health') {

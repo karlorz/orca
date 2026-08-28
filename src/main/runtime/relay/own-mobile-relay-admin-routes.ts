@@ -14,7 +14,11 @@ import {
   renderAdminPairing
 } from './own-mobile-relay-admin-pages'
 import { buildOperatorIncidentBundle } from './own-mobile-relay-operator-bundle'
-import { emitAudit } from './own-mobile-relay-audit-emit'
+import {
+  loadOperatorConsoleState,
+  revokeOperatorDevice,
+  revokeOperatorGrant
+} from './own-mobile-relay-operator-actions'
 
 export const OPERATOR_COOKIE_NAME = 'own_relay_operator'
 const OPERATOR_SESSION_TTL_MS = 24 * 60 * 60 * 1000
@@ -184,22 +188,16 @@ export async function handleAdminRequest(
   }
 
   if (request.method === 'GET' && pathname === '/admin') {
-    const now = Date.now()
-    const [sessions, grants, devices, events] = await Promise.all([
-      context.securityState.listAccessSessions(now),
-      context.securityState.listRelayGrants(now),
-      context.securityState.listDeviceCredentials(),
-      context.auditLog ? context.auditLog.list({}) : Promise.resolve([])
-    ])
+    const state = await loadOperatorConsoleState(context)
     sendHtml(
       response,
       200,
       renderAdminOverview({
-        hostControlLive: context.hostControlLive ? context.hostControlLive() : false,
-        sessions: sessions.length,
-        grants: grants.length,
-        devices: devices.length,
-        events: events.length
+        hostControlLive: state.hostControlLive,
+        sessions: state.sessions.length,
+        grants: state.grants.length,
+        devices: state.devices.length,
+        events: state.events.length
       })
     )
     return
@@ -222,22 +220,7 @@ export async function handleAdminRequest(
   }
 
   if (request.method === 'GET' && pathname === '/admin/incident') {
-    const now = Date.now()
-    const [sessions, grants, devices, events] = await Promise.all([
-      context.securityState.listAccessSessions(now),
-      context.securityState.listRelayGrants(now),
-      context.securityState.listDeviceCredentials(),
-      context.auditLog ? context.auditLog.list({}) : Promise.resolve([])
-    ])
-    const hostControlLive = context.hostControlLive ? context.hostControlLive() : false
-    const bundle = buildOperatorIncidentBundle({
-      generatedAt: now,
-      hostControlLive,
-      sessions,
-      grants,
-      devices,
-      events
-    })
+    const bundle = buildOperatorIncidentBundle(await loadOperatorConsoleState(context))
     sendHtml(
       response,
       200,
@@ -253,29 +236,17 @@ export async function handleAdminRequest(
   const grantRevoke = pathname.match(/^\/admin\/pairing\/grants\/([^/]+)\/revoke$/)
   if (request.method === 'POST' && (deviceRevoke || grantRevoke)) {
     if (!isAdminCsrfAllowed(request, authOrigin)) {
-      sendHtml(
-        response,
-        403,
-        renderAdminLogin('Open this page on the auth origin and sign in from that form.')
-      )
+      sendHtml(response, 403, '<!DOCTYPE html><html><body>Forbidden</body></html>')
       return
     }
     if (deviceRevoke) {
-      const relayHostId = decodeURIComponent(deviceRevoke[1] ?? '')
-      const deviceId = decodeURIComponent(deviceRevoke[2] ?? '')
-      await context.securityState.revokeDeviceCredential(relayHostId, deviceId)
-      await emitAudit(context.auditLog, 'device.revoked', {
-        relayHostId,
-        deviceId,
-        actor: 'operator'
-      })
+      await revokeOperatorDevice(
+        context,
+        decodeURIComponent(deviceRevoke[1] ?? ''),
+        decodeURIComponent(deviceRevoke[2] ?? '')
+      )
     } else if (grantRevoke) {
-      const grantId = decodeURIComponent(grantRevoke[1] ?? '')
-      await context.securityState.revokeRelayGrantById(grantId)
-      await emitAudit(context.auditLog, 'grant.revoked', {
-        grantId,
-        actor: 'operator'
-      })
+      await revokeOperatorGrant(context, decodeURIComponent(grantRevoke[1] ?? ''))
     }
     redirect(response, '/admin/pairing')
     return

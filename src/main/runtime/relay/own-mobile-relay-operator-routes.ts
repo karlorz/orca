@@ -10,6 +10,11 @@ import {
   type OperatorAuthContext
 } from './own-mobile-relay-operator-auth'
 import { buildOperatorIncidentBundle } from './own-mobile-relay-operator-bundle'
+import {
+  loadOperatorConsoleState,
+  revokeOperatorDevice,
+  revokeOperatorGrant
+} from './own-mobile-relay-operator-actions'
 
 export type OwnMobileRelayOperatorRequestContext = {
   securityState: OwnMobileRelaySecurityState
@@ -132,24 +137,15 @@ export async function handleOperatorRequest(
 
   // GET /v1/operator/overview
   if (request.method === 'GET' && pathname === '/v1/operator/overview') {
-    const now = Date.now()
-    const [sessions, grants, devices, events] = await Promise.all([
-      context.securityState.listAccessSessions(now),
-      context.securityState.listRelayGrants(now),
-      context.securityState.listDeviceCredentials(),
-      context.auditLog ? context.auditLog.list({}) : Promise.resolve([])
-    ])
-
-    const hostControlLive = context.hostControlLive ? context.hostControlLive() : false
-
+    const state = await loadOperatorConsoleState(context)
     sendJson(response, 200, {
       ok: true,
-      hostControlLive,
+      hostControlLive: state.hostControlLive,
       counts: {
-        sessions: sessions.length,
-        grants: grants.length,
-        devices: devices.length,
-        events: events.length
+        sessions: state.sessions.length,
+        grants: state.grants.length,
+        devices: state.devices.length,
+        events: state.events.length
       }
     })
     return
@@ -196,23 +192,11 @@ export async function handleOperatorRequest(
     /^\/v1\/operator\/pairing\/devices\/([^/]+)\/([^/]+)\/revoke$/
   )
   if (request.method === 'POST' && devRevokeMatch) {
-    const relayHostId = decodeURIComponent(devRevokeMatch[1])
-    const deviceId = decodeURIComponent(devRevokeMatch[2])
-
-    await context.securityState.revokeDeviceCredential(relayHostId, deviceId)
-
-    if (context.auditLog) {
-      await context.auditLog.append({
-        at: Date.now(),
-        type: 'device.revoked',
-        fields: {
-          relayHostId,
-          deviceId,
-          actor: 'operator'
-        }
-      })
-    }
-
+    await revokeOperatorDevice(
+      context,
+      decodeURIComponent(devRevokeMatch[1]),
+      decodeURIComponent(devRevokeMatch[2])
+    )
     sendJson(response, 200, { ok: true })
     return
   }
@@ -220,51 +204,18 @@ export async function handleOperatorRequest(
   // POST /v1/operator/pairing/grants/:grantId/revoke
   const grantRevokeMatch = pathname.match(/^\/v1\/operator\/pairing\/grants\/([^/]+)\/revoke$/)
   if (request.method === 'POST' && grantRevokeMatch) {
-    const grantId = decodeURIComponent(grantRevokeMatch[1])
-
-    const success = await context.securityState.revokeRelayGrantById(grantId)
-
-    if (context.auditLog) {
-      await context.auditLog.append({
-        at: Date.now(),
-        type: 'grant.revoked',
-        fields: {
-          grantId,
-          actor: 'operator'
-        }
-      })
-    }
-
+    const success = await revokeOperatorGrant(context, decodeURIComponent(grantRevokeMatch[1]))
     if (!success) {
       sendJson(response, 404, { error: 'not_found' })
       return
     }
-
     sendJson(response, 200, { ok: true })
     return
   }
 
   // GET /v1/operator/incident-bundle
   if (request.method === 'GET' && pathname === '/v1/operator/incident-bundle') {
-    const now = Date.now()
-    const [sessions, grants, devices, events] = await Promise.all([
-      context.securityState.listAccessSessions(now),
-      context.securityState.listRelayGrants(now),
-      context.securityState.listDeviceCredentials(),
-      context.auditLog ? context.auditLog.list({}) : Promise.resolve([])
-    ])
-
-    const hostControlLive = context.hostControlLive ? context.hostControlLive() : false
-    const bundle = buildOperatorIncidentBundle({
-      generatedAt: now,
-      hostControlLive,
-      sessions,
-      grants,
-      devices,
-      events
-    })
-
-    sendJson(response, 200, bundle)
+    sendJson(response, 200, buildOperatorIncidentBundle(await loadOperatorConsoleState(context)))
     return
   }
 

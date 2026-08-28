@@ -43,10 +43,9 @@ export function createOwnMobileRelayAuditMemory(
       }
 
       if (limit !== undefined && limit >= 0 && result.length > limit) {
-        result = result.slice(0, limit)
+        return result.slice(0, limit)
       }
-
-      return [...result]
+      return result === events ? [...events] : result
     }
   }
 }
