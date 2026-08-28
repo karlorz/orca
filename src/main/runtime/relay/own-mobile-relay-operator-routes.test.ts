@@ -383,14 +383,15 @@ describe('OwnMobileRelay Operator Routes Slice 3 (/v1/operator/*)', () => {
         overview: object
         pairing: object
         events: unknown[]
+        markdown: string
       }
 
       expect(typeof bundle.generatedAt).toBe('number')
       expect(bundle.overview).toBeDefined()
       expect(bundle.pairing).toBeDefined()
       expect(Array.isArray(bundle.events)).toBe(true)
-      expect(typeof (bundle as { markdown?: unknown }).markdown).toBe('string')
-      expect((bundle as { markdown: string }).markdown).toContain('hostControlLive')
+      expect(typeof bundle.markdown).toBe('string')
+      expect(bundle.markdown).toContain('hostControlLive')
 
       const stringified = JSON.stringify(bundle)
 
