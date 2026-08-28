@@ -37,7 +37,10 @@ const MUTABLE_BUILD_ENV = [
   'ORCA_HOURLY_BUILD_VERSION',
   'ORCA_DAILY_BUILD_VERSION',
   'ORCA_ADHOC_BUILD_VERSION',
-  'ORCA_LOCAL_BUILD_VERSION'
+  'ORCA_LOCAL_BUILD_VERSION',
+  'CSC_LINK',
+  'CSC_NAME',
+  'CSC_KEY_PASSWORD'
 ]
 
 function withEnv(env, assert) {
@@ -136,6 +139,29 @@ describe('fork voice electron-builder config gate', () => {
         () => {}
       )
     }).toThrow('Invalid or missing ORCA_FORK_VOICE_BUILD_VERSION')
+  })
+
+  it('when ORCA_FORK_VOICE_BUILD=1 and CSC_LINK is set, pins the self-signed identity and forces signing without notarizing', () => {
+    withEnv(
+      {
+        ORCA_FORK_VOICE_BUILD: '1',
+        ORCA_FORK_VOICE_BUILD_VERSION: '1.4.190-7',
+        CSC_LINK: 'dGVzdA==',
+        CSC_NAME: 'Orca Fork (karlorz)'
+      },
+      (config) => {
+        expect(config.mac.identity).toBe('Orca Fork (karlorz)')
+        expect(config.forceCodeSigning).toBe(true)
+        expect(config.mac.hardenedRuntime).toBe(false)
+        expect(config.mac.notarize).toBe(false)
+        expect(config.publish).toEqual({
+          provider: 'github',
+          owner: 'karlorz',
+          repo: 'orca',
+          releaseType: 'prerelease'
+        })
+      }
+    )
   })
 
   it('when ORCA_FORK_VOICE_BUILD is absent, preserves stablyai upstream defaults byte-for-byte', () => {
