@@ -163,6 +163,65 @@ export type SecurityStateDeviceMatchResult = {
   readonly acceptedAs: 'current' | 'grace'
 }
 
+export type SecurityStateRedactedAccessSession = {
+  readonly sessionId: string
+  readonly accountId: string
+  readonly expiresAt: number
+  readonly createdAt: number
+  readonly identity: {
+    readonly userId: string
+    readonly profileId: string
+    readonly organizationId: string
+    readonly email: string
+    readonly cloudProfileId: string
+  }
+}
+
+export type SecurityStateRedactedRelayGrant = {
+  readonly grantId: string
+  readonly accountId: string
+  readonly parentSessionId: string
+  readonly relayHostId: string
+  readonly expiresAt: number
+  readonly createdAt: number
+  readonly identity: {
+    readonly userId: string
+    readonly profileId: string
+    readonly organizationId: string
+  }
+}
+
+export type SecurityStateRedactedDeviceCredential = {
+  readonly relayHostId: string
+  readonly relayDeviceId: string
+  readonly lastInstallReqId: string
+  readonly currentVersion: number
+  readonly resumeExpiresAt: number
+  readonly authorizationMode: 'relay-basis' | 'authenticated-direct'
+  readonly graceExpiresAt?: number
+  readonly revoked: boolean
+}
+
+export type SecurityStateOperatorSession = {
+  readonly sessionId: string
+  readonly accountId: string
+  readonly authEpoch: number
+  readonly expiresAt: number
+  readonly createdAt: number
+}
+
+export type SecurityStateIssueOperatorSessionInput = {
+  readonly rawToken: string
+  readonly ttlMs: number
+}
+
+export type SecurityStateIssuedOperatorSession = {
+  readonly sessionId: string
+  readonly accountId: string
+  readonly authEpoch: number
+  readonly expiresAt: number
+}
+
 export type SecurityStateCleanupResult = {
   readonly expiredSessionsDeleted: number
   readonly expiredGrantsDeleted: number
@@ -224,6 +283,7 @@ export type OwnMobileRelaySecurityState = {
     relayHostId?: string,
     now?: number
   ): Promise<SecurityStateRelayGrant | null>
+  revokeRelayGrantById(grantId: string, now?: number): Promise<boolean>
 
   installDeviceCredential(
     input: SecurityStateDeviceInstallInput,
@@ -240,6 +300,20 @@ export type OwnMobileRelaySecurityState = {
     now?: number
   ): Promise<SecurityStateDeviceMatchResult | null>
   revokeDeviceCredential(relayHostId: string, relayDeviceId: string, now?: number): Promise<boolean>
+
+  listAccessSessions(now?: number): Promise<SecurityStateRedactedAccessSession[]>
+  listRelayGrants(now?: number): Promise<SecurityStateRedactedRelayGrant[]>
+  listDeviceCredentials(): Promise<SecurityStateRedactedDeviceCredential[]>
+
+  issueOperatorSession(
+    input: SecurityStateIssueOperatorSessionInput,
+    now?: number
+  ): Promise<SecurityStateIssuedOperatorSession>
+  lookupOperatorSession(
+    rawToken: string,
+    now?: number
+  ): Promise<SecurityStateOperatorSession | null>
+  revokeOperatorSession(rawToken: string, now?: number): Promise<boolean>
 
   cleanupExpired(options?: {
     maxBatchSize?: number

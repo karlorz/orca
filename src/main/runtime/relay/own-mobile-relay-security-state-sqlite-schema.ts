@@ -1,7 +1,7 @@
 import { statSync, existsSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
 
 export function verifySqliteParentDirectorySecurity(dirPath: string): void {
@@ -165,6 +165,38 @@ export function runSqliteMigrations(db: DatabaseSync): void {
           ON device_credentials(resume_expires_at);
 
         PRAGMA user_version = 1;
+      `)
+      db.exec('COMMIT;')
+    } catch (err) {
+      db.exec('ROLLBACK;')
+      throw err
+    }
+  }
+
+  const v1Row = db.prepare('PRAGMA user_version;').get() as { user_version?: number } | undefined
+  const v1Version = Number(v1Row?.user_version ?? 0)
+
+  if (v1Version === 1) {
+    db.exec('BEGIN IMMEDIATE;')
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS operator_sessions (
+          session_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER,
+          FOREIGN KEY (account_id) REFERENCES operator_account(account_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_operator_sessions_token_hash
+          ON operator_sessions(token_hash);
+        CREATE INDEX IF NOT EXISTS idx_operator_sessions_expires
+          ON operator_sessions(expires_at);
+
+        PRAGMA user_version = 2;
       `)
       db.exec('COMMIT;')
     } catch (err) {

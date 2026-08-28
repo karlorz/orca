@@ -14,11 +14,18 @@ import type {
   SecurityStateDeviceInstallResult,
   SecurityStateDeviceInstallStatusResult,
   SecurityStateDeviceMatchResult,
-  SecurityStateCleanupResult
+  SecurityStateCleanupResult,
+  SecurityStateRedactedAccessSession,
+  SecurityStateRedactedRelayGrant,
+  SecurityStateRedactedDeviceCredential,
+  SecurityStateOperatorSession,
+  SecurityStateIssueOperatorSessionInput,
+  SecurityStateIssuedOperatorSession
 } from './own-mobile-relay-security-state'
 import type {
   InternalDeviceRecord,
   InternalGrantRecord,
+  InternalOperatorSessionRecord,
   InternalSessionRecord
 } from './own-mobile-relay-security-state-types'
 import { cleanupExpiredRecords } from './own-mobile-relay-security-state-device-cleanup'
@@ -38,7 +45,8 @@ import {
   revokeAccessSessionByIdMemory,
   revokeAccessSessionByTokenMemory,
   validateRelayGrantByTokenMemory,
-  validateRelayGrantByIdMemory
+  validateRelayGrantByIdMemory,
+  revokeRelayGrantByIdMemory
 } from './own-mobile-relay-security-state-grant-ops'
 import {
   installDeviceCredentialMemory,
@@ -46,6 +54,14 @@ import {
   matchDeviceCredentialMemory,
   revokeDeviceCredentialMemory
 } from './own-mobile-relay-security-state-device-ops'
+import {
+  listAccessSessionsMemory,
+  listRelayGrantsMemory,
+  listDeviceCredentialsMemory,
+  issueOperatorSessionMemory,
+  lookupOperatorSessionMemory,
+  revokeOperatorSessionMemory
+} from './own-mobile-relay-security-state-operator-ops'
 
 export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurityState {
   const ctx: MemoryStoreContext = {
@@ -55,7 +71,9 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
     sessionsByAccessHash: new Map<string, string>(),
     grantsById: new Map<string, InternalGrantRecord>(),
     grantsByTokenHash: new Map<string, string>(),
-    devicesByKey: new Map<string, InternalDeviceRecord>()
+    devicesByKey: new Map<string, InternalDeviceRecord>(),
+    operatorSessionsById: new Map<string, InternalOperatorSessionRecord>(),
+    operatorSessionsByTokenHash: new Map<string, string>()
   }
 
   return {
@@ -160,6 +178,10 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       return validateRelayGrantByIdMemory(ctx, grantId, relayHostId, now)
     },
 
+    async revokeRelayGrantById(grantId: string, now = Date.now()): Promise<boolean> {
+      return revokeRelayGrantByIdMemory(ctx, grantId, now)
+    },
+
     async installDeviceCredential(
       input: SecurityStateDeviceInstallInput,
       now = Date.now()
@@ -191,6 +213,36 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       return revokeDeviceCredentialMemory(ctx, relayHostId, relayDeviceId, now)
     },
 
+    async listAccessSessions(now = Date.now()): Promise<SecurityStateRedactedAccessSession[]> {
+      return listAccessSessionsMemory(ctx, now)
+    },
+
+    async listRelayGrants(now = Date.now()): Promise<SecurityStateRedactedRelayGrant[]> {
+      return listRelayGrantsMemory(ctx, now)
+    },
+
+    async listDeviceCredentials(): Promise<SecurityStateRedactedDeviceCredential[]> {
+      return listDeviceCredentialsMemory(ctx)
+    },
+
+    async issueOperatorSession(
+      input: SecurityStateIssueOperatorSessionInput,
+      now = Date.now()
+    ): Promise<SecurityStateIssuedOperatorSession> {
+      return issueOperatorSessionMemory(ctx, input, now)
+    },
+
+    async lookupOperatorSession(
+      rawToken: string,
+      now = Date.now()
+    ): Promise<SecurityStateOperatorSession | null> {
+      return lookupOperatorSessionMemory(ctx, rawToken, now)
+    },
+
+    async revokeOperatorSession(rawToken: string, now = Date.now()): Promise<boolean> {
+      return revokeOperatorSessionMemory(ctx, rawToken, now)
+    },
+
     async cleanupExpired(options?: {
       maxBatchSize?: number
       now?: number
@@ -218,6 +270,8 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       ctx.grantsById.clear()
       ctx.grantsByTokenHash.clear()
       ctx.devicesByKey.clear()
+      ctx.operatorSessionsById.clear()
+      ctx.operatorSessionsByTokenHash.clear()
       ctx.account = null
     }
   }

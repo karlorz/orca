@@ -2,24 +2,7 @@ import { existsSync, chmodSync, openSync, closeSync } from 'node:fs'
 import { dirname } from 'node:path'
 import process from 'node:process'
 import { DatabaseSync } from 'node:sqlite'
-import type { PasswordRecord } from './own-mobile-relay-password'
-import type {
-  OwnMobileRelaySecurityState,
-  SecurityStateAccountBootstrapInput,
-  SecurityStateAccountIdentity,
-  SecurityStateAccessSession,
-  SecurityStateIssueAccessSessionInput,
-  SecurityStateIssuedAccessSession,
-  SecurityStateReplaceAccessSessionInput,
-  SecurityStateRelayGrant,
-  SecurityStateIssueRelayGrantInput,
-  SecurityStateIssuedRelayGrant,
-  SecurityStateDeviceInstallInput,
-  SecurityStateDeviceInstallResult,
-  SecurityStateDeviceInstallStatusResult,
-  SecurityStateDeviceMatchResult,
-  SecurityStateCleanupResult
-} from './own-mobile-relay-security-state'
+import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
 import {
   CURRENT_SCHEMA_VERSION,
   DEFAULT_BUSY_TIMEOUT_MS,
@@ -46,7 +29,8 @@ import {
 import {
   executeIssueRelayGrantSqlite,
   executeValidateRelayGrantByTokenSqlite,
-  executeValidateRelayGrantByIdSqlite
+  executeValidateRelayGrantByIdSqlite,
+  executeRevokeRelayGrantByIdSqlite
 } from './own-mobile-relay-security-state-sqlite-grant-ops'
 import {
   executeInstallDeviceCredentialSqlite,
@@ -55,6 +39,14 @@ import {
   executeRevokeDeviceCredentialSqlite,
   executeCleanupExpiredSqlite
 } from './own-mobile-relay-security-state-sqlite-device-ops'
+import {
+  executeListAccessSessionsSqlite,
+  executeListRelayGrantsSqlite,
+  executeListDeviceCredentialsSqlite,
+  executeIssueOperatorSessionSqlite,
+  executeLookupOperatorSessionSqlite,
+  executeRevokeOperatorSessionSqlite
+} from './own-mobile-relay-security-state-sqlite-operator-ops'
 
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
@@ -126,123 +118,67 @@ export function openOwnMobileRelaySecurityStateSqlite(
   }
 
   return {
-    async getAccount(): Promise<SecurityStateAccountIdentity | null> {
+    getAccount: async () => {
       assertOpen()
       return executeGetAccountSqlite(ctx.db)
     },
-
-    async bootstrapAccount(
-      input: SecurityStateAccountBootstrapInput,
-      now = Date.now()
-    ): Promise<SecurityStateAccountIdentity> {
+    bootstrapAccount: async (input, now = Date.now()) => {
       assertOpen()
       return executeBootstrapAccountSqlite(ctx.db, input, now)
     },
-
-    async getAccountPasswordRecord(): Promise<{
-      accountId: string
-      verifierVersion: number
-      authEpoch: number
-      passwordRecord: PasswordRecord
-    } | null> {
+    getAccountPasswordRecord: async () => {
       assertOpen()
       return executeGetAccountPasswordRecordSqlite(ctx.db)
     },
-
-    async replacePasswordVerifier(
-      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-      now = Date.now()
-    ): Promise<
-      | { ok: true; account: SecurityStateAccountIdentity }
-      | { ok: false; error: 'version_mismatch' | 'not_found' }
-    > {
+    replacePasswordVerifier: async (input, now = Date.now()) => {
       assertOpen()
       return executeReplacePasswordVerifierSqlite(ctx.db, input, now)
     },
-
-    async upgradePasswordVerifier(
-      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-      now = Date.now()
-    ): Promise<
-      | { ok: true; account: SecurityStateAccountIdentity }
-      | { ok: false; error: 'version_mismatch' | 'not_found' }
-    > {
+    upgradePasswordVerifier: async (input, now = Date.now()) => {
       assertOpen()
       return executeUpgradePasswordVerifierSqlite(ctx.db, input, now)
     },
-
-    async issueAccessSession(
-      input: SecurityStateIssueAccessSessionInput,
-      now = Date.now()
-    ): Promise<SecurityStateIssuedAccessSession> {
+    issueAccessSession: async (input, now = Date.now()) => {
       assertOpen()
       return executeIssueAccessSessionSqlite(ctx.db, input, now)
     },
-
-    async lookupAccessSessionByToken(
-      rawAccessToken: string,
-      now = Date.now()
-    ): Promise<SecurityStateAccessSession | null> {
+    lookupAccessSessionByToken: async (rawAccessToken, now = Date.now()) => {
       assertOpen()
       return executeLookupAccessSessionByTokenSqlite(ctx.db, rawAccessToken, now)
     },
-
-    async replaceAccessSession(
-      input: SecurityStateReplaceAccessSessionInput,
-      now = Date.now()
-    ): Promise<SecurityStateIssuedAccessSession | null> {
+    replaceAccessSession: async (input, now = Date.now()) => {
       assertOpen()
       return executeReplaceAccessSessionSqlite(ctx.db, input, now)
     },
-
-    async revokeAccessSessionById(sessionId: string, now = Date.now()): Promise<boolean> {
+    revokeAccessSessionById: async (sessionId, now = Date.now()) => {
       assertOpen()
       return executeRevokeAccessSessionByIdSqlite(ctx.db, sessionId, now)
     },
-
-    async revokeAccessSessionByToken(rawAccessToken: string, now = Date.now()): Promise<boolean> {
+    revokeAccessSessionByToken: async (rawAccessToken, now = Date.now()) => {
       assertOpen()
       return executeRevokeAccessSessionByTokenSqlite(ctx.db, rawAccessToken, now)
     },
-
-    async issueRelayGrant(
-      input: SecurityStateIssueRelayGrantInput,
-      now = Date.now()
-    ): Promise<SecurityStateIssuedRelayGrant | null> {
+    issueRelayGrant: async (input, now = Date.now()) => {
       assertOpen()
       return executeIssueRelayGrantSqlite(ctx.db, input, now)
     },
-
-    async validateRelayGrantByToken(
-      rawRelayToken: string,
-      now = Date.now()
-    ): Promise<SecurityStateRelayGrant | null> {
+    validateRelayGrantByToken: async (rawRelayToken, now = Date.now()) => {
       assertOpen()
       return executeValidateRelayGrantByTokenSqlite(ctx.db, rawRelayToken, now)
     },
-
-    async validateRelayGrantById(
-      grantId: string,
-      relayHostId?: string,
-      now = Date.now()
-    ): Promise<SecurityStateRelayGrant | null> {
+    validateRelayGrantById: async (grantId, relayHostId, now = Date.now()) => {
       assertOpen()
       return executeValidateRelayGrantByIdSqlite(ctx.db, grantId, relayHostId, now)
     },
-
-    async installDeviceCredential(
-      input: SecurityStateDeviceInstallInput,
-      now = Date.now()
-    ): Promise<SecurityStateDeviceInstallResult> {
+    revokeRelayGrantById: async (grantId, now = Date.now()) => {
+      assertOpen()
+      return executeRevokeRelayGrantByIdSqlite(ctx.db, grantId, now)
+    },
+    installDeviceCredential: async (input, now = Date.now()) => {
       assertOpen()
       return executeInstallDeviceCredentialSqlite(ctx.db, input, now)
     },
-
-    async getDeviceCredentialInstallStatus(
-      relayHostId: string,
-      relayDeviceId: string,
-      reqId: string
-    ): Promise<SecurityStateDeviceInstallStatusResult> {
+    getDeviceCredentialInstallStatus: async (relayHostId, relayDeviceId, reqId) => {
       assertOpen()
       return executeGetDeviceCredentialInstallStatusSqlite(
         ctx.db,
@@ -251,29 +187,39 @@ export function openOwnMobileRelaySecurityStateSqlite(
         reqId
       )
     },
-
-    async matchDeviceCredential(
-      relayHostId: string,
-      tokenHash: string,
-      now = Date.now()
-    ): Promise<SecurityStateDeviceMatchResult | null> {
+    matchDeviceCredential: async (relayHostId, tokenHash, now = Date.now()) => {
       assertOpen()
       return executeMatchDeviceCredentialSqlite(ctx.db, relayHostId, tokenHash, now)
     },
-
-    async revokeDeviceCredential(
-      relayHostId: string,
-      relayDeviceId: string,
-      now = Date.now()
-    ): Promise<boolean> {
+    revokeDeviceCredential: async (relayHostId, relayDeviceId, now = Date.now()) => {
       assertOpen()
       return executeRevokeDeviceCredentialSqlite(ctx.db, relayHostId, relayDeviceId, now)
     },
-
-    async cleanupExpired(options?: {
-      maxBatchSize?: number
-      now?: number
-    }): Promise<SecurityStateCleanupResult> {
+    listAccessSessions: async (now = Date.now()) => {
+      assertOpen()
+      return executeListAccessSessionsSqlite(ctx.db, now)
+    },
+    listRelayGrants: async (now = Date.now()) => {
+      assertOpen()
+      return executeListRelayGrantsSqlite(ctx.db, now)
+    },
+    listDeviceCredentials: async () => {
+      assertOpen()
+      return executeListDeviceCredentialsSqlite(ctx.db)
+    },
+    issueOperatorSession: async (input, now = Date.now()) => {
+      assertOpen()
+      return executeIssueOperatorSessionSqlite(ctx.db, input, now)
+    },
+    lookupOperatorSession: async (rawToken, now = Date.now()) => {
+      assertOpen()
+      return executeLookupOperatorSessionSqlite(ctx.db, rawToken, now)
+    },
+    revokeOperatorSession: async (rawToken, now = Date.now()) => {
+      assertOpen()
+      return executeRevokeOperatorSessionSqlite(ctx.db, rawToken, now)
+    },
+    cleanupExpired: async (options) => {
       assertOpen()
       return executeCleanupExpiredSqlite(
         ctx.db,
@@ -281,8 +227,7 @@ export function openOwnMobileRelaySecurityStateSqlite(
         options?.now ?? Date.now()
       )
     },
-
-    async close(): Promise<void> {
+    close: async () => {
       if (ctx.isClosed) {
         return
       }

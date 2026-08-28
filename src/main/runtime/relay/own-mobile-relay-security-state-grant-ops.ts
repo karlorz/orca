@@ -107,3 +107,20 @@ export function validateRelayGrantByIdMemory(
   }
   return toPublicRelayGrant(grant)
 }
+
+export function revokeRelayGrantByIdMemory(
+  ctx: MemoryStoreContext,
+  grantId: string,
+  now: number
+): boolean {
+  assertOpen(ctx)
+  const grant = ctx.grantsById.get(grantId)
+  if (!grant) {
+    return false
+  }
+  if (grant.revokedAt === undefined) {
+    grant.revokedAt = now
+    ctx.grantsByTokenHash.delete(grant.relayTokenHash)
+  }
+  return true
+}

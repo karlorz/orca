@@ -9,6 +9,8 @@ import type {
   OwnMobileRelaySecurityState,
   SecurityStateRelayGrant
 } from './own-mobile-relay-security-state'
+import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import { emitAudit } from './own-mobile-relay-audit-emit'
 
 export type OwnMobileRelayPendingConnContext = {
   relayDeviceId: string
@@ -24,8 +26,14 @@ export type OwnMobileRelayControlContext = {
   securityState: OwnMobileRelaySecurityState
   invites?: Map<string, OwnMobileRelayInviteRecord>
   pendingConns?: Map<string, OwnMobileRelayPendingConnContext>
+  auditLog?: OwnMobileRelayAuditLog
   onActive?: (relayHostId: string, send: (msg: object) => void) => void
-  onClose?: (relayHostId: string, sender?: (msg: object) => void) => void
+  onClose?: (
+    relayHostId: string,
+    sender?: (msg: object) => void,
+    closeCode?: number,
+    reason?: string
+  ) => void
 }
 
 export async function handleActiveControlMessage(
@@ -110,6 +118,11 @@ export async function handleActiveControlMessage(
     typeof msg.relayDeviceId === 'string'
   ) {
     await options.securityState.revokeDeviceCredential(grant.relayHostId, msg.relayDeviceId)
+    await emitAudit(options.auditLog, 'device.revoked', {
+      relayHostId: grant.relayHostId,
+      deviceId: msg.relayDeviceId,
+      actor: 'host'
+    })
     ws.send(JSON.stringify({ type: 'device-revoked', reqId: msg.reqId }))
     return
   }
@@ -143,6 +156,12 @@ async function handleCredentialInstall(
     ws.send(JSON.stringify({ type: 'control-error', reqId, code: result.code }))
     return
   }
+
+  await emitAudit(options.auditLog, 'device.installed', {
+    relayHostId: grant.relayHostId,
+    deviceId: relayDeviceId,
+    actor: 'host'
+  })
 
   ws.send(
     JSON.stringify({

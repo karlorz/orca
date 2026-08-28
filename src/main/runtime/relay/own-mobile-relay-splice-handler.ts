@@ -7,6 +7,8 @@ import type {
 } from './own-mobile-relay-types'
 import { spliceOwnMobileRelaySockets } from './own-mobile-relay-socket-splice'
 import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
+import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import { emitAudit } from './own-mobile-relay-audit-emit'
 
 export type { OwnMobileRelayBufferedFrame, OwnMobileRelayRouter, PendingConnRecord }
 
@@ -86,13 +88,19 @@ export function handleOwnMobileRelayPhoneSocket(
   ws: WebSocket,
   relayHostId: string,
   router: OwnMobileRelayRouter,
-  securityState: OwnMobileRelaySecurityState
+  securityState: OwnMobileRelaySecurityState,
+  auditLog?: OwnMobileRelayAuditLog
 ): void {
   const hostSender = router.activeHosts.get(relayHostId)
   if (!hostSender) {
     process.stderr.write(
       `[own-mobile-relay] phone-4404 host_not_found relayHostId=${relayHostId}\n`
     )
+    void emitAudit(auditLog, 'phone.connect.rejected', {
+      relayHostId,
+      closeCode: 4404,
+      reason: 'host_not_found'
+    })
     ws.close(4404, 'host_not_found')
     return
   }

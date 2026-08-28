@@ -9,6 +9,8 @@ import {
 } from './own-mobile-relay-splice-handler'
 import { bearerToken } from './own-mobile-relay-http-utils'
 import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
+import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import { emitAudit } from './own-mobile-relay-audit-emit'
 
 export type OwnMobileRelayUpgradeContext = {
   securityState: OwnMobileRelaySecurityState
@@ -16,6 +18,7 @@ export type OwnMobileRelayUpgradeContext = {
   advertisedOriginCallback: () => string
   silenceLimitMs: number
   router: OwnMobileRelayRouter
+  auditLog?: OwnMobileRelayAuditLog
 }
 
 export function registerOwnMobileRelayUpgrades(
@@ -48,15 +51,26 @@ export function registerOwnMobileRelayUpgrades(
           securityState: context.securityState,
           invites: context.router.invites,
           pendingConns: context.router.pendingConns,
+          auditLog: context.auditLog,
           onActive: (relayHostId, send) => {
             context.router.activeHosts.set(relayHostId, send)
+            void emitAudit(context.auditLog, 'host.control.up', {
+              relayHostId,
+              hostControlLive: true
+            })
           },
-          onClose: (relayHostId, sender) => {
+          onClose: (relayHostId, sender, closeCode, reason) => {
             // Why: only the socket that owns the registration may remove it —
             // stale or duplicate control sockets for the same host must not
             // knock out a live registration (phone would see 4404).
             if (sender && context.router.activeHosts.get(relayHostId) === sender) {
               context.router.activeHosts.delete(relayHostId)
+              void emitAudit(context.auditLog, 'host.control.down', {
+                relayHostId,
+                ...(closeCode !== undefined ? { closeCode } : {}),
+                ...(reason !== undefined ? { reason } : {}),
+                hostControlLive: false
+              })
             }
           }
         })
@@ -73,7 +87,13 @@ export function registerOwnMobileRelayUpgrades(
         }
         ws.once('close', cleanup)
         ws.once('error', cleanup)
-        handleOwnMobileRelayPhoneSocket(ws, relayHostId, context.router, context.securityState)
+        handleOwnMobileRelayPhoneSocket(
+          ws,
+          relayHostId,
+          context.router,
+          context.securityState,
+          context.auditLog
+        )
       })
       return
     }

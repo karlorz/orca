@@ -4,6 +4,7 @@ import type {
   InternalAccountRecord,
   InternalDeviceRecord,
   InternalGrantRecord,
+  InternalOperatorSessionRecord,
   InternalSessionRecord
 } from './own-mobile-relay-security-state-types'
 import type {
@@ -26,6 +27,8 @@ export type MemoryStoreContext = {
   grantsById: Map<string, InternalGrantRecord>
   grantsByTokenHash: Map<string, string>
   devicesByKey: Map<string, InternalDeviceRecord>
+  operatorSessionsById: Map<string, InternalOperatorSessionRecord>
+  operatorSessionsByTokenHash: Map<string, string>
 }
 
 export function assertOpen(ctx: MemoryStoreContext): void {

@@ -167,3 +167,20 @@ export function executeValidateRelayGrantByIdSqlite(
 
   return row ? mapGrantRow(row) : null
 }
+
+export function executeRevokeRelayGrantByIdSqlite(
+  db: DatabaseSync,
+  grantId: string,
+  now: number
+): boolean {
+  const row = db
+    .prepare('SELECT grant_id, revoked_at FROM relay_grants WHERE grant_id = ?')
+    .get(grantId) as { grant_id: string; revoked_at: number | null } | undefined
+  if (!row) {
+    return false
+  }
+  if (row.revoked_at === null) {
+    db.prepare('UPDATE relay_grants SET revoked_at = ? WHERE grant_id = ?').run(now, grantId)
+  }
+  return true
+}

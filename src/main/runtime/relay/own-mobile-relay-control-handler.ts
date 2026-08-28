@@ -47,7 +47,7 @@ export function handleOwnMobileRelayHostControlSocket(
       clearInterval(pingTimer)
       pingTimer = null
     }
-    options.onClose?.(grant.relayHostId, activeSender ?? undefined)
+    options.onClose?.(grant.relayHostId, activeSender ?? undefined, code, reason)
     ws.close(code, reason)
   }
 
@@ -74,7 +74,7 @@ export function handleOwnMobileRelayHostControlSocket(
     if (state !== 'closed') {
       state = 'closed'
       if (wasActive) {
-        options.onClose?.(grant.relayHostId, activeSender ?? undefined)
+        options.onClose?.(grant.relayHostId, activeSender ?? undefined, undefined, undefined)
       }
     }
   })

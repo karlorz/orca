@@ -173,5 +173,69 @@ export function registerGrantLifecycleTests(
       expect(tokenRevoked).toBe(true)
       expect(await state.lookupAccessSessionByToken('access-for-token-revoke', t0 + 550)).toBeNull()
     })
+
+    it('revokes relay grant by grantId directly via revokeRelayGrantById', async () => {
+      await state.bootstrapAccount({
+        email: 'admin@example.com',
+        userId: 'usr_1',
+        profileId: 'prf_1',
+        organizationId: 'org_1',
+        passwordRecord
+      })
+
+      const t0 = 4_000_000
+      const session = await state.issueAccessSession(
+        {
+          rawAccessToken: 'access-token-for-grant-rev',
+          identity: {
+            userId: 'usr_1',
+            profileId: 'prf_1',
+            organizationId: 'org_1',
+            email: 'admin@example.com',
+            cloudProfileId: 'c_prf_1'
+          },
+          ttlMs: 3600_000
+        },
+        t0
+      )
+
+      const rawRelayToken = 'relay-token-direct-rev'
+      const grant = await state.issueRelayGrant(
+        {
+          rawRelayToken,
+          parentSessionId: session.sessionId,
+          relayHostId: 'host_direct_rev_123',
+          hostPublicKeyB64: 'key==',
+          identity: {
+            userId: 'usr_1',
+            profileId: 'c_prf_1',
+            organizationId: 'org_1'
+          },
+          ttlMs: 3600_000
+        },
+        t0
+      )
+
+      expect(grant).not.toBeNull()
+      expect(
+        await state.validateRelayGrantById(grant!.grantId, 'host_direct_rev_123', t0 + 10)
+      ).not.toBeNull()
+
+      const revoked = await state.revokeRelayGrantById(grant!.grantId, t0 + 100)
+      expect(revoked).toBe(true)
+
+      // Re-revoking returns true (or idempotent)
+      const reRevoked = await state.revokeRelayGrantById(grant!.grantId, t0 + 200)
+      expect(reRevoked).toBe(true)
+
+      // Invalid now
+      expect(
+        await state.validateRelayGrantById(grant!.grantId, 'host_direct_rev_123', t0 + 300)
+      ).toBeNull()
+      expect(await state.validateRelayGrantByToken(rawRelayToken, t0 + 300)).toBeNull()
+
+      // Non-existent grant returns false
+      expect(await state.revokeRelayGrantById('non_existent_grant_id', t0 + 400)).toBe(false)
+    })
   })
 }

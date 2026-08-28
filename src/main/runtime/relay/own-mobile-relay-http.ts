@@ -17,6 +17,8 @@ import { bootstrapOperatorAccount } from './own-mobile-relay-account'
 import { TEST_FAST_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay-password'
 import { createOwnMobileRelayCleanupScheduler } from './own-mobile-relay-cleanup-scheduler'
 import { createAuthThrottle, type AuthThrottle } from './own-mobile-relay-auth-throttle'
+import { createOwnMobileRelayAuditMemory } from './own-mobile-relay-audit-memory'
+import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
 
 export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
@@ -29,6 +31,7 @@ export type OwnMobileRelayListenOptions = {
   silenceLimitMs?: number
   passwordPolicy?: PasswordPolicy
   throttle?: AuthThrottle
+  auditLog?: OwnMobileRelayAuditLog
 }
 
 export type OwnMobileRelayServer = {
@@ -45,6 +48,7 @@ export async function listenOwnMobileRelay(
   const activeSockets = new Set<WebSocket>()
   const authStore: OwnMobileRelayAuthStore = createOwnMobileRelayAuthStore()
   const throttle: AuthThrottle = options.throttle ?? createAuthThrottle()
+  const auditLog: OwnMobileRelayAuditLog = options.auditLog ?? createOwnMobileRelayAuditMemory()
   let advertisedOrigin = options.origin
   const silenceLimitMs = options.silenceLimitMs ?? DEFAULT_SILENCE_LIMIT_MS
   const configuredClientId = options.clientId ?? 'orca-desktop'
@@ -76,10 +80,12 @@ export async function listenOwnMobileRelay(
     configuredClientId,
     authStore,
     advertisedOriginCallback: () => advertisedOrigin,
-    authOriginCallback: () => options.authOrigin ?? advertisedOrigin,
+    authOriginCallback: () => options.authOrigin ?? options.origin,
     router,
     throttle,
-    passwordPolicy
+    passwordPolicy,
+    auditLog,
+    hostControlLive: () => router.activeHosts.size > 0
   })
 
   const server = createServer((request, response) => {
@@ -93,7 +99,8 @@ export async function listenOwnMobileRelay(
       activeSockets,
       advertisedOriginCallback: () => advertisedOrigin,
       silenceLimitMs,
-      router
+      router,
+      auditLog
     })
   )
 

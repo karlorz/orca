@@ -60,3 +60,13 @@ export type InternalDeviceRecord = {
   graceExpiresAt?: number
   revokedAt?: number
 }
+
+export type InternalOperatorSessionRecord = {
+  sessionId: string
+  accountId: string
+  tokenHash: string
+  authEpoch: number
+  expiresAt: number
+  createdAt: number
+  revokedAt?: number
+}

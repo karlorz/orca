@@ -21,6 +21,12 @@ import {
 } from './own-mobile-relay-auth'
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import type { PasswordPolicy } from './own-mobile-relay-password'
+import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import {
+  handleOperatorRequest,
+  type OwnMobileRelayOperatorRequestContext
+} from './own-mobile-relay-operator-routes'
+import { handleAdminRequest } from './own-mobile-relay-admin-routes'
 
 const RELAY_TOKEN_TTL_MS = 60 * 60 * 1000
 
@@ -33,6 +39,22 @@ export type OwnMobileRelayRequestContext = {
   router: OwnMobileRelayRouter
   throttle?: AuthThrottle
   passwordPolicy?: PasswordPolicy
+  auditLog?: OwnMobileRelayAuditLog
+  hostControlLive?: () => boolean
+}
+
+function operatorRouteContext(
+  context: OwnMobileRelayRequestContext
+): OwnMobileRelayOperatorRequestContext {
+  return {
+    securityState: context.securityState,
+    authOriginCallback: context.authOriginCallback,
+    advertisedOriginCallback: context.advertisedOriginCallback,
+    throttle: context.throttle,
+    passwordPolicy: context.passwordPolicy,
+    auditLog: context.auditLog,
+    hostControlLive: context.hostControlLive ?? (() => context.router.activeHosts.size > 0)
+  }
 }
 
 export function createOwnMobileRelayRequestHandler(
@@ -40,6 +62,14 @@ export function createOwnMobileRelayRequestHandler(
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (url.pathname.startsWith('/v1/operator/')) {
+      await handleOperatorRequest(request, response, url, operatorRouteContext(context))
+      return
+    }
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+      await handleAdminRequest(request, response, url, operatorRouteContext(context))
+      return
+    }
     if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { ok: true })
       return
