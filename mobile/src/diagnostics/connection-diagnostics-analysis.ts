@@ -126,11 +126,17 @@ export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs):
 function findCurrentDiagnosticFailure(
   entries: readonly ConnectionLogEntry[]
 ): ConnectionLogEntry | undefined {
-  const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
-  return entries
-    .slice(boundaryIndex + 1)
-    .toReversed()
-    .find(isDiagnosticFailure)
+  // Why: RN 0.83 Hermes has no findLastIndex/toReversed; calling them crashes this screen.
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (isDiagnosticBoundary(entry)) {
+      return undefined
+    }
+    if (isDiagnosticFailure(entry)) {
+      return entry
+    }
+  }
+  return undefined
 }
 
 function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
