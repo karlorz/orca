@@ -181,9 +181,9 @@ describe('fork voice electron-builder config gate', () => {
 })
 
 describe('mobile version increment contract', () => {
-  it('mobile/app.json stays on upstream marketing 0.0.44 with a higher versionCode', () => {
+  it('mobile/app.json stays on upstream marketing 0.0.46 with a higher versionCode', () => {
     const appJson = JSON.parse(readFileSync(join(projectDir, 'mobile/app.json'), 'utf8'))
-    expect(appJson.expo.version).toBe('0.0.44')
+    expect(appJson.expo.version).toBe('0.0.46')
     expect(appJson.expo.android.versionCode).toBeGreaterThanOrEqual(15)
     expect(appJson.expo.android.package).toBe('com.stably.orca.mobile')
   })
