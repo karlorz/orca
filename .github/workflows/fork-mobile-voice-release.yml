@@ -272,7 +272,7 @@ jobs:
           ### Orca Mobile Android Development Release
 
           - Fork development APK (mobile train only)
-          - Marketing version matches upstream (0.0.44-N tags)
+          - Marketing version matches upstream train (0.0.46-N tags)
           - Android development-signed APK
           - Signing: debug-keystore
           - Not auto-installed and no installation was performed
