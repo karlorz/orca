@@ -5,7 +5,8 @@ import { parse } from 'yaml'
 import {
   buildAutoCutPlan,
   buildNextMobileTagPlan,
-  parseUpstreamMobileBase
+  parseUpstreamMobileBase,
+  planMobileAppJsonForTrain
 } from './fork-next-mobile-tag.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -69,15 +70,30 @@ describe('fork next mobile tag planner', () => {
     expect(plan.cut).toBe(false)
     expect(plan.reason).toMatch(/already covered/)
   })
+
+  it('bumps marketing version to the published train and increments versionCode', () => {
+    expect(
+      planMobileAppJsonForTrain({
+        expoVersion: '0.0.44',
+        versionCode: 29,
+        trainBase: '0.0.46',
+        bumpVersionCode: true
+      })
+    ).toEqual({ expoVersion: '0.0.46', versionCode: 30 })
+  })
 })
 
-describe('fork-sync reports next mobile tag without auto-cutting', () => {
-  it('runs the mobile planner dry-run after desktop auto-cut', () => {
+describe('fork-sync auto-cuts mobile -0 on a new published train', () => {
+  it('runs the mobile planner with --auto after desktop auto-cut', () => {
     expect(existsSync(workflowPath)).toBe(true)
     const workflow = parse(readFileSync(workflowPath, 'utf8'))
     const scripts = workflow.jobs['sync-fork-main'].steps.map((step) => step.run ?? '').join('\n')
-    expect(scripts).toContain('fork-next-mobile-tag.mjs')
+    expect(scripts).toContain('fork-next-mobile-tag.mjs --auto')
     expect(scripts).not.toMatch(/fork-next-mobile-tag\.mjs[^\n]*--write/)
-    expect(scripts).not.toMatch(/fork-next-mobile-tag\.mjs[^\n]*--auto/)
+    const autoCutStep = workflow.jobs['sync-fork-main'].steps.find((step) =>
+      String(step.run ?? '').includes('fork-next-mobile-tag.mjs')
+    )
+    expect(autoCutStep.run).toContain('--auto')
+    expect(autoCutStep.run).not.toContain('--write')
   })
 })

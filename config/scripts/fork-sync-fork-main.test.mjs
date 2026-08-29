@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   assertSafePushRemoteUrl,
   buildForkMainSyncPlan,
+  isAutoResolvableSyncConflict,
   resolvePushRemote
 } from './fork-sync-fork-main.mjs'
+import { resolveForkMobileAppJson } from './fork-next-mobile-tag.mjs'
 
 describe('fork-sync-fork-main helper', () => {
   it('merges stablyai/orca main into fork-main and never uses merge-upstream on fork-main', () => {
@@ -26,5 +28,44 @@ describe('fork-sync-fork-main helper', () => {
         { name: 'origin', url: 'https://github.com/karlorz/orca.git' }
       ])
     ).toBe('fork')
+  })
+
+  it('auto-resolves only a mobile/app.json version conflict', () => {
+    expect(isAutoResolvableSyncConflict(['mobile/app.json'])).toBe(true)
+    expect(isAutoResolvableSyncConflict(['mobile/app.json', 'package.json'])).toBe(false)
+    expect(isAutoResolvableSyncConflict([])).toBe(false)
+  })
+
+  it('keeps fork versionCode and published-train marketing version across app.json sync', () => {
+    const ours = {
+      expo: {
+        version: '0.0.46',
+        android: {
+          versionCode: 30,
+          permissions: ['RECORD_AUDIO', 'android.permission.POST_NOTIFICATIONS']
+        }
+      }
+    }
+    const theirs = {
+      expo: {
+        version: '0.0.47',
+        android: { versionCode: 15, permissions: ['RECORD_AUDIO'] }
+      }
+    }
+    const resolved = resolveForkMobileAppJson({ ours, theirs, trainBase: '0.0.46' })
+    expect(resolved.expo.version).toBe('0.0.46')
+    expect(resolved.expo.android.versionCode).toBe(30)
+    expect(resolved.expo.android.permissions).toEqual([
+      'RECORD_AUDIO',
+      'android.permission.POST_NOTIFICATIONS'
+    ])
+  })
+
+  it('uses the published train base even when ours still lags', () => {
+    const ours = { expo: { version: '0.0.44', android: { versionCode: 29, permissions: [] } } }
+    const theirs = { expo: { version: '0.0.47', android: { versionCode: 15, permissions: [] } } }
+    const resolved = resolveForkMobileAppJson({ ours, theirs, trainBase: '0.0.46' })
+    expect(resolved.expo.version).toBe('0.0.46')
+    expect(resolved.expo.android.versionCode).toBe(29)
   })
 })

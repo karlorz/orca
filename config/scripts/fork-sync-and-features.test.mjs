@@ -51,6 +51,12 @@ describe('fork-sync-main workflow', () => {
     )
     expect(autoCutStep.run).toContain('--auto')
     expect(autoCutStep.run).not.toContain('--write')
+
+    const mobileCutStep = job.steps.find((step) =>
+      String(step.run ?? '').includes('fork-next-mobile-tag.mjs')
+    )
+    expect(mobileCutStep.run).toContain('--auto')
+    expect(mobileCutStep.run).not.toContain('--write')
   })
 })
 

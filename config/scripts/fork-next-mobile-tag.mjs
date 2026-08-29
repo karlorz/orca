@@ -1,7 +1,14 @@
-import { compareSemverBases } from './fork-next-desktop-tag.mjs'
-import { selectLatestTrains, loadUpstreamReleases } from './fork-upstream-trains.mjs'
-import { listGitRemotes, resolvePushRemote } from './fork-sync-fork-main.mjs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { assertSafeWorkingTreeForTag, compareSemverBases } from './fork-next-desktop-tag.mjs'
+import { selectLatestTrains, loadUpstreamReleases } from './fork-upstream-trains.mjs'
+import {
+  FORK_WORKING_BRANCH,
+  listGitRemotes,
+  resolvePushRemote,
+  assertSafePushRemoteUrl
+} from './fork-sync-fork-main.mjs'
 
 const UPSTREAM_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)$/
 const FORK_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)-(\d+)$/
@@ -84,6 +91,68 @@ export function buildAutoCutPlan({ upstreamTag, forkTags }) {
   return { cut: true, upstreamTag, base, suffix: 0, nextTag, tagRef: `refs/tags/${nextTag}` }
 }
 
+export function planMobileAppJsonForTrain({
+  expoVersion: _expoVersion,
+  versionCode,
+  trainBase,
+  bumpVersionCode = false
+}) {
+  parseUpstreamMobileBase(`mobile-android-v${trainBase}`)
+  const code = Number(versionCode)
+  if (!Number.isSafeInteger(code) || code <= 0) {
+    throw new Error(`Invalid Android versionCode: ${versionCode}`)
+  }
+  return {
+    expoVersion: trainBase,
+    versionCode: bumpVersionCode ? code + 1 : code
+  }
+}
+
+export function resolveForkMobileAppJson({ ours, theirs, trainBase }) {
+  if (!ours?.expo?.android || !theirs?.expo?.android) {
+    throw new Error('mobile/app.json sides are missing expo.android')
+  }
+  parseUpstreamMobileBase(`mobile-android-v${trainBase}`)
+  const resolved = structuredClone(ours)
+  resolved.expo.version = trainBase
+  const ourCode = Number(ours.expo.android.versionCode)
+  const theirCode = Number(theirs.expo.android.versionCode)
+  const maxCode = Math.max(
+    Number.isSafeInteger(ourCode) ? ourCode : 0,
+    Number.isSafeInteger(theirCode) ? theirCode : 0
+  )
+  if (maxCode <= 0) {
+    throw new Error('mobile/app.json versionCode is missing on both sides')
+  }
+  resolved.expo.android.versionCode = maxCode
+  resolved.expo.android.permissions = [
+    ...new Set([
+      ...(ours.expo.android.permissions ?? []),
+      ...(theirs.expo.android.permissions ?? [])
+    ])
+  ]
+  return resolved
+}
+
+function mobileAppJsonPath(cwd) {
+  return join(cwd ?? process.cwd(), 'mobile/app.json')
+}
+
+function applyMobileAppJsonTrainBump({ cwd, trainBase }) {
+  const path = mobileAppJsonPath(cwd)
+  const json = JSON.parse(readFileSync(path, 'utf8'))
+  const next = planMobileAppJsonForTrain({
+    expoVersion: json.expo.version,
+    versionCode: json.expo.android.versionCode,
+    trainBase,
+    bumpVersionCode: true
+  })
+  json.expo.version = next.expoVersion
+  json.expo.android.versionCode = next.versionCode
+  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`)
+  return next
+}
+
 function git(args, { cwd } = {}) {
   const result = spawnSync('git', args, {
     encoding: 'utf8',
@@ -133,19 +202,82 @@ export function reportNextMobileTag({ cwd } = {}) {
   }
 }
 
-function main() {
-  const result = reportNextMobileTag()
-  const autoLine = result.auto.cut
-    ? `auto-cut candidate: ${result.auto.nextTag} (not applied; mobile is attended)`
-    : `auto-cut: skip (${result.auto.reason})`
-  process.stdout.write(
+function listLocalTags({ cwd } = {}) {
+  const stdout = git(['tag', '-l'], { cwd })
+  return stdout
+    ? stdout
+        .split('\n')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    : []
+}
+
+export function executeNextMobileTag({ cwd, write = false, auto = false } = {}) {
+  const remotes = listGitRemotes(cwd)
+  const pushRemote = resolvePushRemote(remotes)
+  const trains = selectLatestTrains(loadUpstreamReleases())
+  if (!trains.mobile?.tag) {
+    throw new Error('No upstream mobile tag found')
+  }
+
+  const pushRemoteUrl = remotes.find((r) => r.name === pushRemote)?.url
+  assertSafePushRemoteUrl(pushRemoteUrl)
+
+  const forkTags = listRemoteTags(pushRemote, { cwd })
+  const plan = auto
+    ? buildAutoCutPlan({ upstreamTag: trains.mobile.tag, forkTags })
+    : buildNextMobileTagPlan({ upstreamTag: trains.mobile.tag, forkTags })
+
+  if (plan.cut === false) {
+    return { ...plan, pushRemote, wrote: false, skipped: true }
+  }
+
+  const localTags = listLocalTags({ cwd })
+  if (localTags.includes(plan.nextTag) || forkTags.includes(plan.nextTag)) {
+    throw new Error(`Tag ${plan.nextTag} already exists locally or on remote`)
+  }
+
+  if (!write && !auto) {
+    return { ...plan, pushRemote, wrote: false }
+  }
+
+  assertSafeWorkingTreeForTag({ cwd, pushRemote })
+  const bump = applyMobileAppJsonTrainBump({ cwd, trainBase: plan.base })
+  git(['add', 'mobile/app.json'], { cwd })
+  git(
     [
-      `mobile train: ${result.train.tag} (${result.train.prerelease ? 'prerelease' : 'stable'})`,
-      `next attended fork tag: ${result.next.nextTag}`,
-      autoLine,
-      ''
-    ].join('\n')
+      'commit',
+      '-m',
+      `chore(mobile): set expo.version ${bump.expoVersion} versionCode ${bump.versionCode} for ${plan.nextTag}`
+    ],
+    { cwd }
   )
+  git(['push', pushRemote, `HEAD:${FORK_WORKING_BRANCH}`], { cwd })
+  git(['tag', plan.nextTag], { cwd })
+  git(['push', pushRemote, `refs/tags/${plan.nextTag}:refs/tags/${plan.nextTag}`], { cwd })
+  return { ...plan, pushRemote, wrote: true, bump }
+}
+
+function main() {
+  const write = process.argv.includes('--write')
+  const auto = process.argv.includes('--auto')
+  if (!write && !auto) {
+    const result = reportNextMobileTag()
+    const autoLine = result.auto.cut
+      ? `auto-cut candidate: ${result.auto.nextTag}`
+      : `auto-cut: skip (${result.auto.reason})`
+    process.stdout.write(
+      [
+        `mobile train: ${result.train.tag} (${result.train.prerelease ? 'prerelease' : 'stable'})`,
+        `next attended fork tag: ${result.next.nextTag}`,
+        autoLine,
+        ''
+      ].join('\n')
+    )
+    return
+  }
+  const result = executeNextMobileTag({ write, auto })
+  process.stdout.write(result.skipped ? `skip: ${result.reason}\n` : `${result.nextTag}\n`)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
