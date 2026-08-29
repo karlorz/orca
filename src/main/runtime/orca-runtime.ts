@@ -1285,7 +1285,7 @@ import {
   type ReplayableMobileNotification
 } from './mobile-notification-replay'
 import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
-import type { PetSpeakEvent, PetSpeakOutcome } from './pet-voice-relay'
+import type { PetSpeakEvent, PetSpeakOutcome, PetVoiceRelay } from './pet-voice-relay'
 import { PetSpeechDeviceRegistry, type PetSpeechDeviceStatus } from './pet-speech-status-registry'
 import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
@@ -16411,6 +16411,12 @@ export class OrcaRuntimeService {
     handler: ((eventId: string, outcome: PetSpeakOutcome) => Promise<{ completed: boolean }>) | null
   ): void {
     this.petSpeakCompleteHandler = handler
+  }
+
+  private petVoiceRelay: PetVoiceRelay | null = null
+
+  setPetVoiceRelay(relay: PetVoiceRelay | null): void {
+    this.petVoiceRelay = relay
   }
 
   async handlePetSpeakComplete(

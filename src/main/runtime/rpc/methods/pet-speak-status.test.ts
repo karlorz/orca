@@ -71,8 +71,11 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
     const statusMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.status') as RpcMethod
     expect(statusMethod).toBeDefined()
 
+    const statusParams = statusMethod.params
+    expect(statusParams).toBeTruthy()
+
     expect(() =>
-      statusMethod.params.parse({
+      statusParams!.parse({
         installUuid: '',
         modelName: 'Pixel 8',
         enabled: true,
@@ -81,7 +84,7 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
     ).toThrow()
 
     expect(() =>
-      statusMethod.params.parse({
+      statusParams!.parse({
         installUuid: 'uuid-1',
         modelName: '',
         enabled: true,
@@ -95,9 +98,11 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
       (m) => m.name === 'pet.speak.subscribe'
     ) as RpcMethod
     expect(subscribeMethod).toBeDefined()
+    const subscribeParams = subscribeMethod.params
+    expect(subscribeParams).toBeTruthy()
     // Subscribe params schema accepts last_seen_seq, epoch, and optional status
     expect(() =>
-      subscribeMethod.params.parse({
+      subscribeParams!.parse({
         last_seen_seq: 1,
         epoch: 'ep-1',
         status: {
@@ -111,13 +116,13 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
 
     // Old client without status is also valid (mixed-version compatibility)
     expect(() =>
-      subscribeMethod.params.parse({
+      subscribeParams!.parse({
         last_seen_seq: 1,
         epoch: 'ep-1'
       })
     ).not.toThrow()
 
     // Completely empty params is also valid
-    expect(() => subscribeMethod.params.parse({})).not.toThrow()
+    expect(() => subscribeParams!.parse({})).not.toThrow()
   })
 })
