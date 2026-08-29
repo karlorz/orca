@@ -3,40 +3,26 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { loadUpstreamReleases, selectLatestTrains } from './fork-upstream-trains.mjs'
 import { parseUpstreamMobileBase, resolveForkMobileAppJson } from './fork-next-mobile-tag.mjs'
+import {
+  FORK_WORKING_BRANCH,
+  FORK_MIRROR_BRANCH,
+  UPSTREAM_REPO,
+  UPSTREAM_GIT_URL,
+  UPSTREAM_BRANCH,
+  assertSafePushRemoteUrl,
+  resolvePushRemote,
+  listGitRemotes
+} from './fork-git-remote.mjs'
 
-export const FORK_WORKING_BRANCH = 'fork-main'
-export const FORK_MIRROR_BRANCH = 'main'
-export const UPSTREAM_REPO = 'stablyai/orca'
-export const UPSTREAM_GIT_URL = 'https://github.com/stablyai/orca.git'
-export const UPSTREAM_BRANCH = 'main'
-
-export function assertSafePushRemoteUrl(remoteUrl) {
-  const url = String(remoteUrl ?? '')
-  if (!url) {
-    throw new Error('Push remote URL is required')
-  }
-  if (url.includes('stablyai/orca')) {
-    throw new Error('Refusing to push to stablyai/orca')
-  }
-  if (!url.includes('karlorz/orca')) {
-    throw new Error(`Push remote must be karlorz/orca, got: ${url}`)
-  }
-}
-
-export function resolvePushRemote(remotes) {
-  const rows = Array.isArray(remotes) ? remotes : []
-  const named = (name) => rows.find((row) => row?.name === name)
-  const fork = named('fork')
-  if (fork) {
-    assertSafePushRemoteUrl(fork.url)
-    return fork.name
-  }
-  const origin = named('origin')
-  if (origin) {
-    assertSafePushRemoteUrl(origin.url)
-    return origin.name
-  }
-  throw new Error('No karlorz/orca push remote (fork or origin)')
+export {
+  FORK_WORKING_BRANCH,
+  FORK_MIRROR_BRANCH,
+  UPSTREAM_REPO,
+  UPSTREAM_GIT_URL,
+  UPSTREAM_BRANCH,
+  assertSafePushRemoteUrl,
+  resolvePushRemote,
+  listGitRemotes
 }
 
 export function buildForkMainSyncPlan() {
@@ -101,18 +87,6 @@ function resolveMobileAppJsonMergeConflict({ cwd }) {
   )
   git(['add', 'mobile/app.json'], { cwd })
   git(['commit', '--no-edit'], { cwd })
-}
-
-export function listGitRemotes(cwd) {
-  const stdout = git(['remote', '-v'], { cwd })
-  const remotes = []
-  for (const line of stdout.split('\n')) {
-    const match = /^(?<name>\S+)\s+(?<url>\S+)\s+\(push\)$/.exec(line)
-    if (match?.groups) {
-      remotes.push({ name: match.groups.name, url: match.groups.url })
-    }
-  }
-  return remotes
 }
 
 export function syncForkMainFromUpstream({ cwd, write = false } = {}) {

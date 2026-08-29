@@ -8,7 +8,7 @@ import {
   listGitRemotes,
   resolvePushRemote,
   assertSafePushRemoteUrl
-} from './fork-sync-fork-main.mjs'
+} from './fork-git-remote.mjs'
 
 const UPSTREAM_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)$/
 const FORK_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)-(\d+)$/

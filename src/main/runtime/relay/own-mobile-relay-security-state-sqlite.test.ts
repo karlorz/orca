@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtemp, rm, readFile, chmod, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, readFile, chmod, stat } from 'node:fs/promises'
 import * as fs from 'node:fs'
 import { existsSync, readFileSync, writeFileSync, openSync, closeSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -453,10 +453,13 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
     })
 
     it('rejects non-regular database path in production mode', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'orca-sec-nonregular-'))
-      tempDirs.push(dir)
+      const parent = await mkdtemp(join(tmpdir(), 'orca-sec-nonregular-'))
+      tempDirs.push(parent)
+      await chmod(parent, 0o700)
+      const dir = join(parent, 'not-a-file')
+      await mkdir(dir, { mode: 0o700 })
+      await chmod(dir, 0o700)
 
-      // Passing a directory path as the DB path
       await expect(async () => {
         await openOwnMobileRelaySecurityStateSqlite({ dbPath: dir, testMode: false })
       }).rejects.toThrow(/not_a_regular_file/)

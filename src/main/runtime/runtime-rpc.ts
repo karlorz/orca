@@ -643,6 +643,7 @@ export class OrcaRuntimeRpcServer {
     }
     if (this.petVoiceRelay) {
       const relay = this.petVoiceRelay
+      this.runtime.setPetVoiceRelay?.(relay)
       this.runtime.setPetSpeakCompleteHandler?.(async (eventId, outcome) => {
         await relay.sendSpeakComplete(eventId, outcome)
         return { completed: true }
@@ -1586,6 +1587,7 @@ export class OrcaRuntimeRpcServer {
     this.mobileSocketWiring = null
     this.detachWebSocketWiring = null
     if (this.petVoiceRelay) {
+      this.runtime.setPetVoiceRelay?.(null)
       this.petVoiceRelay.destroy()
     }
     const stopResults = await Promise.allSettled(

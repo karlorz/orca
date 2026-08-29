@@ -5,7 +5,7 @@ import {
   listGitRemotes,
   resolvePushRemote,
   UPSTREAM_GIT_URL
-} from './fork-sync-fork-main.mjs'
+} from './fork-git-remote.mjs'
 import { loadUpstreamReleases, selectLatestTrains } from './fork-upstream-trains.mjs'
 
 const UPSTREAM_DESKTOP_TAG = /^v(\d+\.\d+\.\d+)(?:-rc\.\d+)?$/

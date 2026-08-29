@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Play } from 'lucide-react-native'
+import { colors, spacing } from '../src/theme/mobile-theme'
 import { styles } from '../src/pet-speak/pet-speech-settings-styles'
 import {
   CANONICAL_LANGUAGES,

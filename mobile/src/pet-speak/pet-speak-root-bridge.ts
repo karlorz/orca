@@ -1,7 +1,5 @@
-/* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { loadHostCatalog } from '../transport/host-store'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
@@ -12,16 +10,18 @@ import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
 import {
-  decidePetVoiceHoldAction,
-  PET_VOICE_RECONNECT_GRACE_MS,
-  type PetVoiceHoldState
-} from './pet-voice-hold-decision'
-import {
   loadPetSpeechPreferences,
   subscribePetSpeechPreferences,
   type PetSpeechPreferences
 } from './pet-speech-preferences'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
+import {
+  clearPetVoiceGraceTimer,
+  evaluatePetVoiceHold,
+  idlePetVoiceHoldState,
+  type PetSpeakSubscriptionEntry,
+  type PetVoiceHoldRuntime
+} from './pet-speak-root-bridge-hold'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
@@ -110,12 +110,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
     [updateVoiceSessionNotificationProp, defaultAdapter]
   )
 
-  const holdStateRef = useRef<PetVoiceHoldState>({
-    isSessionHeld: false,
-    isAcquiring: false,
-    reconnectingSince: null,
-    lastNotificationText: null
-  })
+  const holdStateRef = useRef(idlePetVoiceHoldState())
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refreshCatalog = useCallback(() => {
@@ -146,119 +141,33 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
 
   const clients = useAllHostClients(hostIds)
 
-  const subscriptionsRef = useRef<Map<string, { client: RpcClient; unsub: () => void }>>(new Map())
+  const subscriptionsRef = useRef<Map<string, PetSpeakSubscriptionEntry>>(new Map())
   const hostStatesRef = useRef<Map<string, ConnectionState>>(new Map())
 
-  // Wire per client onStateChange
   useEffect(() => {
     const currentSubs = subscriptionsRef.current
     const hostStates = hostStatesRef.current
-
-    const clearGraceTimer = () => {
-      if (graceTimerRef.current !== null) {
-        clearTimeout(graceTimerRef.current)
-        graceTimerRef.current = null
-      }
+    const holdRuntime: PetVoiceHoldRuntime = {
+      isAndroid,
+      isDisposed: () => isDisposedRef.current,
+      holdState: holdStateRef,
+      graceTimer: graceTimerRef,
+      currentSubs,
+      hostStates,
+      ensureNotificationPermissions: ensureNotificationPermissionsFn,
+      acquireVoiceSession: acquireVoiceSessionFn,
+      releaseVoiceSession: releaseVoiceSessionFn,
+      updateVoiceSessionNotification: updateVoiceSessionNotificationFn
     }
 
-    const evaluateHoldDecision = (now: number = Date.now()) => {
-      if (!isAndroid || isDisposedRef.current) {
-        return
-      }
-
-      const connectedCount = currentSubs.size
-      let reconnectingCount = 0
-      let stillTryingCount = 0
-      for (const state of hostStates.values()) {
-        if (state === 'reconnecting') {
-          reconnectingCount++
-        }
-        if (state === 'reconnecting' || state === 'connecting' || state === 'handshaking') {
-          stillTryingCount++
-        }
-      }
-
-      const action = decidePetVoiceHoldAction({
-        state: holdStateRef.current,
-        connectedCount,
-        reconnectingCount,
-        stillTryingCount,
-        now
-      })
-
-      holdStateRef.current = action.nextState
-
-      const reconnectingSince = action.nextState.reconnectingSince
-      if (reconnectingSince === null) {
-        clearGraceTimer()
-      } else if (graceTimerRef.current === null) {
-        const remaining = Math.max(0, PET_VOICE_RECONNECT_GRACE_MS - (now - reconnectingSince))
-        graceTimerRef.current = setTimeout(() => {
-          graceTimerRef.current = null
-          evaluateHoldDecision(Date.now())
-        }, remaining)
-      }
-
-      if (action.type === 'acquire') {
-        void ensureNotificationPermissionsFn().then((granted) => {
-          if (granted && !isDisposedRef.current) {
-            void acquireVoiceSessionFn().then((res) => {
-              if (isDisposedRef.current) {
-                holdStateRef.current = {
-                  ...holdStateRef.current,
-                  isSessionHeld: false,
-                  isAcquiring: false,
-                  reconnectingSince: null,
-                  lastNotificationText: null
-                }
-                if (res.held) {
-                  void releaseVoiceSessionFn()
-                }
-                return
-              }
-              holdStateRef.current = {
-                ...holdStateRef.current,
-                isAcquiring: false,
-                isSessionHeld: res.held,
-                lastNotificationText: res.held
-                  ? (holdStateRef.current.lastNotificationText ?? action.notificationText)
-                  : null
-              }
-              if (res.held) {
-                evaluateHoldDecision()
-              }
-            })
-          } else {
-            holdStateRef.current = {
-              ...holdStateRef.current,
-              isAcquiring: false
-            }
-          }
-        })
-      } else if (action.type === 'update-notification') {
-        void updateVoiceSessionNotificationFn(action.notificationText)
-      } else if (action.type === 'release') {
-        void releaseVoiceSessionFn()
-      }
-    }
-
-    // If Pet Speech is not explicitly enabled, do NOT create subscriptions or hold voice sessions.
-    // Publish bounded disabled/unavailable status to any connected hosts so Mac observes disabled state.
     if (!isEnabled) {
-      if (graceTimerRef.current !== null) {
-        clearGraceTimer()
-      }
+      clearPetVoiceGraceTimer(graceTimerRef)
       for (const sub of currentSubs.values()) {
         sub.unsub()
       }
       currentSubs.clear()
       if (holdStateRef.current.isSessionHeld) {
-        holdStateRef.current = {
-          isSessionHeld: false,
-          isAcquiring: false,
-          reconnectingSince: null,
-          lastNotificationText: null
-        }
+        holdStateRef.current = idlePetVoiceHoldState()
         void releaseVoiceSessionFn()
       }
       for (const entry of clients) {
@@ -299,7 +208,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
           }
         }
         if (previous !== state || subscriptionChanged) {
-          evaluateHoldDecision()
+          evaluatePetVoiceHold(holdRuntime)
         }
       }
 
@@ -324,7 +233,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
       }
     }
     if (removedAny) {
-      evaluateHoldDecision()
+      evaluatePetVoiceHold(holdRuntime)
     }
 
     return () => {
@@ -346,22 +255,14 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   // Root unmount cleanup
   useEffect(() => {
     return () => {
-      if (graceTimerRef.current !== null) {
-        clearTimeout(graceTimerRef.current)
-        graceTimerRef.current = null
-      }
+      clearPetVoiceGraceTimer(graceTimerRef)
       for (const sub of subscriptionsRef.current.values()) {
         sub.unsub()
       }
       subscriptionsRef.current.clear()
       hostStatesRef.current.clear()
       if (holdStateRef.current.isSessionHeld) {
-        holdStateRef.current = {
-          isSessionHeld: false,
-          isAcquiring: false,
-          reconnectingSince: null,
-          lastNotificationText: null
-        }
+        holdStateRef.current = idlePetVoiceHoldState()
         void releaseVoiceSessionFn()
       }
     }
