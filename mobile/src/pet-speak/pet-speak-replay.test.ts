@@ -78,7 +78,7 @@ describe('PetSpeak Replay & Watermark (Phase C)', () => {
 
     expect(mockClient.subscribe).toHaveBeenCalledWith(
       'pet.speak.subscribe',
-      { last_seen_seq: 7, epoch: 'epoch-xyz' },
+      expect.objectContaining({ last_seen_seq: 7, epoch: 'epoch-xyz' }),
       expect.any(Function)
     )
     unsub()

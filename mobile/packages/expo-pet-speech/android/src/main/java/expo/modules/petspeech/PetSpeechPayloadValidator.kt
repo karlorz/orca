@@ -3,7 +3,6 @@ package expo.modules.petspeech
 import java.util.Locale
 
 object PetSpeechPayloadValidator {
-    private val ALLOWED_LANGUAGES = setOf("yue", "cantonese", "yue-hk", "zh-hk")
     private const val MAX_TEXT_CODE_POINTS = 70
     private const val MAX_EVENT_ID_CODE_POINTS = 128
 
@@ -27,8 +26,8 @@ object PetSpeechPayloadValidator {
         }
 
         if (lang != null) {
-            val normalizedLang = lang.trim().lowercase(Locale.ROOT)
-            if (!ALLOWED_LANGUAGES.contains(normalizedLang)) {
+            val normalized = PetSpeechLanguageNormalizer.normalize(lang)
+            if (normalized == null) {
                 return false
             }
         }

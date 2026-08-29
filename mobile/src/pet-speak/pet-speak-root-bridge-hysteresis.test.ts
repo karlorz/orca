@@ -1,3 +1,19 @@
+vi.mock('expo-notifications', () => ({
+  AndroidImportance: { HIGH: 'high' },
+  setNotificationChannelAsync: vi.fn(),
+  getPermissionsAsync: vi.fn(),
+  requestPermissionsAsync: vi.fn(),
+  scheduleNotificationAsync: vi.fn(),
+  dismissNotificationAsync: vi.fn()
+}))
+
+vi.mock('expo-speech', () => ({
+  VoiceQuality: { Default: 'Default', Enhanced: 'Enhanced' },
+  getAvailableVoicesAsync: vi.fn(async () => []),
+  speak: vi.fn(),
+  stop: vi.fn(async () => {})
+}))
+
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +22,38 @@ import type { RpcClient } from '../transport/rpc-client'
 
 const openHostLogicalClientMock = vi.fn()
 const loadHostCatalogMock = vi.fn()
+
+vi.mock('@react-native-async-storage/async-storage', () => {
+  const store = new Map<string, string>()
+  return {
+    default: {
+      getItem: vi.fn(async (key: string) => store.get(key) ?? null),
+      setItem: vi.fn(async (key: string, value: string) => {
+        store.set(key, value)
+      }),
+      removeItem: vi.fn(async (key: string) => {
+        store.delete(key)
+      }),
+      getAllKeys: vi.fn(async () => Array.from(store.keys())),
+      clear: vi.fn(async () => {
+        store.clear()
+      })
+    }
+  }
+})
+
+vi.mock('./pet-speech-preferences', () => ({
+  loadPetSpeechPreferences: vi.fn(async () => ({
+    enabled: true,
+    migrationCompleted: true,
+    installUuid: 'test-uuid',
+    rate: 1,
+    voiceByLanguage: {}
+  })),
+  subscribePetSpeechPreferences: vi.fn((_listener) => {
+    return () => {}
+  })
+}))
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', Version: 18 }

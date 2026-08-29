@@ -83,7 +83,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
 
     expect(emitted.length).toBe(1)
     expect(emitted[0].text).toBe('Hello')
-    expect(emitted[0].lang).toBe('yue')
+    expect(emitted[0].lang).toBe('yue-HK')
     expect(emitted[0].event_id).toBeDefined()
     expect(typeof emitted[0].event_id).toBe('string')
     expect(emitted[0].event_id!.length).toBeGreaterThan(0)
@@ -92,7 +92,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
-  it('rejects payload if text is empty, >70 unicode chars, or lang is not Cantonese', async () => {
+  it('rejects payload if text is empty, >70 unicode chars, or lang is invalid', async () => {
     const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
@@ -110,11 +110,11 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     // 2. >70 unicode characters
     const longText = '這是一段超過七十個字符的文字。'.repeat(6) // 15*6 = 90 chars
     emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: longText, lang: 'yue' })
-    // 3. Unsupported language (e.g., en-US, fr, es, de)
+    // 3. Unsupported language (e.g., fr, es, de)
     emitCapturedSpeakIntent(captured, {
       kind: 'speak-intent',
-      text: 'Hello world',
-      lang: 'en-US'
+      text: 'Bonjour monde',
+      lang: 'fr-FR'
     })
     // 4. Overlong event_id (>128 chars)
     const longEventId = 'a'.repeat(129)
@@ -124,7 +124,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
       lang: 'yue',
       event_id: longEventId
     })
-    // 5. Valid Cantonese variants: yue, cantonese, yue-HK, zh-HK (case insensitive)
+    // 5. Valid canonical/legacy variants
     emitCapturedSpeakIntent(captured, {
       kind: 'speak-intent',
       text: '你好一',

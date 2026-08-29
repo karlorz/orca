@@ -192,7 +192,8 @@ class PetSpeechResourceOwnerRegistry(
         eventId: String,
         text: String,
         tempFilePath: String,
-        onOutcome: (PetSpeechOutcome) -> Unit
+        onOutcome: (PetSpeechOutcome) -> Unit,
+        onDeleteFile: (String) -> Unit = this.onDeleteFile
     ): PetSpeechResourceOwner {
         val prev: PetSpeechResourceOwner?
         val newOwner: PetSpeechResourceOwner

@@ -5,6 +5,19 @@ export interface PetSpeechUtteranceOptions {
   text: string
   lang?: string
   rate?: number
+  voiceName?: string
+  playerKind?: 'mediaplayer' | 'media3'
+  debug?: boolean
+}
+
+export interface PetSpeechVoice {
+  name: string
+  locale: string
+  language?: string
+  quality: number
+  network: boolean
+  engine?: string
+  gender: string
 }
 
 export interface PetSpeechResult {
@@ -12,7 +25,7 @@ export interface PetSpeechResult {
 }
 
 export interface PetSpeechNativeModule {
-  getAvailableVoicesAsync(): Promise<string[]>
+  getAvailableVoicesAsync(): Promise<PetSpeechVoice[]>
   speakAsync(options: PetSpeechUtteranceOptions): Promise<PetSpeechResult>
   stopAsync(): Promise<void>
   acquireVoiceSessionAsync(): Promise<{ held: boolean }>

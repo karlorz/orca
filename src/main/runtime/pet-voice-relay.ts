@@ -1,32 +1,21 @@
 import { type Socket, connect as netConnect } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { PetVoiceLogger } from './pet-voice-logger'
+import { buildDeviceStatusMessage } from './pet-speak-rate'
+import { parseSpeakIntentMessage } from './pet-speak-intent'
 
 export type AudioSessionState = 'live' | 'dead'
+export {
+  parsePetSpeakRate,
+  PET_SPEAK_DEFAULT_RATE,
+  PET_SPEAK_MIN_RATE,
+  PET_SPEAK_MAX_RATE
+} from './pet-speak-rate'
 
 export type PetSpeakOutcome = 'spoken' | 'voice-unavailable' | 'playback-error' | 'cancelled'
 
-export const PET_SPEAK_DEFAULT_RATE = 1.2
-export const PET_SPEAK_MIN_RATE = 0.5
-export const PET_SPEAK_MAX_RATE = 2.5
-
-export function parsePetSpeakRate(raw: unknown): number {
-  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN
-  if (!Number.isFinite(n)) {
-    return PET_SPEAK_DEFAULT_RATE
-  }
-  return Math.min(PET_SPEAK_MAX_RATE, Math.max(PET_SPEAK_MIN_RATE, Math.round(n * 100) / 100))
-}
-
-export type PetSpeakEvent = {
-  type: 'pet.speak'
-  text: string
-  lang?: string
-  event_id?: string
-  rate: number
-}
+export type { PetSpeakEvent } from './pet-speak-intent'
 
 export type PetVoiceRelayOptions = {
   petSocketPath?: string
@@ -264,55 +253,22 @@ export class PetVoiceRelay {
     if (this.audioSessionState !== 'live') {
       return
     }
-
-    const rawText = typeof message.text === 'string' ? message.text.trim() : ''
-    // Trust boundary: non-empty trimmed text up to 70 Unicode characters
-    const textChars = Array.from(rawText)
-    if (textChars.length === 0 || textChars.length > 70) {
+    const parsed = parseSpeakIntentMessage(message)
+    if (!parsed) {
       return
     }
-
-    // Language trust boundary: limited to Cantonese forms
-    const rawLang = typeof message.lang === 'string' ? message.lang.trim().toLowerCase() : ''
-    const allowedLangs = new Set(['yue', 'cantonese', 'yue-hk', 'zh-hk'])
-    if (rawLang && !allowedLangs.has(rawLang)) {
-      return
-    }
-
-    // Event ID correlation & validation: non-empty <= 128 Unicode characters
-    let eventId = typeof message.event_id === 'string' ? message.event_id.trim() : ''
-    if (eventId) {
-      if (Array.from(eventId).length > 128) {
-        return
-      }
-    } else {
-      // Compatibility correlation ID if missing
-      eventId = `relay-${randomUUID()}`
-    }
-
-    const event: PetSpeakEvent = {
-      type: 'pet.speak',
-      text: rawText,
-      lang:
-        typeof message.lang === 'string' && message.lang.trim().length > 0
-          ? message.lang.trim()
-          : undefined,
-      event_id: eventId,
-      rate: parsePetSpeakRate(message.rate)
-    }
-
+    const { event, charsCount } = parsed
     this.logger.logSpeakIntent({
-      event_id: eventId,
-      charsCount: textChars.length,
+      event_id: event.event_id ?? '',
+      charsCount,
       rate: event.rate
     })
-
     for (const listener of this.listeners) {
       try {
         listener(event)
       } catch (err) {
         this.logger.logEmitError({
-          event_id: eventId,
+          event_id: event.event_id ?? '',
           error: err instanceof Error ? err.message : String(err)
         })
         console.error('[pet-voice-relay] Listener error:', err)
@@ -328,6 +284,10 @@ export class PetVoiceRelay {
       outcome,
       speak: false
     })
+  }
+
+  async sendDeviceStatus(status: Record<string, unknown>, connectionId?: string): Promise<void> {
+    await this.sendOneShotMessage(buildDeviceStatusMessage(status, this.reporterId, connectionId))
   }
 
   private scheduleReconnect(): void {

@@ -7,12 +7,16 @@ import org.junit.Test
 class PetSpeechPayloadValidatorTest {
 
     @Test
-    fun acceptsValidCantoneseUtterance() {
+    fun acceptsValidLanguages() {
         assertTrue(PetSpeechPayloadValidator.isValid("ev-1", "你好呀", "yue"))
         assertTrue(PetSpeechPayloadValidator.isValid("ev-2", "早晨", "yue-HK"))
         assertTrue(PetSpeechPayloadValidator.isValid("ev-3", "食咗飯未", "zh-HK"))
         assertTrue(PetSpeechPayloadValidator.isValid("ev-4", "得唔得", "cantonese"))
         assertTrue(PetSpeechPayloadValidator.isValid("ev-5", "預設語言", null))
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-6", "Hello", "en-US"))
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-7", "Hello", "en"))
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-8", "你好", "zh-CN"))
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-9", "你好", "zh-TW"))
     }
 
     @Test
@@ -64,10 +68,11 @@ class PetSpeechPayloadValidatorTest {
     }
 
     @Test
-    fun rejectsNonCantoneseLanguages() {
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", "Hello", "en-US"))
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-2", "你好", "zh-CN"))
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-3", "你好", "zh-TW"))
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-4", "Bonjour", "fr-FR"))
+    fun rejectsUnknownOrAmbiguousLanguages() {
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", "Bonjour", "fr-FR"))
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-2", "Bonjour", "fr"))
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-3", "Hello", "zh"))
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-4", "Hello", "mandarin"))
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-5", "Hello", "auto"))
     }
 }

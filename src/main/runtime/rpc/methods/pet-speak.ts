@@ -4,10 +4,27 @@ import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
 
 let petSpeakSubscriptionSeq = 0
 
+const PetSpeechStatusSchema = z.object({
+  installUuid: z.string().min(1, 'Missing installUuid'),
+  modelName: z.string().min(1, 'Missing modelName'),
+  enabled: z.boolean(),
+  availability: z.enum(['available', 'disabled', 'unavailable']),
+  activeEngine: z.string().optional(),
+  supportedLanguages: z.array(z.string()).optional(),
+  currentLanguage: z.string().optional(),
+  selectedVoice: z.string().optional(),
+  rate: z.number().optional(),
+  lastOutcome: z.string().optional(),
+  updatedAt: z.number().optional()
+})
+
 const PetSpeakSubscribeParams = z.object({
   last_seen_seq: z.number().int().min(0, 'last_seen_seq must be a non-negative integer').optional(),
-  epoch: z.string().optional()
+  epoch: z.string().optional(),
+  status: PetSpeechStatusSchema.optional()
 })
+
+const PetSpeakStatusParams = PetSpeechStatusSchema
 
 const PetSpeakUnsubscribeParams = z.object({
   subscriptionId: z
@@ -79,6 +96,11 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
+        // If client provided additive status during subscribe, report it
+        if (params?.status && runtime.handlePetSpeechStatus) {
+          void runtime.handlePetSpeechStatus(params.status, connectionId).catch(() => {})
+        }
+
         // 1. Emit ready frame with subscriptionId and epoch
         const epoch = runtime.getPetSpeakEpoch?.()
         if (!safeEmit({ type: 'ready', subscriptionId, epoch })) {
@@ -86,7 +108,11 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
         }
 
         // 2. Replay missed events if client is catching up
-        if (params?.last_seen_seq !== undefined && params?.epoch && runtime.getMissedPetSpeakSince) {
+        if (
+          params?.last_seen_seq !== undefined &&
+          params?.epoch &&
+          runtime.getMissedPetSpeakSince
+        ) {
           const missed = runtime.getMissedPetSpeakSince(params.last_seen_seq, params.epoch)
           for (const event of missed) {
             if (!safeEmit(event, event.event_id)) {
@@ -117,6 +143,16 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
         return await runtime.handlePetSpeakComplete(params.event_id, params.outcome)
       }
       return { completed: false }
+    }
+  }),
+  defineMethod({
+    name: 'pet.speak.status',
+    params: PetSpeakStatusParams,
+    handler: async (params, { runtime, connectionId }) => {
+      if (runtime.handlePetSpeechStatus) {
+        return await runtime.handlePetSpeechStatus(params, connectionId)
+      }
+      return { acknowledged: true }
     }
   })
 ]

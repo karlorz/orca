@@ -167,6 +167,102 @@ describe('PetVoiceRelay', () => {
     relay.destroy()
   })
 
+  it('normalizes legacy lang aliases to canonical language IDs when forwarding speak-intent', async () => {
+    const { captured, connectFn } = captureSubscriberConnectFn()
+    const emittedEvents: PetSpeakEvent[] = []
+    const relay = new PetVoiceRelay({
+      connectFn,
+      petSocketPath: '/tmp/test-pet.sock'
+    })
+    await new Promise((r) => process.nextTick(r))
+    relay.onSpeak((event) => {
+      emittedEvents.push(event)
+    })
+    await relay.onVoiceSubscriptionPresenceChange(1)
+
+    // Cantonese legacy aliases -> yue-HK
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '粵語測試',
+      lang: 'cantonese',
+      event_id: 'ev-can'
+    })
+    expect(emittedEvents[0]?.lang).toBe('yue-HK')
+
+    // Mandarin canonical -> zh-CN, zh-TW
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '普通话测试',
+      lang: 'zh-CN',
+      event_id: 'ev-zh-cn'
+    })
+    expect(emittedEvents[1]?.lang).toBe('zh-CN')
+
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '國語測試',
+      lang: 'zh-TW',
+      event_id: 'ev-zh-tw'
+    })
+    expect(emittedEvents[2]?.lang).toBe('zh-TW')
+
+    // English legacy alias en -> en-US
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: 'English test',
+      lang: 'en',
+      event_id: 'ev-en'
+    })
+    expect(emittedEvents[3]?.lang).toBe('en-US')
+
+    // Unknown language tag -> rejected / not forwarded
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: 'French test',
+      lang: 'fr-FR',
+      event_id: 'ev-fr'
+    })
+    expect(emittedEvents).toHaveLength(4)
+
+    relay.destroy()
+  })
+
+  it('forwards voiceName and debug options when provided in speak-intent message', async () => {
+    const { captured, connectFn } = captureSubscriberConnectFn()
+    const receivedEvents: PetSpeakEvent[] = []
+
+    const relay = new PetVoiceRelay({
+      connectFn,
+      petSocketPath: '/tmp/test-pet.sock',
+      onSpeak: (event) => receivedEvents.push(event)
+    })
+
+    await relay.onVoiceSubscriptionPresenceChange(1)
+
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '測試自訂語音',
+      lang: 'yue-HK',
+      event_id: 'ev-voice-1',
+      rate: 1.5,
+      voiceName: 'yue-hk-x-yud-network',
+      debug: true
+    })
+
+    expect(receivedEvents).toHaveLength(1)
+    expect(receivedEvents[0]).toEqual({
+      type: 'pet.speak',
+      text: '測試自訂語音',
+      lang: 'yue-HK',
+      event_id: 'ev-voice-1',
+      rate: 1.5,
+      voiceName: 'yue-hk-x-yud-network',
+      debug: true
+    })
+
+    relay.destroy()
+  })
+
   it('forwards clamped speak rate and defaults missing rate to 1.2', async () => {
     expect(parsePetSpeakRate(undefined)).toBe(1.2)
     expect(parsePetSpeakRate('nope')).toBe(1.2)

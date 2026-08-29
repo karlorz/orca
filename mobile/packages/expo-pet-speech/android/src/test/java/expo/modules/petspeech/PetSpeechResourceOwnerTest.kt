@@ -71,8 +71,8 @@ class PetSpeechResourceOwnerTest {
     fun outOfOrderInitLeavesReq2ActiveAndReq1Cancelled() {
         val registry = PetSpeechResourceOwnerRegistry()
 
-        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav") { outcome -> }
-        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav") { outcome -> }
+        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav", onOutcome = {})
+        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav", onOutcome = {})
 
         // req2 was created after req1, so req1 must be superseded immediately
         assertTrue(req1.isCancelled)
@@ -101,9 +101,9 @@ class PetSpeechResourceOwnerTest {
         val registry = PetSpeechResourceOwnerRegistry()
         var settledOutcome: PetSpeechOutcome? = null
 
-        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") { outcome ->
+        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = { outcome ->
             settledOutcome = outcome
-        }
+        })
 
         assertFalse(req.isCancelled)
         registry.stopAll()
@@ -128,7 +128,7 @@ class PetSpeechResourceOwnerTest {
         var serviceStoppedCount = 0
         var unbindCount = 0
 
-        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") {}
+        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = {})
         req.markServiceStarted {
             serviceStoppedCount++
         }
@@ -152,7 +152,7 @@ class PetSpeechResourceOwnerTest {
         var serviceStoppedCount = 0
         var unbindCount = 0
 
-        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") {}
+        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = {})
         req.markServiceStarted {
             serviceStoppedCount++
         }
@@ -177,7 +177,7 @@ class PetSpeechResourceOwnerTest {
         var serviceStoppedCount = 0
         var unbindCount = 0
 
-        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") {}
+        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = {})
         req.markServiceStarted {
             serviceStoppedCount++
         }
@@ -201,13 +201,13 @@ class PetSpeechResourceOwnerTest {
         var req1ServiceStopCount = 0
         var req2ServiceStopCount = 0
 
-        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav") {}
+        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav", onOutcome = {})
         req1.markServiceStarted {
             req1ServiceStopCount++
         }
 
         // Req2 starts, replacing Req1
-        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav") {}
+        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav", onOutcome = {})
         req2.markServiceStarted {
             req2ServiceStopCount++
         }
@@ -225,12 +225,12 @@ class PetSpeechResourceOwnerTest {
         val registry = PetSpeechResourceOwnerRegistry()
         val mockService = MockForegroundService("service-1")
 
-        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav") {}
+        val req1 = registry.createOwner("ev-1", "你好1", "/tmp/ev1.wav", onOutcome = {})
         req1.attachBoundService(
             onCancelSpeech = { mockService.cancelSpeech(req1.id) }
         )
 
-        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav") {}
+        val req2 = registry.createOwner("ev-2", "你好2", "/tmp/ev2.wav", onOutcome = {})
         req2.attachBoundService(
             onCancelSpeech = { mockService.cancelSpeech(req2.id) }
         )
@@ -249,7 +249,7 @@ class PetSpeechResourceOwnerTest {
         val registry = PetSpeechResourceOwnerRegistry()
 
         // Path 1: Normal success
-        val req1 = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") {}
+        val req1 = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = {})
         var unbindCount1 = 0
         req1.registerConnectionAttempt(Object()) { unbindCount1++ }
         req1.onBindResult(true)
@@ -257,7 +257,7 @@ class PetSpeechResourceOwnerTest {
         assertEquals(1, unbindCount1)
 
         // Path 2: Disconnect
-        val req2 = registry.createOwner("ev-2", "你好", "/tmp/ev2.wav") {}
+        val req2 = registry.createOwner("ev-2", "你好", "/tmp/ev2.wav", onOutcome = {})
         var unbindCount2 = 0
         req2.registerConnectionAttempt(Object()) { unbindCount2++ }
         req2.onBindResult(true)
@@ -276,10 +276,10 @@ class PetSpeechResourceOwnerTest {
         var reentrantCallSuccess = false
 
         // Test that within onOutcome callback, we can synchronously query or interact with registry without deadlock
-        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav") { outcome ->
+        val req = registry.createOwner("ev-1", "你好", "/tmp/ev1.wav", onOutcome = { outcome ->
             // Reentrant call into registry under onOutcome callback
             reentrantCallSuccess = !registry.isCurrent(PetSpeechResourceOwner(999L, "other", "text", "/tmp/other.wav", {}, {}, {}))
-        }
+        })
 
         req.settle(PetSpeechOutcome.Spoken)
         assertTrue(reentrantCallSuccess)

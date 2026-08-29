@@ -10,8 +10,6 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.MediaPlayer
-import android.media.PlaybackParams
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -38,7 +36,7 @@ class PetSpeechForegroundService : Service() {
     }
 
     private val binder = LocalBinder()
-    private var mediaPlayer: MediaPlayer? = null
+    private var audioPlayer: PetSpeechAudioPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -65,12 +63,12 @@ class PetSpeechForegroundService : Service() {
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 try {
-                    mediaPlayer?.setVolume(0.2f, 0.2f)
+                    audioPlayer?.setVolume(0.2f)
                 } catch (_: Exception) {}
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 try {
-                    mediaPlayer?.setVolume(1.0f, 1.0f)
+                    audioPlayer?.setVolume(1.0f)
                 } catch (_: Exception) {}
             }
         }
@@ -184,10 +182,12 @@ class PetSpeechForegroundService : Service() {
         text: String,
         tempFilePath: String,
         rate: Float = PetSpeechRate.DEFAULT,
+        debug: Boolean = false,
+        playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind,
         onOutcome: (String, PetSpeechOutcome) -> Unit
     ) {
         // Reset player and focus for incoming utterance
-        teardownMediaPlayerAndFocus()
+        teardownAudioPlayerAndFocus()
 
         replacementDecisionHandler.beginPlayback(ownerId, eventId, text, onOutcome)
 
@@ -202,7 +202,7 @@ class PetSpeechForegroundService : Service() {
                     }
                 }
                 is PetSpeechStateMachine.Action.PlayAudioFile -> {
-                    playAudio(action.filePath, PetSpeechRate.androidPlaybackSpeed(rate))
+                    playAudio(eventId, action.filePath, PetSpeechRate.androidPlaybackSpeed(rate), debug, playerKind)
                 }
                 is PetSpeechStateMachine.Action.AbandonAudioFocus -> {
                     abandonSpeechAudioFocus()
@@ -213,11 +213,13 @@ class PetSpeechForegroundService : Service() {
                     }
                 }
                 is PetSpeechStateMachine.Action.DeleteTempFile -> {
+                    safeTeardownAudioPlayer()
                     deleteFileSafely(action.filePath)
                 }
                 is PetSpeechStateMachine.Action.NotifyOutcome -> {
                     stateMachine = null
-                    teardownMediaPlayerAndFocus()
+                    safeTeardownAudioPlayer()
+                    abandonSpeechAudioFocus()
                     replacementDecisionHandler.completePlayback(ownerId, action.outcome)
                 }
             }
@@ -230,17 +232,20 @@ class PetSpeechForegroundService : Service() {
     fun cancelSpeech(ownerId: Long) {
         if (replacementDecisionHandler.activeOwnerId == ownerId) {
             stateMachine = null
-            teardownMediaPlayerAndFocus()
+            teardownAudioPlayerAndFocus()
             replacementDecisionHandler.cancelSpeech(ownerId)
         }
     }
 
-    private fun teardownMediaPlayerAndFocus() {
+    private fun safeTeardownAudioPlayer() {
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
+            audioPlayer?.stopAndRelease()
         } catch (_: Exception) {}
+        audioPlayer = null
+    }
+
+    private fun teardownAudioPlayerAndFocus() {
+        safeTeardownAudioPlayer()
         abandonSpeechAudioFocus()
     }
 
@@ -317,46 +322,58 @@ class PetSpeechForegroundService : Service() {
         }
     }
 
-    private fun playAudio(filePath: String, rate: Float) {
+    private fun playAudio(
+        eventId: String,
+        filePath: String,
+        rate: Float,
+        debug: Boolean = false,
+        playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind
+    ) {
         try {
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                setDataSource(filePath)
-                setOnCompletionListener {
+            safeTeardownAudioPlayer()
+            val player = PetSpeechPlayerProvider.createPlayer(playerKind)
+            audioPlayer = player
+
+            val playerStartTime = System.currentTimeMillis()
+            PetSpeechPlaybackInstrumentation.recordPlayerStarted(
+                eventId = eventId,
+                playerImplementation = player.implementationName,
+                selectedRate = rate,
+                timestampMs = playerStartTime
+            )
+
+            player.play(
+                context = this,
+                filePath = filePath,
+                rate = rate,
+                debug = debug,
+                onComplete = {
+                    val durationMs = System.currentTimeMillis() - playerStartTime
+                    PetSpeechPlaybackInstrumentation.recordPlayerCompleted(
+                        eventId = eventId,
+                        durationMs = durationMs
+                    )
                     stateMachine?.onPlaybackComplete()
-                }
-                setOnErrorListener { _, _, _ ->
+                },
+                onError = { reason ->
+                    PetSpeechPlaybackInstrumentation.recordPlayerFailed(
+                        eventId = eventId,
+                        failureReason = reason
+                    )
                     stateMachine?.onPlaybackError()
-                    true
                 }
-                prepare()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    try {
-                        playbackParams = PlaybackParams()
-                            .setSpeed(rate)
-                            .setPitch(1.0f)
-                    } catch (_: Exception) {
-                    }
-                }
-                start()
-            }
-        } catch (_: Exception) {
+            )
+        } catch (e: Exception) {
+            PetSpeechPlaybackInstrumentation.recordPlayerFailed(
+                eventId = eventId,
+                failureReason = e.message ?: "playAudio exception"
+            )
             stateMachine?.onPlaybackError()
         }
     }
 
     private fun stopForegroundPlayback() {
-        try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
-        } catch (_: Exception) {}
+        safeTeardownAudioPlayer()
 
         if (isForegroundStarted) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -384,8 +401,7 @@ class PetSpeechForegroundService : Service() {
             cancelSpeech(currentOwnerId)
         }
         stopForegroundPlayback()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        safeTeardownAudioPlayer()
         mediaSession?.release()
         mediaSession = null
         abandonSpeechAudioFocus()

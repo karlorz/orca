@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
@@ -15,6 +16,12 @@ import {
   PET_VOICE_RECONNECT_GRACE_MS,
   type PetVoiceHoldState
 } from './pet-voice-hold-decision'
+import {
+  loadPetSpeechPreferences,
+  subscribePetSpeechPreferences,
+  type PetSpeechPreferences
+} from './pet-speech-preferences'
+import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
@@ -27,6 +34,8 @@ export interface PetSpeakBridgeOptions {
   acquireVoiceSession?: () => Promise<{ held: boolean }>
   releaseVoiceSession?: () => Promise<void>
   updateVoiceSessionNotification?: (text: string) => Promise<void>
+  loadPreferences?: () => Promise<PetSpeechPreferences>
+  subscribePreferences?: (listener: (prefs: PetSpeechPreferences) => void) => () => void
 }
 
 export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
@@ -34,9 +43,36 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   const [connectableProfiles, setConnectableProfiles] = useState<HostProfile[]>([])
   const loadCatalogFn = options?.loadCatalog ?? loadHostCatalog
   const subscribeToCatalogChange = options?.subscribeToCatalogChange ?? ctx.subscribeAllHosts
+  const loadPreferencesFn = options?.loadPreferences ?? loadPetSpeechPreferences
+  const subscribePreferencesFn = options?.subscribePreferences ?? subscribePetSpeechPreferences
   const primeHosts = ctx.primeHosts
   const catalogGenerationRef = useRef(0)
   const isDisposedRef = useRef(false)
+
+  const [preferences, setPreferences] = useState<PetSpeechPreferences | null>(() => {
+    return null
+  })
+
+  // Load and subscribe to Pet Speech Enabled preferences
+  useEffect(() => {
+    let active = true
+    void loadPreferencesFn().then((prefs) => {
+      if (active && !isDisposedRef.current) {
+        setPreferences({ ...prefs })
+      }
+    })
+    const unsub = subscribePreferencesFn((prefs) => {
+      if (active && !isDisposedRef.current) {
+        setPreferences({ ...prefs })
+      }
+    })
+    return () => {
+      active = false
+      unsub()
+    }
+  }, [loadPreferencesFn, subscribePreferencesFn])
+
+  const isEnabled = preferences !== null ? preferences.enabled : false
 
   const isAndroid = options?.isAndroid ?? Platform.OS === 'android'
   const ensureNotificationPermissionsFn =
@@ -206,12 +242,45 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
       }
     }
 
+    // If Pet Speech is not explicitly enabled, do NOT create subscriptions or hold voice sessions.
+    // Publish bounded disabled/unavailable status to any connected hosts so Mac observes disabled state.
+    if (!isEnabled) {
+      if (graceTimerRef.current !== null) {
+        clearGraceTimer()
+      }
+      for (const sub of currentSubs.values()) {
+        sub.unsub()
+      }
+      currentSubs.clear()
+      if (holdStateRef.current.isSessionHeld) {
+        holdStateRef.current = {
+          isSessionHeld: false,
+          isAcquiring: false,
+          reconnectingSince: null,
+          lastNotificationText: null
+        }
+        void releaseVoiceSessionFn()
+      }
+      for (const entry of clients) {
+        if (entry.client.getState() === 'connected') {
+          void buildPetSpeechDeviceStatus({ preferences: preferences ?? undefined })
+            .then((status) => {
+              if (entry.client.getState() === 'connected') {
+                entry.client.sendRequest('pet.speak.status', status).catch(() => {})
+              }
+            })
+            .catch(() => {})
+        }
+      }
+      return
+    }
+
     const cleanups = clients.map((entry) => {
       const wireUp = (state: ConnectionState) => {
         const previous = hostStates.get(entry.hostId)
         hostStates.set(entry.hostId, state)
         let subscriptionChanged = false
-        if (state === 'connected') {
+        if (state === 'connected' && isEnabled) {
           if (
             !currentSubs.has(entry.hostId) ||
             currentSubs.get(entry.hostId)?.client !== entry.client
@@ -234,7 +303,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
         }
       }
 
-      wireUp(entry.state)
+      wireUp(entry.client.getState())
       return entry.client.onStateChange(wireUp)
     })
 
@@ -265,6 +334,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
     }
   }, [
     clients,
+    isEnabled,
     handlerOptionsProp,
     isAndroid,
     ensureNotificationPermissionsFn,
