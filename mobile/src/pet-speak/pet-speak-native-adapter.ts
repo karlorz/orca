@@ -2,7 +2,12 @@ import { Platform } from 'react-native'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
 import { isValidPetSpeakPayload, parsePetSpeakRate } from './pet-speak-payload-validation'
 import type { PetSpeakTerminalOutcome } from './pet-speak-adapters'
-import { getExpoPetSpeechModule, type PetSpeechNativeModule } from '@orca/expo-pet-speech'
+import {
+  getExpoPetSpeechModule,
+  type PetSpeechNativeModule,
+  type PetSpeechVoice
+} from '@orca/expo-pet-speech'
+export { getExpoPetSpeechModule, type PetSpeechNativeModule, type PetSpeechVoice }
 
 export interface PetSpeechNativeAdapter {
   speak(payload: PetSpeakPayload): Promise<PetSpeakTerminalOutcome>
@@ -33,7 +38,10 @@ export class AndroidPetSpeechAdapter implements PetSpeechNativeAdapter {
         eventId: payload.event_id!,
         text: payload.text,
         lang: payload.lang,
-        rate: parsePetSpeakRate(payload.rate)
+        rate: parsePetSpeakRate(payload.rate),
+        voiceName: payload.voiceName,
+        playerKind: payload.playerKind,
+        debug: payload.debug
       })
       return result.outcome
     } catch {

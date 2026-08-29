@@ -23,10 +23,10 @@ class PetSpeechRateTest {
 
     @Test
     fun androidPlaybackIsOneMenuStepFaster() {
-        assertEquals(1.0f, PetSpeechRate.androidPlaybackSpeed(0.8f), 0.0001f)
-        assertEquals(1.2f, PetSpeechRate.androidPlaybackSpeed(1.0f), 0.0001f)
-        assertEquals(1.5f, PetSpeechRate.androidPlaybackSpeed(1.2f), 0.0001f)
-        assertEquals(2.0f, PetSpeechRate.androidPlaybackSpeed(1.5f), 0.0001f)
-        assertEquals(2.5f, PetSpeechRate.androidPlaybackSpeed(2.0f), 0.0001f)
+        assertEquals(0.8f, PetSpeechRate.androidPlaybackSpeed(0.8f), 0.0001f)
+        assertEquals(1.0f, PetSpeechRate.androidPlaybackSpeed(1.0f), 0.0001f)
+        assertEquals(1.2f, PetSpeechRate.androidPlaybackSpeed(1.2f), 0.0001f)
+        assertEquals(1.5f, PetSpeechRate.androidPlaybackSpeed(1.5f), 0.0001f)
+        assertEquals(2.0f, PetSpeechRate.androidPlaybackSpeed(2.0f), 0.0001f)
     }
 }

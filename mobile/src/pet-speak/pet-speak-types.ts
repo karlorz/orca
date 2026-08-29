@@ -4,6 +4,9 @@ export type PetSpeakPayload = {
   lang?: string
   event_id?: string
   rate?: number
+  voiceName?: string
+  playerKind?: 'mediaplayer' | 'media3'
+  debug?: boolean
   seq?: number
   epoch?: string
   replayed?: boolean

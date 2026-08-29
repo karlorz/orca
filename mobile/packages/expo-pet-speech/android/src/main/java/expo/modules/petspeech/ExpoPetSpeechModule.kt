@@ -32,32 +32,60 @@ class ExpoPetSpeechModule : Module() {
         AsyncFunction("getAvailableVoicesAsync") { promise: Promise ->
             synchronized(initLock) {
                 if (isDestroyed) {
-                    promise.resolve(emptyList<String>())
+                    promise.resolve(emptyList<Map<String, Any>>())
                     return@AsyncFunction
                 }
             }
 
             val context = appContext.reactContext
             if (context == null) {
-                promise.resolve(emptyList<String>())
+                promise.resolve(emptyList<Map<String, Any>>())
                 return@AsyncFunction
             }
 
             createTtsEngine(context) { engineLifecycle ->
                 if (engineLifecycle == null) {
-                    promise.resolve(emptyList<String>())
+                    promise.resolve(emptyList<Map<String, Any>>())
                     return@createTtsEngine
                 }
                 try {
                     val voices = engineLifecycle.engine.voices
+                    val defaultEngine = engineLifecycle.engine.defaultEngine ?: ""
                     if (voices != null) {
-                        val languages = voices.map { it.locale.toLanguageTag() }.distinct()
-                        promise.resolve(languages)
+                        val filteredVoices = voices
+                            .filter { voice ->
+                                PetSpeechVoiceClassifier.isSupportedVoiceLocale(voice.locale)
+                            }
+                            .map { voice ->
+                                val name = voice.name ?: ""
+                                val canonicalLanguage = PetSpeechVoiceClassifier.classifyCanonicalLanguage(voice.locale) ?: ""
+                                val lowerName = name.lowercase()
+                                val gender = when {
+                                    lowerName.contains("女") ||
+                                    lowerName.contains("female") ||
+                                    lowerName.contains("hiu") ||
+                                    lowerName.contains("yuc") ||
+                                    lowerName.contains("gaai") -> "female"
+                                    lowerName.contains("男") ||
+                                    lowerName.contains("male") -> "male"
+                                    else -> "unknown"
+                                }
+                                mapOf(
+                                    "name" to name,
+                                    "locale" to (voice.locale?.toLanguageTag() ?: ""),
+                                    "language" to canonicalLanguage,
+                                    "quality" to voice.quality,
+                                    "network" to voice.isNetworkConnectionRequired,
+                                    "engine" to defaultEngine,
+                                    "gender" to gender
+                                )
+                            }
+                        promise.resolve(filteredVoices)
                     } else {
-                        promise.resolve(emptyList<String>())
+                        promise.resolve(emptyList<Map<String, Any>>())
                     }
                 } catch (_: Exception) {
-                    promise.resolve(emptyList<String>())
+                    promise.resolve(emptyList<Map<String, Any>>())
                 } finally {
                     engineLifecycle.release()
                 }
@@ -75,6 +103,8 @@ class ExpoPetSpeechModule : Module() {
             val eventId = options["eventId"] as? String
             val text = options["text"] as? String
             val lang = options["lang"] as? String
+            val voiceName = options["voiceName"] as? String
+            val debug = options["debug"] as? Boolean ?: false
 
             if (!PetSpeechPayloadValidator.isValid(eventId, text, lang)) {
                 promise.resolve(mapOf("outcome" to "playback-error"))
@@ -84,6 +114,8 @@ class ExpoPetSpeechModule : Module() {
             val validEventId = eventId!!.trim()
             val validText = text!!.trim()
             val rate = PetSpeechRate.parse(options["rate"])
+            val playerKindParam = options["playerKind"] as? String
+            val playerKind = PetSpeechPlayerKind.fromIdentifier(playerKindParam)
 
             val context = appContext.reactContext
             if (context == null) {
@@ -95,9 +127,34 @@ class ExpoPetSpeechModule : Module() {
             val tempFilePath = tempFile.absolutePath
 
             // Establish resource owner synchronously before TTS initialization
-            val owner = resourceOwnerRegistry.createOwner(validEventId, validText, tempFilePath) { outcome ->
-                promise.resolve(mapOf("outcome" to outcome.name))
-            }
+            val owner = resourceOwnerRegistry.createOwner(
+                validEventId,
+                validText,
+                tempFilePath,
+                onOutcome = { outcome ->
+                    promise.resolve(mapOf("outcome" to outcome.name))
+                },
+                onDeleteFile = { path ->
+                    if (debug) {
+                        try {
+                            val lastWavFile = File(context.cacheDir, "pet_speech_last.wav")
+                            val srcFile = File(path)
+                            if (srcFile.exists()) {
+                                srcFile.copyTo(lastWavFile, overwrite = true)
+                                android.util.Log.i("PetSpeechDebug", "copied last wav to ${lastWavFile.absolutePath}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.i("PetSpeechDebug", "failed copying debug wav: ${e.message}")
+                        }
+                    }
+                    try {
+                        val file = File(path)
+                        if (file.exists()) {
+                            file.delete()
+                        }
+                    } catch (_: Exception) {}
+                }
+            )
 
             createTtsEngine(context) { engineLifecycle ->
                 synchronized(initLock) {
@@ -136,6 +193,27 @@ class ExpoPetSpeechModule : Module() {
                         return@createTtsEngine
                     }
 
+                    // Voice selection if voiceName is provided and available
+                    var selectedVoice = tts.voice
+                    var networkVoice = selectedVoice?.isNetworkConnectionRequired ?: false
+                    var effectiveVoiceName = selectedVoice?.name
+                    if (!voiceName.isNullOrEmpty()) {
+                        val matchingVoice = tts.voices?.find { it.name == voiceName }
+                        if (matchingVoice != null) {
+                            try {
+                                tts.voice = matchingVoice
+                                selectedVoice = matchingVoice
+                                networkVoice = matchingVoice.isNetworkConnectionRequired
+                                effectiveVoiceName = matchingVoice.name
+                            } catch (_: Exception) {}
+                        }
+                    }
+
+                    android.util.Log.i(
+                        "PetSpeechDebug",
+                        "speakAsync eventId=$validEventId voiceName=$effectiveVoiceName locale=${targetLocale.toLanguageTag()} rate=$rate networkVoice=$networkVoice filePath=$tempFilePath durationMs=-1 teardown=reset-stop-release"
+                    )
+
                     // synthesizeToFile often ignores setSpeechRate (especially CJK engines).
                     // Keep engine rate at 1.0 and apply the pet multiplier during MediaPlayer playback.
                     tts.setSpeechRate(1.0f)
@@ -148,9 +226,10 @@ class ExpoPetSpeechModule : Module() {
                         override fun onDone(id: String?) {
                             if (id == utteranceId && resourceOwnerRegistry.isCurrent(owner)) {
                                 engineLifecycle.onSynthesisComplete()
+                                PetSpeechPlaybackInstrumentation.recordSynthesisCompleted(validEventId)
                                 mainHandler.post {
                                     if (resourceOwnerRegistry.isCurrent(owner)) {
-                                        startServicePlayback(context, owner, validEventId, validText, tempFilePath, rate)
+                                        startServicePlayback(context, owner, validEventId, validText, tempFilePath, rate, debug, playerKind)
                                     } else {
                                         owner.teardown()
                                     }
@@ -317,7 +396,9 @@ class ExpoPetSpeechModule : Module() {
         eventId: String,
         text: String,
         tempFilePath: String,
-        rate: Float
+        rate: Float,
+        debug: Boolean = false,
+        playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind
     ) {
         val startIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
             putExtra(PetSpeechForegroundService.EXTRA_OWNER_ID, owner.id)
@@ -371,7 +452,7 @@ class ExpoPetSpeechModule : Module() {
                         }
                     }
 
-                    foregroundService.playSpeech(owner.id, eventId, text, tempFilePath, rate) { id, outcome ->
+                    foregroundService.playSpeech(owner.id, eventId, text, tempFilePath, rate, debug, playerKind) { id, outcome ->
                         owner.settle(outcome)
                     }
                 }

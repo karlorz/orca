@@ -23,7 +23,8 @@ import {
   MessageSquare,
   Terminal as TerminalIcon,
   KeyRound,
-  Gauge
+  Gauge,
+  Sparkles
 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import {
@@ -140,6 +141,15 @@ export default function SettingsScreen() {
           >
             <Mic size={16} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>Voice</Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push('/plugins-settings')}
+          >
+            <Sparkles size={16} color={colors.textSecondary} />
+            <Text style={styles.rowLabel}>Plugins</Text>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
           <View style={styles.separator} />

@@ -3,10 +3,18 @@ import type { PetSpeakPayload, PetSpeakSubscribeResult } from './pet-speak-paylo
 import { PetSpeakHandler } from './pet-speak'
 import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import { loadPetSpeakWatermark, savePetSpeakWatermark } from './pet-speak-watermark'
+import {
+  buildPetSpeechDeviceStatus,
+  type PetSpeechDeviceStatusPayload
+} from './pet-speech-device-status'
+
+export interface SubscribeToPetSpeakOptions extends PetSpeakHandlerOptions {
+  status?: PetSpeechDeviceStatusPayload
+}
 
 export function subscribeToPetSpeak(
   client: RpcClient,
-  options?: PetSpeakHandlerOptions,
+  options?: SubscribeToPetSpeakOptions,
   hostId?: string
 ): () => void {
   let disposed = false
@@ -25,6 +33,15 @@ export function subscribeToPetSpeak(
             outcome
           })
           .catch(() => {})
+
+        // Additive: update device status outcome on the connection
+        void buildPetSpeechDeviceStatus({ lastOutcome: outcome })
+          .then((status) => {
+            if (client.getState() === 'connected' && !disposed) {
+              client.sendRequest('pet.speak.status', status).catch(() => {})
+            }
+          })
+          .catch(() => {})
       }
     }
   })
@@ -39,15 +56,34 @@ export function subscribeToPetSpeak(
 
   let unsubscribeStream: (() => void) | null = null
 
-  void loadPetSpeakWatermark(targetHostId).then((watermark) => {
+  const initializeSubscription = async () => {
+    let watermark: { stored: boolean; seq: number; epoch: string | null } = {
+      stored: false,
+      seq: 0,
+      epoch: ''
+    }
+    let status: PetSpeechDeviceStatusPayload | undefined = options?.status
+
+    try {
+      watermark = await loadPetSpeakWatermark(targetHostId)
+    } catch {}
+
+    if (!status) {
+      try {
+        status = await buildPetSpeechDeviceStatus()
+      } catch {}
+    }
+
     if (disposed) {
       return
     }
 
-    const params =
-      watermark.stored && watermark.seq > 0 && watermark.epoch
+    const params: Record<string, unknown> = {
+      ...(watermark.stored && watermark.seq > 0 && watermark.epoch
         ? { last_seen_seq: watermark.seq, epoch: watermark.epoch }
-        : {}
+        : {}),
+      ...(status ? { status } : {})
+    }
 
     unsubscribeStream = client.subscribe('pet.speak.subscribe', params, (data: unknown) => {
       const event = data as PetSpeakPayload | PetSpeakSubscribeResult | { type: 'end' }
@@ -85,7 +121,9 @@ export function subscribeToPetSpeak(
         void handler.handleEvent(payload).catch(() => {})
       }
     })
-  })
+  }
+
+  void initializeSubscription()
 
   return () => {
     if (disposed) {

@@ -113,6 +113,25 @@ describe('resolvePetLocale', () => {
     expect(resolvePetLocale('yue', [])).toBeNull()
   })
 
+  it('resolves zh-CN strictly to zh-CN and never falls back to zh-TW, zh-HK, yue, or en', () => {
+    expect(resolvePetLocale('zh-CN', ['zh-CN', 'zh-TW', 'yue-HK', 'en-US'])).toBe('zh-CN')
+    expect(resolvePetLocale('zh-cn', ['zh-CN'])).toBe('zh-CN')
+    expect(resolvePetLocale('zh-CN', ['zh-TW', 'zh-HK', 'yue-HK', 'en-US'])).toBeNull()
+  })
+
+  it('resolves zh-TW strictly to zh-TW and never falls back to zh-CN, zh-HK, yue, or en', () => {
+    expect(resolvePetLocale('zh-TW', ['zh-TW', 'zh-CN', 'yue-HK', 'en-US'])).toBe('zh-TW')
+    expect(resolvePetLocale('zh-tw', ['zh-TW'])).toBe('zh-TW')
+    expect(resolvePetLocale('zh-TW', ['zh-CN', 'zh-HK', 'yue-HK', 'en-US'])).toBeNull()
+  })
+
+  it('resolves en-US to en-US first, then to another installed en locale', () => {
+    expect(resolvePetLocale('en-US', ['en-US', 'en-GB'])).toBe('en-US')
+    expect(resolvePetLocale('en', ['en-GB', 'en-AU'])).toBe('en-GB')
+    expect(resolvePetLocale('en-us', ['en-CA'])).toBe('en-CA')
+    expect(resolvePetLocale('en-US', ['zh-CN', 'yue-HK', 'fr-FR'])).toBeNull()
+  })
+
   it('handles default lang parameter when omitted or undefined (defaults to yue mapping)', () => {
     expect(resolvePetLocale(undefined, ['yue-HK'])).toBe('yue-HK')
     expect(resolvePetLocale(undefined, ['zh-HK'])).toBe('zh-HK')

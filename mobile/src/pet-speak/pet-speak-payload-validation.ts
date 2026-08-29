@@ -1,7 +1,12 @@
 export type { PetSpeakPayload, PetSpeakSubscribeResult } from './pet-speak-types'
 import type { PetSpeakPayload } from './pet-speak-types'
+import { normalizePetLanguage } from './pet-language-normalizer'
 
-export const ALLOWED_LANGUAGES = new Set(['yue', 'cantonese', 'yue-hk', 'zh-hk'])
+export {
+  normalizePetLanguage,
+  CANONICAL_LANGUAGES,
+  type CanonicalLanguage
+} from './pet-language-normalizer'
 
 export const PET_SPEAK_DEFAULT_RATE = 1.2
 export const PET_SPEAK_MIN_RATE = 0.5
@@ -42,15 +47,27 @@ export function isValidPetSpeakPayload(event: unknown): event is PetSpeakPayload
     return false
   }
 
-  // language validation: default or Cantonese
-  if (candidate.lang !== undefined) {
-    if (typeof candidate.lang !== 'string') {
+  // language validation: canonical or legacy alias
+  if (candidate.lang !== undefined && candidate.lang !== null) {
+    const normalized = normalizePetLanguage(candidate.lang)
+    if (!normalized) {
       return false
     }
-    const langNormalized = candidate.lang.toLowerCase().trim()
-    if (!ALLOWED_LANGUAGES.has(langNormalized)) {
+  }
+
+  // voiceName validation: optional string <= 256 chars
+  if (candidate.voiceName !== undefined) {
+    if (typeof candidate.voiceName !== 'string') {
       return false
     }
+    if (Array.from(candidate.voiceName.trim()).length > 256) {
+      return false
+    }
+  }
+
+  // debug validation: optional boolean
+  if (candidate.debug !== undefined && typeof candidate.debug !== 'boolean') {
+    return false
   }
 
   return true

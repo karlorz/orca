@@ -1286,6 +1286,7 @@ import {
 } from './mobile-notification-replay'
 import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
 import type { PetSpeakEvent, PetSpeakOutcome } from './pet-voice-relay'
+import { PetSpeechDeviceRegistry, type PetSpeechDeviceStatus } from './pet-speech-status-registry'
 import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
@@ -16350,6 +16351,9 @@ export class OrcaRuntimeService {
     if (set.size === 0) {
       this.subscriptionsByConnection.delete(connectionId)
     }
+
+    // Connection cleanup for connection-scoped Pet Speech device status
+    this.petSpeechDeviceRegistry.cleanupConnection(connectionId)
   }
 
   // Why: mobile clients subscribe via notifications.subscribe streaming RPC.
@@ -16417,6 +16421,23 @@ export class OrcaRuntimeService {
       return await this.petSpeakCompleteHandler(eventId, outcome)
     }
     return { completed: false }
+  }
+
+  private readonly petSpeechDeviceRegistry = new PetSpeechDeviceRegistry()
+
+  getPetSpeechDeviceRegistry(): PetSpeechDeviceRegistry {
+    return this.petSpeechDeviceRegistry
+  }
+
+  async handlePetSpeechStatus(
+    status: PetSpeechDeviceStatus,
+    connectionId?: string
+  ): Promise<{ acknowledged: boolean }> {
+    this.petSpeechDeviceRegistry.reportStatus(status, connectionId)
+    if (this.petVoiceRelay) {
+      await this.petVoiceRelay.sendDeviceStatus(status, connectionId)
+    }
+    return { acknowledged: true }
   }
 
   // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).

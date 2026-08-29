@@ -379,15 +379,21 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
       false
     )
 
-    // 5. Non-Cantonese languages
+    // 5. Accepted canonical and legacy languages
     expect(
       isValidPetSpeakPayload({ type: 'pet.speak', text: 'Hello', lang: 'en-US', event_id: 'ev-3' })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isValidPetSpeakPayload({ type: 'pet.speak', text: '你好', lang: 'zh-CN', event_id: 'ev-4' })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isValidPetSpeakPayload({ type: 'pet.speak', text: '你好', lang: 'zh-TW', event_id: 'ev-5' })
+    ).toBe(true)
+    expect(
+      isValidPetSpeakPayload({ type: 'pet.speak', text: 'Hello', lang: 'en', event_id: 'ev-6' })
+    ).toBe(true)
+    expect(
+      isValidPetSpeakPayload({ type: 'pet.speak', text: 'Hello', lang: 'fr-FR', event_id: 'ev-7' })
     ).toBe(false)
 
     // Optional rate must not reject an otherwise valid Cantonese payload
@@ -414,7 +420,7 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     await handler.handleEvent({
       type: 'pet.speak',
       text: 'Hello',
-      lang: 'en-US',
+      lang: 'fr-FR',
       event_id: 'ev-bad-2'
     })
 
@@ -422,16 +428,35 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     expect(completedOutcomes.length).toBe(0)
   })
 
-  it('strictly resolves Cantonese locales and never falls back to en-US, zh-CN, or zh-TW', () => {
+  it('strictly resolves locales within the same semantic language and fails closed', () => {
+    // Cantonese: yue-HK, then zh-HK
     expect(resolvePetLocale('yue', ['en-US', 'yue-HK', 'zh-HK'])).toBe('yue-HK')
     expect(resolvePetLocale('cantonese', ['zh-HK'])).toBe('zh-HK')
     expect(resolvePetLocale('zh-HK', ['zh-HK'])).toBe('zh-HK')
     expect(resolvePetLocale('yue-HK', ['yue-HK'])).toBe('yue-HK')
 
-    // Non-Cantonese requested languages return null
-    expect(resolvePetLocale('en-US', ['en-US'])).toBeNull()
-    expect(resolvePetLocale('zh-CN', ['zh-CN'])).toBeNull()
-    expect(resolvePetLocale('zh-TW', ['zh-TW'])).toBeNull()
+    // Mandarin zh-CN: zh-CN only
+    expect(resolvePetLocale('zh-CN', ['zh-CN'])).toBe('zh-CN')
+    expect(resolvePetLocale('zh-CN', ['zh-TW'])).toBeNull()
+    expect(resolvePetLocale('zh-CN', ['zh-HK'])).toBeNull()
+    expect(resolvePetLocale('zh-CN', ['yue-HK'])).toBeNull()
+    expect(resolvePetLocale('zh-CN', ['en-US'])).toBeNull()
+
+    // Mandarin zh-TW: zh-TW only
+    expect(resolvePetLocale('zh-TW', ['zh-TW'])).toBe('zh-TW')
+    expect(resolvePetLocale('zh-TW', ['zh-CN'])).toBeNull()
+    expect(resolvePetLocale('zh-TW', ['zh-HK'])).toBeNull()
+    expect(resolvePetLocale('zh-TW', ['yue-HK'])).toBeNull()
+    expect(resolvePetLocale('zh-TW', ['en-US'])).toBeNull()
+
+    // English en-US: en-US, then other en locales
+    expect(resolvePetLocale('en-US', ['en-US'])).toBe('en-US')
+    expect(resolvePetLocale('en', ['en-GB'])).toBe('en-GB')
+    expect(resolvePetLocale('en-US', ['en-AU', 'en-GB'])).toBe('en-AU')
+    expect(resolvePetLocale('en-US', ['zh-CN', 'yue-HK'])).toBeNull()
+
+    // Non-supported languages fail closed
     expect(resolvePetLocale('fr-FR', ['fr-FR'])).toBeNull()
+    expect(resolvePetLocale('ja-JP', ['ja-JP'])).toBeNull()
   })
 })

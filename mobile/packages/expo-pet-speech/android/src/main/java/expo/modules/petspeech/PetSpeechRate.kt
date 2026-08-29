@@ -20,9 +20,9 @@ object PetSpeechRate {
         return n.coerceIn(MIN, MAX)
     }
 
-    // Android CJK file playback sounds one 語速 step slower than Mac say.
+    // MediaTek stuttered at 1.5× when pet was 1.2. Play pet rate as-is.
     fun androidPlaybackSpeed(petRate: Float): Float {
-        val parsed = parse(petRate)
-        return MENU.firstOrNull { it > parsed + 0.05f } ?: MAX
+        return parse(petRate)
     }
 }
+

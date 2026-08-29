@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications'
 import * as Speech from 'expo-speech'
 import { Platform } from 'react-native'
-import { ALLOWED_LANGUAGES } from './pet-speak-payload-validation'
+import { normalizePetLanguage } from './pet-language-normalizer'
 
 export type { PetSpeakPayload, PetSpeakSubscribeResult } from './pet-speak-types'
 
@@ -29,27 +29,73 @@ export {
 } from './pet-speak-native-adapter'
 
 /**
- * Resolve target locale for pet speech strictly to Cantonese.
- * Order: yue-HK then zh-HK.
- * Never English, never zh-CN, never zh-TW.
- * If neither is available or requested lang is not Cantonese, fails closed (returns null).
+ * Resolves target locale for pet speech within the requested canonical language.
+ * Resolution order:
+ * - yue-HK: exact yue-HK, then exact zh-HK. Never zh-CN, zh-TW, or en.
+ * - zh-CN: exact zh-CN only. Never zh-TW / zh-HK / yue / en.
+ * - zh-TW: exact zh-TW only. Never zh-CN / zh-HK / yue / en.
+ * - en-US: exact en-US, then another installed locale whose language is en.
+ * If no same-language match is available, fails closed (returns null).
  */
 export function resolvePetLocale(
   lang: string | undefined,
   availableLocales: string[]
 ): string | null {
-  const normalizedLang = (lang ?? 'yue').toLowerCase().trim()
-  if (!ALLOWED_LANGUAGES.has(normalizedLang)) {
+  const canonical = normalizePetLanguage(lang ?? 'yue')
+  if (!canonical) {
     return null
   }
-  const set = new Set(availableLocales.map((l) => l.toLowerCase()))
-  if (set.has('yue-hk')) {
-    return 'yue-HK'
+
+  const localeLowerMap = new Map<string, string>()
+  for (const loc of availableLocales) {
+    if (typeof loc === 'string') {
+      const trimmed = loc.trim()
+      if (trimmed.length > 0) {
+        localeLowerMap.set(trimmed.toLowerCase(), trimmed)
+      }
+    }
   }
-  if (set.has('zh-hk')) {
-    return 'zh-HK'
+
+  switch (canonical) {
+    case 'yue-HK': {
+      if (localeLowerMap.has('yue-hk')) {
+        return localeLowerMap.get('yue-hk') ?? 'yue-HK'
+      }
+      if (localeLowerMap.has('zh-hk')) {
+        return localeLowerMap.get('zh-hk') ?? 'zh-HK'
+      }
+      return null
+    }
+    case 'zh-CN': {
+      if (localeLowerMap.has('zh-cn')) {
+        return localeLowerMap.get('zh-cn') ?? 'zh-CN'
+      }
+      return null
+    }
+    case 'zh-TW': {
+      if (localeLowerMap.has('zh-tw')) {
+        return localeLowerMap.get('zh-tw') ?? 'zh-TW'
+      }
+      return null
+    }
+    case 'en-US': {
+      if (localeLowerMap.has('en-us')) {
+        return localeLowerMap.get('en-us') ?? 'en-US'
+      }
+      // Fallback: another installed locale whose language tag starts with 'en-' or is 'en'
+      for (const loc of availableLocales) {
+        if (typeof loc === 'string') {
+          const lower = loc.trim().toLowerCase()
+          if (lower === 'en' || lower.startsWith('en-') || lower.startsWith('en_')) {
+            return loc.trim()
+          }
+        }
+      }
+      return null
+    }
+    default:
+      return null
   }
-  return null
 }
 
 export class DefaultExpoNotificationMediaSessionAdapter implements MediaSessionAdapter {

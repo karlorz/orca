@@ -242,15 +242,29 @@ export class PetSpeakHandler {
     }
   }
 
+  cancelInFlightUtterance(): void {
+    if (this.activeItem) {
+      this.activeItem.isCancelled = true
+    }
+    if (this.activeSessionId) {
+      void this.mediaSession.stopSession(this.activeSessionId).catch(() => {})
+      this.activeSessionId = null
+    }
+    if (this.nativeAdapter?.stop) {
+      void this.nativeAdapter.stop().catch(() => {})
+    }
+    if (this.tts.stop) {
+      void this.tts.stop().catch(() => {})
+    }
+  }
+
   dispose(): void {
     if (this.disposed) {
       return
     }
     this.disposed = true
 
-    if (this.activeItem) {
-      this.activeItem.isCancelled = true
-    }
+    this.cancelInFlightUtterance()
 
     const pending = [...this.queue]
     this.queue = []
@@ -261,17 +275,6 @@ export class PetSpeakHandler {
         void this.onComplete(item.event.event_id, 'cancelled').catch(() => {})
       }
       item.resolve()
-    }
-
-    if (this.activeSessionId) {
-      void this.mediaSession.stopSession(this.activeSessionId).catch(() => {})
-      this.activeSessionId = null
-    }
-    if (this.nativeAdapter?.stop) {
-      void this.nativeAdapter.stop().catch(() => {})
-    }
-    if (this.tts.stop) {
-      void this.tts.stop().catch(() => {})
     }
   }
 }

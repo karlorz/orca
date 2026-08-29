@@ -200,6 +200,8 @@ export default function RootLayout() {
           <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
           <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="plugins-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="pet-speech-settings" options={{ headerShown: false }} />
           <Stack.Screen name="account-usage-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />

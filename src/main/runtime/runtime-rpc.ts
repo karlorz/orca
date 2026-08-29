@@ -380,6 +380,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'pet.speak.subscribe',
   'pet.speak.unsubscribe',
   'pet.speak.complete',
+  'pet.speak.status',
   'pairing.getEndpoints',
   'pairing.provisionRelay',
   'preflight.check',
