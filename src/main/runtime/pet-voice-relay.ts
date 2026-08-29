@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { PetVoiceLogger } from './pet-voice-logger'
 import { buildDeviceStatusMessage } from './pet-speak-rate'
-import { parseSpeakIntentMessage } from './pet-speak-intent'
+import { parseSpeakIntentMessage, type PetSpeakEvent } from './pet-speak-intent'
 
 export type AudioSessionState = 'live' | 'dead'
 export {

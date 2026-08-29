@@ -1,32 +1,18 @@
 import { net } from 'electron'
 import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
-import { isForkDesktopVersion } from '../shared/release-channel'
+import {
+  KARLORZ_FORK_RELEASE_FEED,
+  STABLYAI_RELEASE_FEED,
+  type ReleaseFeedConfig
+} from './updater-release-feeds'
 
-export type ReleaseFeedConfig = {
-  repoAtomUrl: string
-  releaseDownloadBase: string
-  tagHrefPattern: RegExp
-  desktopTagPattern: RegExp
-}
-
-export const STABLYAI_RELEASE_FEED: ReleaseFeedConfig = {
-  repoAtomUrl: 'https://github.com/stablyai/orca/releases.atom',
-  releaseDownloadBase: 'https://github.com/stablyai/orca/releases/download',
-  tagHrefPattern: /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/,
-  desktopTagPattern: /^v?\d+\.\d+\.\d+(?:-rc\.\d+(?:\.perf)?)?$/
-}
-
-export const KARLORZ_FORK_RELEASE_FEED: ReleaseFeedConfig = {
-  repoAtomUrl: 'https://github.com/karlorz/orca/releases.atom',
-  releaseDownloadBase: 'https://github.com/karlorz/orca/releases/download',
-  tagHrefPattern: /href="https:\/\/github\.com\/karlorz\/orca\/releases\/tag\/([^"]+)"/,
-  desktopTagPattern: /^v\d+\.\d+\.\d+-\d+$/
-}
-
-export function selectReleaseFeed(currentVersion: string): ReleaseFeedConfig {
-  return isForkDesktopVersion(currentVersion) ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED
-}
+export type { ReleaseFeedConfig } from './updater-release-feeds'
+export {
+  KARLORZ_FORK_RELEASE_FEED,
+  STABLYAI_RELEASE_FEED,
+  selectReleaseFeed
+} from './updater-release-feeds'
 
 const FETCH_TIMEOUT_MS = 5000
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
