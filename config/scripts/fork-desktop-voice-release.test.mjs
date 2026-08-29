@@ -56,7 +56,7 @@ describe('fork desktop voice release workflow', () => {
     expect(mobile.on.push.tags).toEqual(['mobile-android-v*.*.*-*'])
   })
 
-  it('fails closed without fork self-signed secrets and trusts that identity before electron-builder', () => {
+  it('fails closed without fork self-signed secrets and imports that identity before electron-builder', () => {
     const rawYaml = readFileSync(workflowPath, 'utf8')
     const trustScript = join(projectDir, 'config/scripts/fork-macos-trust-self-signed-identity.sh')
     expect(existsSync(trustScript)).toBe(true)
