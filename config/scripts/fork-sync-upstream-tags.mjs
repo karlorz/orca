@@ -5,7 +5,7 @@ import {
   listGitRemotes,
   resolvePushRemote,
   UPSTREAM_GIT_URL
-} from './fork-sync-fork-main.mjs'
+} from './fork-git-remote.mjs'
 
 const UPSTREAM_V_TAG = /^refs\/tags\/(v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/
 
