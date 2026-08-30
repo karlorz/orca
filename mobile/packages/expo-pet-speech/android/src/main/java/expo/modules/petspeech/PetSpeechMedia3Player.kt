@@ -37,7 +37,7 @@ class PetSpeechMedia3Player : PetSpeechAudioPlayer {
                 stopAndRelease()
 
                 // Configure renderers factory with software audio processing (Sonic)
-                // and explicitly disable hardware AudioTrack playback-parameter delegation and offload
+                // and disable hardware AudioTrack playback-parameter delegation.
                 val renderersFactory = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(
                         context: Context,
@@ -48,7 +48,6 @@ class PetSpeechMedia3Player : PetSpeechAudioPlayer {
                         return DefaultAudioSink.Builder(context)
                             .setAudioProcessors(arrayOf(sonic))
                             .setEnableAudioTrackPlaybackParams(false)
-                            .setOffloadMode(DefaultAudioSink.OFFLOAD_MODE_DISABLED)
                             .setEnableFloatOutput(false)
                             .build()
                     }
