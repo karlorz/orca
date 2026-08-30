@@ -2410,6 +2410,7 @@ type RuntimeNotifier = {
       direction: 'horizontal' | 'vertical'
       command?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }
   ): void
   renameTerminal(tabId: string, title: string | null): void
@@ -6073,22 +6074,18 @@ export class OrcaRuntimeService {
     )
     const worktrees = (await this.listResolvedWorktrees())
       .filter((worktree) => repos.has(getRepoIdFromWorktreeId(worktree.id)))
-      .map(
-        (worktree): SkillSshWorkspaceAuthority => ({
-          kind: 'worktree',
-          id: worktree.id,
-          path: worktree.path
-        })
-      )
+      .map((worktree): SkillSshWorkspaceAuthority => ({
+        kind: 'worktree',
+        id: worktree.id,
+        path: worktree.path
+      }))
     const folders = this.listFolderWorkspaces()
       .filter((folder) => folder.connectionId === connectionId)
-      .map(
-        (folder): SkillSshWorkspaceAuthority => ({
-          kind: 'folder',
-          id: folder.id,
-          path: folder.folderPath
-        })
-      )
+      .map((folder): SkillSshWorkspaceAuthority => ({
+        kind: 'folder',
+        id: folder.id,
+        path: folder.folderPath
+      }))
     return [...worktrees, ...folders]
   }
 
@@ -23410,7 +23407,8 @@ export class OrcaRuntimeService {
   async addRepo(
     path: string,
     kind: 'git' | 'folder' = 'git',
-    executionHostId?: ExecutionHostId | null
+    executionHostId?: ExecutionHostId | null,
+    displayName?: string
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -23458,7 +23456,7 @@ export class OrcaRuntimeService {
     const repo: Repo = {
       id: randomUUID(),
       path,
-      displayName: getRepoName(path),
+      displayName: displayName?.trim() || getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,
@@ -27452,13 +27450,13 @@ export class OrcaRuntimeService {
           // a renderer window, so the startup shell can wait on setup completion
           // and windowless creates resolve the same Windows setup shell.
           const runtimeTarget = this.getLocalGitExecutionOptionArgs(repo)[0]
-          // Why: both trailing args are optional — the shell is undefined off Windows.
           setup = createSetupRunnerScript(
             repo,
             worktreePath,
             hooks.scripts.setup,
             runtimeTarget,
-            resolveSetupRunnerShell(settings)
+            resolveSetupRunnerShell(settings),
+            yamlHooks?.setupAgentStartupPolicy
           )
         } catch (error) {
           // Why: the git worktree is already real at this point. If runner
@@ -32343,22 +32341,22 @@ export class OrcaRuntimeService {
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
 
-    // Snapshot current leaf keys so the post-split graph-sync delta reveals the new pane.
-    const leafKeysBefore = new Set<string>()
-    for (const [key, l] of this.leaves) {
-      if (l.tabId === leaf.tabId) {
-        leafKeysBefore.add(key)
-      }
-    }
+    const newLeafId = randomUUID()
 
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
-      telemetrySource: opts.telemetrySource
+      telemetrySource: opts.telemetrySource,
+      newLeafId
     })
 
-    const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
-    return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+    const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
+    return {
+      handle: newHandle,
+      tabId: leaf.tabId,
+      paneRuntimeId: leaf.paneRuntimeId,
+      leafId: newLeafId
+    }
   }
 
   private async splitPtyBackedTerminal(
@@ -32548,7 +32546,12 @@ export class OrcaRuntimeService {
       void revealSplit().catch(() => undefined)
     }
 
-    return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
+    return {
+      handle: this.issuePtyHandle(createdPty ?? pty),
+      tabId: parentTabId,
+      paneRuntimeId: -1,
+      leafId
+    }
   }
 
   private resolveTerminalSplitSourceAuthority(
@@ -32679,18 +32682,10 @@ export class OrcaRuntimeService {
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
   }
 
-  private waitForNewLeafInTab(
-    tabId: string,
-    existingLeafKeys: Set<string>,
-    timeoutMs = 10_000
-  ): Promise<string> {
+  private waitForLeafInTab(tabId: string, leafId: string, timeoutMs = 10_000): Promise<string> {
     const tryResolve = (): string | null => {
-      for (const [key, leaf] of this.leaves) {
-        if (leaf.tabId === tabId && !existingLeafKeys.has(key) && leaf.ptyId !== null) {
-          return this.issueHandle(leaf)
-        }
-      }
-      return null
+      const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+      return leaf?.ptyId !== null && leaf?.ptyId !== undefined ? this.issueHandle(leaf) : null
     }
 
     const existing = tryResolve()

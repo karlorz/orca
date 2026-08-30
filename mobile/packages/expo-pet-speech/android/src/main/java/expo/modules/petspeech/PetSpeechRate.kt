@@ -25,4 +25,3 @@ object PetSpeechRate {
         return parse(petRate)
     }
 }
-

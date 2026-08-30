@@ -29,9 +29,7 @@ export type PreparedPetSpeakEventResult =
   | { status: 'prepared'; event: PetSpeakPayload }
   | { status: 'voice-unavailable' }
 
-export type PetSpeakEventPreparer = (
-  event: PetSpeakPayload
-) => Promise<PreparedPetSpeakEventResult>
+export type PetSpeakEventPreparer = (event: PetSpeakPayload) => Promise<PreparedPetSpeakEventResult>
 
 export interface PetSpeakHandlerOptions {
   tts?: TtsAdapter

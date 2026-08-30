@@ -397,16 +397,17 @@ describe('PetSpeakHandler', () => {
 
       const customHandler = new PetSpeakHandler({
         nativeAdapter: mockAdapter,
-        prepareEvent: (event) => preparePetSpeakEvent(event, [
-          {
-            name: 'yue-HK-voice-1',
-            locale: 'yue-HK',
-            language: 'yue-HK',
-            quality: 300,
-            network: false,
-            gender: 'unknown'
-          }
-        ]),
+        prepareEvent: (event) =>
+          preparePetSpeakEvent(event, [
+            {
+              name: 'yue-HK-voice-1',
+              locale: 'yue-HK',
+              language: 'yue-HK',
+              quality: 300,
+              network: false,
+              gender: 'unknown'
+            }
+          ]),
         onComplete: async (eventId, outcome) => {
           completed.push({ eventId, outcome })
         }

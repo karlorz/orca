@@ -177,4 +177,3 @@ class PetSpeechStateMachineTest {
         assertEquals(PetSpeechState.Idle, sm.currentState)
     }
 }
-
