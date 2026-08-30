@@ -144,10 +144,10 @@ export async function executeTestVoiceAsync(
   }
 
   const sampleTexts: Record<CanonicalLanguage, string> = {
-    'yue-HK': '你好，我係你嘅桌面寵物！',
-    'zh-CN': '你好，我是你的桌面宠物！',
-    'zh-TW': '你好，我是你的桌面寵物！',
-    'en-US': 'Hello! I am your desktop pet.'
+    'yue-HK': '你好！我係你嘅桌面寵物。今日天氣幾好，我哋一齊處理 123 件事啦！',
+    'zh-CN': '你好！我是你的桌面宠物。今天天气不错，我们一起处理 123 件事吧！',
+    'zh-TW': '你好！我是你的桌面寵物。今天天氣不錯，我們一起處理 123 件事吧！',
+    'en-US': 'Hello! I am your desktop pet. Today is a great day, let us handle 123 tasks together!'
   }
 
   const text = sampleTexts[lang] ?? sampleTexts['yue-HK']
