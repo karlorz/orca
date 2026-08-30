@@ -21,8 +21,10 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', Version: 34 }
 }))
 
-vi.mock('./pet-speak-native-adapter', async () => {
+vi.mock('./pet-speak-native-adapter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./pet-speak-native-adapter')>()
   return {
+    ...actual,
     getExpoPetSpeechModule: vi.fn(() => null),
     getPetSpeechNativeAdapter: vi.fn(() => null)
   }
@@ -57,7 +59,11 @@ import {
   setPetSpeechVoiceForLanguage,
   setPetSpeechRate
 } from './pet-speech-preferences'
-import type { PetSpeechVoice } from './pet-speak-native-adapter'
+import {
+  AndroidPetSpeechAdapter,
+  type PetSpeechVoice,
+  type PetSpeechNativeModule
+} from './pet-speak-native-adapter'
 import type { PetSpeechNativeAdapter } from './pet-speak-adapters'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
 
@@ -228,7 +234,45 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
       availableVoices: sampleVoices
     })
     expect(mockSpokenPayloads[3].text).toBe(
-      'Hello! I am your desktop pet. Today is a great day, let us handle 123 tasks together!'
+      'Hello! I am your desktop pet. Let us handle 123 tasks together today!'
+    )
+  })
+
+  it('executeTestVoiceAsync for en-US delivers valid payload through AndroidPetSpeechAdapter to native speakAsync', async () => {
+    await setPetSpeechEnabled(true)
+    await setPetSpeechVoiceForLanguage('en-US', 'en-US-voice-1')
+
+    const nativeCalls: Array<{
+      eventId: string
+      text: string
+      lang?: string
+      rate: number
+      voiceName?: string
+    }> = []
+
+    const mockNativeModule: PetSpeechNativeModule = {
+      speakAsync: vi.fn(async (params) => {
+        nativeCalls.push(params)
+        return { outcome: 'spoken' as const }
+      }),
+      stopAsync: vi.fn(async () => {}),
+      getAvailableVoicesAsync: vi.fn(async () => []),
+      acquireVoiceSessionAsync: vi.fn(async () => ({ held: true })),
+      releaseVoiceSessionAsync: vi.fn(async () => {}),
+      updateVoiceSessionNotificationAsync: vi.fn(async () => {})
+    }
+
+    const adapter = new AndroidPetSpeechAdapter(mockNativeModule)
+    const res = await executeTestVoiceAsync('en-US', {
+      nativeAdapter: adapter,
+      availableVoices: sampleVoices
+    })
+
+    expect(res.outcome).toBe('spoken')
+    expect(nativeCalls.length).toBe(1)
+    expect(nativeCalls[0].lang).toBe('en-US')
+    expect(nativeCalls[0].text).toBe(
+      'Hello! I am your desktop pet. Let us handle 123 tasks together today!'
     )
   })
 })
