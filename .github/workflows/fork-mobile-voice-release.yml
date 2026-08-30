@@ -43,11 +43,6 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - name: Setup mobile pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
       - name: Install mobile dependencies
         working-directory: mobile
         run: pnpm install --frozen-lockfile

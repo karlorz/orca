@@ -321,6 +321,20 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(verifyStep.run).toContain('mobile-android-v[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+')
   })
 
+  it('uses install-node-dependencies composite action and contains no separate pnpm setup step in verify job', () => {
+    const wf = readWorkflow()
+    const verifySteps = wf.jobs.verify.steps
+    const installNodeStep = verifySteps.find(
+      (s) => s.uses === './.github/actions/install-node-dependencies'
+    )
+    expect(installNodeStep).toBeDefined()
+
+    const pnpmSetupStep = verifySteps.find(
+      (s) => s.uses?.startsWith('pnpm/action-setup') || s.uses?.startsWith('pnpm/setup')
+    )
+    expect(pnpmSetupStep).toBeUndefined()
+  })
+
   it('runs root reliability and code quality gates in verify job', () => {
     const wf = readWorkflow()
     const verifySteps = wf.jobs.verify.steps
