@@ -15,6 +15,7 @@ import {
   type PetSpeechPreferences
 } from './pet-speech-preferences'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
+import { preparePetSpeakEvent } from './pet-speech-service'
 import {
   clearPetVoiceGraceTimer,
   evaluatePetVoiceHold,
@@ -87,6 +88,15 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   const releaseVoiceSessionProp = options?.releaseVoiceSession
   const updateVoiceSessionNotificationProp = options?.updateVoiceSessionNotification
   const handlerOptionsProp = options?.handlerOptions
+
+  const effectiveHandlerOptions = useMemo<PetSpeakHandlerOptions | undefined>(() => {
+    if (handlerOptionsProp !== undefined) {
+      return handlerOptionsProp
+    }
+    return {
+      prepareEvent: preparePetSpeakEvent
+    }
+  }, [handlerOptionsProp])
 
   const acquireVoiceSessionFn = useCallback(
     () =>
@@ -195,7 +205,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
             currentSubs.get(entry.hostId)?.client !== entry.client
           ) {
             currentSubs.get(entry.hostId)?.unsub()
-            const unsub = subscribeToPetSpeak(entry.client, handlerOptionsProp, entry.hostId)
+            const unsub = subscribeToPetSpeak(entry.client, effectiveHandlerOptions, entry.hostId)
             currentSubs.set(entry.hostId, { client: entry.client, unsub })
             subscriptionChanged = true
           }
@@ -244,7 +254,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   }, [
     clients,
     isEnabled,
-    handlerOptionsProp,
+    effectiveHandlerOptions,
     isAndroid,
     ensureNotificationPermissionsFn,
     acquireVoiceSessionFn,

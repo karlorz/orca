@@ -104,4 +104,17 @@ describe('fork-features registry', () => {
       'projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings'
     )
   })
+
+  it('records pet-speech-live-local-preferences as a landed product feature inventory entry', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'pet-speech-live-local-preferences')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('product')
+    expect(entry.status).toBe('landed')
+    expect(entry.title).toContain('device-local voice and rate')
+    expect(entry.paths).toEqual(['mobile/src/pet-speak'])
+    expect(entry.wiki).toBe(
+      'projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings'
+    )
+  })
 })

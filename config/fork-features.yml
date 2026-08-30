@@ -138,3 +138,11 @@ features:
       - mobile/app/pet-speech-settings.tsx
       - mobile/packages/expo-pet-speech
     wiki: projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings
+
+  - id: pet-speech-live-local-preferences
+    title: Live mobile pet speech applies device-local voice and rate preferences
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+    wiki: projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings
