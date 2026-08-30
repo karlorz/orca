@@ -243,9 +243,6 @@ class ExpoPetSpeechModule : Module() {
                         return@createTtsEngine
                     }
 
-                    val effectiveVoiceName = decision.effectiveVoiceName
-                    val networkVoice = decision.networkRequired
-
                     // synthesizeToFile often ignores setSpeechRate (especially CJK engines).
                     // Keep engine rate at 1.0 and apply the pet multiplier during MediaPlayer playback.
                     tts.setSpeechRate(1.0f)
