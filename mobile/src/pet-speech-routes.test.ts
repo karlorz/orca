@@ -94,5 +94,28 @@ describe('Pet Speech and Plugins Routes', () => {
 
     expect(labels).toContain('Pet Speech')
     expect(labels).toContain('Enable Pet Speech')
+    expect(labels).toContain('Selected voice: Device default')
+  })
+
+  it('PetSpeechSettingsScreen shows explicit selected voice name when configured', async () => {
+    const prefsModule = await import('../src/pet-speak/pet-speech-preferences')
+    vi.mocked(prefsModule.loadPetSpeechPreferences).mockResolvedValueOnce({
+      enabled: true,
+      migrationCompleted: true,
+      installUuid: 'uuid-1',
+      rate: 1,
+      voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' }
+    })
+
+    let root: { root: { findAllByType: (type: string) => Array<{ props: { children: unknown } }> } }
+    await act(async () => {
+      root = create(createElement(PetSpeechSettingsScreen))
+      await Promise.resolve()
+    })
+
+    const textNodes = root.root.findAllByType('Text')
+    const labels = textNodes.flatMap((n) => n.props.children)
+
+    expect(labels).toContain('Selected voice: yue-hk-x-yuc-local')
   })
 })

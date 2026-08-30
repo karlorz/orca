@@ -193,26 +193,58 @@ class ExpoPetSpeechModule : Module() {
                         return@createTtsEngine
                     }
 
-                    // Voice selection if voiceName is provided and available
-                    var selectedVoice = tts.voice
-                    var networkVoice = selectedVoice?.isNetworkConnectionRequired ?: false
-                    var effectiveVoiceName = selectedVoice?.name
-                    if (!voiceName.isNullOrEmpty()) {
-                        val matchingVoice = tts.voices?.find { it.name == voiceName }
+                    var matchingVoiceFound = false
+                    var setVoiceResult: Int? = null
+                    var exceptionThrown = false
+
+                    if (!voiceName.isNullOrBlank()) {
+                        val matchingVoice = tts.voices?.find { it.name == voiceName.trim() }
+                        matchingVoiceFound = matchingVoice != null
                         if (matchingVoice != null) {
                             try {
-                                tts.voice = matchingVoice
-                                selectedVoice = matchingVoice
-                                networkVoice = matchingVoice.isNetworkConnectionRequired
-                                effectiveVoiceName = matchingVoice.name
-                            } catch (_: Exception) {}
+                                setVoiceResult = tts.setVoice(matchingVoice)
+                            } catch (_: Exception) {
+                                exceptionThrown = true
+                            }
                         }
                     }
 
+                    var readbackVoiceName: String? = null
+                    var readbackNetwork = false
+                    try {
+                        val currentVoice = tts.voice
+                        readbackVoiceName = currentVoice?.name
+                        readbackNetwork = currentVoice?.isNetworkConnectionRequired ?: false
+                    } catch (_: Exception) {
+                        exceptionThrown = true
+                    }
+
+                    val decision = PetSpeechVoiceApplicationClassifier.evaluateVoiceApplication(
+                        requestedVoiceName = voiceName,
+                        matchingVoiceFound = matchingVoiceFound,
+                        setVoiceResult = setVoiceResult,
+                        readbackVoiceName = readbackVoiceName,
+                        readbackNetwork = readbackNetwork,
+                        exceptionThrown = exceptionThrown
+                    )
+
+                    val defaultEngine = tts.defaultEngine ?: ""
                     android.util.Log.i(
                         "PetSpeechDebug",
-                        "speakAsync eventId=$validEventId voiceName=$effectiveVoiceName locale=${targetLocale.toLanguageTag()} rate=$rate networkVoice=$networkVoice filePath=$tempFilePath durationMs=-1 teardown=reset-stop-release"
+                        "speakAsync eventId=$validEventId requestedVoiceName=$voiceName appliedVoiceName=${decision.effectiveVoiceName} setVoiceResult=$setVoiceResult locale=${targetLocale.toLanguageTag()} engine=$defaultEngine rate=$rate networkVoice=${decision.networkRequired} filePath=$tempFilePath durationMs=-1 teardown=reset-stop-release"
                     )
+
+                    if (!decision.shouldProceed) {
+                        android.util.Log.w(
+                            "PetSpeechDebug",
+                            "speakAsync voice application failed eventId=$validEventId requestedVoiceName=$voiceName appliedVoiceName=${decision.effectiveVoiceName} setVoiceResult=$setVoiceResult matchingVoiceFound=$matchingVoiceFound exceptionThrown=$exceptionThrown"
+                        )
+                        owner.settle(decision.failureOutcome ?: PetSpeechOutcome.VoiceUnavailable)
+                        return@createTtsEngine
+                    }
+
+                    val effectiveVoiceName = decision.effectiveVoiceName
+                    val networkVoice = decision.networkRequired
 
                     // synthesizeToFile often ignores setSpeechRate (especially CJK engines).
                     // Keep engine rate at 1.0 and apply the pet multiplier during MediaPlayer playback.

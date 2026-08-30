@@ -171,4 +171,64 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
     expect(mockSpokenPayloads[0].voiceName).toBe('en-US-voice-1')
     expect(mockSpokenPayloads[0].lang).toBe('en-US')
   })
+
+  it('executeTestVoiceAsync uses longer language-specific multi-clause samples for prosody/timbre evaluation', async () => {
+    await setPetSpeechEnabled(true)
+    await setPetSpeechRate(1)
+    await setPetSpeechVoiceForLanguage('yue-HK', 'yue-HK-voice-1')
+
+    const mockSpokenPayloads: PetSpeakPayload[] = []
+    const mockAdapter: PetSpeechNativeAdapter = {
+      speak: async (payload) => {
+        mockSpokenPayloads.push(payload)
+        return 'spoken'
+      }
+    }
+
+    await executeTestVoiceAsync('yue-HK', {
+      nativeAdapter: mockAdapter,
+      availableVoices: sampleVoices
+    })
+
+    expect(mockSpokenPayloads[0].text).toBe(
+      '你好！我係你嘅桌面寵物。今日天氣幾好，我哋一齊處理 123 件事啦！'
+    )
+
+    // zh-CN sample check
+    await executeTestVoiceAsync('zh-CN', {
+      nativeAdapter: mockAdapter,
+      availableVoices: sampleVoices
+    })
+    expect(mockSpokenPayloads[1].text).toBe(
+      '你好！我是你的桌面宠物。今天天气不错，我们一起处理 123 件事吧！'
+    )
+
+    // zh-TW sample check
+    await executeTestVoiceAsync('zh-TW', {
+      nativeAdapter: mockAdapter,
+      availableVoices: [
+        ...sampleVoices,
+        {
+          name: 'zh-TW-voice-1',
+          locale: 'zh-TW',
+          language: 'zh-TW',
+          quality: 300,
+          network: false,
+          gender: 'unknown'
+        }
+      ]
+    })
+    expect(mockSpokenPayloads[2].text).toBe(
+      '你好！我是你的桌面寵物。今天天氣不錯，我們一起處理 123 件事吧！'
+    )
+
+    // en-US sample check
+    await executeTestVoiceAsync('en-US', {
+      nativeAdapter: mockAdapter,
+      availableVoices: sampleVoices
+    })
+    expect(mockSpokenPayloads[3].text).toBe(
+      'Hello! I am your desktop pet. Today is a great day, let us handle 123 tasks together!'
+    )
+  })
 })

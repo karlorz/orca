@@ -279,6 +279,9 @@ export default function PetSpeechSettingsScreen() {
                 )}
                 <Text style={styles.testVoiceLabel}>Test Voice ({selectedLanguageTab})</Text>
               </Pressable>
+              <Text style={styles.testOutcomeText}>
+                {`Selected voice: ${selectedVoiceForLang ? selectedVoiceForLang : 'Device default'}`}
+              </Text>
               {testVoiceOutcome ? (
                 <Text style={styles.testOutcomeText}>Outcome: {testVoiceOutcome}</Text>
               ) : null}
