@@ -103,15 +103,12 @@ describe('PetSpeakHandler in-flight cancellation and disposal', () => {
 
   it('cancellation/disposal while asynchronous preparation is pending prevents late native dispatch and does not double-complete', async () => {
     let prepResolve!: (value: { status: 'prepared'; event: PetSpeakPayload }) => void
-    const prepStarted = new Promise<void>((resolve) => {
-      // track prep started
-    })
-    let prepCalledResolve: () => void
+    let prepCalledResolve!: () => void
     const prepCalled = new Promise<void>((resolve) => {
       prepCalledResolve = resolve
     })
 
-    const prepareEvent = vi.fn(async (event: PetSpeakPayload) => {
+    const prepareEvent = vi.fn(async (_event: PetSpeakPayload) => {
       prepCalledResolve()
       return new Promise<{ status: 'prepared'; event: PetSpeakPayload }>((resolve) => {
         prepResolve = resolve
