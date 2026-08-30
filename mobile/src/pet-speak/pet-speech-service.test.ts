@@ -52,6 +52,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 import {
   validatePetSpeechVoice,
   resolveEnabledSpeechOptions,
+  preparePetSpeakEvent,
   executeTestVoiceAsync
 } from './pet-speech-service'
 import {
@@ -145,6 +146,57 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
     expect(options.rate).toBe(1.8)
     expect(options.voiceName).toBe('yue-HK-voice-1')
     expect(options.isValidLocale).toBe(true)
+  })
+
+  describe('preparePetSpeakEvent', () => {
+    it('prepares live yue event with persisted voice and rate while preserving all other metadata', async () => {
+      await setPetSpeechEnabled(true)
+      await setPetSpeechRate(1.4)
+      await setPetSpeechVoiceForLanguage('yue-HK', 'yue-HK-voice-1')
+
+      const rawEvent: PetSpeakPayload = {
+        type: 'pet.speak',
+        text: ' 你好！ ',
+        lang: 'yue',
+        event_id: ' ev-live-1 ',
+        seq: 42,
+        epoch: 'epoch-abc',
+        replayed: false,
+        playerKind: 'media3',
+        debug: true
+      }
+
+      const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
+      expect(result.status).toBe('prepared')
+      if (result.status === 'prepared') {
+        expect(result.event).toEqual({
+          type: 'pet.speak',
+          text: ' 你好！ ',
+          lang: 'yue-HK',
+          event_id: ' ev-live-1 ',
+          seq: 42,
+          epoch: 'epoch-abc',
+          replayed: false,
+          playerKind: 'media3',
+          debug: true,
+          rate: 1.4,
+          voiceName: 'yue-HK-voice-1'
+        })
+      }
+    })
+
+    it('returns voice-unavailable status when language has no available voice in engine', async () => {
+      await setPetSpeechEnabled(true)
+      const rawEvent: PetSpeakPayload = {
+        type: 'pet.speak',
+        text: '你好',
+        lang: 'zh-TW',
+        event_id: 'ev-no-voice-1'
+      }
+
+      const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
+      expect(result.status).toBe('voice-unavailable')
+    })
   })
 
   it('executeTestVoiceAsync fails closed when disabled', async () => {

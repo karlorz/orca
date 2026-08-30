@@ -7,6 +7,9 @@ import {
 } from './pet-speak-adapters'
 import { getExpoPetSpeechModule, type PetSpeechVoice } from './pet-speak-native-adapter'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
+import type { PreparedPetSpeakEventResult } from './pet-speak-types'
+
+export type { PreparedPetSpeakEventResult }
 
 export interface VoiceValidationResult {
   valid: boolean
@@ -123,6 +126,35 @@ export async function resolveEnabledSpeechOptions(
     rate: prefs.rate,
     voiceName: validation.effectiveVoiceName,
     isValidLocale: validation.status !== 'voice-unavailable'
+  }
+}
+
+/**
+ * Prepares an incoming live pet.speak event with mobile-local voice and rate preferences.
+ * Preserves all original metadata and returns 'voice-unavailable' if locale cannot be resolved.
+ */
+export async function preparePetSpeakEvent(
+  event: PetSpeakPayload,
+  availableVoices?: PetSpeechVoice[]
+): Promise<PreparedPetSpeakEventResult> {
+  const canonical = normalizePetLanguage(event.lang ?? 'yue-HK')
+  if (!canonical) {
+    return { status: 'voice-unavailable' }
+  }
+
+  const resolved = await resolveEnabledSpeechOptions(event, availableVoices)
+  if (!resolved.isValidLocale) {
+    return { status: 'voice-unavailable' }
+  }
+
+  return {
+    status: 'prepared',
+    event: {
+      ...event,
+      lang: canonical,
+      rate: resolved.rate,
+      voiceName: resolved.voiceName
+    }
   }
 }
 

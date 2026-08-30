@@ -282,6 +282,113 @@ describe('PetSpeakHandler', () => {
     expect(mockMediaSession.startSession).not.toHaveBeenCalled()
     expect(mockTts.speak).not.toHaveBeenCalled()
   })
+
+  describe('prepareEvent seam', () => {
+    it('applies prepareEvent immediately before speech and preserves original event payload fields', async () => {
+      const mockAdapter: PetSpeechNativeAdapter = {
+        speak: vi.fn(async () => 'spoken')
+      }
+      const completed: Array<{ eventId: string; outcome: string }> = []
+      const prepareEvent = vi.fn(async (event: PetSpeakPayload) => {
+        return {
+          status: 'prepared' as const,
+          event: {
+            ...event,
+            voiceName: 'yue-hk-x-yuc-local',
+            rate: 1.5
+          }
+        }
+      })
+
+      const customHandler = new PetSpeakHandler({
+        nativeAdapter: mockAdapter,
+        prepareEvent,
+        onComplete: async (eventId, outcome) => {
+          completed.push({ eventId, outcome })
+        }
+      })
+
+      await customHandler.handleEvent({
+        type: 'pet.speak',
+        text: ' 你好！ ',
+        lang: 'yue',
+        event_id: ' ev-prep-1 ',
+        seq: 10,
+        epoch: 'epoch-1',
+        replayed: false,
+        playerKind: 'mediaplayer',
+        debug: true
+      })
+
+      expect(prepareEvent).toHaveBeenCalledTimes(1)
+      expect(mockAdapter.speak).toHaveBeenCalledWith({
+        type: 'pet.speak',
+        text: '你好！',
+        lang: 'yue',
+        event_id: 'ev-prep-1',
+        seq: 10,
+        epoch: 'epoch-1',
+        replayed: false,
+        playerKind: 'mediaplayer',
+        debug: true,
+        voiceName: 'yue-hk-x-yuc-local',
+        rate: 1.5
+      })
+      expect(completed).toEqual([{ eventId: 'ev-prep-1', outcome: 'spoken' }])
+    })
+
+    it('settles voice-unavailable exactly once and never calls native adapter when prepareEvent returns voice-unavailable', async () => {
+      const mockAdapter: PetSpeechNativeAdapter = {
+        speak: vi.fn(async () => 'spoken')
+      }
+      const completed: Array<{ eventId: string; outcome: string }> = []
+      const prepareEvent = vi.fn(async () => {
+        return { status: 'voice-unavailable' as const }
+      })
+
+      const customHandler = new PetSpeakHandler({
+        nativeAdapter: mockAdapter,
+        prepareEvent,
+        onComplete: async (eventId, outcome) => {
+          completed.push({ eventId, outcome })
+        }
+      })
+
+      await customHandler.handleEvent({
+        type: 'pet.speak',
+        text: '測試無語音',
+        lang: 'zh-TW',
+        event_id: 'ev-unavail-1'
+      })
+
+      expect(prepareEvent).toHaveBeenCalledTimes(1)
+      expect(mockAdapter.speak).not.toHaveBeenCalled()
+      expect(completed).toEqual([{ eventId: 'ev-unavail-1', outcome: 'voice-unavailable' }])
+    })
+
+    it('defaults to identity behavior when prepareEvent is omitted', async () => {
+      const mockAdapter: PetSpeechNativeAdapter = {
+        speak: vi.fn(async () => 'spoken')
+      }
+      const customHandler = new PetSpeakHandler({
+        nativeAdapter: mockAdapter
+      })
+
+      await customHandler.handleEvent({
+        type: 'pet.speak',
+        text: '默認行為',
+        lang: 'yue-HK',
+        event_id: 'ev-default-1'
+      })
+
+      expect(mockAdapter.speak).toHaveBeenCalledWith({
+        type: 'pet.speak',
+        text: '默認行為',
+        lang: 'yue-HK',
+        event_id: 'ev-default-1'
+      })
+    })
+  })
 })
 
 describe('subscribeToPetSpeak', () => {

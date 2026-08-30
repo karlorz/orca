@@ -100,4 +100,60 @@ describe('PetSpeakHandler in-flight cancellation and disposal', () => {
 
     expect(completedOutcomes).toEqual([{ eventId: 'ev-disposed-1', outcome: 'cancelled' }])
   })
+
+  it('cancellation/disposal while asynchronous preparation is pending prevents late native dispatch and does not double-complete', async () => {
+    let prepResolve!: (value: { status: 'prepared'; event: PetSpeakPayload }) => void
+    const prepStarted = new Promise<void>((resolve) => {
+      // track prep started
+    })
+    let prepCalledResolve: () => void
+    const prepCalled = new Promise<void>((resolve) => {
+      prepCalledResolve = resolve
+    })
+
+    const prepareEvent = vi.fn(async (event: PetSpeakPayload) => {
+      prepCalledResolve()
+      return new Promise<{ status: 'prepared'; event: PetSpeakPayload }>((resolve) => {
+        prepResolve = resolve
+      })
+    })
+
+    const handler = new PetSpeakHandler({
+      nativeAdapter: mockNativeAdapter as unknown as PetSpeechNativeAdapter,
+      prepareEvent,
+      onComplete: async (eventId, outcome) => {
+        completedOutcomes.push({ eventId, outcome })
+      }
+    })
+
+    const eventPromise = handler.handleEvent({
+      type: 'pet.speak',
+      text: '異步準備中斷',
+      lang: 'yue-HK',
+      event_id: 'ev-async-cancel-1'
+    })
+
+    await prepCalled
+
+    // Dispose while asynchronous prepareEvent is still unresolved
+    handler.dispose()
+
+    // Now resolve the prepareEvent
+    prepResolve({
+      status: 'prepared',
+      event: {
+        type: 'pet.speak',
+        text: '異步準備中斷',
+        lang: 'yue-HK',
+        event_id: 'ev-async-cancel-1',
+        voiceName: 'yue-hk-x-yuc-local'
+      }
+    })
+
+    await eventPromise
+
+    // Verify nativeAdapter.speak was NEVER called, and completed with cancelled exactly once
+    expect(mockNativeAdapter.speak).not.toHaveBeenCalled()
+    expect(completedOutcomes).toEqual([{ eventId: 'ev-async-cancel-1', outcome: 'cancelled' }])
+  })
 })

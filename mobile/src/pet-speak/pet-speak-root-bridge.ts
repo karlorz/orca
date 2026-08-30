@@ -6,7 +6,7 @@ import { selectConnectableHostProfiles } from '../transport/host-catalog-selecti
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { useRpcClientContext } from '../transport/client-context'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
-import type { PetSpeakHandlerOptions } from './pet-speak-types'
+import type { PetSpeakHandlerOptions, PetSpeakPayload } from './pet-speak-types'
 import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
 import {
@@ -15,6 +15,7 @@ import {
   type PetSpeechPreferences
 } from './pet-speech-preferences'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
+import { preparePetSpeakEvent } from './pet-speech-service'
 import {
   clearPetVoiceGraceTimer,
   evaluatePetVoiceHold,
@@ -87,6 +88,20 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   const releaseVoiceSessionProp = options?.releaseVoiceSession
   const updateVoiceSessionNotificationProp = options?.updateVoiceSessionNotification
   const handlerOptionsProp = options?.handlerOptions
+
+  const defaultPrepareEvent = useCallback(
+    (event: PetSpeakPayload) => preparePetSpeakEvent(event),
+    []
+  )
+
+  const effectiveHandlerOptions = useMemo<PetSpeakHandlerOptions | undefined>(() => {
+    if (handlerOptionsProp !== undefined) {
+      return handlerOptionsProp
+    }
+    return {
+      prepareEvent: defaultPrepareEvent
+    }
+  }, [defaultPrepareEvent, handlerOptionsProp])
 
   const acquireVoiceSessionFn = useCallback(
     () =>
@@ -195,7 +210,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
             currentSubs.get(entry.hostId)?.client !== entry.client
           ) {
             currentSubs.get(entry.hostId)?.unsub()
-            const unsub = subscribeToPetSpeak(entry.client, handlerOptionsProp, entry.hostId)
+            const unsub = subscribeToPetSpeak(entry.client, effectiveHandlerOptions, entry.hostId)
             currentSubs.set(entry.hostId, { client: entry.client, unsub })
             subscriptionChanged = true
           }
@@ -244,7 +259,7 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   }, [
     clients,
     isEnabled,
-    handlerOptionsProp,
+    effectiveHandlerOptions,
     isAndroid,
     ensureNotificationPermissionsFn,
     acquireVoiceSessionFn,

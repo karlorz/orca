@@ -11,7 +11,7 @@ import {
   getPetSpeechNativeAdapter
 } from './pet-speak-adapters'
 import { type PetSpeakPayload, isValidPetSpeakPayload } from './pet-speak-payload-validation'
-import type { PetSpeakHandlerOptions } from './pet-speak-types'
+import type { PetSpeakHandlerOptions, PetSpeakEventPreparer } from './pet-speak-types'
 import { createSeenGuard } from '../storage/watermark-storage'
 
 export {
@@ -22,6 +22,7 @@ export {
   type MediaSessionAdapter,
   type PetSpeechNativeAdapter,
   type PetSpeakHandlerOptions,
+  type PetSpeakEventPreparer,
   resolvePetLocale,
   DefaultTtsAdapter,
   DefaultExpoNotificationMediaSessionAdapter,
@@ -39,6 +40,7 @@ export class PetSpeakHandler {
   private readonly tts: TtsAdapter
   private readonly mediaSession: MediaSessionAdapter
   private readonly nativeAdapter: PetSpeechNativeAdapter | null
+  private readonly prepareEvent?: PetSpeakEventPreparer
   private readonly seenEventIds: ReturnType<typeof createSeenGuard>
   private readonly seenSeqs: ReturnType<typeof createSeenGuard>
   private readonly inFlightPromises = new Map<string, Promise<void>>()
@@ -59,6 +61,7 @@ export class PetSpeakHandler {
         : Platform.OS === 'android'
           ? getPetSpeechNativeAdapter()
           : null
+    this.prepareEvent = options?.prepareEvent
     const maxSeen = options?.maxSeenEvents ?? 256
     this.seenEventIds = createSeenGuard(maxSeen)
     this.seenSeqs = createSeenGuard(maxSeen)
@@ -162,9 +165,9 @@ export class PetSpeakHandler {
   }
 
   private async playItem(item: QueuedItem): Promise<void> {
-    const event = item.event
-    const text = event.text
-    const eventId = event.event_id!
+    const rawEvent = item.event
+    const text = rawEvent.text
+    const eventId = rawEvent.event_id!
 
     if (this.disposed || item.isCancelled) {
       if (this.onComplete) {
@@ -172,6 +175,43 @@ export class PetSpeakHandler {
       }
       item.resolve()
       return
+    }
+
+    let event = rawEvent
+    if (this.prepareEvent) {
+      try {
+        const prepResult = await this.prepareEvent(rawEvent)
+        if (this.disposed || item.isCancelled) {
+          if (this.onComplete) {
+            await this.onComplete(eventId, 'cancelled').catch(() => {})
+          }
+          item.resolve()
+          return
+        }
+
+        if (prepResult.status === 'voice-unavailable') {
+          if (this.onComplete) {
+            await this.onComplete(eventId, 'voice-unavailable').catch(() => {})
+          }
+          item.resolve()
+          return
+        }
+
+        event = prepResult.event
+      } catch {
+        if (this.disposed || item.isCancelled) {
+          if (this.onComplete) {
+            await this.onComplete(eventId, 'cancelled').catch(() => {})
+          }
+          item.resolve()
+          return
+        }
+        if (this.onComplete) {
+          await this.onComplete(eventId, 'voice-unavailable').catch(() => {})
+        }
+        item.resolve()
+        return
+      }
     }
 
     if (this.nativeAdapter) {
