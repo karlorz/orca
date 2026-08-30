@@ -14,7 +14,7 @@ export type { PreparedPetSpeakEventResult }
 export interface VoiceValidationResult {
   valid: boolean
   effectiveVoiceName?: string
-  status: 'valid' | 'fallback-default' | 'voice-unavailable'
+  status: 'valid' | 'voice-unavailable'
 }
 
 /**

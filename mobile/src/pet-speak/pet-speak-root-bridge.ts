@@ -6,7 +6,7 @@ import { selectConnectableHostProfiles } from '../transport/host-catalog-selecti
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { useRpcClientContext } from '../transport/client-context'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
-import type { PetSpeakHandlerOptions, PetSpeakPayload } from './pet-speak-types'
+import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
 import {
@@ -89,19 +89,14 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   const updateVoiceSessionNotificationProp = options?.updateVoiceSessionNotification
   const handlerOptionsProp = options?.handlerOptions
 
-  const defaultPrepareEvent = useCallback(
-    (event: PetSpeakPayload) => preparePetSpeakEvent(event),
-    []
-  )
-
   const effectiveHandlerOptions = useMemo<PetSpeakHandlerOptions | undefined>(() => {
     if (handlerOptionsProp !== undefined) {
       return handlerOptionsProp
     }
     return {
-      prepareEvent: defaultPrepareEvent
+      prepareEvent: preparePetSpeakEvent
     }
-  }, [defaultPrepareEvent, handlerOptionsProp])
+  }, [handlerOptionsProp])
 
   const acquireVoiceSessionFn = useCallback(
     () =>
