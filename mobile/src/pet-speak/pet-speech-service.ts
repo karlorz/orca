@@ -105,6 +105,7 @@ export async function resolveEnabledSpeechOptions(
   rate: number
   voiceName?: string
   isValidLocale: boolean
+  canonicalLanguage?: CanonicalLanguage
 }> {
   const prefs = await loadPetSpeechPreferences()
   const canonical = normalizePetLanguage(event.lang ?? 'yue-HK')
@@ -113,7 +114,8 @@ export async function resolveEnabledSpeechOptions(
     return {
       rate: prefs.rate,
       voiceName: undefined,
-      isValidLocale: false
+      isValidLocale: false,
+      canonicalLanguage: undefined
     }
   }
 
@@ -125,7 +127,8 @@ export async function resolveEnabledSpeechOptions(
   return {
     rate: prefs.rate,
     voiceName: validation.effectiveVoiceName,
-    isValidLocale: validation.status !== 'voice-unavailable'
+    isValidLocale: validation.status !== 'voice-unavailable',
+    canonicalLanguage: canonical
   }
 }
 
@@ -137,13 +140,8 @@ export async function preparePetSpeakEvent(
   event: PetSpeakPayload,
   availableVoices?: PetSpeechVoice[]
 ): Promise<PreparedPetSpeakEventResult> {
-  const canonical = normalizePetLanguage(event.lang ?? 'yue-HK')
-  if (!canonical) {
-    return { status: 'voice-unavailable' }
-  }
-
   const resolved = await resolveEnabledSpeechOptions(event, availableVoices)
-  if (!resolved.isValidLocale) {
+  if (!resolved.isValidLocale || !resolved.canonicalLanguage) {
     return { status: 'voice-unavailable' }
   }
 
@@ -151,7 +149,7 @@ export async function preparePetSpeakEvent(
     status: 'prepared',
     event: {
       ...event,
-      lang: canonical,
+      lang: resolved.canonicalLanguage,
       rate: resolved.rate,
       voiceName: resolved.voiceName
     }

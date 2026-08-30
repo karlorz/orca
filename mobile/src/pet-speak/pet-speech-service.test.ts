@@ -146,6 +146,24 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
     expect(options.rate).toBe(1.8)
     expect(options.voiceName).toBe('yue-HK-voice-1')
     expect(options.isValidLocale).toBe(true)
+    expect(options.canonicalLanguage).toBe('yue-HK')
+  })
+
+  it('returns undefined canonicalLanguage and isValidLocale false when event has invalid locale', async () => {
+    await setPetSpeechEnabled(true)
+    const options = await resolveEnabledSpeechOptions(
+      {
+        type: 'pet.speak',
+        text: 'unknown lang test',
+        lang: 'invalid-locale-xyz',
+        event_id: 'ev-invalid-1'
+      },
+      sampleVoices
+    )
+
+    expect(options.isValidLocale).toBe(false)
+    expect(options.canonicalLanguage).toBeUndefined()
+    expect(options.voiceName).toBeUndefined()
   })
 
   describe('preparePetSpeakEvent', () => {
