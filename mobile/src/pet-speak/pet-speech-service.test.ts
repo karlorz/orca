@@ -107,11 +107,11 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
     expect(res.status).toBe('valid')
   })
 
-  it('detects missing/stale voice and falls back to same-language default', () => {
+  it('detects missing/stale voice and reports voice-unavailable', () => {
     const res = validatePetSpeechVoice('yue-HK', 'stale-vanished-voice', sampleVoices)
     expect(res.valid).toBe(false)
     expect(res.effectiveVoiceName).toBeUndefined()
-    expect(res.status).toBe('fallback-default')
+    expect(res.status).toBe('voice-unavailable')
   })
 
   it('never uses a voice from another language family', () => {
@@ -196,6 +196,55 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
 
       const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
       expect(result.status).toBe('voice-unavailable')
+    })
+
+    it('returns voice-unavailable status when an invalid or stale explicit voice is persisted despite same-language voices existing', async () => {
+      await setPetSpeechEnabled(true)
+      await setPetSpeechVoiceForLanguage('yue-HK', 'stale-vanished-voice')
+
+      const rawEvent: PetSpeakPayload = {
+        type: 'pet.speak',
+        text: '你好',
+        lang: 'yue-HK',
+        event_id: 'ev-stale-voice-1'
+      }
+
+      const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
+      expect(result.status).toBe('voice-unavailable')
+    })
+
+    it('returns voice-unavailable status when a wrong-language explicit voice is persisted', async () => {
+      await setPetSpeechEnabled(true)
+      await setPetSpeechVoiceForLanguage('yue-HK', 'zh-CN-voice-1')
+
+      const rawEvent: PetSpeakPayload = {
+        type: 'pet.speak',
+        text: '你好',
+        lang: 'yue-HK',
+        event_id: 'ev-cross-voice-1'
+      }
+
+      const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
+      expect(result.status).toBe('voice-unavailable')
+    })
+
+    it('permits preparation with undefined voiceName when no explicit voice is selected and same-language voices exist', async () => {
+      await setPetSpeechEnabled(true)
+      // no voice selection for yue-HK
+
+      const rawEvent: PetSpeakPayload = {
+        type: 'pet.speak',
+        text: '你好',
+        lang: 'yue-HK',
+        event_id: 'ev-no-explicit-voice-1'
+      }
+
+      const result = await preparePetSpeakEvent(rawEvent, sampleVoices)
+      expect(result.status).toBe('prepared')
+      if (result.status === 'prepared') {
+        expect(result.event.voiceName).toBeUndefined()
+        expect(result.event.lang).toBe('yue-HK')
+      }
     })
   })
 

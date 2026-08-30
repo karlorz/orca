@@ -79,11 +79,11 @@ export function validatePetSpeechVoice(
         status: 'valid'
       }
     }
-    // Stale or cross-language ID: keep engine default inside this language.
+    // Stale or cross-language ID: explicit invalid voice is unavailable.
     return {
       valid: false,
       effectiveVoiceName: undefined,
-      status: 'fallback-default'
+      status: 'voice-unavailable'
     }
   }
 
