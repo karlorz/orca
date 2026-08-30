@@ -128,3 +128,13 @@ features:
       - config/scripts/fork-macos-trust-self-signed-identity.sh
       - .github/workflows/fork-desktop-voice-release.yml
     wiki: projects/orca/work/2026-08-28-fork-desktop-self-signed-ci
+
+  - id: pet-speech-test-voice-selection
+    title: Truthful exact Android Test Voice application and readback validation
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/app/pet-speech-settings.tsx
+      - mobile/packages/expo-pet-speech
+    wiki: projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings

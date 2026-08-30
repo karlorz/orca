@@ -85,4 +85,23 @@ describe('fork-features registry', () => {
     expect(rows.some((row) => row.includes('pet-voice-fgs-hysteresis'))).toBe(true)
     expect(rows.some((row) => row.includes('landed'))).toBe(true)
   })
+
+  it('records pet-speech-test-voice-selection as a landed product feature inventory entry', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'pet-speech-test-voice-selection')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('product')
+    expect(entry.status).toBe('landed')
+    expect(entry.title).toBeTruthy()
+    expect(entry.paths).toEqual(
+      expect.arrayContaining([
+        'mobile/src/pet-speak',
+        'mobile/app/pet-speech-settings.tsx',
+        'mobile/packages/expo-pet-speech'
+      ])
+    )
+    expect(entry.wiki).toBe(
+      'projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings'
+    )
+  })
 })
