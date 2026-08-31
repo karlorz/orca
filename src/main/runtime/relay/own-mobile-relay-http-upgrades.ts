@@ -55,11 +55,10 @@ export function registerOwnMobileRelayUpgrades(
           onActive: (relayHostId, send) => {
             const wasRegistered = context.router.activeHosts.has(relayHostId)
             context.router.activeHosts.set(relayHostId, send)
-            const hostControlLive = context.router.activeHosts.has(relayHostId)
             if (!wasRegistered) {
               void emitAudit(context.auditLog, 'host.control.up', {
                 relayHostId,
-                hostControlLive
+                hostControlLive: true
               })
             }
           },
@@ -69,12 +68,11 @@ export function registerOwnMobileRelayUpgrades(
             // knock out a live registration (phone would see 4404).
             if (sender && context.router.activeHosts.get(relayHostId) === sender) {
               context.router.activeHosts.delete(relayHostId)
-              const hostControlLive = context.router.activeHosts.has(relayHostId)
               void emitAudit(context.auditLog, 'host.control.down', {
                 relayHostId,
                 ...(closeCode !== undefined ? { closeCode } : {}),
                 ...(reason !== undefined && reason !== '' ? { reason } : {}),
-                hostControlLive
+                hostControlLive: false
               })
             }
           }
