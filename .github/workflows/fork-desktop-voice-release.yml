@@ -90,7 +90,7 @@ jobs:
           CSC_NAME: Orca Fork (karlorz)
         run: bash config/scripts/fork-macos-trust-self-signed-identity.sh
 
-      - name: Build self-signed macOS arm64
+      - name: Build self-signed macOS
         env:
           ORCA_FORK_VOICE_BUILD: '1'
           ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
@@ -108,7 +108,7 @@ jobs:
           pnpm run ensure:electron-runtime
           # --publish never: tag pushes default to onTagOrDraft and demand GH_TOKEN;
           # our publish-release job owns release creation.
-          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64 --publish never
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish never
           app="$(find dist -name 'Orca.app' -type d | head -n 1)"
           if [[ -z "$app" ]]; then
             echo "Packed Orca.app not found under dist/" >&2
@@ -131,25 +131,19 @@ jobs:
           set -euo pipefail
           mkdir -p desktop-artifacts
           shopt -s nullglob
-          if [[ ! -f dist/orca-macos-arm64.dmg ]]; then
-            echo "Expected dist/orca-macos-arm64.dmg" >&2
-            ls -la dist || true
-            exit 1
-          fi
-          if [[ ! -f dist/latest-mac.yml ]]; then
-            echo "Expected dist/latest-mac.yml" >&2
-            ls -la dist || true
-            exit 1
-          fi
-          cp dist/orca-macos-arm64.dmg desktop-artifacts/
-          cp dist/latest-mac.yml desktop-artifacts/
-          if [[ -f dist/orca-macos-arm64.zip ]]; then
-            cp dist/orca-macos-arm64.zip desktop-artifacts/
-          fi
+          for archive in orca-macos-x64.dmg orca-macos-arm64.dmg orca-macos-x64.zip orca-macos-arm64.zip latest-mac.yml; do
+            if [[ ! -f "dist/$archive" ]]; then
+              echo "Expected dist/$archive" >&2
+              ls -la dist || true
+              exit 1
+            fi
+            cp "dist/$archive" desktop-artifacts/
+          done
           for blockmap in dist/*.blockmap; do
             cp "$blockmap" desktop-artifacts/
           done
           (cd desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts
 
       - name: Upload mac artifacts
         uses: actions/upload-artifact@v7

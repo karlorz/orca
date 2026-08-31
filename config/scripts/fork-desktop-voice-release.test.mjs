@@ -42,11 +42,26 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}')
   })
 
-  it('stages latest-mac.yml and optional blockmaps in desktop-artifacts', () => {
+  it('builds both macOS architectures (x64 and arm64)', () => {
     const rawYaml = readFileSync(workflowPath, 'utf8')
-    expect(rawYaml).toContain('dist/latest-mac.yml')
-    expect(rawYaml).toContain('cp dist/latest-mac.yml desktop-artifacts/')
+    expect(rawYaml).not.toMatch(/electron-builder[^\n]*--mac[^\n]*--arm64/)
+    expect(rawYaml).toMatch(/electron-builder[^\n]*--mac[^\n]*--publish never/)
+  })
+
+  it('stages all four archives, latest-mac.yml, blockmaps, and SHA256SUMS in desktop-artifacts', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('orca-macos-x64.dmg')
+    expect(rawYaml).toContain('orca-macos-arm64.dmg')
+    expect(rawYaml).toContain('orca-macos-x64.zip')
+    expect(rawYaml).toContain('orca-macos-arm64.zip')
+    expect(rawYaml).toContain('latest-mac.yml')
     expect(rawYaml).toContain('dist/*.blockmap')
+    expect(rawYaml).toContain('SHA256SUMS.txt')
+  })
+
+  it('runs verify-fork-desktop-release-artifacts before artifact upload to fail closed on missing manifest references', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('verify-fork-desktop-release-artifacts.mjs')
   })
 
   it('does not share the mobile tag pattern or publish DMG onto mobile releases', () => {
