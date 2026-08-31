@@ -143,18 +143,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: karlorz/wiki
-          token: ${{ secrets.WIKI_FOLLOWUP_TOKEN }}
+          token: ${{ secrets.FORK_SYNC_TOKEN }}
           path: wiki
           fetch-depth: 1
 
       - name: File wiki follow-up
         if: steps.detect.outputs.matched == 'true'
         env:
-          WIKI_FOLLOWUP_TOKEN: ${{ secrets.WIKI_FOLLOWUP_TOKEN }}
+          FORK_SYNC_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${WIKI_FOLLOWUP_TOKEN}" ]]; then
-            echo "Missing WIKI_FOLLOWUP_TOKEN (fine-grained PAT: karlorz/wiki Contents read/write)." >&2
+          if [[ -z "${FORK_SYNC_TOKEN}" ]]; then
+            echo "Missing FORK_SYNC_TOKEN (classic PAT: repo + workflow; also pushes karlorz/wiki)." >&2
             exit 1
           fi
           node config/scripts/fork-own-relay-followup.mjs \
