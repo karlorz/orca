@@ -136,7 +136,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../shared/agent-title-owner'
-import { resolvePaneAgentOwner } from '../../shared/pane-agent-owner'
+import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
 import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
@@ -167,6 +167,7 @@ import {
   gitSpawnAfterWindowsEnvironmentReady,
   nonInteractiveGitEnv
 } from '../git/runner'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import {
@@ -338,7 +339,11 @@ import type {
   GitHubPRReviewCommentInput,
   GitHubReactionContent
 } from '../../shared/github/comment-types'
-import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type {
+  GitHubPRRefreshReason,
+  PRRefreshOutcome
+} from '../../shared/github/pull-request-refresh-types'
+import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-policy'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { ListWorkItemsResult } from '../../shared/github/work-item-types'
 import type {
@@ -957,6 +962,7 @@ import { createStackedHostedReview as createStackedHostedReviewFromRepo } from '
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
+  getWorktreeMirrorDistro,
   getLocalProjectWorktreeGitOptionsForRuntime,
   resolveLocalProjectRuntimeForRepo,
   resolveLocalProjectRuntimesForRepos
@@ -1085,6 +1091,7 @@ import {
   listProjects as listJiraProjects,
   listTransitions as listJiraTransitions,
   searchIssues as searchJiraIssues,
+  searchUsers as searchJiraUsers,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
 import {
@@ -1237,7 +1244,7 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
-import { findCreatedWorktree } from '../ipc/created-worktree-reconciliation'
+import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -1257,6 +1264,10 @@ import {
   resolveWorktreeRemovalRepoOwner
 } from '../worktree-removal-repo-owner'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
+import {
+  consumePreparedWorktreeCreate,
+  prepareWorktreeCreateForRepo
+} from '../worktree-create-preparation'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
@@ -1464,6 +1475,9 @@ type RuntimeStore = {
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
+    // Read by worktree placement: decides whether this project's worktrees
+    // mirror into a WSL distro instead of the Windows drive.
+    localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -6618,6 +6632,10 @@ export class OrcaRuntimeService {
     }
   }
 
+  shouldRelayTerminalBrowserOpens(): boolean {
+    return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+  }
+
   // Why: scans the transcript-owning host's disk (correct by construction over
   // RPC — a remote/SSH host scans its own disk). Delegates to the one shared
   // cache so the desktop panel and the mobile screen never double-scan.
@@ -8555,7 +8573,8 @@ export class OrcaRuntimeService {
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent
     const title = normalizeCompatibleAgentTitleForOwner(
       args.title ?? getLatestPtyTitle(pty) ?? 'Terminal',
-      ownerAgent
+      ownerAgent,
+      { ownerIsLaunch: Boolean(pty.launchAgent) }
     )
     const existingTab = existing?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -10138,7 +10157,7 @@ export class OrcaRuntimeService {
           }
         }
       }
-      this.closeStructuredAgentSessionTab(worktreeId, snapshot, tab)
+      await this.closeStructuredAgentSessionTab(worktreeId, snapshot, tab)
     } else {
       if (!this.notifier?.closeSessionTab) {
         throw new Error('runtime_unavailable')
@@ -10244,11 +10263,15 @@ export class OrcaRuntimeService {
     return true
   }
 
-  private closeStructuredAgentSessionTab(
+  private async closeStructuredAgentSessionTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionAgentTab
-  ): void {
+  ): Promise<void> {
+    const host = getStructuredAgentSessionHost()
+    if (typeof host?.setSessionTabVisibility === 'function') {
+      await host.setSessionTabVisibility(tab.sessionId, false)
+    }
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
@@ -11760,11 +11783,11 @@ export class OrcaRuntimeService {
       stopRecoveredOwner: (record) => this.stopStructuredSessionProcess(record),
       tuiStatus: (owner) => this.structuredTuiStatus(owner),
       closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
-      revealNativeSession: ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
+      revealNativeSession: async ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
         if (adoptedTerminal || agent !== 'codex') {
           return
         }
-        this.publishStructuredAgentSessionTab({
+        await this.publishStructuredAgentSessionTab({
           workspaceId,
           sessionId,
           agent,
@@ -12323,10 +12346,15 @@ export class OrcaRuntimeService {
   private async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
+    const persistedVisibleIndex =
+      typeof host?.getPersistedVisibleSessionTabIndex === 'function'
+        ? host.getPersistedVisibleSessionTabIndex()
+        : { present: false, sessionIds: [] }
+    const profileIds = collectSavedStructuredAgentSessionIds(
+      this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+    )
     await host?.restoreReadableSessions(
-      collectSavedStructuredAgentSessionIds(
-        this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-      )
+      persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
     )
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
@@ -12343,7 +12371,7 @@ export class OrcaRuntimeService {
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
       }
-      this.publishStructuredAgentSessionTab({
+      await this.publishStructuredAgentSessionTab({
         ...session,
         agent: 'codex',
         sessionId,
@@ -12353,13 +12381,17 @@ export class OrcaRuntimeService {
     }
   }
 
-  publishStructuredAgentSessionTab(input: {
+  async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
     agent: 'codex'
     activate: boolean
     notify?: boolean
-  }): void {
+  }): Promise<void> {
+    const host = getStructuredAgentSessionHost()
+    if (typeof host?.setSessionTabVisibility === 'function') {
+      await host.setSessionTabVisibility(input.sessionId, true)
+    }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
@@ -23663,6 +23695,7 @@ export class OrcaRuntimeService {
         ['clone', '--progress', '--', trimmedUrl, clonePath],
         {
           cwd: trimmedDestination,
+          admissionTier: 'interactive',
           // Why: without the non-interactive guard, a clone that needs GitHub
           // auth makes Git Credential Manager pop its "Connect to GitHub" OAuth
           // window on Windows; in a network-restricted env the browser/device
@@ -24059,9 +24092,20 @@ export class OrcaRuntimeService {
   }
 
   private getHostedReviewExecutionOptions(
-    repo: Repo
-  ): { localGitExecOptions: { wslDistro?: string } } | undefined {
-    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
+    repo: Repo,
+    admissionTier?: GitAdmissionTier
+  ):
+    | {
+        localGitExecOptions: {
+          wslDistro?: string
+          admissionTier?: GitAdmissionTier
+        }
+      }
+    | undefined {
+    const localGitOptions = {
+      ...this.getLocalGitExecutionOptionArgs(repo)[0],
+      ...(admissionTier && { admissionTier })
+    }
     return Object.keys(localGitOptions).length > 0
       ? { localGitExecOptions: localGitOptions }
       : undefined
@@ -24286,10 +24330,15 @@ export class OrcaRuntimeService {
     linkedPRNumber?: number | null,
     fallbackPRNumber?: number | null,
     acceptMergedFallbackPR?: boolean,
-    currentHeadOid?: string | null
+    currentHeadOid?: string | null,
+    reason?: GitHubPRRefreshReason
   ): Promise<PRRefreshOutcome> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    const options: GitHubPRBranchLookupOptions = this.getHostedReviewExecutionOptions(repo) ?? {}
+    const options: GitHubPRBranchLookupOptions =
+      this.getHostedReviewExecutionOptions(
+        repo,
+        reason ? admissionTierForRefreshReason(reason) : undefined
+      ) ?? {}
     const lookupOptions = { ...options }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
@@ -24316,6 +24365,7 @@ export class OrcaRuntimeService {
   async getHostedReviewForBranch(args: {
     repoSelector: string
     branch: string
+    admissionTier?: GitAdmissionTier
     currentHeadOid?: string | null
     active?: boolean
     linkedGitHubPR?: number | null
@@ -24326,7 +24376,10 @@ export class OrcaRuntimeService {
     linkedGiteaPR?: number | null
   }): Promise<HostedReviewInfo | null> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
+    const executionOptions = this.getHostedReviewExecutionOptions(
+      repo,
+      args.admissionTier ?? 'background'
+    )
     const review = await getHostedReviewForBranchFromRepo({
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,
@@ -24359,7 +24412,7 @@ export class OrcaRuntimeService {
     }
   ): Promise<HostedReviewCreationEligibility> {
     const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
+    const executionOptions = this.getHostedReviewExecutionOptions(repo, 'interactive')
     return getHostedReviewCreationEligibilityFromRepo({
       repoPath,
       connectionId: repo.connectionId ?? null,
@@ -24383,7 +24436,7 @@ export class OrcaRuntimeService {
     args: CreateHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
   ): Promise<CreateHostedReviewResult> {
     const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
+    const executionOptions = this.getHostedReviewExecutionOptions(repo, 'interactive')
     const input = {
       provider: args.provider,
       base: args.base,
@@ -24416,7 +24469,7 @@ export class OrcaRuntimeService {
     args: CreateStackedHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
   ): Promise<CreateStackedHostedReviewResult> {
     const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
-    const executionOptions = this.getHostedReviewExecutionOptions(repo)
+    const executionOptions = this.getHostedReviewExecutionOptions(repo, 'interactive')
     const result = await createStackedHostedReviewFromRepo(
       repoPath,
       {
@@ -26579,11 +26632,18 @@ export class OrcaRuntimeService {
     }
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    await prefetchWorktreeCreateBase({
+    const baseBranch = await prefetchWorktreeCreateBase({
       repo,
       baseBranch: args.baseBranch,
       runtime: this
     })
+    if (baseBranch) {
+      try {
+        await prepareWorktreeCreateForRepo(this.requireStore(), repo, baseBranch)
+      } catch {
+        // Why: speculative preparation is an optimistic warm-up; the real create path reports failures.
+      }
+    }
   }
 
   async createManagedWorktree(args: {
@@ -26858,7 +26918,11 @@ export class OrcaRuntimeService {
       }
     }
     const settings = createSettings
-    const worktreePathSettings = getWorktreePathSettings(repo, settings)
+    const worktreePathSettings = getWorktreePathSettings(
+      repo,
+      settings,
+      getWorktreeMirrorDistro(this.requireStore(), repo)
+    )
     const localGitExecOptions = getLocalProjectGitExecOptions(this.requireStore(), repo)
     const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
     const hasLocalWorktreeGitOptions = hasLocalGitOptions(localWorktreeGitOptions)
@@ -26876,14 +26940,13 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     let effectiveSanitizedName = sanitizedName
-    // Why: explicit branches and non-username prefix modes never consume this
-    // value; skipping the probes preserves the exact generated branch name.
-    const username =
+    // Username and base resolution are independent read-only probes. Starting
+    // both before awaiting removes one serial git/config round trip from create.
+    const usernamePromise =
       !args.branchNameOverride && settings.branchPrefix === 'git-username'
-        ? await resolveLocalGitUsername(repo.path)
-        : ''
-
-    const baseBranch = await resolveWorktreeCreateBase({
+        ? resolveLocalGitUsername(repo.path)
+        : Promise.resolve('')
+    const baseBranchPromise = resolveWorktreeCreateBase({
       requestedBaseBranch: args.baseBranch,
       repoWorktreeBaseRef: repo.worktreeBaseRef,
       resolveDefaultBaseRef: () =>
@@ -26919,6 +26982,7 @@ export class OrcaRuntimeService {
         )
       }
     })
+    const [username, baseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
     if (!baseBranch) {
       // Why: a null default means no suitable ref exists; fail clearly instead
       // of handing Git a fabricated origin/main ref.
@@ -27075,18 +27139,15 @@ export class OrcaRuntimeService {
       ...localWorktreeGitOptionArgs
     )
     if (remoteTrackingBase) {
-      const hadRemoteTrackingBaseRef = await this.hasRemoteTrackingRef(
-        repo.path,
-        remoteTrackingBase,
-        ...localWorktreeGitOptionArgs
-      )
-      const hasLocalBaseRef =
-        hadRemoteTrackingBaseRef ||
-        (await hasLocalWorktreeBaseRef(
+      const [hadRemoteTrackingBaseRef, hasNamedLocalBaseRef] = await Promise.all([
+        this.hasRemoteTrackingRef(repo.path, remoteTrackingBase, ...localWorktreeGitOptionArgs),
+        hasLocalWorktreeBaseRef(
           repo.path,
           baseBranch,
           hasLocalWorktreeGitOptions ? localWorktreeGitOptions : {}
-        ))
+        )
+      ])
+      const hasLocalBaseRef = hadRemoteTrackingBaseRef || hasNamedLocalBaseRef
       if (!hadRemoteTrackingBaseRef && hasLocalBaseRef) {
         remoteTrackingBase = null
       } else {
@@ -27167,9 +27228,27 @@ export class OrcaRuntimeService {
       ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
     }
     const defaultAddWorktreeOption = addProjectGitOptions()
+    const preparedWorktreeOptions = suggestLocalBaseRefUpdate
+      ? addProjectGitOptions({ ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate })
+      : remoteTrackingBaseOption
+        ? addProjectGitOptions(remoteTrackingBaseOption)
+        : defaultAddWorktreeOption
     let addResult: AddWorktreeResult
     try {
+      const preparedResult =
+        sparseDirectories.length === 0 && !checkoutExistingBranch
+          ? await consumePreparedWorktreeCreate({
+              repoPath: repo.path,
+              workspaceRoot,
+              worktreePath,
+              branch: branchName,
+              baseBranch,
+              refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
+              ...(preparedWorktreeOptions ? { options: preparedWorktreeOptions } : {})
+            })
+          : null
       addResult =
+        preparedResult ??
         (await (sparseDirectories.length > 0
           ? checkoutExistingBranch
             ? addSparseWorktree(
@@ -27265,7 +27344,8 @@ export class OrcaRuntimeService {
                       branchName,
                       baseBranch,
                       settings.refreshLocalBaseRefOnWorktreeCreate
-                    ))) ?? {}
+                    ))) ??
+        {}
     } catch (error) {
       if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
         await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
@@ -27288,14 +27368,12 @@ export class OrcaRuntimeService {
       )
     }
 
-    const gitWorktrees = hasLocalWorktreeGitOptions
-      ? await listWorktrees(repo.path, localWorktreeGitOptions)
-      : await listWorktrees(repo.path)
-    // Why: Git may canonicalize a symlinked create path; its exact branch identifies the listed row.
-    const created = findCreatedWorktree(gitWorktrees, worktreePath, branchName)
-    if (!created) {
-      throw new Error('Worktree created but not found in listing')
-    }
+    const { created } = await resolveCreatedWorktree(
+      repo.path,
+      worktreePath,
+      branchName,
+      hasLocalWorktreeGitOptions ? localWorktreeGitOptions : undefined
+    )
 
     const worktreeId = `${repo.id}::${created.path}`
     const now = Date.now()
@@ -27385,22 +27463,18 @@ export class OrcaRuntimeService {
       await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
     }
 
-    // Why: project-level `orca.yaml` shared directories add to (never replace) the
-    // per-user setting, so a repo's shared dirs reach every teammate (issue #10451).
-    const sharedDirectories = await resolveWorktreeSharedDirectories(
-      repo.path,
-      localWorktreeGitOptions
-    )
+    // Why: these discoveries are read-only; overlap them, but keep the
+    // shared-path mutation ahead of include copies below.
+    const [sharedDirectories, worktreeIncludePaths] = await Promise.all([
+      resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions),
+      resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+    ])
     if (sharedDirectories.length > 0) {
       await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
     }
 
     // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
     // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
-    const worktreeIncludePaths = await resolveWorktreeIncludePaths(
-      repo.path,
-      localWorktreeGitOptions
-    )
     let includeCopyWarning: string | undefined
     if (worktreeIncludePaths.length > 0) {
       const skippedIncludePaths = await createWorktreeCopiedPaths(
@@ -33877,6 +33951,8 @@ export class OrcaRuntimeService {
         }
       }
     } else if (selector.startsWith('path:')) {
+      // Why exact-spelling-only (#16628): a Linux path names a directory in *some* WSL distro, and
+      // only the CLI sits in one and can prove which. Guessing here would delete a stranger's.
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
@@ -36371,31 +36447,32 @@ export class OrcaRuntimeService {
       const launchAgent = tab.launchAgent ?? null
       const launchOwnerAgent = launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
       // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
+      const ownerRecord = resolvePaneAgentOwnerRecord({
+        launchAgent: launchOwnerAgent,
+        hookAgent:
+          tab.agentStatus?.agentType ??
+          hookAgentStatus?.agentType ??
+          retainedAgentStatus?.payload.agentType ??
+          null
+      })
       const ownerAgent =
-        resolvePaneAgentOwner({
-          launchAgent: launchOwnerAgent,
-          hookAgent:
-            tab.agentStatus?.agentType ??
-            hookAgentStatus?.agentType ??
-            retainedAgentStatus?.payload.agentType ??
-            null
-        }) ??
-        liveLeafPty?.foregroundAgent ??
-        pty?.foregroundAgent ??
-        null
+        ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
+      const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
       const title = normalizeCompatibleAgentTitleForOwner(
         trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
-        ownerAgent
+        ownerAgent,
+        ownerOptions
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
       // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
       const rendererStatusAgent =
-        resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent) ??
+        resolveCompatibleAgentTypeForOwner(tab.agentStatus?.agentType, ownerAgent, ownerOptions) ??
         ownerAgent ??
         undefined
       const hookSessionAgent = resolveCompatibleAgentTypeForOwner(
         hookAgentStatus?.providerSessionAgentType,
-        ownerAgent
+        ownerAgent,
+        ownerOptions
       )
       const hookSessionMatchesRenderer =
         !rendererStatusAgent || !hookSessionAgent || rendererStatusAgent === hookSessionAgent
@@ -36414,7 +36491,8 @@ export class OrcaRuntimeService {
                 ...tab.agentStatus,
                 ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
               },
-              ownerAgent
+              ownerAgent,
+              ownerOptions
             )
           : null,
         statusPty,
@@ -36719,16 +36797,16 @@ export class OrcaRuntimeService {
       }
     }
     // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
-    const ownerAgent =
-      resolvePaneAgentOwner({
-        launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
-        hookAgent: retained?.payload.agentType ?? hookRow.agentType
-      }) ??
-      pty?.foregroundAgent ??
-      null
+    const ownerRecord = resolvePaneAgentOwnerRecord({
+      launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
+      hookAgent: retained?.payload.agentType ?? hookRow.agentType
+    })
+    const ownerAgent = ownerRecord?.agent ?? pty?.foregroundAgent ?? null
+    const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
     const terminalTitle = normalizeCompatibleAgentTitleForOwner(
       trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
-      ownerAgent
+      ownerAgent,
+      ownerOptions
     )
     // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
     const liveRow = retained ?? this.resolveHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
@@ -36748,7 +36826,8 @@ export class OrcaRuntimeService {
           terminalTitle,
           ...providerSession
         },
-        ownerAgent
+        ownerAgent,
+        ownerOptions
       )
       // A live question outranks only the shell title that currently obscures it.
       const renewedStatus = this.renewMobileAgentStatusFromPtyTitle(liveStatus, pty, {
@@ -40848,6 +40927,11 @@ export class OrcaRuntimeService {
     return listJiraAssignableUsers(key, query, siteId)
   }
 
+  /** Searches all users on the site, for reporter and user-picker create fields. */
+  jiraSearchUsers(query?: string, siteId?: string): ReturnType<typeof searchJiraUsers> {
+    return searchJiraUsers(query, siteId)
+  }
+
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
     return listJiraTransitions(key, siteId)
   }
@@ -41281,6 +41365,9 @@ export class OrcaRuntimeService {
 
   browserTabCreate: RuntimeBrowserCommands['browserTabCreate'] =
     this.browserCommands.browserTabCreate.bind(this.browserCommands)
+
+  browserOpenUrlOnClient: RuntimeBrowserCommands['browserOpenUrlOnClient'] =
+    this.browserCommands.browserOpenUrlOnClient.bind(this.browserCommands)
 
   browserTabSetProfile: RuntimeBrowserCommands['browserTabSetProfile'] =
     this.browserCommands.browserTabSetProfile.bind(this.browserCommands)

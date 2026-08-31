@@ -1,6 +1,9 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { isForkDesktopVersion } from '../shared/release-channel'
+import {
+  createPrereleaseFeedMockFactory,
+  type PrereleaseFeedMockFactory
+} from './updater-prerelease-feed-test-harness'
 
 /** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
@@ -52,18 +55,7 @@ type UpdaterModuleFactories = {
     armUpdateInstallExitWatchdog: UpdaterSpy
     disarmUpdateInstallExitWatchdog: UpdaterSpy
   }
-  updaterPrereleaseFeed: () => {
-    fetchNewerReleaseTagsWithReadiness: (...args: unknown[]) => Promise<unknown>
-    fetchNewerForkDesktopReleaseTag: (...args: unknown[]) => Promise<unknown>
-    getReleaseDownloadUrl: (tag: string) => string
-    getReleaseDownloadUrlForFeed: (
-      feed: { releaseDownloadBase?: string } | null | undefined,
-      tag: string
-    ) => string
-    selectReleaseFeed: (currentVersion: string) => unknown
-    STABLYAI_RELEASE_FEED: unknown
-    KARLORZ_FORK_RELEASE_FEED: unknown
-  }
+  updaterPrereleaseFeed: () => PrereleaseFeedMockFactory
   localBuildSwitch: () => { chooseLocalBuild: UpdaterSpy }
   localBuildFeedServer: () => { startLocalBuildFeed: UpdaterSpy }
 }
@@ -132,7 +124,35 @@ export function createUpdaterMocks(): UpdaterMocks {
     }
   }
 
+  // Why: `vi.resetModules()` abandons the previous test's `updater` module instance but cannot cancel
+  // the real timers it armed (1s silent-settle, 45s stall, 24h auto-check). Those fire during a later
+  // test — re-arming on that test's fake clock — and drove these shared spies, so a stale instance
+  // could land an extra `checkForUpdates()` inside the window under assertion.
+  let currentGeneration = 0
+
+  /**
+   * Hands each `updater` module instance an autoUpdater view stamped with the generation that loaded
+   * it. Once `resetUpdaterMocks` bumps the generation, the abandoned instance's calls and property
+   * writes are dropped instead of reaching the spies the running test asserts on.
+   */
+  const loadGenerationScopedAutoUpdater = (): AutoUpdaterMock => {
+    const loadedGeneration = currentGeneration
+    return new Proxy(autoUpdaterMock, {
+      get(target, property) {
+        const value = Reflect.get(target, property)
+        if (loadedGeneration === currentGeneration || typeof value !== 'function') {
+          return value
+        }
+        return () => undefined
+      },
+      set(target, property, value) {
+        return loadedGeneration === currentGeneration ? Reflect.set(target, property, value) : true
+      }
+    }) as AutoUpdaterMock
+  }
+
   const reset = () => {
+    currentGeneration += 1
     appEventHandlers.clear()
     appOn.mockClear()
     eventHandlers.clear()
@@ -208,7 +228,7 @@ export function createUpdaterMocks(): UpdaterMocks {
       net: { fetch: vi.fn() }
     }),
     electronUpdater: () => ({ autoUpdater: autoUpdaterMock }),
-    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }),
+    electronUpdaterLoader: () => ({ loadElectronAutoUpdater: loadGenerationScopedAutoUpdater }),
     electronToolkitUtils: () => ({ is: isMock }),
     ipcPty: () => ({ killAllPty: killAllPtyMock }),
     // Why: only the marker resolver is faked so the real artifact capture/redaction path stays under test.
@@ -220,46 +240,15 @@ export function createUpdaterMocks(): UpdaterMocks {
       armUpdateInstallExitWatchdog: armExitWatchdogMock,
       disarmUpdateInstallExitWatchdog: disarmExitWatchdogMock
     }),
-    updaterPrereleaseFeed: () => {
-      const STABLYAI_RELEASE_FEED = {
-        repoAtomUrl: 'https://github.com/stablyai/orca/releases.atom',
-        releaseDownloadBase: 'https://github.com/stablyai/orca/releases/download',
-        tagHrefPattern: /href="https:\/\/github\.com\/stablyai\/orca\/releases\/tag\/([^"]+)"/,
-        desktopTagPattern: /^v?\d+\.\d+\.\d+(?:-rc\.\d+(?:\.perf)?)?$/
-      }
-      const KARLORZ_FORK_RELEASE_FEED = {
-        repoAtomUrl: 'https://github.com/karlorz/orca/releases.atom',
-        releaseDownloadBase: 'https://github.com/karlorz/orca/releases/download',
-        tagHrefPattern: /href="https:\/\/github\.com\/karlorz\/orca\/releases\/tag\/([^"]+)"/,
-        desktopTagPattern: /^v\d+\.\d+\.\d+-\d+$/
-      }
-      return {
-        STABLYAI_RELEASE_FEED,
-        KARLORZ_FORK_RELEASE_FEED,
-        selectReleaseFeed: (currentVersion: string) =>
-          isForkDesktopVersion(currentVersion) ? KARLORZ_FORK_RELEASE_FEED : STABLYAI_RELEASE_FEED,
-        fetchNewerReleaseTagsWithReadiness: async (...args: unknown[]) => {
-          const result = await fetchNewerReleaseTagsMock(...args)
-          return Array.isArray(result)
-            ? { tags: result, state: result.length > 0 ? 'ready' : 'no-newer' }
-            : result
-        },
-        fetchNewerForkDesktopReleaseTag: vi.fn(async () => null),
-        getReleaseDownloadUrl: (tag: string) =>
-          `https://github.com/stablyai/orca/releases/download/${tag}`,
-        getReleaseDownloadUrlForFeed: (
-          feed: { releaseDownloadBase?: string } | null | undefined,
-          tag: string
-        ) =>
-          `${(feed as { releaseDownloadBase?: string })?.releaseDownloadBase ?? 'https://github.com/stablyai/orca/releases/download'}/${tag}`
-      }
-    },
+    updaterPrereleaseFeed: () => createPrereleaseFeedMockFactory(fetchNewerReleaseTagsMock),
     localBuildSwitch: () => ({ chooseLocalBuild: chooseLocalBuildMock }),
     localBuildFeedServer: () => ({ startLocalBuildFeed: startLocalBuildFeedMock })
   }
 
   /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
   const resetUpdaterMocks = () => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()
@@ -287,7 +276,6 @@ export function createUpdaterMocks(): UpdaterMocks {
       close: closeLocalBuildFeedMock
     })
     vi.unstubAllGlobals()
-    vi.useRealTimers()
   }
 
   return {

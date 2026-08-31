@@ -1,11 +1,11 @@
 import { net } from 'electron'
-import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 import {
   KARLORZ_FORK_RELEASE_FEED,
   STABLYAI_RELEASE_FEED,
   type ReleaseFeedConfig
 } from './updater-release-feeds'
+import { getPlatformManifestReadiness } from './updater-manifest-readiness'
 
 export type { ReleaseFeedConfig } from './updater-release-feeds'
 export {
@@ -13,42 +13,10 @@ export {
   STABLYAI_RELEASE_FEED,
   selectReleaseFeed
 } from './updater-release-feeds'
+export { getReleaseDownloadUrl, getReleaseDownloadUrlForFeed } from './updater-manifest-readiness'
 
 const FETCH_TIMEOUT_MS = 5000
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
-
-export function getReleaseDownloadUrlForFeed(feed: ReleaseFeedConfig, tag: string): string {
-  return `${feed.releaseDownloadBase}/${encodeURIComponent(tag)}`
-}
-
-export function getReleaseDownloadUrl(tag: string): string {
-  return getReleaseDownloadUrlForFeed(STABLYAI_RELEASE_FEED, tag)
-}
-
-function getPlatformManifestName(): string {
-  if (process.platform === 'darwin') {
-    return 'latest-mac.yml'
-  }
-  if (process.platform === 'linux') {
-    return 'latest-linux.yml'
-  }
-  return 'latest.yml'
-}
-
-function getReleaseManifestUrl(
-  tag: string,
-  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
-): string {
-  return `${getReleaseDownloadUrlForFeed(feed, tag)}/${getPlatformManifestName()}`
-}
-
-function getReleaseAssetUrl(
-  tag: string,
-  assetName: string,
-  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
-): string {
-  return `${getReleaseDownloadUrlForFeed(feed, tag)}/${encodeURIComponent(assetName)}`
-}
 
 export function normalizeTagToVersion(tag: string): string {
   return tag.replace(/^v/i, '')
@@ -100,109 +68,6 @@ async function fetchReleaseFeedTags(
     return tags
   } catch {
     return null
-  }
-}
-
-type ManifestAssetEntry = {
-  url?: unknown
-  path?: unknown
-}
-
-function getManifestAssetNames(manifestText: string): string[] {
-  const parsed = parse(manifestText) as {
-    files?: ManifestAssetEntry[]
-    path?: unknown
-  } | null
-
-  const names = new Set<string>()
-  for (const file of Array.isArray(parsed?.files) ? parsed.files : []) {
-    const value = typeof file.url === 'string' ? file.url : file.path
-    if (typeof value === 'string' && value.trim()) {
-      names.add(value.trim())
-    }
-  }
-  if (typeof parsed?.path === 'string' && parsed.path.trim()) {
-    names.add(parsed.path.trim())
-  }
-  return [...names]
-}
-
-function getManifestVersion(manifestText: string): string | null {
-  try {
-    const parsed = parse(manifestText) as { version?: unknown } | null
-    if (typeof parsed?.version === 'string' && parsed.version.trim()) {
-      return parsed.version.trim()
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
-
-type ManifestReadinessResult = {
-  readiness: ReleaseReadiness
-  manifestVersion?: string | null
-}
-
-async function isReleaseAssetAvailable(
-  tag: string,
-  assetName: string,
-  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
-): Promise<ReleaseReadiness> {
-  try {
-    const assetUrl = assetName.startsWith('http')
-      ? assetName
-      : getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName, feed)
-    const res = await net.fetch(assetUrl, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    })
-    return res.status === 404 ? 'not-ready' : res.ok ? 'ready' : 'unavailable'
-  } catch {
-    return 'unavailable'
-  }
-}
-
-async function getPlatformManifestReadiness(
-  tag: string,
-  feed: ReleaseFeedConfig = STABLYAI_RELEASE_FEED
-): Promise<ManifestReadinessResult> {
-  try {
-    // Why: cancelled/draft releases can appear in GitHub's atom feed before
-    // they have updater manifests or the ZIP/exe/AppImage assets referenced by
-    // those manifests. Pinning to those tags makes download clicks 404.
-    const manifestUrl = getReleaseManifestUrl(tag, feed)
-    const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-    if (res.status === 404) {
-      return { readiness: 'not-ready' }
-    }
-    if (!res.ok) {
-      return { readiness: 'unavailable' }
-    }
-    const manifestText = await res.text()
-    const manifestVersion = getManifestVersion(manifestText)
-    let assetNames: string[]
-    try {
-      assetNames = getManifestAssetNames(manifestText)
-    } catch {
-      return { readiness: 'not-ready', manifestVersion }
-    }
-    if (assetNames.length === 0) {
-      return { readiness: 'not-ready', manifestVersion }
-    }
-    const assetResults = await Promise.all(
-      assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName, feed))
-    )
-    const readiness = assetResults.includes('not-ready')
-      ? 'not-ready'
-      : assetResults.includes('unavailable')
-        ? 'unavailable'
-        : 'ready'
-    return { readiness, manifestVersion }
-  } catch {
-    return { readiness: 'unavailable' }
   }
 }
 

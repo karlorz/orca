@@ -26,6 +26,7 @@ import {
   fetchMobileHomeStats,
   fetchMobileHomeTaskProviders
 } from './mobile-home-host-requests'
+import { projectHomeHostConnections } from './home-host-connection-projection'
 import { sortByLastConnected } from './sort-by-last-connected'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
@@ -168,14 +169,9 @@ export function useMobileHomeData() {
   const primaryTaskProviders = primaryHost
     ? (taskProvidersByHost[primaryHost.id] ?? ['github'])
     : []
-  const hostPaths = Object.fromEntries(
-    connections.allClients.map(({ hostId, path }) => [hostId, path])
-  )
-  const hostPendingPaths = Object.fromEntries(
-    connections.allClients.map(({ hostId, pendingPath }) => [hostId, pendingPath])
-  )
-  const hostPairingRejected = Object.fromEntries(
-    connections.allClients.map(({ hostId, pairingRejected }) => [hostId, pairingRejected])
+  const hostConnectionProjection = useMemo(
+    () => projectHomeHostConnections(connections.allClients),
+    [connections.allClients]
   )
 
   return {
@@ -183,9 +179,9 @@ export function useMobileHomeData() {
     accountsHosts,
     connectedHosts,
     hostCatalog,
-    hostPairingRejected,
-    hostPaths,
-    hostPendingPaths,
+    hostPairingRejected: hostConnectionProjection.hostPairingRejected,
+    hostPaths: hostConnectionProjection.hostPaths,
+    hostPendingPaths: hostConnectionProjection.hostPendingPaths,
     primaryHost,
     primaryTaskProviders,
     resumeCard,
