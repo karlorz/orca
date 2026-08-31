@@ -319,6 +319,18 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       assertOpen(ctx)
       const now = options?.now ?? Date.now()
       const maxBatch = options?.maxBatchSize ?? 1000
+      const keepSessionIds = new Set<string>()
+      if (ctx.account) {
+        for (const record of ctx.refreshTokensByHash.values()) {
+          if (
+            record.revokedAt === undefined &&
+            (record.expiresAt === null || record.expiresAt > now) &&
+            record.authEpoch === ctx.account.authEpoch
+          ) {
+            keepSessionIds.add(record.sessionId)
+          }
+        }
+      }
       return cleanupExpiredRecords(
         {
           byId: ctx.sessionsById,
@@ -328,7 +340,8 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
         ctx.devicesByKey,
         ctx.account,
         maxBatch,
-        now
+        now,
+        keepSessionIds
       )
     },
 

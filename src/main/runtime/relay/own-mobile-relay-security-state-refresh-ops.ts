@@ -77,7 +77,8 @@ export function lookupRefreshTokenMemory(
     return null
   }
   const session = ctx.sessionsById.get(record.sessionId)
-  if (!session || !isSessionValid(session, ctx.account, now)) {
+  // Session must exist, not be revoked, and match auth epoch (access wall-clock expiry ignored for refresh)
+  if (!session || session.revokedAt !== undefined || session.authEpoch !== ctx.account.authEpoch) {
     return null
   }
   return {
@@ -104,7 +105,8 @@ export function rotateRefreshTokenMemory(
   }
 
   const oldSession = ctx.sessionsById.get(oldRefreshRecord.sessionId)
-  if (!oldSession || !isSessionValid(oldSession, ctx.account, now)) {
+  // Session must exist, not be revoked, and match auth epoch (access wall-clock expiry ignored for refresh rotation)
+  if (!oldSession || oldSession.revokedAt !== undefined || oldSession.authEpoch !== ctx.account.authEpoch) {
     return null
   }
 

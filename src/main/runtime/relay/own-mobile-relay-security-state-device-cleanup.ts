@@ -65,7 +65,8 @@ export function cleanupExpiredRecords(
   devices: Map<string, InternalDeviceRecord>,
   account: InternalAccountRecord | null,
   maxBatch: number,
-  now: number
+  now: number,
+  keepSessionIds?: ReadonlySet<string>
 ): SecurityStateCleanupResult {
   let expiredSessionsDeleted = 0
   let expiredGrantsDeleted = 0
@@ -77,7 +78,7 @@ export function cleanupExpiredRecords(
     if (totalDeleted >= maxBatch) {
       break
     }
-    if (!isSessionValid(session, account, now)) {
+    if (!isSessionValid(session, account, now) && !keepSessionIds?.has(sessionId)) {
       sessions.byId.delete(sessionId)
       sessions.byAccess.delete(session.accessTokenHash)
       expiredSessionsDeleted += 1

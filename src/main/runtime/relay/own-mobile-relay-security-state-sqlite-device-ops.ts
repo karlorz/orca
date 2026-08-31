@@ -258,12 +258,17 @@ export function executeCleanupExpiredSqlite(
         db
           .prepare(`
             SELECT session_id FROM access_sessions
-            WHERE revoked_at IS NOT NULL
+            WHERE (revoked_at IS NOT NULL
                OR expires_at <= ?
-               OR auth_epoch != ?
+               OR auth_epoch != ?)
+              AND session_id NOT IN (
+                SELECT session_id FROM refresh_tokens
+                WHERE revoked_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > ?)
+              )
             LIMIT ?
           `)
-          .all(now, currentEpoch, remainingBudget) as { session_id: string }[]
+          .all(now, currentEpoch, now, remainingBudget) as { session_id: string }[]
       ).map((r) => r.session_id)
 
       if (expiredSessionIds.length > 0) {

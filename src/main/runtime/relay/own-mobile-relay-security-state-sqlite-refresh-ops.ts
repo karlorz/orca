@@ -88,10 +88,9 @@ export function executeLookupRefreshTokenSqlite(
         AND (r.expires_at IS NULL OR r.expires_at > ?)
         AND r.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
-        AND s.expires_at > ?
         AND s.auth_epoch = a.auth_epoch
     `)
-    .get(hash, now, now) as { token_hash: string; session_id: string; expires_at: number | null; cloud_profile_id: string } | undefined
+    .get(hash, now) as { token_hash: string; session_id: string; expires_at: number | null; cloud_profile_id: string } | undefined
 
   if (!row) {
     return null
@@ -143,10 +142,9 @@ export function executeRotateRefreshTokenSqlite(
         FROM access_sessions
         WHERE session_id = ?
           AND revoked_at IS NULL
-          AND expires_at > ?
           AND auth_epoch = ?
       `)
-      .get(oldRefresh.session_id, now, acc.auth_epoch) as SqliteSessionRow | undefined
+      .get(oldRefresh.session_id, acc.auth_epoch) as SqliteSessionRow | undefined
 
     if (!oldSession) {
       db.exec('ROLLBACK;')
