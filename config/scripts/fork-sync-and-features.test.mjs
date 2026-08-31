@@ -58,6 +58,26 @@ describe('fork-sync-main workflow', () => {
     expect(mobileCutStep.run).toContain('--auto')
     expect(mobileCutStep.run).not.toContain('--write')
   })
+
+  it('files a wiki own-relay follow-up from the captured merge SHA', () => {
+    const workflow = parse(readFileSync(workflowPath, 'utf8'))
+    const mergeJob = workflow.jobs['sync-fork-main']
+    expect(mergeJob.outputs.before).toBe('${{ steps.merge_fork_main.outputs.before }}')
+    expect(mergeJob.outputs.after).toBe('${{ steps.merge_fork_main.outputs.after }}')
+    expect(mergeJob.outputs.pushed).toBe('${{ steps.merge_fork_main.outputs.pushed }}')
+    const mergeStep = mergeJob.steps.find((step) => step.id === 'merge_fork_main')
+    expect(mergeStep).toBeTruthy()
+
+    const follow = workflow.jobs['own-relay-followup']
+    expect(follow.needs).toBe('sync-fork-main')
+    expect(follow.if).toContain("needs.sync-fork-main.outputs.pushed == 'true'")
+    const blob = JSON.stringify(follow)
+    expect(blob).toContain('fork-own-relay-followup.mjs')
+    expect(blob).toContain('WIKI_FOLLOWUP_TOKEN')
+    expect(blob).not.toContain('FORK_SYNC_TOKEN')
+    expect(blob).toContain('needs.sync-fork-main.outputs.after')
+    expect(blob).toContain('needs.sync-fork-main.outputs.before')
+  })
 })
 
 describe('fork-features registry', () => {

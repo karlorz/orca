@@ -1,5 +1,9 @@
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  appendGitHubOutput,
   assertSafePushRemoteUrl,
   buildForkMainSyncPlan,
   isAutoResolvableSyncConflict,
@@ -59,6 +63,16 @@ describe('fork-sync-fork-main helper', () => {
       'RECORD_AUDIO',
       'android.permission.POST_NOTIFICATIONS'
     ])
+  })
+
+  it('appends merge SHAs to GITHUB_OUTPUT for later follow-up detection', () => {
+    const outputPath = join(mkdtempSync(join(tmpdir(), 'gha-out-')), 'github_output')
+    appendGitHubOutput(outputPath, {
+      before: 'aaa',
+      after: 'bbb',
+      pushed: 'true'
+    })
+    expect(readFileSync(outputPath, 'utf8')).toBe('before=aaa\nafter=bbb\npushed=true\n')
   })
 
   it('uses the published train base even when ours still lags', () => {

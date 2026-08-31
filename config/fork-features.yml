@@ -158,3 +158,14 @@ features:
     paths:
       - mobile/src/pet-speak
     wiki: projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings
+
+  - id: fork-sync-own-relay-followup
+    title: Fork-sync files wiki follow-ups when own-mobile-relay protocol/client paths change
+    kind: ci
+    status: in-progress
+    paths:
+      - config/fork-own-relay-protocol-paths.yml
+      - config/scripts/fork-own-relay-protocol-paths.mjs
+      - config/scripts/fork-own-relay-followup.mjs
+      - .github/workflows/fork-sync-main.yml
+    wiki: projects/orca/work/2026-08-31-fork-sync-own-relay-followup

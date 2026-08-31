@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { appendFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { loadUpstreamReleases, selectLatestTrains } from './fork-upstream-trains.mjs'
@@ -55,6 +55,16 @@ function git(args, options = {}) {
     throw new Error(`git ${args.join(' ')} failed${detail ? `: ${detail}` : ''}`)
   }
   return (result.stdout ?? '').trim()
+}
+
+export function appendGitHubOutput(outputPath, values) {
+  if (!outputPath) {
+    return
+  }
+  const body = Object.entries(values)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n')
+  appendFileSync(outputPath, `${body}\n`)
 }
 
 export function isAutoResolvableSyncConflict(unmergedPaths) {
@@ -123,7 +133,9 @@ export function syncForkMainFromUpstream({ cwd, write = false } = {}) {
   if (before !== after) {
     git(['push', pushRemote, `HEAD:${plan.workingBranch}`], { cwd })
   }
-  return { ...plan, pushRemote, wrote: true, before, after, pushed: before !== after }
+  const pushed = before !== after
+  appendGitHubOutput(process.env.GITHUB_OUTPUT, { before, after, pushed: String(pushed) })
+  return { ...plan, pushRemote, wrote: true, before, after, pushed }
 }
 
 const invokedDirectly =

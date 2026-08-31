@@ -65,6 +65,10 @@ jobs:
     if: github.repository == 'karlorz/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      before: ${{ steps.merge_fork_main.outputs.before }}
+      after: ${{ steps.merge_fork_main.outputs.after }}
+      pushed: ${{ steps.merge_fork_main.outputs.pushed }}
     steps:
       - name: Checkout fork-main
         uses: actions/checkout@v6
@@ -74,6 +78,7 @@ jobs:
           token: ${{ secrets.FORK_SYNC_TOKEN }}
 
       - name: Merge stablyai/orca main into fork-main
+        id: merge_fork_main
         env:
           GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
         run: |
@@ -106,3 +111,73 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
         run: node config/scripts/fork-upstream-trains.mjs
+
+  own-relay-followup:
+    needs: sync-fork-main
+    if: "github.repository == 'karlorz/orca' && needs.sync-fork-main.outputs.pushed == 'true'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout merge SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.sync-fork-main.outputs.after }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect own-relay protocol hits
+        id: detect
+        run: |
+          set -euo pipefail
+          node config/scripts/fork-own-relay-followup.mjs \
+            --before '${{ needs.sync-fork-main.outputs.before }}' \
+            --after '${{ needs.sync-fork-main.outputs.after }}' | tee /tmp/own-relay-detect.txt
+          if grep -Eq '^(noop|no-allowlist-hit)$' /tmp/own-relay-detect.txt; then
+            echo 'matched=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matched=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout wiki
+        if: steps.detect.outputs.matched == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: karlorz/wiki
+          token: ${{ secrets.WIKI_FOLLOWUP_TOKEN }}
+          path: wiki
+          fetch-depth: 1
+
+      - name: File wiki follow-up
+        if: steps.detect.outputs.matched == 'true'
+        env:
+          WIKI_FOLLOWUP_TOKEN: ${{ secrets.WIKI_FOLLOWUP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${WIKI_FOLLOWUP_TOKEN}" ]]; then
+            echo "Missing WIKI_FOLLOWUP_TOKEN (fine-grained PAT: karlorz/wiki Contents read/write)." >&2
+            exit 1
+          fi
+          node config/scripts/fork-own-relay-followup.mjs \
+            --before '${{ needs.sync-fork-main.outputs.before }}' \
+            --after '${{ needs.sync-fork-main.outputs.after }}' \
+            --wiki "$GITHUB_WORKSPACE/wiki" \
+            --write
+          cd "$GITHUB_WORKSPACE/wiki"
+          git config user.name 'fork-sync'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add raw/transcripts projects/orca/work
+          if git diff --cached --quiet; then
+            echo 'wiki already had follow-up'
+            exit 0
+          fi
+          git commit -m "chore(orca): own-relay follow-up ${{ needs.sync-fork-main.outputs.after }}"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort || true
+            sleep $((attempt * 2))
+          done
+          echo 'wiki push failed after retries' >&2
+          exit 1

@@ -1,0 +1,40 @@
+# Own-mobile-relay protocol/client paths. Fork-sync files a wiki follow-up
+# when a merge into fork-main touches these. Rooted globs only — never bare *relay*.
+# own-mobile-relay-* is the sg01 server (follow-up *target*), not a trigger.
+
+include:
+  - src/main/runtime/relay/**
+  - src/main/runtime/rpc/relay-transport.ts
+  - src/main/runtime/rpc/relay-transport.test.ts
+  - src/main/runtime/rpc/e2ee-crypto.ts
+  - src/main/runtime/rpc/e2ee-crypto.test.ts
+  - src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts
+  - src/shared/mobile-relay-*
+  - src/shared/mobile-e2ee-v2-*
+  - src/shared/relay-retry-after-header.ts
+  - src/main/orca-profiles/profile-cloud-pkce.ts
+  - src/main/orca-profiles/profile-cloud-pkce.test.ts
+  - src/main/orca-profiles/profile-cloud-auth-config.ts
+  - src/main/orca-profiles/profile-cloud-auth-config.test.ts
+  - src/main/orca-profiles/profile-cloud-client.ts
+  - src/main/orca-profiles/profile-cloud-client.test.ts
+  - src/main/orca-profiles/profile-cloud-session-exchange.ts
+  - src/main/orca-profiles/profile-cloud-session-refresh.ts
+  - src/main/orca-profiles/profile-cloud-session-refresh.test.ts
+  - src/main/orca-profiles/profile-cloud-session-store.ts
+  - src/main/orca-profiles/profile-cloud-session-store.test.ts
+  - src/main/orca-profiles/profile-cloud-capability-refresh.ts
+  - src/main/orca-profiles/profile-cloud-callback-page.ts
+  - mobile/src/transport/mobile-relay-*
+  - mobile/src/transport/mobile-e2ee-v2-*
+  - mobile/src/transport/pre-profile-pairing-coordinator.ts
+  - mobile/src/transport/pairing-relay-candidate.ts
+
+exclude:
+  - '**/own-mobile-relay-*'
+  - src/relay/**
+  - src/shared/agent-hook-relay.ts
+  - src/shared/wsl-hook-relay-contract.ts
+  - src/shared/relay-frame-decoder.ts
+  - src/shared/relay-frame-decoder-contract.ts
+  - src/shared/relay-frame-buffer.ts
