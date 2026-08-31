@@ -4,6 +4,7 @@ import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
 import { RelayControlClient } from './relay-control-client'
 import { loginAndObtainSessionToken, TEST_OPERATOR } from './own-mobile-relay-test-auth'
+import { createOwnMobileRelaySecurityStateMemory } from './own-mobile-relay-security-state-memory'
 import type { E2EEKeypair } from '../e2ee-keypair'
 
 describe('own mobile relay host-control', () => {
@@ -82,6 +83,155 @@ describe('own mobile relay host-control', () => {
       expect(ack.controlResumeSecret).toMatch(/^[A-Za-z0-9_-]{43}$/)
       expect(client.isLive()).toBe(true)
       client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('accepts valid auth-refresh and updates grant validation', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const securityState = createOwnMobileRelaySecurityStateMemory()
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      securityState
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes1 = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken: relayToken1 } = (await tokenRes1.json()) as { relayToken: string }
+
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken1,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      const ack = await client.connect()
+      // Ack leaseExpiresAt should match the 24-hour lease constant (approx Date.now() + 24*60*60*1000)
+      expect(ack.leaseExpiresAt).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000)
+
+      // Mint token 2
+      const tokenRes2 = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken: relayToken2 } = (await tokenRes2.json()) as { relayToken: string }
+
+      // Send auth-refresh with replacement token
+      client.refreshAuthorization(relayToken2)
+
+      // Wait a moment for server to process auth-refresh
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(client.isLive()).toBe(true)
+
+      // Old grant should now be revoked in securityState
+      const oldGrantValid = await securityState.validateRelayGrantByToken(relayToken1)
+      expect(oldGrantValid).toBeNull()
+
+      // New grant should still be valid
+      const newGrantValid = await securityState.validateRelayGrantByToken(relayToken2)
+      expect(newGrantValid).not.toBeNull()
+
+      client.closeNow()
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('fails-closed on auth-refresh with invalid or mismatched token', async () => {
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1'
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const onClose = vi.fn()
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose
+      })
+
+      await client.connect()
+      expect(client.isLive()).toBe(true)
+
+      // Send auth-refresh with invalid token
+      client.refreshAuthorization('bogus-invalid-token')
+
+      await vi.waitFor(() => expect(client.isLive()).toBe(false))
+      expect(onClose).toHaveBeenCalledWith(4401)
     } finally {
       await server.close()
     }

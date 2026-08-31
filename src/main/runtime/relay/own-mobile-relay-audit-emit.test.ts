@@ -183,6 +183,181 @@ describe('OwnMobileRelay Audit Emission Slice 5', () => {
     }
   })
 
+  it('owner edge: replacement active control does not emit duplicate up, retired close does not emit down, current owner close emits down with code/reason', async () => {
+    const auditLog = createOwnMobileRelayAuditMemory()
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      auditLog
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const client1 = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      await client1.connect()
+      expect(client1.isLive()).toBe(true)
+
+      const upEvents1 = await auditLog.list({ type: 'host.control.up' })
+      expect(upEvents1.length).toBe(1)
+
+      // Connect client2 (simulating replacement control on rebind/reconnect for same host)
+      const client2 = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      await client2.connect()
+      expect(client2.isLive()).toBe(true)
+
+      // Host was already up, replacement active control must not emit another host.control.up
+      const upEvents2 = await auditLog.list({ type: 'host.control.up' })
+      expect(upEvents2.length).toBe(1)
+
+      // Close client1 (retired predecessor). It should NOT emit host.control.down since client2 is current owner
+      client1.closeNow()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const downEvents1 = await auditLog.list({ type: 'host.control.down' })
+      expect(downEvents1.length).toBe(0)
+
+      // Close client2 with specific code/reason or normal close.
+      client2.closeNow()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const downEvents2 = await auditLog.list({ type: 'host.control.down' })
+      expect(downEvents2.length).toBe(1)
+      expect(downEvents2[0]).toMatchObject({
+        type: 'host.control.down',
+        fields: {
+          relayHostId,
+          hostControlLive: false
+        }
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('captures peer websocket close code and reason in host.control.down audit event', async () => {
+    const auditLog = createOwnMobileRelayAuditMemory()
+    const hostKeys = nacl.box.keyPair()
+    const keypair: E2EEKeypair = {
+      publicKey: hostKeys.publicKey,
+      secretKey: hostKeys.secretKey,
+      publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+    }
+    const relayHostId = deriveRelayHostId(hostKeys.publicKey)
+    const identity = {
+      userId: TEST_OPERATOR.userId,
+      profileId: TEST_OPERATOR.profileId,
+      organizationId: TEST_OPERATOR.organizationId
+    }
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      auditLog
+    })
+
+    try {
+      const sessionToken = await loginAndObtainSessionToken(server.origin)
+      const tokenRes = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: keypair.publicKeyB64
+        })
+      })
+      const { relayToken } = (await tokenRes.json()) as { relayToken: string }
+
+      const client = new RelayControlClient({
+        cellUrl: server.origin,
+        relayJwt: relayToken,
+        relayHostId,
+        assignmentEpoch: 1,
+        identity,
+        keypair,
+        appVersion: '0.0.0-test',
+        onConnectionOpen: vi.fn(),
+        onDrain: vi.fn(),
+        onClose: vi.fn()
+      })
+
+      await client.connect()
+
+      // Send raw client close with specific code 4000 and reason 'client_restarting'
+      // Access underlying socket to close with custom code/reason
+      const clientSocket = (client as unknown as { socket: import('ws').WebSocket }).socket
+      clientSocket.close(4000, 'client_restarting')
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const downEvents = await auditLog.list({ type: 'host.control.down' })
+      expect(downEvents.length).toBe(1)
+      expect(downEvents[0]).toMatchObject({
+        type: 'host.control.down',
+        fields: {
+          relayHostId,
+          closeCode: 4000,
+          reason: 'client_restarting',
+          hostControlLive: false
+        }
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
   it('4. Admin HTML POST revoke of a device -> device.revoked (actor: operator)', async () => {
     const auditLog = createOwnMobileRelayAuditMemory()
     const server = await listenOwnMobileRelay({

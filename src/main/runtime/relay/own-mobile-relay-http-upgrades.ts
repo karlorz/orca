@@ -53,11 +53,15 @@ export function registerOwnMobileRelayUpgrades(
           pendingConns: context.router.pendingConns,
           auditLog: context.auditLog,
           onActive: (relayHostId, send) => {
+            const wasRegistered = context.router.activeHosts.has(relayHostId)
             context.router.activeHosts.set(relayHostId, send)
-            void emitAudit(context.auditLog, 'host.control.up', {
-              relayHostId,
-              hostControlLive: true
-            })
+            const hostControlLive = context.router.activeHosts.has(relayHostId)
+            if (!wasRegistered) {
+              void emitAudit(context.auditLog, 'host.control.up', {
+                relayHostId,
+                hostControlLive
+              })
+            }
           },
           onClose: (relayHostId, sender, closeCode, reason) => {
             // Why: only the socket that owns the registration may remove it —
@@ -65,11 +69,12 @@ export function registerOwnMobileRelayUpgrades(
             // knock out a live registration (phone would see 4404).
             if (sender && context.router.activeHosts.get(relayHostId) === sender) {
               context.router.activeHosts.delete(relayHostId)
+              const hostControlLive = context.router.activeHosts.has(relayHostId)
               void emitAudit(context.auditLog, 'host.control.down', {
                 relayHostId,
                 ...(closeCode !== undefined ? { closeCode } : {}),
-                ...(reason !== undefined ? { reason } : {}),
-                hostControlLive: false
+                ...(reason !== undefined && reason !== '' ? { reason } : {}),
+                hostControlLive
               })
             }
           }

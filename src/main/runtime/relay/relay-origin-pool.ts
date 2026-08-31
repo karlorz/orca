@@ -243,9 +243,16 @@ export class RelayOriginPool {
       return
     }
     const now = (this.options.now ?? Date.now)()
+    const remainingMs = origin.controlLeaseExpiresAt - now
+    if (remainingMs <= 0) {
+      this.rotationTimer = null
+      return
+    }
     const random = this.options.random ?? Math.random
-    const earlyMs = 60_000 + Math.floor(random() * 60_001)
-    const delay = Math.max(0, origin.controlLeaseExpiresAt - earlyMs - now)
+    const randomLeadMs = 60_000 + Math.floor(random() * 60_001)
+    const earlyMs = Math.min(randomLeadMs, Math.floor(remainingMs * 0.2))
+    const minDelayMs = 5_000
+    const delay = Math.max(minDelayMs, remainingMs - earlyMs)
     this.rotationTimer = setTimeout(() => void this.rebindActiveControl(origin), delay)
   }
 

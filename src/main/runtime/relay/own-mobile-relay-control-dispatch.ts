@@ -34,6 +34,7 @@ export type OwnMobileRelayControlContext = {
     closeCode?: number,
     reason?: string
   ) => void
+  onGrantRotated?: (newGrant: SecurityStateRelayGrant) => void
 }
 
 export async function handleActiveControlMessage(
@@ -43,6 +44,25 @@ export async function handleActiveControlMessage(
   msg: Record<string, unknown>,
   closeSocket: (code: number, reason?: string) => void
 ): Promise<void> {
+  if (msg.type === 'auth-refresh' && typeof msg.relayJwt === 'string') {
+    const replacementGrant = await options.securityState.validateRelayGrantByToken(msg.relayJwt)
+    if (
+      !replacementGrant ||
+      replacementGrant.relayHostId !== grant.relayHostId ||
+      replacementGrant.hostPublicKeyB64 !== grant.hostPublicKeyB64 ||
+      replacementGrant.identity.userId !== grant.identity.userId ||
+      replacementGrant.identity.profileId !== grant.identity.profileId ||
+      replacementGrant.identity.organizationId !== grant.identity.organizationId
+    ) {
+      closeSocket(4401, 'invalid_auth_refresh')
+      return
+    }
+    const previousGrantId = grant.grantId
+    options.onGrantRotated?.(replacementGrant)
+    await options.securityState.revokeRelayGrantById(previousGrantId)
+    return
+  }
+
   if (msg.type === 'ping' && typeof msg.t === 'number') {
     ws.send(JSON.stringify({ type: 'pong', t: msg.t }))
     return

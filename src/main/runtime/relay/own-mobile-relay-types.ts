@@ -1,5 +1,6 @@
 import type { RawData, WebSocket } from 'ws'
 
+export const OWN_RELAY_CONTROL_LEASE_MS = 24 * 60 * 60 * 1000
 export const RESUME_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 export const GRACE_TOKEN_TTL_MS = 5 * 60 * 1000
 export const INVITE_TOKEN_TTL_MS = 10 * 60 * 1000

@@ -21,6 +21,7 @@ const fakes = vi.hoisted(() => ({
     }
     connect: ReturnType<typeof vi.fn>
     closeNow: ReturnType<typeof vi.fn>
+    refreshAuthorization: ReturnType<typeof vi.fn>
     confirmResume: ReturnType<typeof vi.fn>
     installCredential: ReturnType<typeof vi.fn>
     pendingRequestCount: number
@@ -48,6 +49,7 @@ vi.mock('./relay-control-client', () => ({
     connect = fakes.controlConnect
     closeNow = vi.fn()
     isLive = vi.fn(() => true)
+    refreshAuthorization = vi.fn()
     confirmResume = vi.fn().mockResolvedValue({
       type: 'device-resume-confirmed',
       v: 1,
@@ -310,6 +312,47 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     await vi.waitFor(() => expect(brokerBasisIds(broker)).toEqual(['existing-basis']))
     await broker.confirmResume('existing-basis', 'confirm-1')
     expect(fakes.controls[1]!.confirmResume).toHaveBeenCalledOnce()
+  })
+
+  it('hardens control rotation against short/malformed leases: safe fraction cap and minimum retry delay', async () => {
+    vi.useFakeTimers()
+    try {
+      const shortAck: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 10_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(shortAck)
+      fakes.assign.mockResolvedValue({
+        cellUrl: 'https://relay.example.test',
+        assignmentEpoch: 1,
+        leaseExpiresAt: 10_000
+      })
+
+      const broker = await RelaySessionBroker.connect(brokerOptions({
+        now: () => 0,
+        random: () => 0
+      }))
+
+      // Control rebind should not have been called immediately at t=0
+      expect(fakes.controlConnect).toHaveBeenCalledTimes(1)
+
+      // At t=0, with leaseExpiresAt = 10_000 and old unhardened logic:
+      // earlyMs = 60_000, delay = max(0, 10_000 - 60_000 - 0) = 0!
+      // In the next macrotask / timer tick (e.g. 1ms), the old unhardened pool would immediately call rebind.
+      await vi.advanceTimersByTimeAsync(1)
+      // With proper hardening (safe fraction cap, positive min retry/rotation delay like 5s or min positive delay),
+      // rebind must NOT have been called at t=1ms!
+      expect(fakes.controlConnect).toHaveBeenCalledTimes(1)
+
+      broker.closeNow()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('opens a fresh same-cell generation when process-local rebind state is lost', async () => {

@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
 import { computeRelayHostProofAck, createRelayHostChallenge } from './relay-host-proof'
 import type { SecurityStateRelayGrant } from './own-mobile-relay-security-state'
+import { OWN_RELAY_CONTROL_LEASE_MS } from './own-mobile-relay-types'
 import {
   handleActiveControlMessage,
   type OwnMobileRelayControlContext
@@ -11,15 +12,25 @@ export type { OwnMobileRelayControlContext }
 
 export function handleOwnMobileRelayHostControlSocket(
   ws: WebSocket,
-  grant: SecurityStateRelayGrant,
+  initialGrant: SecurityStateRelayGrant,
   options: OwnMobileRelayControlContext
 ): void {
+  let grant = initialGrant
   let state: 'waiting-hello' | 'waiting-challenge-ack' | 'active' | 'closed' = 'waiting-hello'
   let expectedChallengeId: string | null = null
   let expectedProof: string | null = null
   let silenceTimer: NodeJS.Timeout | null = null
   let pingTimer: NodeJS.Timeout | null = null
   let activeSender: ((msg: object) => void) | null = null
+  let messageQueue: Promise<void> = Promise.resolve()
+
+  const controlContext: OwnMobileRelayControlContext = {
+    ...options,
+    onGrantRotated: (newGrant) => {
+      grant = newGrant
+      options.onGrantRotated?.(newGrant)
+    }
+  }
 
   function resetSilenceWatchdog(): void {
     if (silenceTimer) {
@@ -57,7 +68,7 @@ export function handleOwnMobileRelayHostControlSocket(
     closeSocket(4401, 'socket_error')
   })
 
-  ws.once('close', () => {
+  ws.once('close', (code, reasonBuf) => {
     // Why: a client that disconnected must not let the pending silence
     // watchdog fire later — a phantom close would log noise and, worse,
     // delete a *newer* active registration for the same relayHostId.
@@ -74,7 +85,8 @@ export function handleOwnMobileRelayHostControlSocket(
     if (state !== 'closed') {
       state = 'closed'
       if (wasActive) {
-        options.onClose?.(grant.relayHostId, activeSender ?? undefined, undefined, undefined)
+        const reason = reasonBuf ? reasonBuf.toString('utf8') : undefined
+        options.onClose?.(grant.relayHostId, activeSender ?? undefined, code, reason)
       }
     }
   })
@@ -174,7 +186,7 @@ export function handleOwnMobileRelayHostControlSocket(
 
       state = 'active'
       const controlResumeSecret = randomBytes(32).toString('base64url')
-      const leaseExpiresAt = Date.now() + 60_000
+      const leaseExpiresAt = Date.now() + OWN_RELAY_CONTROL_LEASE_MS
 
       const pingIntervalMs = Math.max(10, Math.floor(options.silenceLimitMs / 3))
       pingTimer = setInterval(async () => {
@@ -223,9 +235,16 @@ export function handleOwnMobileRelayHostControlSocket(
     }
 
     if (state === 'active') {
-      handleActiveControlMessage(ws, grant, options, msg, closeSocket).catch(() => {
-        closeSocket(4401, 'authorization_unavailable')
-      })
+      messageQueue = messageQueue
+        .then(async () => {
+          if (state !== 'active') {
+            return
+          }
+          await handleActiveControlMessage(ws, grant, controlContext, msg, closeSocket)
+        })
+        .catch(() => {
+          closeSocket(4401, 'authorization_unavailable')
+        })
       return
     }
 
