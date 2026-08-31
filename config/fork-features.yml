@@ -103,6 +103,18 @@ features:
       - scripts/build-own-mobile-relay.mjs
     wiki: projects/orca/work/2026-08-27-own-relay-durable-security-state
 
+  - id: own-relay-durable-desktop-session
+    title: Durable own-relay desktop session and key-expiry-disabled Safe Storage fail-closed
+    kind: product
+    status: landed
+    paths:
+      - CONTEXT.md
+      - docs/reference/own-mobile-relay-key-expiry.md
+      - src/main/orca-profiles/profile-cloud-auth-config.ts
+      - src/main/orca-profiles/profile-cloud-session-store.ts
+      - src/main/runtime/relay
+    wiki: projects/orca/work/2026-08-31-own-relay-durable-desktop-session
+
   - id: pet-voice-android-rate-step
     title: Android pet TTS plays one 語速 step faster than Mac
     kind: product

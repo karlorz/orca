@@ -34,3 +34,7 @@ _Avoid_: access session, grant
 
 **Reconnect-required**:
 UI state when the profile is cloud-linked but no usable encrypted session exists. Must not appear after a normal Mac/Orca restart when this host’s key expiry is disabled.
+
+## Decision record
+
+- [Key expiry and machine trust](docs/reference/own-mobile-relay-key-expiry.md): Personal-operator defaults, durable hashed admission, and revocation mechanics.
