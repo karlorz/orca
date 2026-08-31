@@ -28,31 +28,25 @@ export function createOwnMobileRelayAuditMemory(
     async list(options: OwnMobileRelayAuditListOptions = {}): Promise<OwnMobileRelayAuditEvent[]> {
       const { since, type, limit, order = 'asc' } = options
 
-      let result = events
-
-      if (since !== undefined || type !== undefined) {
-        result = result.filter((e) => {
-          if (since !== undefined && e.at < since) {
-            return false
-          }
-          if (type !== undefined && e.type !== type) {
-            return false
-          }
-          return true
-        })
-      }
+      const result =
+        since !== undefined || type !== undefined
+          ? events.filter((e) => {
+              if (since !== undefined && e.at < since) {
+                return false
+              }
+              if (type !== undefined && e.type !== type) {
+                return false
+              }
+              return true
+            })
+          : events.slice()
 
       if (order === 'desc') {
-        result = [...result].reverse()
-      } else if (result === events) {
-        result = [...events]
+        result.reverse()
       }
 
       if (limit !== undefined && Number.isFinite(limit) && limit >= 0) {
-        const flooredLimit = Math.floor(limit)
-        if (result.length > flooredLimit) {
-          return result.slice(0, flooredLimit)
-        }
+        return result.slice(0, Math.floor(limit))
       }
       return result
     }
