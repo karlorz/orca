@@ -489,4 +489,3 @@ describe('hasVisibleRenderableUsage', () => {
     expect(hasVisibleRenderableUsage(grokSnapshot, new Set<UsageProviderKey>())).toBe(false)
   })
 })
-
