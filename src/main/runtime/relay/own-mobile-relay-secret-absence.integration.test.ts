@@ -183,6 +183,24 @@ describe('own-mobile-relay-secret-absence.integration (Scenario 6)', () => {
       expect(resolveAdmissionRes.status).toBe(200)
 
       controlClient.closeNow()
+
+      // Attempt malicious audit logging with raw secret fields
+      const { createOwnMobileRelayAuditSqlite, openOwnMobileRelaySecurityStateSqlite } =
+        await import('./own-mobile-relay-security-state-sqlite')
+      const auditDirectState = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+      const auditDirect = createOwnMobileRelayAuditSqlite(auditDirectState)
+      await auditDirect.append({
+        at: Date.now(),
+        type: 'malicious.attempt',
+        fields: {
+          password: rawPasswordSecret,
+          accessToken: rawAccessToken,
+          relayToken: rawRelayToken,
+          resumeToken: rawResumeSecret,
+          actor: 'attacker'
+        } as unknown as Record<string, string | number | boolean | null>
+      })
+      await auditDirectState.close()
     } finally {
       await serverInstance.close()
     }

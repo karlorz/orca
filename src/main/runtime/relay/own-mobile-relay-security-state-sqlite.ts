@@ -57,8 +57,20 @@ import {
   executeIsDeviceKeyExpiryDisabledSqlite,
   executeSetDeviceKeyExpiryDisabledSqlite
 } from './own-mobile-relay-security-state-sqlite-refresh-ops'
+import {
+  createOwnMobileRelayAuditSqlite,
+  executeAppendAuditEventSqlite,
+  executeListAuditEventsSqlite
+} from './own-mobile-relay-security-state-sqlite-audit-ops'
 
-export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
+export {
+  CURRENT_SCHEMA_VERSION,
+  verifySqliteParentDirectorySecurity,
+  verifySqlitePathSecurity,
+  createOwnMobileRelayAuditSqlite,
+  executeAppendAuditEventSqlite,
+  executeListAuditEventsSqlite
+}
 
 export type SqliteSecurityStateOptions = {
   dbPath: string
@@ -128,6 +140,7 @@ export function openOwnMobileRelaySecurityStateSqlite(
   }
 
   return {
+    _sqliteCtx: ctx,
     getAccount: async () => {
       assertOpen()
       return executeGetAccountSqlite(ctx.db)

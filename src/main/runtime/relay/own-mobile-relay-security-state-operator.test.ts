@@ -208,6 +208,9 @@ describe('OwnMobileRelaySecurityState Slice 2: List APIs and Operator Sessions',
         expect(grant1).not.toBeNull()
         expect(grant2).not.toBeNull()
 
+        // Disable key expiry for host_list_2 so grant2 obeys wall-clock expiry
+        await state.setHostKeyExpiryDisabled('host_list_2', false)
+
         const list = await state.listRelayGrants(t0 + 2000)
         expect(list.length).toBe(1)
         const item = list[0]
@@ -500,8 +503,8 @@ describe('OwnMobileRelaySecurityState Slice 2: List APIs and Operator Sessions',
 
       rawDb.close()
 
-      // Open with adapter, which should migrate to CURRENT_SCHEMA_VERSION = 2
-      expect(CURRENT_SCHEMA_VERSION).toBe(2)
+      // Open with adapter, which should migrate to CURRENT_SCHEMA_VERSION
+      expect(CURRENT_SCHEMA_VERSION).toBe(4)
       const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
 
       // Verify v1 data is preserved

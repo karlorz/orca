@@ -158,5 +158,45 @@ describe('own-mobile-relay-audit', () => {
       expect(combined).toHaveLength(1)
       expect(combined[0]?.at).toBe(100)
     })
+
+    it('5. list order asc (default) vs desc and orders before limit', async () => {
+      const audit = createOwnMobileRelayAuditMemory()
+      await audit.append({ at: 100, type: 'ev', fields: { count: 1 } })
+      await audit.append({ at: 200, type: 'ev', fields: { count: 2 } })
+      await audit.append({ at: 300, type: 'ev', fields: { count: 3 } })
+
+      // Default asc
+      const defaultAsc = await audit.list({})
+      expect(defaultAsc.map((e) => e.at)).toEqual([100, 200, 300])
+
+      // Explicit asc
+      const explicitAsc = await audit.list({ order: 'asc' })
+      expect(explicitAsc.map((e) => e.at)).toEqual([100, 200, 300])
+
+      // Descending
+      const desc = await audit.list({ order: 'desc' })
+      expect(desc.map((e) => e.at)).toEqual([300, 200, 100])
+
+      // Ordering applied BEFORE limit: limit=2 desc gives newest two [300, 200]
+      const descLimited = await audit.list({ order: 'desc', limit: 2 })
+      expect(descLimited.map((e) => e.at)).toEqual([300, 200])
+
+      // Limit=2 asc gives oldest two [100, 200]
+      const ascLimited = await audit.list({ order: 'asc', limit: 2 })
+      expect(ascLimited.map((e) => e.at)).toEqual([100, 200])
+    })
+
+    it('6. deterministic tie-breaking for equal timestamps', async () => {
+      const audit = createOwnMobileRelayAuditMemory()
+      await audit.append({ at: 500, type: 'ev', fields: { count: 1 } })
+      await audit.append({ at: 500, type: 'ev', fields: { count: 2 } })
+      await audit.append({ at: 500, type: 'ev', fields: { count: 3 } })
+
+      const asc = await audit.list({ order: 'asc' })
+      expect(asc.map((e) => e.fields.count)).toEqual([1, 2, 3])
+
+      const desc = await audit.list({ order: 'desc' })
+      expect(desc.map((e) => e.fields.count)).toEqual([3, 2, 1])
+    })
   })
 })

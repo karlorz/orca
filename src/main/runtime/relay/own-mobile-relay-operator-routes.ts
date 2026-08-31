@@ -176,15 +176,23 @@ export async function handleOperatorRequest(
     const sinceParam = url.searchParams.get('since')
     const typeParam = url.searchParams.get('type')
     const limitParam = url.searchParams.get('limit')
+    const orderParam = url.searchParams.get('order')
+
+    if (orderParam !== null && orderParam !== 'asc' && orderParam !== 'desc') {
+      sendJson(response, 400, { error: 'invalid_request' })
+      return
+    }
 
     const since = sinceParam ? Number(sinceParam) : undefined
     const type = typeParam ? typeParam : undefined
     const limit = limitParam ? Number(limitParam) : undefined
+    const order = (orderParam as 'asc' | 'desc' | null) ?? 'desc'
 
     const events = await context.auditLog.list({
       ...(since !== undefined && !Number.isNaN(since) ? { since } : {}),
       ...(type !== undefined ? { type } : {}),
-      ...(limit !== undefined && !Number.isNaN(limit) ? { limit } : {})
+      ...(limit !== undefined && !Number.isNaN(limit) ? { limit } : {}),
+      order
     })
 
     sendJson(response, 200, { events })

@@ -204,7 +204,7 @@ export async function handleAdminRequest(
   }
 
   if (request.method === 'GET' && pathname === '/admin/events') {
-    const events = context.auditLog ? await context.auditLog.list({}) : []
+    const events = context.auditLog ? await context.auditLog.list({ order: 'desc' }) : []
     sendHtml(response, 200, renderAdminEvents(events))
     return
   }
@@ -235,9 +235,14 @@ export async function handleAdminRequest(
   const deviceRevoke = pathname.match(/^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/revoke$/)
   const grantRevoke = pathname.match(/^\/admin\/pairing\/grants\/([^/]+)\/revoke$/)
   const hostKeyExpiry = pathname.match(/^\/admin\/pairing\/hosts\/([^/]+)\/key-expiry$/)
-  const deviceKeyExpiry = pathname.match(/^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/key-expiry$/)
+  const deviceKeyExpiry = pathname.match(
+    /^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/key-expiry$/
+  )
 
-  if (request.method === 'POST' && (deviceRevoke || grantRevoke || hostKeyExpiry || deviceKeyExpiry)) {
+  if (
+    request.method === 'POST' &&
+    (deviceRevoke || grantRevoke || hostKeyExpiry || deviceKeyExpiry)
+  ) {
     if (!isAdminCsrfAllowed(request, authOrigin)) {
       sendHtml(response, 403, '<!DOCTYPE html><html><body>Forbidden</body></html>')
       return

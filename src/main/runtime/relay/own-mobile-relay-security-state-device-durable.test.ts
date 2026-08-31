@@ -425,6 +425,7 @@ describe('own mobile relay durable device security integration', () => {
         },
         Date.now() - 5000
       )
+      await securityState1.setDeviceKeyExpiryDisabled(relayHostId, 'dev-exp-c4', false)
       hostClient.closeNow()
       await server1.close()
 

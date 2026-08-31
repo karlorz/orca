@@ -629,4 +629,118 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       }
     })
   })
+
+  // 9. Schema v4 Migration
+  describe('SQLite Schema v4 Migration and Audit Persistence', () => {
+    it('migrates existing v3 database to v4 creating audit_events table', async () => {
+      const dbPath = await createTempDbPath()
+      const rawDb = new DatabaseSync(dbPath)
+
+      // Create v3 tables manually
+      rawDb.exec(`
+        CREATE TABLE IF NOT EXISTS operator_account (
+          singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+          account_id TEXT NOT NULL UNIQUE,
+          email TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          profile_id TEXT NOT NULL,
+          organization_id TEXT NOT NULL,
+          verifier_version INTEGER NOT NULL,
+          auth_epoch INTEGER NOT NULL,
+          password_version INTEGER NOT NULL,
+          password_verifier TEXT NOT NULL,
+          password_salt TEXT NOT NULL,
+          param_n INTEGER NOT NULL,
+          param_r INTEGER NOT NULL,
+          param_p INTEGER NOT NULL,
+          param_key_len INTEGER NOT NULL,
+          param_maxmem INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS access_sessions (
+          session_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          access_token_hash TEXT NOT NULL UNIQUE,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER,
+          user_id TEXT NOT NULL,
+          profile_id TEXT NOT NULL,
+          organization_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          cloud_profile_id TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS relay_grants (
+          grant_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          parent_session_id TEXT NOT NULL,
+          relay_token_hash TEXT NOT NULL UNIQUE,
+          relay_host_id TEXT NOT NULL,
+          host_public_key_b64 TEXT NOT NULL,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER,
+          user_id TEXT NOT NULL,
+          profile_id TEXT NOT NULL,
+          organization_id TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS device_credentials (
+          relay_host_id TEXT NOT NULL,
+          relay_device_id TEXT NOT NULL,
+          last_install_req_id TEXT NOT NULL,
+          current_resume_token_hash TEXT NOT NULL,
+          current_version INTEGER NOT NULL,
+          resume_expires_at INTEGER NOT NULL,
+          authorization_mode TEXT NOT NULL,
+          grace_resume_token_hash TEXT,
+          grace_expires_at INTEGER,
+          revoked_at INTEGER,
+          key_expiry_disabled INTEGER NOT NULL DEFAULT 1,
+          PRIMARY KEY (relay_host_id, relay_device_id)
+        );
+        CREATE TABLE IF NOT EXISTS operator_sessions (
+          session_id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+          token_hash TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS host_key_expiry (
+          relay_host_id TEXT PRIMARY KEY,
+          key_expiry_disabled INTEGER NOT NULL DEFAULT 1,
+          updated_at INTEGER NOT NULL
+        );
+        PRAGMA user_version = 3;
+      `)
+      rawDb.close()
+
+      expect(CURRENT_SCHEMA_VERSION).toBe(4)
+      const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+      expect(state).toBeDefined()
+      await state.close()
+
+      const checkDb = new DatabaseSync(dbPath)
+      const ver = checkDb.prepare('PRAGMA user_version;').get() as { user_version: number }
+      expect(ver.user_version).toBe(4)
+      const tableCheck = checkDb
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_events';")
+        .get()
+      expect(tableCheck).toBeDefined()
+      checkDb.close()
+    })
+  })
 })

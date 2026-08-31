@@ -30,7 +30,7 @@ export async function loadOperatorConsoleState(
     source.securityState.listAccessSessions(now),
     source.securityState.listRelayGrants(now),
     source.securityState.listDeviceCredentials(),
-    source.auditLog ? source.auditLog.list({}) : Promise.resolve([])
+    source.auditLog ? source.auditLog.list({ order: 'desc' }) : Promise.resolve([])
   ])
   return {
     generatedAt: now,

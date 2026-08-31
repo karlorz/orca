@@ -292,10 +292,7 @@ export type OwnMobileRelaySecurityState = {
   revokeAccessSessionById(sessionId: string, now?: number): Promise<boolean>
   revokeAccessSessionByToken(rawAccessToken: string, now?: number): Promise<boolean>
 
-  issueRefreshToken(
-    input: SecurityStateIssueRefreshTokenInput,
-    now?: number
-  ): Promise<void>
+  issueRefreshToken(input: SecurityStateIssueRefreshTokenInput, now?: number): Promise<void>
   lookupRefreshToken(
     rawRefreshToken: string,
     now?: number
@@ -366,4 +363,5 @@ export type OwnMobileRelaySecurityState = {
     now?: number
   }): Promise<SecurityStateCleanupResult>
   close(): Promise<void>
+  readonly _sqliteCtx?: unknown
 }

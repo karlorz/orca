@@ -26,7 +26,7 @@ export function createOwnMobileRelayAuditMemory(
     },
 
     async list(options: OwnMobileRelayAuditListOptions = {}): Promise<OwnMobileRelayAuditEvent[]> {
-      const { since, type, limit } = options
+      const { since, type, limit, order = 'asc' } = options
 
       let result = events
 
@@ -42,10 +42,16 @@ export function createOwnMobileRelayAuditMemory(
         })
       }
 
+      if (order === 'desc') {
+        result = [...result].reverse()
+      } else if (result === events) {
+        result = [...events]
+      }
+
       if (limit !== undefined && limit >= 0 && result.length > limit) {
         return result.slice(0, limit)
       }
-      return result === events ? [...events] : result
+      return result
     }
   }
 }

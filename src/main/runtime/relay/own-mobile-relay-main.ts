@@ -1,5 +1,8 @@
 import process from 'node:process'
-import { openOwnMobileRelaySecurityStateSqlite } from './own-mobile-relay-security-state-sqlite'
+import {
+  openOwnMobileRelaySecurityStateSqlite,
+  createOwnMobileRelayAuditSqlite
+} from './own-mobile-relay-security-state-sqlite'
 import { bootstrapOperatorAccount } from './own-mobile-relay-account'
 import { CURRENT_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay-password'
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
@@ -160,8 +163,10 @@ export async function startOwnRelayServer(options: {
 
   let server
   try {
+    const auditLog = createOwnMobileRelayAuditSqlite(securityState)
     server = await listenOwnMobileRelay({
       securityState,
+      auditLog,
       origin: config.origin,
       authOrigin: config.authOrigin,
       clientId: config.clientId,

@@ -389,6 +389,26 @@ describe('OwnMobileRelay Operator Routes Slice 3 (/v1/operator/*)', () => {
       })
       const filteredData = (await filteredRes.json()) as { events: { type: string }[] }
       expect(filteredData.events.every((e) => e.type === 'test.second')).toBe(true)
+
+      // Default order is desc (newest first)
+      const descRes = await fetch(`${server.origin}/v1/operator/events`, {
+        headers: { authorization: `Bearer ${token}` }
+      })
+      const descData = (await descRes.json()) as { events: { at: number; type: string }[] }
+      expect(descData.events[0]?.at).toBeGreaterThanOrEqual(descData.events.at(-1)?.at ?? 0)
+
+      // Explicit order=asc
+      const ascRes = await fetch(`${server.origin}/v1/operator/events?order=asc`, {
+        headers: { authorization: `Bearer ${token}` }
+      })
+      const ascData = (await ascRes.json()) as { events: { at: number; type: string }[] }
+      expect(ascData.events[0]?.at).toBeLessThanOrEqual(ascData.events.at(-1)?.at ?? 0)
+
+      // Invalid order fails closed with 400
+      const invalidRes = await fetch(`${server.origin}/v1/operator/events?order=invalid_order`, {
+        headers: { authorization: `Bearer ${token}` }
+      })
+      expect(invalidRes.status).toBe(400)
     } finally {
       await server.close()
     }

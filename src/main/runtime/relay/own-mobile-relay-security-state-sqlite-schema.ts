@@ -1,7 +1,7 @@
 import { statSync, existsSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
 
 /** SQLite INTEGER flag: missing/null defaults to disabled-expiry (1). */
@@ -243,6 +243,34 @@ export function runSqliteMigrations(db: DatabaseSync): void {
         ALTER TABLE device_credentials ADD COLUMN key_expiry_disabled INTEGER NOT NULL DEFAULT 1;
 
         PRAGMA user_version = 3;
+      `)
+      db.exec('COMMIT;')
+    } catch (err) {
+      db.exec('ROLLBACK;')
+      throw err
+    }
+  }
+
+  const v3Row = db.prepare('PRAGMA user_version;').get() as { user_version?: number } | undefined
+  const v3Version = Number(v3Row?.user_version ?? 0)
+
+  if (v3Version === 3) {
+    db.exec('BEGIN IMMEDIATE;')
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS audit_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          at INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          fields_json TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_events_at_id
+          ON audit_events(at, id);
+        CREATE INDEX IF NOT EXISTS idx_audit_events_type_at
+          ON audit_events(type, at);
+
+        PRAGMA user_version = 4;
       `)
       db.exec('COMMIT;')
     } catch (err) {

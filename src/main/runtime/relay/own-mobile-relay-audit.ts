@@ -40,6 +40,7 @@ export type OwnMobileRelayAuditListOptions = {
   since?: number
   type?: string
   limit?: number
+  order?: 'asc' | 'desc'
 }
 
 export function sanitizeAuditFields(rawFields?: Record<string, unknown> | null): AuditFieldRecord {

@@ -341,6 +341,15 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
       client2?.closeNow()
       await serverInstance2.close()
     }
+
+    // Verify audit events persisted across restart
+    const stateDirectCheck = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const { createOwnMobileRelayAuditSqlite } =
+      await import('./own-mobile-relay-security-state-sqlite')
+    const auditDirect = createOwnMobileRelayAuditSqlite(stateDirectCheck)
+    const persistedEvents = await auditDirect.list({ order: 'desc' })
+    expect(persistedEvents.length).toBeGreaterThan(0)
+    await stateDirectCheck.close()
   })
 
   it('Scenario 4: Logout and independent session/grant/device expiries deny admission after restart', async () => {
@@ -532,6 +541,8 @@ describe('own-mobile-relay-persistence.integration (Scenario 1 & 4)', () => {
       authorizationMode: 'relay-basis',
       resumeTtlMs: -10_000
     })
+    await stateDirect.setDeviceKeyExpiryDisabled(relayHostId, expiredPhoneDeviceId, false)
+    await stateDirect.setHostKeyExpiryDisabled(relayHostId, false)
 
     await stateDirect.close()
 

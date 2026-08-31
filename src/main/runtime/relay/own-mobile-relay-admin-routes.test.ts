@@ -245,6 +245,50 @@ describe('OwnMobileRelay /admin HTML', () => {
     }
   })
 
+  it('renders /admin/events in newest-first order', async () => {
+    const { createOwnMobileRelayAuditMemory } = await import('./own-mobile-relay-audit-memory')
+    const auditLog = createOwnMobileRelayAuditMemory()
+    await auditLog.append({ at: 100, type: 'first.event', fields: { count: 1 } })
+    await auditLog.append({ at: 200, type: 'second.event', fields: { count: 2 } })
+
+    const server = await listenOwnMobileRelay({
+      operator: TEST_OPERATOR,
+      origin: 'http://127.0.0.1',
+      auditLog
+    })
+    try {
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({
+          email: TEST_OPERATOR.email,
+          password: TEST_OPERATOR.password
+        }).toString()
+      })
+      const cookie = cookieFromSetCookie(login.headers['set-cookie'])
+      const page = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/events',
+        headers: { cookie }
+      })
+      expect(page.status).toBe(200)
+      const html = await page.text()
+      // second.event (at: 200) must appear before first.event (at: 100) in HTML table
+      const idxFirst = html.indexOf('first.event')
+      const idxSecond = html.indexOf('second.event')
+      expect(idxSecond).toBeGreaterThan(-1)
+      expect(idxFirst).toBeGreaterThan(-1)
+      expect(idxSecond).toBeLessThan(idxFirst)
+    } finally {
+      await server.close()
+    }
+  })
+
   it('renders /admin/incident with markdown bundle for authenticated operator and excludes operator password', async () => {
     const server = await listenOwnMobileRelay({
       operator: TEST_OPERATOR,
