@@ -68,21 +68,37 @@ export function renderAdminEvents(
 }
 
 export function renderAdminPairing(input: {
-  devices: { relayHostId: string; relayDeviceId: string; revoked?: boolean | null }[]
-  grants: { grantId: string; relayHostId: string }[]
+  devices: { relayHostId: string; relayDeviceId: string; revoked?: boolean | null; keyExpiryDisabled?: boolean }[]
+  grants: { grantId: string; relayHostId: string; keyExpiryDisabled?: boolean }[]
 }): string {
   const devices = input.devices
     .map(
-      (device) =>
-        `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}</td><td>${device.revoked ? 'revoked' : 'active'}</td>
-<td><form method="post" action="/admin/pairing/devices/${encodeURIComponent(device.relayHostId)}/${encodeURIComponent(device.relayDeviceId)}/revoke"><button type="submit">Revoke</button></form></td></tr>`
+      (device) => {
+        const expiryDisabled = device.keyExpiryDisabled ?? true
+        const expiryBadge = expiryDisabled ? ' <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">Expiry disabled</span>' : ''
+        const toggleLabel = expiryDisabled ? 'Enable key expiry' : 'Disable key expiry'
+        const toggleDisabledVal = expiryDisabled ? 'false' : 'true'
+        return `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}${expiryBadge}</td><td>${device.revoked ? 'revoked' : 'active'}</td>
+<td>
+<form method="post" action="/admin/pairing/devices/${encodeURIComponent(device.relayHostId)}/${encodeURIComponent(device.relayDeviceId)}/key-expiry" style="display:inline"><input type="hidden" name="disabled" value="${toggleDisabledVal}"><button type="submit">${toggleLabel}</button></form>
+<form method="post" action="/admin/pairing/devices/${encodeURIComponent(device.relayHostId)}/${encodeURIComponent(device.relayDeviceId)}/revoke" style="display:inline"><button type="submit">Revoke</button></form>
+</td></tr>`
+      }
     )
     .join('')
   const grants = input.grants
     .map(
-      (grant) =>
-        `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}</td>
-<td><form method="post" action="/admin/pairing/grants/${encodeURIComponent(grant.grantId)}/revoke"><button type="submit">Revoke</button></form></td></tr>`
+      (grant) => {
+        const expiryDisabled = grant.keyExpiryDisabled ?? true
+        const expiryBadge = expiryDisabled ? ' <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">Expiry disabled</span>' : ''
+        const toggleLabel = expiryDisabled ? 'Enable key expiry' : 'Disable key expiry'
+        const toggleDisabledVal = expiryDisabled ? 'false' : 'true'
+        return `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}${expiryBadge}</td>
+<td>
+<form method="post" action="/admin/pairing/hosts/${encodeURIComponent(grant.relayHostId)}/key-expiry" style="display:inline"><input type="hidden" name="disabled" value="${toggleDisabledVal}"><button type="submit">${toggleLabel}</button></form>
+<form method="post" action="/admin/pairing/grants/${encodeURIComponent(grant.grantId)}/revoke" style="display:inline"><button type="submit">Revoke</button></form>
+</td></tr>`
+      }
     )
     .join('')
   return layout(

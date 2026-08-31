@@ -177,18 +177,24 @@ export type SecurityStateRedactedAccessSession = {
   }
 }
 
-export type SecurityStateRedactedRelayGrant = {
-  readonly grantId: string
-  readonly accountId: string
-  readonly parentSessionId: string
-  readonly relayHostId: string
-  readonly expiresAt: number
-  readonly createdAt: number
-  readonly identity: {
-    readonly userId: string
-    readonly profileId: string
-    readonly organizationId: string
-  }
+export type SecurityStateIssueRefreshTokenInput = {
+  readonly sessionId: string
+  readonly rawRefreshToken: string
+  readonly ttlMs: number | null
+}
+
+export type SecurityStateLookupRefreshTokenResult = {
+  readonly sessionId: string
+  readonly cloudProfileId: string
+  readonly expiresAt: number | null
+}
+
+export type SecurityStateRotateRefreshTokenInput = {
+  readonly oldRawRefreshToken: string
+  readonly newRawRefreshToken: string
+  readonly newRawAccessToken: string
+  readonly accessTtlMs: number
+  readonly refreshTtlMs: number | null
 }
 
 export type SecurityStateRedactedDeviceCredential = {
@@ -200,6 +206,22 @@ export type SecurityStateRedactedDeviceCredential = {
   readonly authorizationMode: 'relay-basis' | 'authenticated-direct'
   readonly graceExpiresAt?: number
   readonly revoked: boolean
+  readonly keyExpiryDisabled: boolean
+}
+
+export type SecurityStateRedactedRelayGrant = {
+  readonly grantId: string
+  readonly accountId: string
+  readonly parentSessionId: string
+  readonly relayHostId: string
+  readonly expiresAt: number
+  readonly createdAt: number
+  readonly keyExpiryDisabled: boolean
+  readonly identity: {
+    readonly userId: string
+    readonly profileId: string
+    readonly organizationId: string
+  }
 }
 
 export type SecurityStateOperatorSession = {
@@ -269,6 +291,30 @@ export type OwnMobileRelaySecurityState = {
   ): Promise<SecurityStateIssuedAccessSession | null>
   revokeAccessSessionById(sessionId: string, now?: number): Promise<boolean>
   revokeAccessSessionByToken(rawAccessToken: string, now?: number): Promise<boolean>
+
+  issueRefreshToken(
+    input: SecurityStateIssueRefreshTokenInput,
+    now?: number
+  ): Promise<void>
+  lookupRefreshToken(
+    rawRefreshToken: string,
+    now?: number
+  ): Promise<SecurityStateLookupRefreshTokenResult | null>
+  rotateRefreshToken(
+    input: SecurityStateRotateRefreshTokenInput,
+    now?: number
+  ): Promise<SecurityStateIssuedAccessSession | null>
+  revokeRefreshTokensForSession(sessionId: string, now?: number): Promise<void>
+
+  isHostKeyExpiryDisabled(relayHostId: string): Promise<boolean>
+  setHostKeyExpiryDisabled(relayHostId: string, disabled: boolean, now?: number): Promise<void>
+  isDeviceKeyExpiryDisabled(relayHostId: string, relayDeviceId: string): Promise<boolean>
+  setDeviceKeyExpiryDisabled(
+    relayHostId: string,
+    relayDeviceId: string,
+    disabled: boolean,
+    now?: number
+  ): Promise<void>
 
   issueRelayGrant(
     input: SecurityStateIssueRelayGrantInput,

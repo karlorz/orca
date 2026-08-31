@@ -37,9 +37,13 @@ export function isGrantValid(
   grant: InternalGrantRecord,
   parent: InternalSessionRecord | undefined,
   account: InternalAccountRecord | null,
-  now: number
+  now: number,
+  keyExpiryDisabled: boolean = false
 ): boolean {
-  if (grant.revokedAt !== undefined || grant.expiresAt <= now) {
+  if (grant.revokedAt !== undefined) {
+    return false
+  }
+  if (!keyExpiryDisabled && grant.expiresAt <= now) {
     return false
   }
   if (!account || grant.authEpoch !== account.authEpoch) {

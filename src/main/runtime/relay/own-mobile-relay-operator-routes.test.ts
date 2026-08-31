@@ -278,6 +278,45 @@ describe('OwnMobileRelay Operator Routes Slice 3 (/v1/operator/*)', () => {
       expect(revokeDevRes.status).toBe(200)
       expect(await revokeDevRes.json()).toEqual({ ok: true })
 
+      // Toggle host key expiry
+      const hostExpiryRes = await fetch(
+        `${server.origin}/v1/operator/pairing/hosts/host-123/key-expiry`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ disabled: false })
+        }
+      )
+      expect(hostExpiryRes.status).toBe(200)
+      expect(await hostExpiryRes.json()).toEqual({
+        ok: true,
+        relayHostId: 'host-123',
+        keyExpiryDisabled: false
+      })
+
+      // Toggle device key expiry
+      const devExpiryRes = await fetch(
+        `${server.origin}/v1/operator/pairing/devices/host-123/dev-456/key-expiry`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ disabled: false })
+        }
+      )
+      expect(devExpiryRes.status).toBe(200)
+      expect(await devExpiryRes.json()).toEqual({
+        ok: true,
+        relayHostId: 'host-123',
+        relayDeviceId: 'dev-456',
+        keyExpiryDisabled: false
+      })
+
       // Revoke non-existent grant -> 404
       const revokeBadGrant = await fetch(
         `${server.origin}/v1/operator/pairing/grants/non-existent-grant/revoke`,

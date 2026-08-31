@@ -40,7 +40,8 @@ export function listRelayGrantsMemory(
   const result: SecurityStateRedactedRelayGrant[] = []
   for (const grant of ctx.grantsById.values()) {
     const parent = ctx.sessionsById.get(grant.parentSessionId)
-    if (isGrantValid(grant, parent, ctx.account, now)) {
+    const keyExpiryDisabled = ctx.hostKeyExpiry.get(grant.relayHostId) ?? true
+    if (isGrantValid(grant, parent, ctx.account, now, keyExpiryDisabled)) {
       result.push({
         grantId: grant.grantId,
         accountId: grant.accountId,
@@ -48,6 +49,7 @@ export function listRelayGrantsMemory(
         relayHostId: grant.relayHostId,
         expiresAt: grant.expiresAt,
         createdAt: grant.createdAt,
+        keyExpiryDisabled,
         identity: grant.identity
       })
     }
@@ -69,7 +71,8 @@ export function listDeviceCredentialsMemory(
       resumeExpiresAt: dev.resumeExpiresAt,
       authorizationMode: dev.authorizationMode,
       ...(dev.graceExpiresAt !== undefined ? { graceExpiresAt: dev.graceExpiresAt } : {}),
-      revoked: dev.revokedAt !== undefined
+      revoked: dev.revokedAt !== undefined,
+      keyExpiryDisabled: dev.keyExpiryDisabled ?? true
     })
   }
   return result

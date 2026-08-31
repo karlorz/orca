@@ -59,6 +59,23 @@ export type InternalDeviceRecord = {
   graceResumeTokenHash?: string
   graceExpiresAt?: number
   revokedAt?: number
+  keyExpiryDisabled?: boolean
+}
+
+export type InternalRefreshTokenRecord = {
+  tokenHash: string
+  sessionId: string
+  accountId: string
+  authEpoch: number
+  expiresAt: number | null
+  createdAt: number
+  revokedAt?: number
+}
+
+export type InternalHostKeyExpiryRecord = {
+  relayHostId: string
+  keyExpiryDisabled: boolean
+  updatedAt: number
 }
 
 export type InternalOperatorSessionRecord = {

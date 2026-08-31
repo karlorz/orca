@@ -227,17 +227,17 @@ export async function handleSessionPost(
       expectedAccountId: authCode.accountId,
       expectedAuthEpoch: authCode.authEpoch
     })
+
+    await securityState.issueRefreshToken({
+      sessionId: issuedSession.sessionId,
+      rawRefreshToken: refreshToken,
+      ttlMs: null
+    })
   } catch {
     response.writeHead(400, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_grant' }))
     return
   }
-
-  store.refreshTokens.set(refreshToken, {
-    refreshToken,
-    sessionId: issuedSession.sessionId,
-    cloudProfileId
-  })
 
   response.writeHead(200, { 'content-type': 'application/json' })
   response.end(

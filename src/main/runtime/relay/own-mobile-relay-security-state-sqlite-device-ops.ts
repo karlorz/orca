@@ -20,6 +20,7 @@ export type SqliteDeviceRow = {
   grace_resume_token_hash: string | null
   grace_expires_at: number | null
   revoked_at: number | null
+  key_expiry_disabled?: number | null
 }
 
 export function executeInstallDeviceCredentialSqlite(
@@ -70,13 +71,18 @@ export function executeInstallDeviceCredentialSqlite(
       graceExpiresAt = now + graceTtl
     }
 
+    const keyExpiryDisabled = existing && existing.key_expiry_disabled !== undefined && existing.key_expiry_disabled !== null
+      ? Number(existing.key_expiry_disabled)
+      : 1
+
     db.prepare(`
       INSERT INTO device_credentials (
         relay_host_id, relay_device_id, last_install_req_id,
         current_resume_token_hash, current_version, resume_expires_at,
-        authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at
+        authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at,
+        key_expiry_disabled
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?
       )
       ON CONFLICT(relay_host_id, relay_device_id) DO UPDATE SET
         last_install_req_id = excluded.last_install_req_id,
@@ -96,7 +102,8 @@ export function executeInstallDeviceCredentialSqlite(
       resumeExpiresAt,
       input.authorizationMode,
       graceHash,
-      graceExpiresAt
+      graceExpiresAt,
+      keyExpiryDisabled
     )
 
     db.exec('COMMIT;')
@@ -162,13 +169,14 @@ export function executeMatchDeviceCredentialSqlite(
     .prepare(`
       SELECT relay_host_id, relay_device_id, last_install_req_id,
              current_resume_token_hash, current_version, resume_expires_at,
-             authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at
+             authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at,
+             key_expiry_disabled
       FROM device_credentials
       WHERE relay_host_id = ?
         AND revoked_at IS NULL
         AND (
-          (current_resume_token_hash = ? AND resume_expires_at > ?)
-          OR (grace_resume_token_hash = ? AND grace_expires_at IS NOT NULL AND grace_expires_at > ?)
+          (current_resume_token_hash = ? AND (COALESCE(key_expiry_disabled, 1) = 1 OR resume_expires_at > ?))
+          OR (grace_resume_token_hash = ? AND grace_expires_at IS NOT NULL AND (COALESCE(key_expiry_disabled, 1) = 1 OR grace_expires_at > ?))
         )
     `)
     .get(relayHostId, tokenHash, now, tokenHash, now) as SqliteDeviceRow | undefined
@@ -187,7 +195,12 @@ export function executeMatchDeviceCredentialSqlite(
     ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {})
   }
 
-  if (row.current_resume_token_hash === tokenHash && Number(row.resume_expires_at) > now) {
+  const keyExpiryDisabled = row.key_expiry_disabled === null || row.key_expiry_disabled === undefined || Number(row.key_expiry_disabled) === 1
+
+  if (
+    row.current_resume_token_hash === tokenHash &&
+    (keyExpiryDisabled || Number(row.resume_expires_at) > now)
+  ) {
     return { device: base, acceptedAs: 'current' }
   }
   if (
@@ -298,7 +311,11 @@ export function executeCleanupExpiredSqlite(
         .prepare(`
           SELECT relay_host_id, relay_device_id FROM device_credentials
           WHERE revoked_at IS NOT NULL
-             OR (resume_expires_at <= ? AND (grace_expires_at IS NULL OR grace_expires_at <= ?))
+             OR (
+               COALESCE(key_expiry_disabled, 1) = 0
+               AND resume_expires_at <= ?
+               AND (grace_expires_at IS NULL OR grace_expires_at <= ?)
+             )
           LIMIT ?
         `)
         .all(now, now, remainingBudget) as {

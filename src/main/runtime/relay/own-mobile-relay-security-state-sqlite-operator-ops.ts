@@ -62,18 +62,20 @@ export function executeListRelayGrantsSqlite(
     .prepare(`
       SELECT g.grant_id, g.account_id, g.parent_session_id, g.relay_host_id,
              g.host_public_key_b64, g.auth_epoch, g.expires_at, g.created_at,
-             g.user_id, g.profile_id, g.organization_id
+             g.user_id, g.profile_id, g.organization_id,
+             COALESCE(h.key_expiry_disabled, 1) as key_expiry_disabled
       FROM relay_grants g
       JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
+      LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.revoked_at IS NULL
-        AND g.expires_at > ?
+        AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
         AND s.auth_epoch = a.auth_epoch
     `)
-    .all(now, now) as SqliteGrantRow[]
+    .all(now, now) as (SqliteGrantRow & { key_expiry_disabled: number })[]
 
   return rows.map((row) => ({
     grantId: row.grant_id,
@@ -82,6 +84,7 @@ export function executeListRelayGrantsSqlite(
     relayHostId: row.relay_host_id,
     expiresAt: Number(row.expires_at),
     createdAt: Number(row.created_at),
+    keyExpiryDisabled: Number(row.key_expiry_disabled) === 1,
     identity: {
       userId: row.user_id,
       profileId: row.profile_id,
@@ -97,10 +100,11 @@ export function executeListDeviceCredentialsSqlite(
     .prepare(`
       SELECT relay_host_id, relay_device_id, last_install_req_id,
              current_resume_token_hash, current_version, resume_expires_at,
-             authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at
+             authorization_mode, grace_resume_token_hash, grace_expires_at, revoked_at,
+             key_expiry_disabled
       FROM device_credentials
     `)
-    .all() as SqliteDeviceRow[]
+    .all() as (SqliteDeviceRow & { key_expiry_disabled?: number | null })[]
 
   return rows.map((row) => ({
     relayHostId: row.relay_host_id,
@@ -110,7 +114,8 @@ export function executeListDeviceCredentialsSqlite(
     resumeExpiresAt: Number(row.resume_expires_at),
     authorizationMode: row.authorization_mode,
     ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {}),
-    revoked: row.revoked_at !== null
+    revoked: row.revoked_at !== null,
+    keyExpiryDisabled: row.key_expiry_disabled === null || row.key_expiry_disabled === undefined || Number(row.key_expiry_disabled) === 1
   }))
 }
 

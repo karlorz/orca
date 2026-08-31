@@ -211,7 +211,7 @@ export function registerDeviceAndEpochTests(
         )
       }
 
-      // Create 3 expired devices
+      // Create 3 expired devices (explicitly enable key expiry so they can expire)
       for (let i = 0; i < 3; i++) {
         await state.installDeviceCredential(
           {
@@ -225,6 +225,7 @@ export function registerDeviceAndEpochTests(
           },
           t0
         )
+        await state.setDeviceKeyExpiryDisabled(`host_cleanup_${i}`, `dev_cleanup_${i}`, false)
       }
 
       const queryTime = t0 + 2000

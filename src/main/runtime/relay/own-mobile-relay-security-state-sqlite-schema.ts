@@ -1,7 +1,7 @@
 import { statSync, existsSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
 
 export function verifySqliteParentDirectorySecurity(dirPath: string): void {
@@ -197,6 +197,47 @@ export function runSqliteMigrations(db: DatabaseSync): void {
           ON operator_sessions(expires_at);
 
         PRAGMA user_version = 2;
+      `)
+      db.exec('COMMIT;')
+    } catch (err) {
+      db.exec('ROLLBACK;')
+      throw err
+    }
+  }
+
+  const v2Row = db.prepare('PRAGMA user_version;').get() as { user_version?: number } | undefined
+  const v2Version = Number(v2Row?.user_version ?? 0)
+
+  if (v2Version === 2) {
+    db.exec('BEGIN IMMEDIATE;')
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+          token_hash TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          auth_epoch INTEGER NOT NULL,
+          expires_at INTEGER,
+          created_at INTEGER NOT NULL,
+          revoked_at INTEGER,
+          FOREIGN KEY (account_id) REFERENCES operator_account(account_id) ON DELETE CASCADE,
+          FOREIGN KEY (session_id) REFERENCES access_sessions(session_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_session
+          ON refresh_tokens(session_id);
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires
+          ON refresh_tokens(expires_at);
+
+        CREATE TABLE IF NOT EXISTS host_key_expiry (
+          relay_host_id TEXT PRIMARY KEY,
+          key_expiry_disabled INTEGER NOT NULL DEFAULT 1,
+          updated_at INTEGER NOT NULL
+        );
+
+        ALTER TABLE device_credentials ADD COLUMN key_expiry_disabled INTEGER NOT NULL DEFAULT 1;
+
+        PRAGMA user_version = 3;
       `)
       db.exec('COMMIT;')
     } catch (err) {

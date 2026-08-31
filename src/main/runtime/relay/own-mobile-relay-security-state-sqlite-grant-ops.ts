@@ -125,9 +125,10 @@ export function executeValidateRelayGrantByTokenSqlite(
       FROM relay_grants g
       JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
+      LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.relay_token_hash = ?
         AND g.revoked_at IS NULL
-        AND g.expires_at > ?
+        AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
@@ -154,10 +155,11 @@ export function executeValidateRelayGrantByIdSqlite(
       FROM relay_grants g
       JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
+      LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.grant_id = ?
         ${hostFilter}
         AND g.revoked_at IS NULL
-        AND g.expires_at > ?
+        AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?

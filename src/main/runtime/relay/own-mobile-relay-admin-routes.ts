@@ -234,7 +234,10 @@ export async function handleAdminRequest(
 
   const deviceRevoke = pathname.match(/^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/revoke$/)
   const grantRevoke = pathname.match(/^\/admin\/pairing\/grants\/([^/]+)\/revoke$/)
-  if (request.method === 'POST' && (deviceRevoke || grantRevoke)) {
+  const hostKeyExpiry = pathname.match(/^\/admin\/pairing\/hosts\/([^/]+)\/key-expiry$/)
+  const deviceKeyExpiry = pathname.match(/^\/admin\/pairing\/devices\/([^/]+)\/([^/]+)\/key-expiry$/)
+
+  if (request.method === 'POST' && (deviceRevoke || grantRevoke || hostKeyExpiry || deviceKeyExpiry)) {
     if (!isAdminCsrfAllowed(request, authOrigin)) {
       sendHtml(response, 403, '<!DOCTYPE html><html><body>Forbidden</body></html>')
       return
@@ -247,6 +250,33 @@ export async function handleAdminRequest(
       )
     } else if (grantRevoke) {
       await revokeOperatorGrant(context, decodeURIComponent(grantRevoke[1] ?? ''))
+    } else if (hostKeyExpiry) {
+      let form: URLSearchParams
+      try {
+        form = await readUrlEncodedBodySafely(request)
+      } catch {
+        sendHtml(response, 400, 'Bad request')
+        return
+      }
+      const disabled = form.get('disabled') === 'true'
+      await context.securityState.setHostKeyExpiryDisabled(
+        decodeURIComponent(hostKeyExpiry[1] ?? ''),
+        disabled
+      )
+    } else if (deviceKeyExpiry) {
+      let form: URLSearchParams
+      try {
+        form = await readUrlEncodedBodySafely(request)
+      } catch {
+        sendHtml(response, 400, 'Bad request')
+        return
+      }
+      const disabled = form.get('disabled') === 'true'
+      await context.securityState.setDeviceKeyExpiryDisabled(
+        decodeURIComponent(deviceKeyExpiry[1] ?? ''),
+        decodeURIComponent(deviceKeyExpiry[2] ?? ''),
+        disabled
+      )
     }
     redirect(response, '/admin/pairing')
     return

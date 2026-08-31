@@ -89,6 +89,8 @@ export function registerGrantLifecycleTests(
       )
       expect(wrongHostGrant).toBeNull()
 
+      // When host key expiry is enabled (disabled=false), validate fails on wall-clock expiry
+      await state.setHostKeyExpiryDisabled('host_1234567890123456', false)
       const expiredGrant = await state.validateRelayGrantByToken(rawRelayToken, t0 + grantTtlMs + 1)
       expect(expiredGrant).toBeNull()
     })

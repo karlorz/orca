@@ -44,7 +44,7 @@ function buildDesktopAuthBody(
 export async function handleRefreshPost(
   body: unknown,
   securityState: OwnMobileRelaySecurityState,
-  store: OwnMobileRelayAuthStore,
+  _store: OwnMobileRelayAuthStore,
   response: ServerResponse
 ): Promise<void> {
   if (!body || typeof body !== 'object') {
@@ -61,8 +61,9 @@ export async function handleRefreshPost(
     return
   }
 
-  const ephemeral = store.refreshTokens.get(oldRefreshToken)
-  if (!ephemeral) {
+  const now = Date.now()
+  const lookup = await securityState.lookupRefreshToken(oldRefreshToken, now)
+  if (!lookup) {
     response.writeHead(401, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_grant' }))
     return
@@ -70,34 +71,26 @@ export async function handleRefreshPost(
 
   const newAccessToken = randomBytes(32).toString('base64url')
   const newRefreshToken = randomBytes(32).toString('base64url')
-  const now = Date.now()
 
-  const issued = await securityState.replaceAccessSession({
-    oldSessionId: ephemeral.sessionId,
+  const issued = await securityState.rotateRefreshToken({
+    oldRawRefreshToken: oldRefreshToken,
+    newRawRefreshToken: newRefreshToken,
     newRawAccessToken: newAccessToken,
-    ttlMs: SESSION_TTL_MS
-  })
+    accessTtlMs: SESSION_TTL_MS,
+    refreshTtlMs: null
+  }, now)
 
   if (!issued) {
-    store.refreshTokens.delete(oldRefreshToken)
     response.writeHead(401, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ error: 'invalid_grant' }))
     return
   }
 
-  // Rotate ephemeral refresh state only after durable success
-  store.refreshTokens.delete(oldRefreshToken)
-  store.refreshTokens.set(newRefreshToken, {
-    refreshToken: newRefreshToken,
-    sessionId: issued.sessionId,
-    cloudProfileId: ephemeral.cloudProfileId
-  })
-
   const payload = {
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
     expiresAt: issued.expiresAt,
-    ...buildDesktopAuthBody(issued.identity, ephemeral.cloudProfileId, now)
+    ...buildDesktopAuthBody(issued.identity, lookup.cloudProfileId, now)
   }
 
   const data = Buffer.from(JSON.stringify(payload))
@@ -144,24 +137,19 @@ export async function handleLogoutPost(
   session: SecurityStateAccessSession,
   body: unknown,
   securityState: OwnMobileRelaySecurityState,
-  store: OwnMobileRelayAuthStore,
+  _store: OwnMobileRelayAuthStore,
   response: ServerResponse
 ): Promise<void> {
   await securityState.revokeAccessSessionById(session.sessionId)
-
-  for (const [token, record] of store.refreshTokens.entries()) {
-    if (record.sessionId === session.sessionId) {
-      store.refreshTokens.delete(token)
-    }
-  }
+  await securityState.revokeRefreshTokensForSession(session.sessionId)
 
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>
     if (typeof record.refreshToken === 'string') {
-      const extra = store.refreshTokens.get(record.refreshToken)
-      if (extra) {
-        await securityState.revokeAccessSessionById(extra.sessionId)
-        store.refreshTokens.delete(record.refreshToken)
+      const lookup = await securityState.lookupRefreshToken(record.refreshToken, Date.now())
+      if (lookup) {
+        await securityState.revokeAccessSessionById(lookup.sessionId)
+        await securityState.revokeRefreshTokensForSession(lookup.sessionId)
       }
     }
   }

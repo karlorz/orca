@@ -20,7 +20,10 @@ import type {
   SecurityStateRedactedDeviceCredential,
   SecurityStateOperatorSession,
   SecurityStateIssueOperatorSessionInput,
-  SecurityStateIssuedOperatorSession
+  SecurityStateIssuedOperatorSession,
+  SecurityStateIssueRefreshTokenInput,
+  SecurityStateLookupRefreshTokenResult,
+  SecurityStateRotateRefreshTokenInput
 } from './own-mobile-relay-security-state'
 import type {
   InternalDeviceRecord,
@@ -62,6 +65,16 @@ import {
   lookupOperatorSessionMemory,
   revokeOperatorSessionMemory
 } from './own-mobile-relay-security-state-operator-ops'
+import {
+  issueRefreshTokenMemory,
+  lookupRefreshTokenMemory,
+  rotateRefreshTokenMemory,
+  revokeRefreshTokensForSessionMemory,
+  isHostKeyExpiryDisabledMemory,
+  setHostKeyExpiryDisabledMemory,
+  isDeviceKeyExpiryDisabledMemory,
+  setDeviceKeyExpiryDisabledMemory
+} from './own-mobile-relay-security-state-refresh-ops'
 
 export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurityState {
   const ctx: MemoryStoreContext = {
@@ -73,7 +86,10 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
     grantsByTokenHash: new Map<string, string>(),
     devicesByKey: new Map<string, InternalDeviceRecord>(),
     operatorSessionsById: new Map<string, InternalOperatorSessionRecord>(),
-    operatorSessionsByTokenHash: new Map<string, string>()
+    operatorSessionsByTokenHash: new Map<string, string>(),
+    refreshTokensByHash: new Map(),
+    refreshHashesBySessionId: new Map(),
+    hostKeyExpiry: new Map()
   }
 
   return {
@@ -154,6 +170,59 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
 
     async revokeAccessSessionByToken(rawAccessToken: string, now = Date.now()): Promise<boolean> {
       return revokeAccessSessionByTokenMemory(ctx, rawAccessToken, now)
+    },
+
+    async issueRefreshToken(
+      input: SecurityStateIssueRefreshTokenInput,
+      now = Date.now()
+    ): Promise<void> {
+      return issueRefreshTokenMemory(ctx, input, now)
+    },
+
+    async lookupRefreshToken(
+      rawRefreshToken: string,
+      now = Date.now()
+    ): Promise<SecurityStateLookupRefreshTokenResult | null> {
+      return lookupRefreshTokenMemory(ctx, rawRefreshToken, now)
+    },
+
+    async rotateRefreshToken(
+      input: SecurityStateRotateRefreshTokenInput,
+      now = Date.now()
+    ): Promise<SecurityStateIssuedAccessSession | null> {
+      return rotateRefreshTokenMemory(ctx, input, now)
+    },
+
+    async revokeRefreshTokensForSession(sessionId: string, now = Date.now()): Promise<void> {
+      return revokeRefreshTokensForSessionMemory(ctx, sessionId, now)
+    },
+
+    async isHostKeyExpiryDisabled(relayHostId: string): Promise<boolean> {
+      return isHostKeyExpiryDisabledMemory(ctx, relayHostId)
+    },
+
+    async setHostKeyExpiryDisabled(
+      relayHostId: string,
+      disabled: boolean,
+      _now = Date.now()
+    ): Promise<void> {
+      return setHostKeyExpiryDisabledMemory(ctx, relayHostId, disabled)
+    },
+
+    async isDeviceKeyExpiryDisabled(
+      relayHostId: string,
+      relayDeviceId: string
+    ): Promise<boolean> {
+      return isDeviceKeyExpiryDisabledMemory(ctx, relayHostId, relayDeviceId)
+    },
+
+    async setDeviceKeyExpiryDisabled(
+      relayHostId: string,
+      relayDeviceId: string,
+      disabled: boolean,
+      _now = Date.now()
+    ): Promise<void> {
+      return setDeviceKeyExpiryDisabledMemory(ctx, relayHostId, relayDeviceId, disabled)
     },
 
     async issueRelayGrant(

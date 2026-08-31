@@ -47,6 +47,16 @@ import {
   executeLookupOperatorSessionSqlite,
   executeRevokeOperatorSessionSqlite
 } from './own-mobile-relay-security-state-sqlite-operator-ops'
+import {
+  executeIssueRefreshTokenSqlite,
+  executeLookupRefreshTokenSqlite,
+  executeRotateRefreshTokenSqlite,
+  executeRevokeRefreshTokensForSessionSqlite,
+  executeIsHostKeyExpiryDisabledSqlite,
+  executeSetHostKeyExpiryDisabledSqlite,
+  executeIsDeviceKeyExpiryDisabledSqlite,
+  executeSetDeviceKeyExpiryDisabledSqlite
+} from './own-mobile-relay-security-state-sqlite-refresh-ops'
 
 export { CURRENT_SCHEMA_VERSION, verifySqliteParentDirectorySecurity, verifySqlitePathSecurity }
 
@@ -157,6 +167,38 @@ export function openOwnMobileRelaySecurityStateSqlite(
     revokeAccessSessionByToken: async (rawAccessToken, now = Date.now()) => {
       assertOpen()
       return executeRevokeAccessSessionByTokenSqlite(ctx.db, rawAccessToken, now)
+    },
+    issueRefreshToken: async (input, now = Date.now()) => {
+      assertOpen()
+      return executeIssueRefreshTokenSqlite(ctx.db, input, now)
+    },
+    lookupRefreshToken: async (rawRefreshToken, now = Date.now()) => {
+      assertOpen()
+      return executeLookupRefreshTokenSqlite(ctx.db, rawRefreshToken, now)
+    },
+    rotateRefreshToken: async (input, now = Date.now()) => {
+      assertOpen()
+      return executeRotateRefreshTokenSqlite(ctx.db, input, now)
+    },
+    revokeRefreshTokensForSession: async (sessionId, now = Date.now()) => {
+      assertOpen()
+      return executeRevokeRefreshTokensForSessionSqlite(ctx.db, sessionId, now)
+    },
+    isHostKeyExpiryDisabled: async (relayHostId) => {
+      assertOpen()
+      return executeIsHostKeyExpiryDisabledSqlite(ctx.db, relayHostId)
+    },
+    setHostKeyExpiryDisabled: async (relayHostId, disabled, now = Date.now()) => {
+      assertOpen()
+      return executeSetHostKeyExpiryDisabledSqlite(ctx.db, relayHostId, disabled, now)
+    },
+    isDeviceKeyExpiryDisabled: async (relayHostId, relayDeviceId) => {
+      assertOpen()
+      return executeIsDeviceKeyExpiryDisabledSqlite(ctx.db, relayHostId, relayDeviceId)
+    },
+    setDeviceKeyExpiryDisabled: async (relayHostId, relayDeviceId, disabled) => {
+      assertOpen()
+      return executeSetDeviceKeyExpiryDisabledSqlite(ctx.db, relayHostId, relayDeviceId, disabled)
     },
     issueRelayGrant: async (input, now = Date.now()) => {
       assertOpen()

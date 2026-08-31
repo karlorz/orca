@@ -8,7 +8,7 @@ import type {
   OrcaCloudSessionPersistence
 } from '../../shared/orca-profiles'
 import { getOrcaProfileDirectory } from './profile-storage-paths'
-import { allowsPlaintextOrcaCloudSession } from './profile-cloud-auth-config'
+import { allowsPlaintextOrcaCloudSession, isPackagedOrcaBuild } from './profile-cloud-auth-config'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import {
   cloudSessionIdentity,
@@ -128,6 +128,12 @@ export function saveOrcaCloudSession(
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
     memorySessions.set(cacheKey, { session, persistence: 'dev-plaintext' })
     return 'dev-plaintext'
+  }
+
+  // Why: packaged desktop builds must not persist memory-only without safeStorage.
+  // Fail closed so caller/UI can surface the distinct persistence error.
+  if (isPackagedOrcaBuild()) {
+    throw new Error('SafeStorage is unavailable. Allow Orca Safe Storage in OS settings to keep Relay signed in.')
   }
 
   // Why: Orca account refresh tokens must not silently fall back to plaintext

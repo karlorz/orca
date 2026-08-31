@@ -35,7 +35,11 @@ export function matchDeviceRecord(
       authorizationMode: record.authorizationMode,
       graceExpiresAt: record.graceExpiresAt
     }
-    if (record.currentResumeTokenHash === tokenHash && record.resumeExpiresAt > now) {
+    const keyExpiryDisabled = record.keyExpiryDisabled ?? true
+    if (
+      record.currentResumeTokenHash === tokenHash &&
+      (keyExpiryDisabled || record.resumeExpiresAt > now)
+    ) {
       return { device: base, acceptedAs: 'current' }
     }
     if (
@@ -100,7 +104,8 @@ export function cleanupExpiredRecords(
     }
     const isExpired =
       device.revokedAt !== undefined ||
-      (device.resumeExpiresAt <= now &&
+      (!device.keyExpiryDisabled &&
+        device.resumeExpiresAt <= now &&
         (device.graceExpiresAt === undefined || device.graceExpiresAt <= now))
     if (isExpired) {
       devices.delete(key)

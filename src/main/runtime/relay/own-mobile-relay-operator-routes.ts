@@ -213,6 +213,43 @@ export async function handleOperatorRequest(
     return
   }
 
+  // POST /v1/operator/pairing/hosts/:relayHostId/key-expiry
+  const hostKeyExpiryMatch = pathname.match(/^\/v1\/operator\/pairing\/hosts\/([^/]+)\/key-expiry$/)
+  if (request.method === 'POST' && hostKeyExpiryMatch) {
+    const body = (await readJsonBodySafely(request, response)) as Record<string, unknown> | undefined
+    if (body === undefined) {
+      return
+    }
+    if (typeof body.disabled !== 'boolean') {
+      sendJson(response, 400, { error: 'invalid_request' })
+      return
+    }
+    const relayHostId = decodeURIComponent(hostKeyExpiryMatch[1])
+    await context.securityState.setHostKeyExpiryDisabled(relayHostId, body.disabled)
+    sendJson(response, 200, { ok: true, relayHostId, keyExpiryDisabled: body.disabled })
+    return
+  }
+
+  // POST /v1/operator/pairing/devices/:relayHostId/:deviceId/key-expiry
+  const devKeyExpiryMatch = pathname.match(
+    /^\/v1\/operator\/pairing\/devices\/([^/]+)\/([^/]+)\/key-expiry$/
+  )
+  if (request.method === 'POST' && devKeyExpiryMatch) {
+    const body = (await readJsonBodySafely(request, response)) as Record<string, unknown> | undefined
+    if (body === undefined) {
+      return
+    }
+    if (typeof body.disabled !== 'boolean') {
+      sendJson(response, 400, { error: 'invalid_request' })
+      return
+    }
+    const relayHostId = decodeURIComponent(devKeyExpiryMatch[1])
+    const relayDeviceId = decodeURIComponent(devKeyExpiryMatch[2])
+    await context.securityState.setDeviceKeyExpiryDisabled(relayHostId, relayDeviceId, body.disabled)
+    sendJson(response, 200, { ok: true, relayHostId, relayDeviceId, keyExpiryDisabled: body.disabled })
+    return
+  }
+
   // GET /v1/operator/incident-bundle
   if (request.method === 'GET' && pathname === '/v1/operator/incident-bundle') {
     sendJson(response, 200, buildOperatorIncidentBundle(await loadOperatorConsoleState(context)))

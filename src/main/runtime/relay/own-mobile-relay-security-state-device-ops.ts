@@ -36,6 +36,7 @@ export function installDeviceCredentialMemory(
   const resumeTtl = input.resumeTtlMs ?? RESUME_TOKEN_TTL_MS
   const graceTtl = input.graceTtlMs ?? GRACE_TOKEN_TTL_MS
   const resumeExpiresAt = now + resumeTtl
+  const keyExpiryDisabled = existing ? (existing.keyExpiryDisabled ?? true) : true
   const record: InternalDeviceRecord = {
     relayHostId: input.relayHostId,
     relayDeviceId: input.relayDeviceId,
@@ -43,7 +44,8 @@ export function installDeviceCredentialMemory(
     currentResumeTokenHash: input.newResumeTokenHash,
     currentVersion,
     resumeExpiresAt,
-    authorizationMode: input.authorizationMode
+    authorizationMode: input.authorizationMode,
+    keyExpiryDisabled
   }
   if (existing) {
     record.graceResumeTokenHash = existing.currentResumeTokenHash

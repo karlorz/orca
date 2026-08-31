@@ -11,10 +11,14 @@ const safeStorageMock = vi.hoisted(() => ({
 }))
 
 let userDataPath = ''
+let isPackaged = false
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => userDataPath
+    getPath: () => userDataPath,
+    get isPackaged() {
+      return isPackaged
+    }
   },
   safeStorage: safeStorageMock
 }))
@@ -62,6 +66,7 @@ function writePlaintextSessionFile(profileId: string, session: OrcaCloudSession)
 describe('Orca cloud session store', () => {
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-cloud-session-'))
+    isPackaged = false
     vi.unstubAllEnvs()
     safeStorageMock.decryptString.mockClear()
     safeStorageMock.encryptString.mockClear()
@@ -168,5 +173,16 @@ describe('Orca cloud session store', () => {
       persistence: 'none',
       error: 'Unsafe session format.'
     })
+  })
+
+  it('fails closed in packaged build when safeStorage is unavailable', async () => {
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    isPackaged = true
+    const store = await loadSessionStore()
+    const session = makeSession()
+
+    expect(() => store.saveOrcaCloudSession('profile-1', userDataPath, session)).toThrow(
+      /SafeStorage is unavailable/
+    )
   })
 })

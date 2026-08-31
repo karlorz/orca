@@ -23,7 +23,7 @@ const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onorca.dev'
 
 // Why: packaged main bundles never define NODE_ENV, so packaged-ness is the
 // only reliable production signal for gating dev-only auth escape hatches.
-function isPackagedOrcaBuild(): boolean {
+export function isPackagedOrcaBuild(): boolean {
   try {
     return app?.isPackaged === true
   } catch {

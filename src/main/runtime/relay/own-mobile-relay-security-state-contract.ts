@@ -4,6 +4,7 @@ import { registerAccountAndVerifierTests } from './own-mobile-relay-security-sta
 import { registerSessionAndGrantTests } from './own-mobile-relay-security-state-session-contract'
 import { registerGrantLifecycleTests } from './own-mobile-relay-security-state-grant-contract'
 import { registerDeviceAndEpochTests } from './own-mobile-relay-security-state-device-contract'
+import { registerRefreshTokenAndKeyExpiryTests } from './own-mobile-relay-security-state-refresh-contract'
 
 export function registerOwnMobileRelaySecurityStateContractTests(
   createAdapter: () => Promise<OwnMobileRelaySecurityState> | OwnMobileRelaySecurityState
@@ -13,5 +14,6 @@ export function registerOwnMobileRelaySecurityStateContractTests(
     registerSessionAndGrantTests(createAdapter)
     registerGrantLifecycleTests(createAdapter)
     registerDeviceAndEpochTests(createAdapter)
+    registerRefreshTokenAndKeyExpiryTests(createAdapter)
   })
 }

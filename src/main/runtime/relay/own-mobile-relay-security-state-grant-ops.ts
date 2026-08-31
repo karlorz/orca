@@ -84,7 +84,8 @@ export function validateRelayGrantByTokenMemory(
     return null
   }
   const parent = ctx.sessionsById.get(grant.parentSessionId)
-  if (!isGrantValid(grant, parent, ctx.account, now)) {
+  const keyExpiryDisabled = ctx.hostKeyExpiry.get(grant.relayHostId) ?? true
+  if (!isGrantValid(grant, parent, ctx.account, now, keyExpiryDisabled)) {
     return null
   }
   return toPublicRelayGrant(grant)
@@ -102,7 +103,8 @@ export function validateRelayGrantByIdMemory(
     return null
   }
   const parent = ctx.sessionsById.get(grant.parentSessionId)
-  if (!isGrantValid(grant, parent, ctx.account, now)) {
+  const keyExpiryDisabled = ctx.hostKeyExpiry.get(grant.relayHostId) ?? true
+  if (!isGrantValid(grant, parent, ctx.account, now, keyExpiryDisabled)) {
     return null
   }
   return toPublicRelayGrant(grant)
