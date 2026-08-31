@@ -4,6 +4,11 @@ import type { DatabaseSync } from 'node:sqlite'
 export const CURRENT_SCHEMA_VERSION = 3
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000
 
+/** SQLite INTEGER flag: missing/null defaults to disabled-expiry (1). */
+export function sqliteKeyExpiryDisabled(value: number | null | undefined): boolean {
+  return value === null || value === undefined || Number(value) === 1
+}
+
 export function verifySqliteParentDirectorySecurity(dirPath: string): void {
   const st = statSync(dirPath)
   // Fail if group-writable (0o020) or world-writable (0o002)

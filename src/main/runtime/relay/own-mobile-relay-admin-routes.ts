@@ -250,7 +250,7 @@ export async function handleAdminRequest(
       )
     } else if (grantRevoke) {
       await revokeOperatorGrant(context, decodeURIComponent(grantRevoke[1] ?? ''))
-    } else if (hostKeyExpiry) {
+    } else if (hostKeyExpiry || deviceKeyExpiry) {
       let form: URLSearchParams
       try {
         form = await readUrlEncodedBodySafely(request)
@@ -259,24 +259,18 @@ export async function handleAdminRequest(
         return
       }
       const disabled = form.get('disabled') === 'true'
-      await context.securityState.setHostKeyExpiryDisabled(
-        decodeURIComponent(hostKeyExpiry[1] ?? ''),
-        disabled
-      )
-    } else if (deviceKeyExpiry) {
-      let form: URLSearchParams
-      try {
-        form = await readUrlEncodedBodySafely(request)
-      } catch {
-        sendHtml(response, 400, 'Bad request')
-        return
+      if (hostKeyExpiry) {
+        await context.securityState.setHostKeyExpiryDisabled(
+          decodeURIComponent(hostKeyExpiry[1] ?? ''),
+          disabled
+        )
+      } else if (deviceKeyExpiry) {
+        await context.securityState.setDeviceKeyExpiryDisabled(
+          decodeURIComponent(deviceKeyExpiry[1] ?? ''),
+          decodeURIComponent(deviceKeyExpiry[2] ?? ''),
+          disabled
+        )
       }
-      const disabled = form.get('disabled') === 'true'
-      await context.securityState.setDeviceKeyExpiryDisabled(
-        decodeURIComponent(deviceKeyExpiry[1] ?? ''),
-        decodeURIComponent(deviceKeyExpiry[2] ?? ''),
-        disabled
-      )
     }
     redirect(response, '/admin/pairing')
     return

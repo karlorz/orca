@@ -10,6 +10,23 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function keyExpiryBadge(expiryDisabled: boolean): string {
+  return expiryDisabled
+    ? ' <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">Expiry disabled</span>'
+    : ''
+}
+
+function keyExpiryForms(opts: {
+  expiryDisabled: boolean
+  toggleAction: string
+  revokeAction: string
+}): string {
+  const toggleLabel = opts.expiryDisabled ? 'Enable key expiry' : 'Disable key expiry'
+  const toggleDisabledVal = opts.expiryDisabled ? 'false' : 'true'
+  return `<form method="post" action="${opts.toggleAction}" style="display:inline"><input type="hidden" name="disabled" value="${toggleDisabledVal}"><button type="submit">${toggleLabel}</button></form>
+<form method="post" action="${opts.revokeAction}" style="display:inline"><button type="submit">Revoke</button></form>`
+}
+
 function layout(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
@@ -72,34 +89,28 @@ export function renderAdminPairing(input: {
   grants: { grantId: string; relayHostId: string; keyExpiryDisabled?: boolean }[]
 }): string {
   const devices = input.devices
-    .map(
-      (device) => {
-        const expiryDisabled = device.keyExpiryDisabled ?? true
-        const expiryBadge = expiryDisabled ? ' <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">Expiry disabled</span>' : ''
-        const toggleLabel = expiryDisabled ? 'Enable key expiry' : 'Disable key expiry'
-        const toggleDisabledVal = expiryDisabled ? 'false' : 'true'
-        return `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}${expiryBadge}</td><td>${device.revoked ? 'revoked' : 'active'}</td>
-<td>
-<form method="post" action="/admin/pairing/devices/${encodeURIComponent(device.relayHostId)}/${encodeURIComponent(device.relayDeviceId)}/key-expiry" style="display:inline"><input type="hidden" name="disabled" value="${toggleDisabledVal}"><button type="submit">${toggleLabel}</button></form>
-<form method="post" action="/admin/pairing/devices/${encodeURIComponent(device.relayHostId)}/${encodeURIComponent(device.relayDeviceId)}/revoke" style="display:inline"><button type="submit">Revoke</button></form>
-</td></tr>`
-      }
-    )
+    .map((device) => {
+      const host = encodeURIComponent(device.relayHostId)
+      const id = encodeURIComponent(device.relayDeviceId)
+      const expiryDisabled = device.keyExpiryDisabled ?? true
+      return `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}${keyExpiryBadge(expiryDisabled)}</td><td>${device.revoked ? 'revoked' : 'active'}</td><td>${keyExpiryForms({
+        expiryDisabled,
+        toggleAction: `/admin/pairing/devices/${host}/${id}/key-expiry`,
+        revokeAction: `/admin/pairing/devices/${host}/${id}/revoke`
+      })}</td></tr>`
+    })
     .join('')
   const grants = input.grants
-    .map(
-      (grant) => {
-        const expiryDisabled = grant.keyExpiryDisabled ?? true
-        const expiryBadge = expiryDisabled ? ' <span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">Expiry disabled</span>' : ''
-        const toggleLabel = expiryDisabled ? 'Enable key expiry' : 'Disable key expiry'
-        const toggleDisabledVal = expiryDisabled ? 'false' : 'true'
-        return `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}${expiryBadge}</td>
-<td>
-<form method="post" action="/admin/pairing/hosts/${encodeURIComponent(grant.relayHostId)}/key-expiry" style="display:inline"><input type="hidden" name="disabled" value="${toggleDisabledVal}"><button type="submit">${toggleLabel}</button></form>
-<form method="post" action="/admin/pairing/grants/${encodeURIComponent(grant.grantId)}/revoke" style="display:inline"><button type="submit">Revoke</button></form>
-</td></tr>`
-      }
-    )
+    .map((grant) => {
+      const host = encodeURIComponent(grant.relayHostId)
+      const grantId = encodeURIComponent(grant.grantId)
+      const expiryDisabled = grant.keyExpiryDisabled ?? true
+      return `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}${keyExpiryBadge(expiryDisabled)}</td><td>${keyExpiryForms({
+        expiryDisabled,
+        toggleAction: `/admin/pairing/hosts/${host}/key-expiry`,
+        revokeAction: `/admin/pairing/grants/${grantId}/revoke`
+      })}</td></tr>`
+    })
     .join('')
   return layout(
     'Relay operator pairing',

@@ -62,13 +62,6 @@ export async function handleRefreshPost(
   }
 
   const now = Date.now()
-  const lookup = await securityState.lookupRefreshToken(oldRefreshToken, now)
-  if (!lookup) {
-    response.writeHead(401, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({ error: 'invalid_grant' }))
-    return
-  }
-
   const newAccessToken = randomBytes(32).toString('base64url')
   const newRefreshToken = randomBytes(32).toString('base64url')
 
@@ -90,7 +83,7 @@ export async function handleRefreshPost(
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
     expiresAt: issued.expiresAt,
-    ...buildDesktopAuthBody(issued.identity, lookup.cloudProfileId, now)
+    ...buildDesktopAuthBody(issued.identity, issued.identity.cloudProfileId, now)
   }
 
   const data = Buffer.from(JSON.stringify(payload))
@@ -140,16 +133,20 @@ export async function handleLogoutPost(
   _store: OwnMobileRelayAuthStore,
   response: ServerResponse
 ): Promise<void> {
-  await securityState.revokeAccessSessionById(session.sessionId)
-  await securityState.revokeRefreshTokensForSession(session.sessionId)
+  await Promise.all([
+    securityState.revokeAccessSessionById(session.sessionId),
+    securityState.revokeRefreshTokensForSession(session.sessionId)
+  ])
 
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>
     if (typeof record.refreshToken === 'string') {
       const lookup = await securityState.lookupRefreshToken(record.refreshToken, Date.now())
-      if (lookup) {
-        await securityState.revokeAccessSessionById(lookup.sessionId)
-        await securityState.revokeRefreshTokensForSession(lookup.sessionId)
+      if (lookup && lookup.sessionId !== session.sessionId) {
+        await Promise.all([
+          securityState.revokeAccessSessionById(lookup.sessionId),
+          securityState.revokeRefreshTokensForSession(lookup.sessionId)
+        ])
       }
     }
   }

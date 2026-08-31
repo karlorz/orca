@@ -12,6 +12,7 @@ import { sha256Base64Url } from './own-mobile-relay-security-state-device-cleanu
 import type { SqliteSessionRow } from './own-mobile-relay-security-state-sqlite-session-ops'
 import type { SqliteGrantRow } from './own-mobile-relay-security-state-sqlite-grant-ops'
 import type { SqliteDeviceRow } from './own-mobile-relay-security-state-sqlite-device-ops'
+import { sqliteKeyExpiryDisabled } from './own-mobile-relay-security-state-sqlite-schema'
 
 export type SqliteOperatorSessionRow = {
   session_id: string
@@ -84,7 +85,7 @@ export function executeListRelayGrantsSqlite(
     relayHostId: row.relay_host_id,
     expiresAt: Number(row.expires_at),
     createdAt: Number(row.created_at),
-    keyExpiryDisabled: Number(row.key_expiry_disabled) === 1,
+    keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled),
     identity: {
       userId: row.user_id,
       profileId: row.profile_id,
@@ -115,7 +116,7 @@ export function executeListDeviceCredentialsSqlite(
     authorizationMode: row.authorization_mode,
     ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {}),
     revoked: row.revoked_at !== null,
-    keyExpiryDisabled: row.key_expiry_disabled === null || row.key_expiry_disabled === undefined || Number(row.key_expiry_disabled) === 1
+    keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled)
   }))
 }
 

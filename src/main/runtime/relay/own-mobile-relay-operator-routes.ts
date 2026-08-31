@@ -89,6 +89,21 @@ async function readJsonBodySafely(
   }
 }
 
+async function readDisabledFlag(
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<boolean | undefined> {
+  const body = (await readJsonBodySafely(request, response)) as Record<string, unknown> | undefined
+  if (body === undefined) {
+    return undefined
+  }
+  if (typeof body.disabled !== 'boolean') {
+    sendJson(response, 400, { error: 'invalid_request' })
+    return undefined
+  }
+  return body.disabled
+}
+
 export async function handleOperatorRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -216,17 +231,13 @@ export async function handleOperatorRequest(
   // POST /v1/operator/pairing/hosts/:relayHostId/key-expiry
   const hostKeyExpiryMatch = pathname.match(/^\/v1\/operator\/pairing\/hosts\/([^/]+)\/key-expiry$/)
   if (request.method === 'POST' && hostKeyExpiryMatch) {
-    const body = (await readJsonBodySafely(request, response)) as Record<string, unknown> | undefined
-    if (body === undefined) {
-      return
-    }
-    if (typeof body.disabled !== 'boolean') {
-      sendJson(response, 400, { error: 'invalid_request' })
+    const disabled = await readDisabledFlag(request, response)
+    if (disabled === undefined) {
       return
     }
     const relayHostId = decodeURIComponent(hostKeyExpiryMatch[1])
-    await context.securityState.setHostKeyExpiryDisabled(relayHostId, body.disabled)
-    sendJson(response, 200, { ok: true, relayHostId, keyExpiryDisabled: body.disabled })
+    await context.securityState.setHostKeyExpiryDisabled(relayHostId, disabled)
+    sendJson(response, 200, { ok: true, relayHostId, keyExpiryDisabled: disabled })
     return
   }
 
@@ -235,18 +246,14 @@ export async function handleOperatorRequest(
     /^\/v1\/operator\/pairing\/devices\/([^/]+)\/([^/]+)\/key-expiry$/
   )
   if (request.method === 'POST' && devKeyExpiryMatch) {
-    const body = (await readJsonBodySafely(request, response)) as Record<string, unknown> | undefined
-    if (body === undefined) {
-      return
-    }
-    if (typeof body.disabled !== 'boolean') {
-      sendJson(response, 400, { error: 'invalid_request' })
+    const disabled = await readDisabledFlag(request, response)
+    if (disabled === undefined) {
       return
     }
     const relayHostId = decodeURIComponent(devKeyExpiryMatch[1])
     const relayDeviceId = decodeURIComponent(devKeyExpiryMatch[2])
-    await context.securityState.setDeviceKeyExpiryDisabled(relayHostId, relayDeviceId, body.disabled)
-    sendJson(response, 200, { ok: true, relayHostId, relayDeviceId, keyExpiryDisabled: body.disabled })
+    await context.securityState.setDeviceKeyExpiryDisabled(relayHostId, relayDeviceId, disabled)
+    sendJson(response, 200, { ok: true, relayHostId, relayDeviceId, keyExpiryDisabled: disabled })
     return
   }
 

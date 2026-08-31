@@ -8,6 +8,7 @@ import type {
   SecurityStateDeviceCredential
 } from './own-mobile-relay-security-state'
 import { RESUME_TOKEN_TTL_MS, GRACE_TOKEN_TTL_MS } from './own-mobile-relay-types'
+import { sqliteKeyExpiryDisabled } from './own-mobile-relay-security-state-sqlite-schema'
 
 export type SqliteDeviceRow = {
   relay_host_id: string
@@ -71,9 +72,7 @@ export function executeInstallDeviceCredentialSqlite(
       graceExpiresAt = now + graceTtl
     }
 
-    const keyExpiryDisabled = existing && existing.key_expiry_disabled !== undefined && existing.key_expiry_disabled !== null
-      ? Number(existing.key_expiry_disabled)
-      : 1
+    const keyExpiryDisabled = sqliteKeyExpiryDisabled(existing?.key_expiry_disabled) ? 1 : 0
 
     db.prepare(`
       INSERT INTO device_credentials (
@@ -195,7 +194,7 @@ export function executeMatchDeviceCredentialSqlite(
     ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {})
   }
 
-  const keyExpiryDisabled = row.key_expiry_disabled === null || row.key_expiry_disabled === undefined || Number(row.key_expiry_disabled) === 1
+  const keyExpiryDisabled = sqliteKeyExpiryDisabled(row.key_expiry_disabled)
 
   if (
     row.current_resume_token_hash === tokenHash &&
