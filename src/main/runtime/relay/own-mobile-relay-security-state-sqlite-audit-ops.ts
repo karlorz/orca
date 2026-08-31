@@ -68,7 +68,8 @@ export function executeListAuditEventsSqlite(
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const orderClause = order === 'desc' ? 'ORDER BY at DESC, id DESC' : 'ORDER BY at ASC, id ASC'
-  const limitClause = limit !== undefined && limit >= 0 ? `LIMIT ${limit}` : ''
+  const isFiniteLimit = limit !== undefined && Number.isFinite(limit) && limit >= 0
+  const limitClause = isFiniteLimit ? `LIMIT ${Math.floor(limit)}` : ''
 
   const sql = `
     SELECT id, at, type, fields_json
@@ -83,7 +84,10 @@ export function executeListAuditEventsSqlite(
   return rows.map((row) => {
     let fields: Record<string, string | number | boolean | null> = {}
     try {
-      fields = JSON.parse(row.fields_json)
+      const parsed = JSON.parse(row.fields_json)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        fields = parsed
+      }
     } catch {
       fields = {}
     }

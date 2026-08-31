@@ -48,8 +48,11 @@ export function createOwnMobileRelayAuditMemory(
         result = [...events]
       }
 
-      if (limit !== undefined && limit >= 0 && result.length > limit) {
-        return result.slice(0, limit)
+      if (limit !== undefined && Number.isFinite(limit) && limit >= 0) {
+        const flooredLimit = Math.floor(limit)
+        if (result.length > flooredLimit) {
+          return result.slice(0, flooredLimit)
+        }
       }
       return result
     }

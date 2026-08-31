@@ -203,4 +203,75 @@ describe('own-mobile-relay-audit-sqlite', () => {
     await expect(audit.append({ at: 200, type: 'test', fields: {} })).rejects.toThrow(/closed/)
     await expect(audit.list({})).rejects.toThrow(/closed/)
   })
+
+  it('8. handles corrupted or non-object JSON primitives in fields_json gracefully', async () => {
+    const dbPath = await createTempDbPath()
+    const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const { DatabaseSync } = await import('node:sqlite')
+    const rawDb = new DatabaseSync(dbPath)
+
+    // Insert rows with invalid/primitive fields_json directly
+    rawDb
+      .prepare('INSERT INTO audit_events (at, type, fields_json) VALUES (?, ?, ?)')
+      .run(100, 'test.null', 'null')
+    rawDb
+      .prepare('INSERT INTO audit_events (at, type, fields_json) VALUES (?, ?, ?)')
+      .run(200, 'test.number', '123')
+    rawDb
+      .prepare('INSERT INTO audit_events (at, type, fields_json) VALUES (?, ?, ?)')
+      .run(300, 'test.array', '[1, 2, 3]')
+    rawDb
+      .prepare('INSERT INTO audit_events (at, type, fields_json) VALUES (?, ?, ?)')
+      .run(400, 'test.string', '"raw_string"')
+    rawDb
+      .prepare('INSERT INTO audit_events (at, type, fields_json) VALUES (?, ?, ?)')
+      .run(500, 'test.invalid', '{not valid json}')
+    rawDb.close()
+
+    const audit = createOwnMobileRelayAuditSqlite(state)
+    const events = await audit.list({})
+    expect(events).toHaveLength(5)
+    for (const ev of events) {
+      expect(ev.fields).toEqual({})
+      expect(typeof ev.fields).toBe('object')
+      expect(ev.fields).not.toBeNull()
+      expect(Array.isArray(ev.fields)).toBe(false)
+    }
+
+    await state.close()
+  })
+
+  it('9. normalizes limit defensively for Infinity, fractional, negative, and non-finite values', async () => {
+    const dbPath = await createTempDbPath()
+    const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const audit = createOwnMobileRelayAuditSqlite(state)
+
+    await audit.append({ at: 100, type: 'ev', fields: { count: 1 } })
+    await audit.append({ at: 200, type: 'ev', fields: { count: 2 } })
+    await audit.append({ at: 300, type: 'ev', fields: { count: 3 } })
+
+    // Infinity should not throw SQL syntax error and should return all rows
+    const infEvents = await audit.list({ limit: Number.POSITIVE_INFINITY })
+    expect(infEvents).toHaveLength(3)
+
+    // Negative limit should behave as no limit
+    const negEvents = await audit.list({ limit: -5 })
+    expect(negEvents).toHaveLength(3)
+
+    // NaN should behave as no limit
+    const nanEvents = await audit.list({ limit: Number.NaN })
+    expect(nanEvents).toHaveLength(3)
+
+    // Fractional limit should floor (e.g. 2.7 -> 2)
+    const fracEvents = await audit.list({ limit: 2.7 })
+    expect(fracEvents).toHaveLength(2)
+    expect(fracEvents.map((e) => e.at)).toEqual([100, 200])
+
+    // Fractional limit with order=desc should floor and order desc before limit
+    const fracDesc = await audit.list({ limit: 1.9, order: 'desc' })
+    expect(fracDesc).toHaveLength(1)
+    expect(fracDesc[0]?.at).toBe(300)
+
+    await state.close()
+  })
 })
