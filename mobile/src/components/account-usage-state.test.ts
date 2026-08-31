@@ -9,10 +9,12 @@ import {
   getWindowResetLabel,
   hasActiveProviderUsage,
   hasRenderableUsage,
+  hasVisibleRenderableUsage,
   USAGE_PROVIDER_IDS,
   type AccountsSnapshot,
   type InactiveAccountUsage,
-  type ProviderRateLimits
+  type ProviderRateLimits,
+  type UsageProviderKey
 } from './account-usage-state'
 
 function makeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
@@ -34,6 +36,7 @@ function makeSnapshot(
     codexLimits?: ProviderRateLimits | null
     geminiLimits?: ProviderRateLimits | null
     antigravityLimits?: ProviderRateLimits | null
+    kimiLimits?: ProviderRateLimits | null
     grokLimits?: ProviderRateLimits | null
     claudeAccounts?: AccountsSnapshot['claude']['accounts']
     codexAccounts?: AccountsSnapshot['codex']['accounts']
@@ -59,6 +62,7 @@ function makeSnapshot(
       codexTarget: { runtime: 'host', wslDistro: null },
       gemini: overrides.geminiLimits ?? null,
       antigravity: overrides.antigravityLimits ?? null,
+      kimi: overrides.kimiLimits ?? null,
       grok: overrides.grokLimits ?? null,
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
       inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
@@ -445,3 +449,62 @@ describe('USAGE_PROVIDER_IDS', () => {
     ])
   })
 })
+
+describe('hasVisibleRenderableUsage', () => {
+  it('is true when an opted-in display provider (grok) has weekly usage', () => {
+    const snapshot = makeSnapshot({
+      grokLimits: makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        weekly: window(33, 10080)
+      })
+    })
+    expect(hasVisibleRenderableUsage(snapshot, new Set<UsageProviderKey>(['grok']))).toBe(true)
+  })
+
+  it('is false for the same grok snapshot when only default providers (claude, codex) are visible', () => {
+    const snapshot = makeSnapshot({
+      grokLimits: makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        weekly: window(33, 10080)
+      })
+    })
+    expect(
+      hasVisibleRenderableUsage(snapshot, new Set<UsageProviderKey>(['claude', 'codex']))
+    ).toBe(false)
+  })
+
+  it('is true when kimi has an error status and grok is ok while claude/codex are empty', () => {
+    const snapshot = makeSnapshot({
+      kimiLimits: makeLimits({
+        provider: 'kimi',
+        status: 'error',
+        error: 'network error'
+      }),
+      grokLimits: makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        weekly: window(33, 10080)
+      })
+    })
+    expect(
+      hasVisibleRenderableUsage(
+        snapshot,
+        new Set<UsageProviderKey>(['claude', 'codex', 'kimi', 'grok'])
+      )
+    ).toBe(true)
+  })
+
+  it('is false for an empty visible set regardless of snapshot data', () => {
+    const snapshot = makeSnapshot({
+      grokLimits: makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        weekly: window(33, 10080)
+      })
+    })
+    expect(hasVisibleRenderableUsage(snapshot, new Set<UsageProviderKey>())).toBe(false)
+  })
+})
+

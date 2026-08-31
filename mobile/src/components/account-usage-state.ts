@@ -275,3 +275,16 @@ export function hasRenderableUsage(
   }
   return hasActiveProviderUsage(limits)
 }
+
+export function hasVisibleRenderableUsage(
+  snapshot: AccountsSnapshot,
+  visibleProviders: ReadonlySet<UsageProviderKey>
+): boolean {
+  for (const provider of visibleProviders) {
+    if (hasRenderableUsage(snapshot, provider)) {
+      return true
+    }
+  }
+  return false
+}
+
