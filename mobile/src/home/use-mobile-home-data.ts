@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AccountsSnapshot } from '../components/AccountUsage'
-import { hasRenderableUsage } from '../components/AccountUsage'
+import { hasVisibleRenderableUsage } from '../components/AccountUsage'
+import { useVisibleUsageProviders } from '../components/use-visible-usage-providers'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import {
@@ -40,6 +41,7 @@ export function useMobileHomeData() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+  const visibleProviders = useVisibleUsageProviders()
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
@@ -151,16 +153,18 @@ export function useMobileHomeData() {
     const items: { host: HostProfile; snapshot: AccountsSnapshot }[] = []
     for (const host of sortedHosts) {
       const snapshot = accountsByHost[host.id]
+      // Why: home inclusion follows the Settings visible set so opted-in Grok/Kimi
+      // still show when Claude/Codex have no usage.
       if (
         connections.hostStates[host.id] === 'connected' &&
         snapshot &&
-        (hasRenderableUsage(snapshot, 'claude') || hasRenderableUsage(snapshot, 'codex'))
+        hasVisibleRenderableUsage(snapshot, visibleProviders)
       ) {
         items.push({ host, snapshot })
       }
     }
     return items
-  }, [sortedHosts, connections.hostStates, accountsByHost])
+  }, [sortedHosts, connections.hostStates, accountsByHost, visibleProviders])
   const connectedHosts = useMemo(
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
     [sortedHosts, connections.hostStates]
