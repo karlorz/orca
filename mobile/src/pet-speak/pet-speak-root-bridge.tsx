@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { loadHostCatalog } from '../transport/host-store'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { useRpcClientContext } from '../transport/client-context'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
-import type { PetSpeakHandlerOptions } from './pet-speak-types'
+import type { PetSpeakCaption, PetSpeakHandlerOptions } from './pet-speak-types'
 import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
 import {
@@ -23,6 +23,7 @@ import {
   type PetSpeakSubscriptionEntry,
   type PetVoiceHoldRuntime
 } from './pet-speak-root-bridge-hold'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
@@ -37,9 +38,46 @@ export interface PetSpeakBridgeOptions {
   updateVoiceSessionNotification?: (text: string) => Promise<void>
   loadPreferences?: () => Promise<PetSpeechPreferences>
   subscribePreferences?: (listener: (prefs: PetSpeechPreferences) => void) => () => void
+  caption?: PetSpeakCaption | null
 }
 
-export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
+const captionStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 50,
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 9999,
+    alignItems: 'center',
+    pointerEvents: 'none'
+  },
+  banner: {
+    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+    borderColor: colors.borderSubtle,
+    borderWidth: 1,
+    borderRadius: radii.card,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg,
+    maxWidth: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5
+  },
+  text: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 20
+  }
+})
+
+export function usePetSpeakRootBridge(
+  options?: PetSpeakBridgeOptions,
+  onCaptionChange?: (caption: PetSpeakCaption | null) => void
+): void {
   const ctx = useRpcClientContext()
   const [connectableProfiles, setConnectableProfiles] = useState<HostProfile[]>([])
   const loadCatalogFn = options?.loadCatalog ?? loadHostCatalog
@@ -89,14 +127,17 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   const updateVoiceSessionNotificationProp = options?.updateVoiceSessionNotification
   const handlerOptionsProp = options?.handlerOptions
 
-  const effectiveHandlerOptions = useMemo<PetSpeakHandlerOptions | undefined>(() => {
-    if (handlerOptionsProp !== undefined) {
-      return handlerOptionsProp
-    }
+  const effectiveHandlerOptions = useMemo<PetSpeakHandlerOptions>(() => {
+    const userOnCaption = handlerOptionsProp?.onCaption
     return {
-      prepareEvent: preparePetSpeakEvent
+      prepareEvent: preparePetSpeakEvent,
+      ...handlerOptionsProp,
+      onCaption: (caption) => {
+        userOnCaption?.(caption)
+        onCaptionChange?.(caption)
+      }
     }
-  }, [handlerOptionsProp])
+  }, [handlerOptionsProp, onCaptionChange])
 
   const acquireVoiceSessionFn = useCallback(
     () =>
@@ -279,7 +320,23 @@ export function usePetSpeakRootBridge(options?: PetSpeakBridgeOptions): void {
   }, [releaseVoiceSessionFn])
 }
 
-export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): null {
-  usePetSpeakRootBridge(props)
-  return null
+export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement | null {
+  const [internalCaption, setInternalCaption] = useState<PetSpeakCaption | null>(null)
+  usePetSpeakRootBridge(props, setInternalCaption)
+
+  const activeCaption = props?.caption !== undefined ? props.caption : internalCaption
+
+  if (!activeCaption) {
+    return null
+  }
+
+  return (
+    <View style={captionStyles.container} pointerEvents="none">
+      <View style={captionStyles.banner}>
+        <Text style={captionStyles.text} numberOfLines={3}>
+          {activeCaption.text}
+        </Text>
+      </View>
+    </View>
+  )
 }

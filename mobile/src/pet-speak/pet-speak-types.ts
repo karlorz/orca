@@ -31,6 +31,11 @@ export type PreparedPetSpeakEventResult =
 
 export type PetSpeakEventPreparer = (event: PetSpeakPayload) => Promise<PreparedPetSpeakEventResult>
 
+export type PetSpeakCaption = {
+  eventId: string
+  text: string
+}
+
 export interface PetSpeakHandlerOptions {
   tts?: TtsAdapter
   mediaSession?: MediaSessionAdapter
@@ -39,4 +44,5 @@ export interface PetSpeakHandlerOptions {
   maxSeenEvents?: number
   maxQueueCapacity?: number
   onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
+  onCaption?: (caption: PetSpeakCaption | null) => void
 }

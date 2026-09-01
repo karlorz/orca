@@ -56,7 +56,13 @@ vi.mock('./pet-speech-preferences', () => ({
 }))
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'ios', Version: 18 }
+  Platform: { OS: 'ios', Version: 18 },
+  View: 'View',
+  Text: 'Text',
+  StyleSheet: {
+    create: (styles: unknown) => styles,
+    hairlineWidth: 1
+  }
 }))
 
 vi.mock('../notifications/notification-permissions', () => ({

@@ -43,7 +43,13 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 })
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android', Version: 34 }
+  Platform: { OS: 'android', Version: 34 },
+  View: 'View',
+  Text: 'Text',
+  StyleSheet: {
+    create: (styles: unknown) => styles,
+    hairlineWidth: 1
+  }
 }))
 
 vi.mock('../notifications/notification-permissions', () => ({

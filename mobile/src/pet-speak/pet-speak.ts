@@ -11,7 +11,11 @@ import {
   getPetSpeechNativeAdapter
 } from './pet-speak-adapters'
 import { type PetSpeakPayload, isValidPetSpeakPayload } from './pet-speak-payload-validation'
-import type { PetSpeakHandlerOptions, PetSpeakEventPreparer } from './pet-speak-types'
+import type {
+  PetSpeakHandlerOptions,
+  PetSpeakEventPreparer,
+  PetSpeakCaption
+} from './pet-speak-types'
 import { createSeenGuard } from '../storage/watermark-storage'
 
 export {
@@ -21,6 +25,7 @@ export {
   type TtsAdapter,
   type MediaSessionAdapter,
   type PetSpeechNativeAdapter,
+  type PetSpeakCaption,
   type PetSpeakHandlerOptions,
   type PetSpeakEventPreparer,
   resolvePetLocale,
@@ -46,11 +51,13 @@ export class PetSpeakHandler {
   private readonly inFlightPromises = new Map<string, Promise<void>>()
   private readonly maxQueueCapacity: number
   private readonly onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
+  private readonly onCaption?: (caption: PetSpeakCaption | null) => void
   private queue: QueuedItem[] = []
   private activeItem: QueuedItem | null = null
   private isProcessing = false
   private disposed = false
   private activeSessionId: string | null = null
+  private activeCaptionEventId: string | null = null
 
   constructor(options?: PetSpeakHandlerOptions) {
     this.tts = options?.tts ?? new DefaultTtsAdapter()
@@ -67,6 +74,7 @@ export class PetSpeakHandler {
     this.seenSeqs = createSeenGuard(maxSeen)
     this.maxQueueCapacity = options?.maxQueueCapacity ?? 16
     this.onComplete = options?.onComplete
+    this.onCaption = options?.onCaption
   }
 
   async handleEvent(event: PetSpeakPayload | null | undefined): Promise<void> {
@@ -81,7 +89,6 @@ export class PetSpeakHandler {
     const eventId = event.event_id!.trim()
     const text = event.text.trim()
 
-    // Deduplication by seq/epoch if present
     if (event.seq !== undefined && event.epoch) {
       const seqKey = `${event.epoch}:${event.seq}`
       if (this.seenSeqs.has(seqKey)) {
@@ -116,7 +123,6 @@ export class PetSpeakHandler {
     }
 
     this.seenEventIds.add(eventId)
-
     const handlePromise = new Promise<void>((resolve, reject) => {
       this.queue.push({
         event: { ...event, text, event_id: eventId },
@@ -128,10 +134,7 @@ export class PetSpeakHandler {
     })
 
     this.inFlightPromises.set(eventId, handlePromise)
-    handlePromise.finally(() => {
-      this.inFlightPromises.delete(eventId)
-    })
-
+    handlePromise.finally(() => this.inFlightPromises.delete(eventId))
     return handlePromise
   }
 
@@ -164,6 +167,16 @@ export class PetSpeakHandler {
     this.isProcessing = false
   }
 
+  private notifyCaption(caption: PetSpeakCaption | null): void {
+    if (caption) {
+      this.activeCaptionEventId = caption.eventId
+      this.onCaption?.(caption)
+    } else if (this.activeCaptionEventId !== null) {
+      this.activeCaptionEventId = null
+      this.onCaption?.(null)
+    }
+  }
+
   private async playItem(item: QueuedItem): Promise<void> {
     const rawEvent = item.event
     const text = rawEvent.text
@@ -188,7 +201,6 @@ export class PetSpeakHandler {
           item.resolve()
           return
         }
-
         if (prepResult.status === 'voice-unavailable') {
           if (this.onComplete) {
             await this.onComplete(eventId, 'voice-unavailable').catch(() => {})
@@ -196,18 +208,11 @@ export class PetSpeakHandler {
           item.resolve()
           return
         }
-
         event = prepResult.event
       } catch {
-        if (this.disposed || item.isCancelled) {
-          if (this.onComplete) {
-            await this.onComplete(eventId, 'cancelled').catch(() => {})
-          }
-          item.resolve()
-          return
-        }
+        const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'voice-unavailable'
         if (this.onComplete) {
-          await this.onComplete(eventId, 'voice-unavailable').catch(() => {})
+          await this.onComplete(eventId, outcome).catch(() => {})
         }
         item.resolve()
         return
@@ -216,16 +221,17 @@ export class PetSpeakHandler {
 
     if (this.nativeAdapter) {
       try {
+        this.notifyCaption({ eventId, text })
         const outcome = await this.nativeAdapter.speak(event)
-        const finalOutcome: PetSpeakTerminalOutcome =
-          this.disposed || item.isCancelled ? 'cancelled' : outcome
+        const finalOutcome = this.disposed || item.isCancelled ? 'cancelled' : outcome
+        this.notifyCaption(null)
         if (this.onComplete) {
           await this.onComplete(eventId, finalOutcome).catch(() => {})
         }
         item.resolve()
       } catch {
-        const outcome: PetSpeakTerminalOutcome =
-          this.disposed || item.isCancelled ? 'cancelled' : 'playback-error'
+        const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'playback-error'
+        this.notifyCaption(null)
         if (this.onComplete) {
           await this.onComplete(eventId, outcome).catch(() => {})
         }
@@ -236,12 +242,10 @@ export class PetSpeakHandler {
 
     const availableVoices = await this.tts.getAvailableVoices().catch(() => [])
     const locale = resolvePetLocale(event.lang, availableVoices)
-
     let sessionId = ''
     try {
       sessionId = await this.mediaSession.startSession(text).catch(() => '')
       this.activeSessionId = sessionId
-
       if (!locale) {
         if (this.onComplete) {
           await this.onComplete(eventId, 'voice-unavailable').catch(() => {})
@@ -249,7 +253,6 @@ export class PetSpeakHandler {
         item.resolve()
         return
       }
-
       if (this.disposed || item.isCancelled) {
         if (this.onComplete) {
           await this.onComplete(eventId, 'cancelled').catch(() => {})
@@ -257,22 +260,23 @@ export class PetSpeakHandler {
         item.resolve()
         return
       }
-
+      this.notifyCaption({ eventId, text })
       await this.tts.speak(text, locale)
-      const outcome: PetSpeakTerminalOutcome =
-        this.disposed || item.isCancelled ? 'cancelled' : 'spoken'
+      const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'spoken'
+      this.notifyCaption(null)
       if (this.onComplete) {
         await this.onComplete(eventId, outcome).catch(() => {})
       }
       item.resolve()
     } catch {
-      const outcome: PetSpeakTerminalOutcome =
-        this.disposed || item.isCancelled ? 'cancelled' : 'playback-error'
+      const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'playback-error'
+      this.notifyCaption(null)
       if (this.onComplete) {
         await this.onComplete(eventId, outcome).catch(() => {})
       }
       item.resolve()
     } finally {
+      this.notifyCaption(null)
       if (sessionId) {
         await this.mediaSession.stopSession(sessionId).catch(() => {})
       }
@@ -283,6 +287,7 @@ export class PetSpeakHandler {
   }
 
   cancelInFlightUtterance(): void {
+    this.notifyCaption(null)
     if (this.activeItem) {
       this.activeItem.isCancelled = true
     }
@@ -303,12 +308,9 @@ export class PetSpeakHandler {
       return
     }
     this.disposed = true
-
     this.cancelInFlightUtterance()
-
     const pending = [...this.queue]
     this.queue = []
-
     for (const item of pending) {
       item.isCancelled = true
       if (item.event.event_id && this.onComplete) {
