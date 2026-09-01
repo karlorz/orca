@@ -22,13 +22,14 @@ export function findExistingFollowup(wikiRoot, mergeSha) {
   const captures = globSync(`raw/transcripts/*own-relay-upstream-${merge8}.md`, {
     cwd: wikiRoot
   })
-  const workDirs = globSync(`projects/orca/work/*own-relay-upstream-${merge8}`, {
-    cwd: wikiRoot
-  }).filter((rel) => existsSync(join(wikiRoot, rel, 'spec.md')))
+  const workDirRel =
+    globSync(`projects/orca/work/*own-relay-upstream-${merge8}`, {
+      cwd: wikiRoot
+    }).find((rel) => existsSync(join(wikiRoot, rel, 'spec.md'))) ?? null
   return {
     merge8,
-    captureRel: captures[0] ?? null,
-    workDirRel: workDirs[0] ?? null
+    captureRel: captures.find(Boolean) ?? null,
+    workDirRel
   }
 }
 
@@ -187,6 +188,42 @@ function gitLines(args, cwd) {
     .filter(Boolean)
 }
 
+export function simulateOwnRelayMergeDetect({ repoRoot, ours, theirs, config }) {
+  if (ours === theirs) {
+    return { skip: true, reason: 'noop', matched: [], rows: [] }
+  }
+  const mergeTree = spawnSync('git', ['merge-tree', '--write-tree', ours, theirs], {
+    cwd: repoRoot,
+    encoding: 'utf8'
+  })
+  const tree = (mergeTree.stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => /^[0-9a-f]{40}$/.test(line))
+  if (!tree) {
+    const detail = (mergeTree.stderr || mergeTree.stdout || '').trim()
+    throw new Error(`git merge-tree --write-tree failed${detail ? `: ${detail}` : ''}`)
+  }
+  const changed = gitLines(['diff', '--name-only', ours, tree], repoRoot)
+  const matched = matchingOwnRelayProtocolPaths(changed, config)
+  if (matched.length === 0) {
+    return { skip: true, reason: 'no-allowlist-hit', matched, rows: [] }
+  }
+  const logLines = gitLines(
+    ['log', '--no-merges', '--format=%H\t%s', `${ours}..${theirs}`, '--', ...matched],
+    repoRoot
+  )
+  const rows = logLines.map((line) => {
+    const tab = line.indexOf('\t')
+    return {
+      sha: tab === -1 ? line : line.slice(0, tab),
+      subject: tab === -1 ? '' : line.slice(tab + 1),
+      paths: matched
+    }
+  })
+  return { skip: false, reason: 'match', matched, rows }
+}
+
 export function detectOwnRelayProtocolHits({ repoRoot, before, after, config }) {
   if (before === after) {
     return { skip: true, reason: 'noop', matched: [], rows: [] }
@@ -227,18 +264,27 @@ const invokedDirectly =
   Boolean(process.argv[1]) && process.argv[1].endsWith('fork-own-relay-followup.mjs')
 
 if (invokedDirectly) {
-  const before = readFlag('--before')
-  const after = readFlag('--after')
+  const simulate = process.argv.includes('--simulate-merge')
+  const before = readFlag('--before') || readFlag('--ours')
+  const after = readFlag('--after') || readFlag('--theirs')
   const wikiRoot = readFlag('--wiki')
   const write = process.argv.includes('--write')
   if (!before || !after) {
     throw new Error(
-      'Usage: fork-own-relay-followup.mjs --before <sha> --after <sha> [--wiki <dir>] [--write]'
+      'Usage: fork-own-relay-followup.mjs --before <sha> --after <sha> [--wiki <dir>] [--write]\n' +
+        '   or: fork-own-relay-followup.mjs --simulate-merge --ours <sha> --theirs <sha>'
     )
   }
   const repoRoot = process.cwd()
   const config = loadOwnRelayProtocolPathConfig(repoRoot)
-  const detection = detectOwnRelayProtocolHits({ repoRoot, before, after, config })
+  const detection = simulate
+    ? simulateOwnRelayMergeDetect({ repoRoot, ours: before, theirs: after, config })
+    : detectOwnRelayProtocolHits({ repoRoot, before, after, config })
+  if (simulate && write) {
+    throw new Error(
+      'Refusing --write with --simulate-merge (no merge SHA; would file a false follow-up)'
+    )
+  }
   if (detection.skip) {
     process.stdout.write(`${detection.reason}\n`)
     process.exit(0)

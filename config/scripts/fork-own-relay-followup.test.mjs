@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -7,7 +8,8 @@ import {
   mergeShaShort,
   planOwnRelayWikiFollowup,
   renderOwnRelayFollowupCapture,
-  renderOwnRelayFollowupSpec
+  renderOwnRelayFollowupSpec,
+  simulateOwnRelayMergeDetect
 } from './fork-own-relay-followup.mjs'
 
 function wikiTree() {
@@ -119,5 +121,46 @@ describe('own-relay follow-up planner', () => {
 
   it('shortens merge SHAs to 8 hex chars', () => {
     expect(mergeShaShort('aabbccddeeff0011')).toBe('aabbccdd')
+  })
+})
+
+describe('simulate-merge detect (tip-diff is the wrong gate)', () => {
+  it('does not file when only fork-side extras differ and upstream did not touch allowlisted paths', () => {
+    const root = mkdtempSync(join(tmpdir(), 'simulate-merge-'))
+    function git(args) {
+      const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+      if (r.status !== 0) {
+        throw new Error(r.stderr || r.stdout)
+      }
+      return r.stdout.trim()
+    }
+    git(['init', '-q'])
+    git(['config', 'user.email', 't@example.com'])
+    git(['config', 'user.name', 't'])
+    mkdirSync(join(root, 'src/shared'), { recursive: true })
+    writeFileSync(join(root, 'src/shared/mobile-relay-phone-protocol.ts'), 'upstream-base\n')
+    git(['add', '.'])
+    git(['commit', '-qm', 'base'])
+    const base = git(['rev-parse', 'HEAD'])
+    writeFileSync(join(root, 'src/shared/mobile-relay-phone-protocol.ts'), 'fork-extra\n')
+    git(['add', '.'])
+    git(['commit', '-qm', 'fork extras'])
+    const ours = git(['rev-parse', 'HEAD'])
+    git(['checkout', '-q', '-b', 'theirs', base])
+    writeFileSync(join(root, 'README.md'), 'upstream only\n')
+    git(['add', '.'])
+    git(['commit', '-qm', 'upstream unrelated'])
+    const theirs = git(['rev-parse', 'HEAD'])
+    const config = { include: ['src/shared/mobile-relay-*'], exclude: ['**/own-mobile-relay-*'] }
+    const detection = simulateOwnRelayMergeDetect({
+      repoRoot: root,
+      ours,
+      theirs,
+      config
+    })
+    expect(detection.skip).toBe(true)
+    expect(detection.reason).toBe('no-allowlist-hit')
+    expect(detection.matched).toEqual([])
+    expect(detection.rows).toEqual([])
   })
 })
