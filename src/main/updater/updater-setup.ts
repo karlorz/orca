@@ -15,6 +15,7 @@ import type {
 import { getLinuxRootPackageType } from '../linux-update-package-type'
 import { createUpdaterDiagnosticLogger } from '../linux-package-install-diagnostic'
 import { registerAutoUpdaterHandlers } from '../updater-events'
+import { KARLORZ_FORK_RELEASE_FEED, selectReleaseFeed } from '../updater-prerelease-feed'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
@@ -153,10 +154,13 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     // Security: never re-add a verifyUpdateCodeSignature override — a no-op disables electron-updater's built-in Authenticode check and accepts any installer.
     if (this.activeUpdateSource === 'release') {
-      autoUpdater.setFeedURL({
-        provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
-      })
+      // Fork builds pin their own feed at check time; the stablyai latest/download URL must not overwrite it.
+      if (selectReleaseFeed(app.getVersion()) !== KARLORZ_FORK_RELEASE_FEED) {
+        autoUpdater.setFeedURL({
+          provider: 'generic',
+          url: 'https://github.com/stablyai/orca/releases/latest/download'
+        })
+      }
     }
     if (this.autoUpdaterInitialized) {
       return

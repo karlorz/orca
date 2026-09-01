@@ -1,7 +1,11 @@
 import { app } from 'electron'
 import {
+  fetchNewerForkDesktopReleaseTag,
   fetchNewerReleaseTagsWithReadiness,
-  getReleaseDownloadUrl
+  getReleaseDownloadUrl,
+  getReleaseDownloadUrlForFeed,
+  KARLORZ_FORK_RELEASE_FEED,
+  selectReleaseFeed
 } from '../updater-prerelease-feed'
 import { isMissingUpdateManifestFailure, isPrereleaseVersion } from '../updater-fallback'
 import type { CheckFailureSource } from './updater-state'
@@ -120,6 +124,23 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     const isPerfCheck = variant === 'perf'
     const includePrerelease =
       isPerfCheck || this.includePrereleaseActive || isPrereleaseVersion(currentVersion)
+    const feedConfig = selectReleaseFeed(currentVersion)
+    if (feedConfig === KARLORZ_FORK_RELEASE_FEED) {
+      // Fork builds resolve their own feed; no prerelease fallback, no publishing-window walk-back.
+      this.clearPrereleaseFallbackContext()
+      this.clearPublishingWindowLastGoodCheck()
+      const forkTag = await fetchNewerForkDesktopReleaseTag(currentVersion, feedConfig)
+      if (forkTag) {
+        const url = getReleaseDownloadUrlForFeed(feedConfig, forkTag)
+        console.info(
+          `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+        )
+        autoUpdater.setFeedURL({ provider: 'generic', url })
+        return 'ready'
+      }
+      console.info('[updater] fork release feed unresolved; keeping previous feed')
+      return 'ready'
+    }
     const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
       currentVersion,
       includePrerelease ? 2 : 1,
