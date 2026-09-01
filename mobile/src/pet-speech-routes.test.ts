@@ -173,9 +173,7 @@ describe('Pet Speech and Plugins Routes', () => {
 
     let root: {
       root: {
-        findAllByType: (
-          type: string
-        ) => Array<{
+        findAllByType: (type: string) => Array<{
           props: { children: unknown; onPress?: () => void }
           parent: { props: { onPress?: () => void } }
         }>
