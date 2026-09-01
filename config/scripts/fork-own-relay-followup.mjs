@@ -188,6 +188,21 @@ function gitLines(args, cwd) {
     .filter(Boolean)
 }
 
+function queryProtocolHitRows(repoRoot, range, matched) {
+  if (matched.length === 0) {
+    return { skip: true, reason: 'no-allowlist-hit', matched, rows: [] }
+  }
+  const logLines = gitLines(
+    ['log', '--no-merges', '--format=%H\t%s', range, '--', ...matched],
+    repoRoot
+  )
+  const rows = logLines.map((line) => {
+    const [sha, ...rest] = line.split('\t')
+    return { sha, subject: rest.join('\t'), paths: matched }
+  })
+  return { skip: false, reason: 'match', matched, rows }
+}
+
 export function simulateOwnRelayMergeDetect({ repoRoot, ours, theirs, config }) {
   if (ours === theirs) {
     return { skip: true, reason: 'noop', matched: [], rows: [] }
@@ -196,32 +211,17 @@ export function simulateOwnRelayMergeDetect({ repoRoot, ours, theirs, config }) 
     cwd: repoRoot,
     encoding: 'utf8'
   })
-  const tree = (mergeTree.stdout ?? '')
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => /^[0-9a-f]{40}$/.test(line))
-  if (!tree) {
+  const tree = (mergeTree.stdout ?? '').trim().split('\n')[0] ?? ''
+  if (!/^[0-9a-f]{40}$/.test(tree)) {
     const detail = (mergeTree.stderr || mergeTree.stdout || '').trim()
     throw new Error(`git merge-tree --write-tree failed${detail ? `: ${detail}` : ''}`)
   }
   const changed = gitLines(['diff', '--name-only', ours, tree], repoRoot)
-  const matched = matchingOwnRelayProtocolPaths(changed, config)
-  if (matched.length === 0) {
-    return { skip: true, reason: 'no-allowlist-hit', matched, rows: [] }
-  }
-  const logLines = gitLines(
-    ['log', '--no-merges', '--format=%H\t%s', `${ours}..${theirs}`, '--', ...matched],
-    repoRoot
+  return queryProtocolHitRows(
+    repoRoot,
+    `${ours}..${theirs}`,
+    matchingOwnRelayProtocolPaths(changed, config)
   )
-  const rows = logLines.map((line) => {
-    const tab = line.indexOf('\t')
-    return {
-      sha: tab === -1 ? line : line.slice(0, tab),
-      subject: tab === -1 ? '' : line.slice(tab + 1),
-      paths: matched
-    }
-  })
-  return { skip: false, reason: 'match', matched, rows }
 }
 
 export function detectOwnRelayProtocolHits({ repoRoot, before, after, config }) {
@@ -233,23 +233,11 @@ export function detectOwnRelayProtocolHits({ repoRoot, before, after, config }) 
     throw new Error(`Stale own-relay protocol include glob(s): ${stale.join(', ')}`)
   }
   const changed = gitLines(['diff', '--name-only', `${before}..${after}`], repoRoot)
-  const matched = matchingOwnRelayProtocolPaths(changed, config)
-  if (matched.length === 0) {
-    return { skip: true, reason: 'no-allowlist-hit', matched, rows: [] }
-  }
-  const logLines = gitLines(
-    ['log', '--no-merges', '--format=%H\t%s', `${after}^1..${after}^2`, '--', ...matched],
-    repoRoot
+  return queryProtocolHitRows(
+    repoRoot,
+    `${after}^1..${after}^2`,
+    matchingOwnRelayProtocolPaths(changed, config)
   )
-  const rows = logLines.map((line) => {
-    const tab = line.indexOf('\t')
-    return {
-      sha: tab === -1 ? line : line.slice(0, tab),
-      subject: tab === -1 ? '' : line.slice(tab + 1),
-      paths: matched
-    }
-  })
-  return { skip: false, reason: 'match', matched, rows }
 }
 
 function readFlag(name) {
@@ -275,16 +263,16 @@ if (invokedDirectly) {
         '   or: fork-own-relay-followup.mjs --simulate-merge --ours <sha> --theirs <sha>'
     )
   }
-  const repoRoot = process.cwd()
-  const config = loadOwnRelayProtocolPathConfig(repoRoot)
-  const detection = simulate
-    ? simulateOwnRelayMergeDetect({ repoRoot, ours: before, theirs: after, config })
-    : detectOwnRelayProtocolHits({ repoRoot, before, after, config })
   if (simulate && write) {
     throw new Error(
       'Refusing --write with --simulate-merge (no merge SHA; would file a false follow-up)'
     )
   }
+  const repoRoot = process.cwd()
+  const config = loadOwnRelayProtocolPathConfig(repoRoot)
+  const detection = simulate
+    ? simulateOwnRelayMergeDetect({ repoRoot, ours: before, theirs: after, config })
+    : detectOwnRelayProtocolHits({ repoRoot, before, after, config })
   if (detection.skip) {
     process.stdout.write(`${detection.reason}\n`)
     process.exit(0)
