@@ -42,6 +42,7 @@ class PetSpeechForegroundService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var stateMachine: PetSpeechStateMachine? = null
     private var isForegroundStarted = false
+    private var onPlaybackStarted: (() -> Unit)? = null
 
     private val replacementDecisionHandler = PetSpeechServiceReplacementDecisionHandler(
         onStopSelf = {
@@ -184,10 +185,12 @@ class PetSpeechForegroundService : Service() {
         rate: Float = PetSpeechRate.DEFAULT,
         debug: Boolean = false,
         playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind,
-        onOutcome: (String, PetSpeechOutcome) -> Unit
+        onOutcome: (String, PetSpeechOutcome) -> Unit,
+        onPlaybackStarted: () -> Unit = {}
     ) {
         // Reset player and focus for incoming utterance
         teardownAudioPlayerAndFocus()
+        this.onPlaybackStarted = onPlaybackStarted
 
         replacementDecisionHandler.beginPlayback(ownerId, eventId, text, onOutcome)
 
@@ -232,6 +235,7 @@ class PetSpeechForegroundService : Service() {
     fun cancelSpeech(ownerId: Long) {
         if (replacementDecisionHandler.activeOwnerId == ownerId) {
             stateMachine = null
+            onPlaybackStarted = null
             teardownAudioPlayerAndFocus()
             replacementDecisionHandler.cancelSpeech(ownerId)
         }
@@ -347,6 +351,9 @@ class PetSpeechForegroundService : Service() {
                 filePath = filePath,
                 rate = rate,
                 debug = debug,
+                onStarted = {
+                    onPlaybackStarted?.invoke()
+                },
                 onComplete = {
                     val durationMs = System.currentTimeMillis() - playerStartTime
                     PetSpeechPlaybackInstrumentation.recordPlayerCompleted(

@@ -21,6 +21,12 @@ import {
   subscribePetSpeakCaptionPreview
 } from './pet-speak-caption-preview'
 import { PetSpeakCaptionHud } from './pet-speak-caption-hud'
+import {
+  applyPetSpeakCaptionRange,
+  subscribePetSpeakCaptionRange,
+  type PetSpeakCaptionRangeEvent
+} from './pet-speak-caption-range'
+import { attachNativeCaptionRangeListener } from './pet-speak-caption-range-native'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
 import {
@@ -302,6 +308,7 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
   const [previewCaption, setPreviewCaption] = useState<PetSpeakCaption | null>(() =>
     getPetSpeakCaptionPreview()
   )
+  const [highlightRange, setHighlightRange] = useState<PetSpeakCaptionRangeEvent | null>(null)
   const prefCaptionsEnabled = usePetSpeakRootBridge(props, setInternalCaption)
 
   useEffect(() => {
@@ -309,6 +316,12 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
     const unsub = subscribePetSpeakCaptionPreview((caption) => {
       setPreviewCaption(caption)
     })
+    return unsub
+  }, [])
+
+  useEffect(() => {
+    attachNativeCaptionRangeListener()
+    const unsub = subscribePetSpeakCaptionRange(setHighlightRange)
     return unsub
   }, [])
 
@@ -322,11 +335,17 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
   }
 
   const isPreview = previewCaption !== null
+  const karaokeRange =
+    highlightRange && highlightRange.eventId === activeCaption.eventId
+      ? { start: highlightRange.start, end: highlightRange.end }
+      : null
 
   return (
     <PetSpeakCaptionHud
       caption={activeCaption}
+      highlightRange={karaokeRange}
       onDisable={() => {
+        applyPetSpeakCaptionRange(null)
         if (isPreview) {
           hidePetSpeakCaptionPreview()
         } else {

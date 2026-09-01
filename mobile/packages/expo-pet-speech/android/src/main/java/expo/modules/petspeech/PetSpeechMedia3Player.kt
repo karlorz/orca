@@ -30,7 +30,8 @@ class PetSpeechMedia3Player : PetSpeechAudioPlayer {
         rate: Float,
         debug: Boolean,
         onComplete: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onStarted: () -> Unit
     ) {
         val runPlay = {
             try {
@@ -67,6 +68,7 @@ class PetSpeechMedia3Player : PetSpeechAudioPlayer {
                 // Set playback speed with pitch preserved (pitch = 1.0f)
                 player.playbackParameters = PlaybackParameters(rate, 1.0f)
 
+                var started = false
                 player.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
@@ -74,6 +76,10 @@ class PetSpeechMedia3Player : PetSpeechAudioPlayer {
                                 onComplete()
                             }
                             Player.STATE_READY -> {
+                                if (!started) {
+                                    started = true
+                                    onStarted()
+                                }
                                 if (debug) {
                                     try {
                                         val durationMs = player.duration

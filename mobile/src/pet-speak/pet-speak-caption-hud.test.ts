@@ -136,6 +136,27 @@ describe('PetSpeakCaptionHud', () => {
     expect(original.props.style.fontSize).toBe(13)
   })
 
+  it('paints a karaoke background on the current spoken range', async () => {
+    let tree: ReturnType<typeof create>
+    await act(async () => {
+      tree = create(
+        createElement(PetSpeakCaptionHud, {
+          caption: { eventId: 'e1', text: '你好世界' },
+          highlightRange: { start: 2, end: 4 }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const karaoke = tree!.root.findByProps({ testID: 'pet-speak-caption-karaoke' })
+    expect(karaoke.props.children).toBe('世界')
+    expect(karaoke.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ backgroundColor: 'rgba(255, 214, 10, 0.55)' })
+      ])
+    )
+  })
+
   it('omits the original English line when originalText is absent', async () => {
     let tree: ReturnType<typeof create>
     await act(async () => {

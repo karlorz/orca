@@ -62,7 +62,8 @@ class PetSpeechPlaybackPrototypeTest {
                     rate: Float,
                     debug: Boolean,
                     onComplete: () -> Unit,
-                    onError: (String) -> Unit
+                    onError: (String) -> Unit,
+                    onStarted: () -> Unit
                 ) {}
                 override fun setVolume(volume: Float) {}
                 override fun stopAndRelease() {}
@@ -89,10 +90,12 @@ class PetSpeechPlaybackPrototypeTest {
                 rate: Float,
                 debug: Boolean,
                 onComplete: () -> Unit,
-                onError: (String) -> Unit
+                onError: (String) -> Unit,
+                onStarted: () -> Unit
             ) {
                 capturedSpeed = rate
                 playedRate.set(true)
+                onStarted()
                 onComplete()
             }
             override fun setVolume(volume: Float) {}

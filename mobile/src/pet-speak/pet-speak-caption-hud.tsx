@@ -14,6 +14,7 @@ import {
   setPetSpeechCaptionOffset
 } from './pet-speech-preferences'
 import type { PetSpeakCaption } from './pet-speak-types'
+import { splitCaptionHighlight, type CaptionHighlightRange } from './pet-speak-caption-highlight'
 
 export const CAPTION_OFFSET_STORAGE_KEY = PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET
 export const CAPTION_HUD_FONT_SIZE = 18
@@ -23,6 +24,7 @@ type CaptionOffset = { x: number; y: number }
 
 export interface PetSpeakCaptionHudProps {
   caption: PetSpeakCaption
+  highlightRange?: CaptionHighlightRange | null
   onDisable?: () => void
 }
 
@@ -65,6 +67,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 4
+  },
+  highlighted: {
+    backgroundColor: 'rgba(255, 214, 10, 0.55)',
+    color: '#ffffff',
+    borderRadius: 3
   },
   close: {
     width: 22,
@@ -138,6 +145,7 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
   )
 
   const originalText = props.caption.originalText?.trim() ?? ''
+  const spokenSegments = splitCaptionHighlight(props.caption.text, props.highlightRange)
 
   return (
     <View style={styles.overlay} pointerEvents="box-none" testID="pet-speak-caption-overlay">
@@ -156,7 +164,17 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
         >
           <View style={styles.textColumn}>
             <Text style={styles.text} numberOfLines={3} testID="pet-speak-caption-text">
-              {props.caption.text}
+              {spokenSegments.length === 1 && !spokenSegments[0]?.highlighted
+                ? props.caption.text
+                : spokenSegments.map((segment, index) => (
+                    <Text
+                      key={`${index}-${segment.highlighted ? 'h' : 'n'}`}
+                      style={segment.highlighted ? [styles.text, styles.highlighted] : styles.text}
+                      testID={segment.highlighted ? 'pet-speak-caption-karaoke' : undefined}
+                    >
+                      {segment.text}
+                    </Text>
+                  ))}
             </Text>
             {originalText ? (
               <Text

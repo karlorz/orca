@@ -18,7 +18,8 @@ class PetSpeechMediaPlayer : PetSpeechAudioPlayer {
         rate: Float,
         debug: Boolean,
         onComplete: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onStarted: () -> Unit
     ) {
         try {
             stopAndRelease()
@@ -52,6 +53,7 @@ class PetSpeechMediaPlayer : PetSpeechAudioPlayer {
                     } catch (_: Exception) {}
                 }
                 start()
+                onStarted()
             }
         } catch (e: Exception) {
             onError(e.message ?: "MediaPlayer prepare/start failed")

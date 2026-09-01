@@ -10,7 +10,8 @@ interface PetSpeechAudioPlayer {
         rate: Float,
         debug: Boolean,
         onComplete: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onStarted: () -> Unit = {}
     )
     fun setVolume(volume: Float)
     fun stopAndRelease()

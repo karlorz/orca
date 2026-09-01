@@ -25,9 +25,13 @@ class ExpoPetSpeechModule : Module() {
     private var isDestroyed = false
 
     private val resourceOwnerRegistry = PetSpeechResourceOwnerRegistry()
+    private val karaokeHandler = Handler(Looper.getMainLooper())
+    private val karaokeRunnables = mutableListOf<Runnable>()
 
     override fun definition() = ModuleDefinition {
         Name("ExpoPetSpeech")
+
+        Events("onCaptionRange")
 
         AsyncFunction("getAvailableVoicesAsync") { promise: Promise ->
             synchronized(initLock) {
@@ -248,17 +252,53 @@ class ExpoPetSpeechModule : Module() {
                     tts.setSpeechRate(1.0f)
 
                     val utteranceId = "utterance_${owner.id}_$validEventId"
+                    var karaokeSampleRate = 0
+                    val karaokeRaw = java.util.Collections.synchronizedList(mutableListOf<IntArray>())
 
                     tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(id: String?) {}
+
+                        override fun onBeginSynthesis(
+                            id: String?,
+                            sampleRateInHz: Int,
+                            audioFormat: Int,
+                            channelCount: Int
+                        ) {
+                            if (id == utteranceId) {
+                                karaokeSampleRate = sampleRateInHz
+                            }
+                        }
+
+                        override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) {
+                            if (id == utteranceId) {
+                                karaokeRaw.add(intArrayOf(start, end, frame))
+                            }
+                        }
 
                         override fun onDone(id: String?) {
                             if (id == utteranceId && resourceOwnerRegistry.isCurrent(owner)) {
                                 engineLifecycle.onSynthesisComplete()
                                 PetSpeechPlaybackInstrumentation.recordSynthesisCompleted(validEventId)
+                                val ranges = karaokeRaw.map { raw ->
+                                    PetSpeechCaptionRange(
+                                        start = raw[0],
+                                        end = raw[1],
+                                        startMs = PetSpeechKaraoke.startMs(raw[2], karaokeSampleRate)
+                                    )
+                                }
                                 mainHandler.post {
                                     if (resourceOwnerRegistry.isCurrent(owner)) {
-                                        startServicePlayback(context, owner, validEventId, validText, tempFilePath, rate, debug, playerKind)
+                                        startServicePlayback(
+                                            context,
+                                            owner,
+                                            validEventId,
+                                            validText,
+                                            tempFilePath,
+                                            rate,
+                                            debug,
+                                            playerKind,
+                                            ranges
+                                        )
                                     } else {
                                         owner.teardown()
                                     }
@@ -303,6 +343,7 @@ class ExpoPetSpeechModule : Module() {
 
         AsyncFunction("stopAsync") { promise: Promise ->
             try {
+                clearCaptionKaraoke()
                 resourceOwnerRegistry.stopAll()
                 promise.resolve(null)
             } catch (_: Exception) {
@@ -419,6 +460,39 @@ class ExpoPetSpeechModule : Module() {
         }
     }
 
+    private fun clearCaptionKaraoke() {
+        for (runnable in karaokeRunnables) {
+            karaokeHandler.removeCallbacks(runnable)
+        }
+        karaokeRunnables.clear()
+    }
+
+    private fun scheduleCaptionKaraoke(
+        eventId: String,
+        ranges: List<PetSpeechCaptionRange>,
+        rate: Float
+    ) {
+        clearCaptionKaraoke()
+        for (range in ranges) {
+            if (range.end <= range.start) {
+                continue
+            }
+            val delay = PetSpeechKaraoke.wallDelayMs(range.startMs, rate)
+            val runnable = Runnable {
+                sendEvent(
+                    "onCaptionRange",
+                    mapOf(
+                        "eventId" to eventId,
+                        "start" to range.start,
+                        "end" to range.end
+                    )
+                )
+            }
+            karaokeRunnables.add(runnable)
+            karaokeHandler.postDelayed(runnable, delay)
+        }
+    }
+
     private fun startServicePlayback(
         context: Context,
         owner: PetSpeechResourceOwner,
@@ -427,7 +501,8 @@ class ExpoPetSpeechModule : Module() {
         tempFilePath: String,
         rate: Float,
         debug: Boolean = false,
-        playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind
+        playerKind: PetSpeechPlayerKind = PetSpeechPlayerProvider.defaultPlayerKind,
+        karaokeRanges: List<PetSpeechCaptionRange> = emptyList()
     ) {
         val startIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
             putExtra(PetSpeechForegroundService.EXTRA_OWNER_ID, owner.id)
@@ -481,9 +556,22 @@ class ExpoPetSpeechModule : Module() {
                         }
                     }
 
-                    foregroundService.playSpeech(owner.id, eventId, text, tempFilePath, rate, debug, playerKind) { id, outcome ->
-                        owner.settle(outcome)
-                    }
+                    foregroundService.playSpeech(
+                        owner.id,
+                        eventId,
+                        text,
+                        tempFilePath,
+                        rate,
+                        debug,
+                        playerKind,
+                        { _, outcome ->
+                            clearCaptionKaraoke()
+                            owner.settle(outcome)
+                        },
+                        onPlaybackStarted = {
+                            scheduleCaptionKaraoke(eventId, karaokeRanges, rate)
+                        }
+                    )
                 }
 
                 override fun onServiceDisconnected(name: ComponentName?) {
