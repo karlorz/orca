@@ -54,8 +54,12 @@ describe('PetSpeakCaptionHud', () => {
     const text = tree!.root.findByProps({ testID: 'pet-speak-caption-text' })
 
     expect(overlay.props.pointerEvents).toBe('box-none')
-    expect(overlay.props.style.top).toBe(CAPTION_HUD_DEFAULT_TOP)
+    expect(overlay.props.style.top).toBe(0)
+    expect(overlay.props.style.bottom).toBe(0)
     expect(pill.props.pointerEvents).toBe('auto')
+    expect(pill.props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ top: CAPTION_HUD_DEFAULT_TOP, left: 16 })])
+    )
     expect(text.props.style.fontSize).toBe(CAPTION_HUD_FONT_SIZE)
     expect(text.props.style.color).toBe('#ffffff')
     expect(text.props.children).toBe('測試字幕顯示')
@@ -96,7 +100,10 @@ describe('PetSpeakCaptionHud', () => {
     const pill = tree!.root.findByProps({ testID: 'pet-speak-caption-pill' })
     expect(pill.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ transform: [{ translateX: 12 }, { translateY: 80 }] })
+        expect.objectContaining({
+          top: CAPTION_HUD_DEFAULT_TOP + 80,
+          left: 16 + 12
+        })
       ])
     )
   })

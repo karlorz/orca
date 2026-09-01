@@ -25,16 +25,17 @@ export interface PetSpeakCaptionHudProps {
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: CAPTION_HUD_DEFAULT_TOP,
-    left: 16,
-    right: 16,
-    zIndex: 9999,
-    alignItems: 'center'
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 9999
   },
   pill: {
+    position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '100%',
+    maxWidth: '92%',
     backgroundColor: 'rgba(0, 0, 0, 0.78)',
     borderRadius: 8,
     paddingVertical: 8,
@@ -66,7 +67,13 @@ const styles = StyleSheet.create({
 
 export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement {
   const [offset, setOffset] = useState<CaptionOffset>({ x: 0, y: 0 })
+  const offsetRef = useRef<CaptionOffset>({ x: 0, y: 0 })
   const startRef = useRef<CaptionOffset>({ x: 0, y: 0 })
+
+  const applyOffset = (next: CaptionOffset): void => {
+    offsetRef.current = next
+    setOffset(next)
+  }
 
   useEffect(() => {
     let active = true
@@ -77,7 +84,7 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
       try {
         const parsed = JSON.parse(raw) as CaptionOffset
         if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-          setOffset({ x: parsed.x, y: parsed.y })
+          applyOffset({ x: parsed.x, y: parsed.y })
         }
       } catch {
         // ignore corrupt offset
@@ -89,23 +96,24 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
   }, [])
 
   const persistOffset = (next: CaptionOffset): void => {
-    setOffset(next)
+    applyOffset(next)
     void AsyncStorage.setItem(CAPTION_OFFSET_STORAGE_KEY, JSON.stringify(next))
   }
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (
           _evt: GestureResponderEvent,
           gesture: PanResponderGestureState
-        ) => Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2,
+        ) => Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
-          startRef.current = offset
+          startRef.current = offsetRef.current
         },
         onPanResponderMove: (_evt, gesture) => {
-          setOffset({
+          applyOffset({
             x: startRef.current.x + gesture.dx,
             y: startRef.current.y + gesture.dy
           })
@@ -117,13 +125,19 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
           })
         }
       }),
-    [offset]
+    []
   )
 
   return (
     <View style={styles.overlay} pointerEvents="box-none" testID="pet-speak-caption-overlay">
       <View
-        style={[styles.pill, { transform: [{ translateX: offset.x }, { translateY: offset.y }] }]}
+        style={[
+          styles.pill,
+          {
+            top: CAPTION_HUD_DEFAULT_TOP + offset.y,
+            left: 16 + offset.x
+          }
+        ]}
         pointerEvents="auto"
         testID="pet-speak-caption-pill"
         {...panResponder.panHandlers}
