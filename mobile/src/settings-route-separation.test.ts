@@ -111,7 +111,16 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
 vi.mock('../src/pet-speak/pet-speech-service', () => ({
   getAvailablePetSpeechVoices: vi.fn(async () => []),
   executeTestVoiceAsync: vi.fn(async () => ({ outcome: 'spoken' })),
-  validatePetSpeechVoice: vi.fn(() => ({ valid: true, status: 'valid' }))
+  validatePetSpeechVoice: vi.fn(() => ({ valid: true, status: 'valid' })),
+  TEST_VOICE_SAMPLES: {
+    'yue-HK': {
+      spoken: '你好！我係你嘅桌面寵物。今日天氣幾好，我哋一齊處理 123 件事啦！',
+      original: 'Hello! I am your desktop pet.'
+    },
+    'zh-CN': { spoken: '你好！我是你的桌面宠物。' },
+    'zh-TW': { spoken: '你好！我是你的桌面寵物。' },
+    'en-US': { spoken: 'Hello! I am your desktop pet.' }
+  }
 }))
 
 import SettingsScreen from '../app/settings'

@@ -34,6 +34,7 @@ export type PetSpeakEventPreparer = (event: PetSpeakPayload) => Promise<Prepared
 export type PetSpeakCaption = {
   eventId: string
   text: string
+  originalText?: string
 }
 
 export interface PetSpeakHandlerOptions {

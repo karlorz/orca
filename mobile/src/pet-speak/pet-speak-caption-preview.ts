@@ -12,10 +12,11 @@ export function getPetSpeakCaptionPreview(): PetSpeakCaption | null {
   return currentPreview
 }
 
-export function showPetSpeakCaptionPreview(text?: string): void {
+export function showPetSpeakCaptionPreview(text?: string, originalText?: string): void {
   currentPreview = {
     eventId: 'preview',
-    text: text ?? DEFAULT_PET_SPEAK_PREVIEW_TEXT
+    text: text ?? DEFAULT_PET_SPEAK_PREVIEW_TEXT,
+    ...(originalText && originalText.trim().length > 0 ? { originalText: originalText.trim() } : {})
   }
   for (const listener of previewListeners) {
     try {

@@ -26,7 +26,8 @@ import {
 } from '../src/pet-speak/pet-speak-caption-preview'
 import {
   getAvailablePetSpeechVoices,
-  executeTestVoiceAsync
+  executeTestVoiceAsync,
+  TEST_VOICE_SAMPLES
 } from '../src/pet-speak/pet-speech-service'
 import type { PetSpeechVoice } from '../src/pet-speak/pet-speak-native-adapter'
 
@@ -132,12 +133,15 @@ export default function PetSpeechSettingsScreen() {
     }
     setTestVoiceBusy(true)
     setTestVoiceOutcome(null)
+    const sample = TEST_VOICE_SAMPLES[selectedLanguageTab] ?? TEST_VOICE_SAMPLES['yue-HK']
+    showPetSpeakCaptionPreview(sample.spoken, sample.original)
     try {
       const res = await executeTestVoiceAsync(selectedLanguageTab, { availableVoices: voices })
       setTestVoiceOutcome(res.outcome)
     } catch {
       setTestVoiceOutcome('playback-error')
     } finally {
+      hidePetSpeakCaptionPreview()
       setTestVoiceBusy(false)
     }
   }, [testVoiceBusy, prefs?.enabled, selectedLanguageTab, voices])
@@ -253,8 +257,9 @@ export default function PetSpeechSettingsScreen() {
               </Pressable>
             </View>
             <Text style={styles.helperText}>
-              Preview the caption pill, drag it, then release to save the position. Saved with Pet
-              Speech settings so app upgrades keep it.
+              Test Voice speaks and shows captions (spoken line over original English). Test Live
+              captions is a silent preview — drag, then release to save the position across
+              upgrades.
             </Text>
 
             <Text style={[styles.groupHeading, styles.inputGroupGap]}>LANGUAGE POLICY</Text>

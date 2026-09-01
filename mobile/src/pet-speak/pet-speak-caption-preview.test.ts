@@ -35,6 +35,15 @@ describe('PetSpeakCaptionPreview Store', () => {
     unsub()
   })
 
+  it('showPetSpeakCaptionPreview stores original English under the spoken line', () => {
+    showPetSpeakCaptionPreview('你好！我係你嘅桌面寵物。', 'Hello! I am your desktop pet.')
+    expect(getPetSpeakCaptionPreview()).toEqual({
+      eventId: 'preview',
+      text: '你好！我係你嘅桌面寵物。',
+      originalText: 'Hello! I am your desktop pet.'
+    })
+  })
+
   it('showPetSpeakCaptionPreview accepts custom text', () => {
     const listener = vi.fn()
     const unsub = subscribePetSpeakCaptionPreview(listener)

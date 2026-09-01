@@ -27,6 +27,10 @@ vi.mock('@react-native-async-storage/async-storage', () => {
       setItem: vi.fn(async (key: string, value: string) => {
         store.set(key, value)
       }),
+      getAllKeys: vi.fn(async () => Array.from(store.keys())),
+      removeItem: vi.fn(async (key: string) => {
+        store.delete(key)
+      }),
       clear: vi.fn(async () => {
         store.clear()
       })
@@ -47,6 +51,7 @@ describe('PetSpeakCaptionHud', () => {
           caption: { eventId: 'e1', text: '測試字幕顯示' }
         })
       )
+      await Promise.resolve()
       await Promise.resolve()
     })
     const overlay = tree!.root.findByProps({ testID: 'pet-speak-caption-overlay' })
@@ -75,6 +80,7 @@ describe('PetSpeakCaptionHud', () => {
           onDisable
         })
       )
+      await Promise.resolve()
       await Promise.resolve()
     })
     const close = tree!.root.findByProps({ testID: 'pet-speak-caption-disable' })
@@ -106,5 +112,41 @@ describe('PetSpeakCaptionHud', () => {
         })
       ])
     )
+  })
+
+  it('renders original English under the spoken line when originalText is set', async () => {
+    let tree: ReturnType<typeof create>
+    await act(async () => {
+      tree = create(
+        createElement(PetSpeakCaptionHud, {
+          caption: {
+            eventId: 'e1',
+            text: '你好！我係你嘅桌面寵物。',
+            originalText: 'Hello! I am your desktop pet.'
+          }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const spoken = tree!.root.findByProps({ testID: 'pet-speak-caption-text' })
+    const original = tree!.root.findByProps({ testID: 'pet-speak-caption-original' })
+    expect(spoken.props.children).toBe('你好！我係你嘅桌面寵物。')
+    expect(original.props.children).toBe('Hello! I am your desktop pet.')
+    expect(original.props.style.fontSize).toBe(13)
+  })
+
+  it('omits the original English line when originalText is absent', async () => {
+    let tree: ReturnType<typeof create>
+    await act(async () => {
+      tree = create(
+        createElement(PetSpeakCaptionHud, {
+          caption: { eventId: 'e1', text: '你好' }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(() => tree!.root.findByProps({ testID: 'pet-speak-caption-original' })).toThrow()
   })
 })

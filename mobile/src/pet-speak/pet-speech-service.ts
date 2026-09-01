@@ -156,6 +156,28 @@ export async function preparePetSpeakEvent(
   }
 }
 
+export const TEST_VOICE_SAMPLES: Record<CanonicalLanguage, { spoken: string; original?: string }> =
+  {
+    'yue-HK': {
+      spoken: '你好！我係你嘅桌面寵物。今日天氣幾好，我哋一齊處理 123 件事啦！',
+      original:
+        'Hello! I am your desktop pet. The weather is nice today — let’s handle 123 things together!'
+    },
+    'zh-CN': {
+      spoken: '你好！我是你的桌面宠物。今天天气不错，我们一起处理 123 件事吧！',
+      original:
+        'Hello! I am your desktop pet. The weather is nice today — let’s handle 123 things together!'
+    },
+    'zh-TW': {
+      spoken: '你好！我是你的桌面寵物。今天天氣不錯，我們一起處理 123 件事吧！',
+      original:
+        'Hello! I am your desktop pet. The weather is nice today — let’s handle 123 things together!'
+    },
+    'en-US': {
+      spoken: 'Hello! I am your desktop pet. Let us handle 123 tasks together today!'
+    }
+  }
+
 /**
  * Executes a production-path Test Voice utterance.
  * Must use the exact same adapter / foreground / player / completion path as real pet.speak.
@@ -173,14 +195,7 @@ export async function executeTestVoiceAsync(
     return { outcome: 'voice-unavailable' }
   }
 
-  const sampleTexts: Record<CanonicalLanguage, string> = {
-    'yue-HK': '你好！我係你嘅桌面寵物。今日天氣幾好，我哋一齊處理 123 件事啦！',
-    'zh-CN': '你好！我是你的桌面宠物。今天天气不错，我们一起处理 123 件事吧！',
-    'zh-TW': '你好！我是你的桌面寵物。今天天氣不錯，我們一起處理 123 件事吧！',
-    'en-US': 'Hello! I am your desktop pet. Let us handle 123 tasks together today!'
-  }
-
-  const text = sampleTexts[lang] ?? sampleTexts['yue-HK']
+  const text = (TEST_VOICE_SAMPLES[lang] ?? TEST_VOICE_SAMPLES['yue-HK']).spoken
   const voices = options?.availableVoices ?? (await getAvailablePetSpeechVoices())
   const resolved = await resolveEnabledSpeechOptions(
     {

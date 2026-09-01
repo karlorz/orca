@@ -46,6 +46,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 10
   },
+  textColumn: {
+    flexShrink: 1
+  },
   text: {
     flexShrink: 1,
     color: '#ffffff',
@@ -53,6 +56,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 24
+  },
+  originalText: {
+    flexShrink: 1,
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 4
   },
   close: {
     width: 22,
@@ -70,7 +82,7 @@ const styles = StyleSheet.create({
 })
 
 export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement {
-  const [offset, setOffset] = useState<CaptionOffset>({ x: 0, y: 0 })
+  const [offset, setOffset] = useState<CaptionOffset | null>(null)
   const offsetRef = useRef<CaptionOffset>({ x: 0, y: 0 })
   const startRef = useRef<CaptionOffset>({ x: 0, y: 0 })
 
@@ -125,35 +137,50 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
     []
   )
 
+  const originalText = props.caption.originalText?.trim() ?? ''
+
   return (
     <View style={styles.overlay} pointerEvents="box-none" testID="pet-speak-caption-overlay">
-      <View
-        style={[
-          styles.pill,
-          {
-            top: CAPTION_HUD_DEFAULT_TOP + offset.y,
-            left: 16 + offset.x
-          }
-        ]}
-        pointerEvents="auto"
-        testID="pet-speak-caption-pill"
-        {...panResponder.panHandlers}
-      >
-        <Text style={styles.text} numberOfLines={3} testID="pet-speak-caption-text">
-          {props.caption.text}
-        </Text>
-        {props.onDisable ? (
-          <Pressable
-            accessibilityLabel="Turn off live captions"
-            hitSlop={8}
-            onPress={props.onDisable}
-            style={styles.close}
-            testID="pet-speak-caption-disable"
-          >
-            <Text style={styles.closeLabel}>×</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      {offset ? (
+        <View
+          style={[
+            styles.pill,
+            {
+              top: CAPTION_HUD_DEFAULT_TOP + offset.y,
+              left: 16 + offset.x
+            }
+          ]}
+          pointerEvents="auto"
+          testID="pet-speak-caption-pill"
+          {...panResponder.panHandlers}
+        >
+          <View style={styles.textColumn}>
+            <Text style={styles.text} numberOfLines={3} testID="pet-speak-caption-text">
+              {props.caption.text}
+            </Text>
+            {originalText ? (
+              <Text
+                style={styles.originalText}
+                numberOfLines={4}
+                testID="pet-speak-caption-original"
+              >
+                {originalText}
+              </Text>
+            ) : null}
+          </View>
+          {props.onDisable ? (
+            <Pressable
+              accessibilityLabel="Turn off live captions"
+              hitSlop={8}
+              onPress={props.onDisable}
+              style={styles.close}
+              testID="pet-speak-caption-disable"
+            >
+              <Text style={styles.closeLabel}>×</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
