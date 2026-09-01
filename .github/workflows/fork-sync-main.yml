@@ -125,6 +125,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install node dependencies
+        # The detector imports the `yaml` package, so a plain checkout cannot run it.
+        uses: ./.github/actions/install-node-dependencies
+
       - name: Detect own-relay protocol hits
         id: detect
         run: |
