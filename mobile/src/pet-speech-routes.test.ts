@@ -34,7 +34,9 @@ vi.mock('lucide-react-native', () => {
     ChevronLeft: Icon,
     ChevronRight: Icon,
     Sparkles: Icon,
-    Play: Icon
+    Play: Icon,
+    Captions: Icon,
+    Subtitles: Icon
   }
 })
 
@@ -45,6 +47,7 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
     installUuid: 'uuid-1',
     rate: 1,
     captionsEnabled: false,
+    captionOffset: { x: 0, y: 0 },
     voiceByLanguage: {}
   })),
   subscribePetSpeechPreferences: vi.fn((_cb: unknown) => () => {}),
@@ -78,7 +81,9 @@ describe('Pet Speech and Plugins Routes', () => {
     })
 
     const textNodes = root.root.findAllByType('Text')
-    const labels = textNodes.flatMap((n) => n.props.children)
+    const labels = textNodes.map((n) =>
+      Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children
+    )
 
     expect(labels).toContain('Plugins')
     expect(labels).toContain('Pet Speech')
@@ -92,11 +97,16 @@ describe('Pet Speech and Plugins Routes', () => {
     })
 
     const textNodes = root.root.findAllByType('Text')
-    const labels = textNodes.flatMap((n) => n.props.children)
+    const labels = textNodes.map((n) =>
+      Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children
+    )
 
     expect(labels).toContain('Pet Speech')
     expect(labels).toContain('Enable Pet Speech')
     expect(labels).toContain('Live captions')
+    expect(labels).toContain('TEST')
+    expect(labels).toContain('Test Voice (yue-HK)')
+    expect(labels).toContain('Test Live captions')
     expect(labels).toContain('Selected voice: Device default')
   })
 
@@ -118,7 +128,9 @@ describe('Pet Speech and Plugins Routes', () => {
     })
 
     const textNodes = root.root.findAllByType('Text')
-    const labels = textNodes.flatMap((n) => n.props.children)
+    const labels = textNodes.map((n) =>
+      Array.isArray(n.props.children) ? n.props.children.join('') : n.props.children
+    )
 
     expect(labels).toContain('Selected voice: yue-hk-x-yuc-local')
   })

@@ -4,6 +4,7 @@ import {
   loadPetSpeechPreferences,
   setPetSpeechEnabled,
   setPetSpeechCaptionsEnabled,
+  setPetSpeechCaptionOffset,
   setPetSpeechRate,
   setPetSpeechVoiceForLanguage,
   subscribePetSpeechPreferences,
@@ -40,6 +41,7 @@ describe('PetSpeechPreferences - Storage and Migration', () => {
     const prefs = await loadPetSpeechPreferences()
     expect(prefs.enabled).toBe(false)
     expect(prefs.captionsEnabled).toBe(false)
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
     expect(prefs.migrationCompleted).toBe(false)
     expect(prefs.rate).toBe(1)
     expect(prefs.voiceByLanguage).toEqual({})
@@ -153,5 +155,50 @@ describe('PetSpeechPreferences - Storage and Migration', () => {
     expect(lastPrefs.enabled).toBe(true)
 
     unsub()
+  })
+
+  it('fresh install default captionOffset is { x: 0, y: 0 }', async () => {
+    const prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
+  })
+
+  it('setPetSpeechCaptionOffset round-trips through loadPetSpeechPreferences and notifies listeners', async () => {
+    let notifiedOffset: { x: number; y: number } | null = null
+    const unsub = subscribePetSpeechPreferences((prefs) => {
+      notifiedOffset = prefs.captionOffset
+    })
+
+    await setPetSpeechCaptionOffset({ x: 12, y: 80 })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 12, y: 80 })
+    expect(await AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET)).toBe(
+      JSON.stringify({ x: 12, y: 80 })
+    )
+    expect(notifiedOffset).toEqual({ x: 12, y: 80 })
+
+    unsub()
+  })
+
+  it('corrupt JSON, non-object, or missing x/y falls back to { x: 0, y: 0 } without throwing', async () => {
+    await AsyncStorage.setItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET, 'not-json')
+    let prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
+
+    await AsyncStorage.setItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET, '123')
+    prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
+
+    await AsyncStorage.setItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET, JSON.stringify({ x: 10 }))
+    prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
+
+    await AsyncStorage.setItem(
+      PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET,
+      JSON.stringify({ x: 'a', y: 'b' })
+    )
+    prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionOffset).toEqual({ x: 0, y: 0 })
   })
 })

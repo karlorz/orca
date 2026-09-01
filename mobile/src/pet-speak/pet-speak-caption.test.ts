@@ -8,6 +8,8 @@ import {
   PetSpeakHandler
 } from './pet-speak'
 import { PetSpeakRootBridge } from './pet-speak-root-bridge'
+import { hidePetSpeakCaptionPreview, showPetSpeakCaptionPreview } from './pet-speak-caption-preview'
+import { setPetSpeechCaptionsEnabled } from './pet-speech-preferences'
 import { RpcClientProvider } from '../transport/client-context'
 import type { HostProfile } from '../transport/types'
 
@@ -60,18 +62,29 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 })
 
 vi.mock('./pet-speech-preferences', () => ({
+  PET_SPEECH_STORAGE_KEYS: {
+    ENABLED: 'orca:petSpeech:enabled',
+    MIGRATION_COMPLETED: 'orca:petSpeech:migrationCompleted',
+    INSTALL_UUID: 'orca:petSpeech:installUuid',
+    RATE: 'orca:petSpeech:rate',
+    VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage',
+    CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled',
+    CAPTION_OFFSET: 'orca:petSpeech:captionOffset'
+  },
   loadPetSpeechPreferences: vi.fn(async () => ({
     enabled: true,
     migrationCompleted: true,
     installUuid: 'test-uuid',
     rate: 1,
     captionsEnabled: false,
+    captionOffset: { x: 0, y: 0 },
     voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' }
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {
     return () => {}
   }),
-  setPetSpeechCaptionsEnabled: vi.fn(async () => {})
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
+  setPetSpeechCaptionOffset: vi.fn(async () => {})
 }))
 
 vi.mock('../notifications/notification-permissions', () => ({
@@ -390,6 +403,48 @@ describe('PetSpeakRootBridge caption UI rendering (TDD)', () => {
       await Promise.resolve()
     })
 
+    expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
+  })
+
+  it('shows preview caption even when Live captions is Off, and × hides preview without disabling captions setting', async () => {
+    hidePetSpeakCaptionPreview()
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            captionsEnabled: false,
+            caption: null
+          })
+        )
+      )
+      await Promise.resolve()
+    })
+
+    expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
+
+    // Trigger preview
+    await act(async () => {
+      showPetSpeakCaptionPreview('Live captions preview — drag, then release')
+      await Promise.resolve()
+    })
+
+    const captionText = renderer?.root.findByProps({ testID: 'pet-speak-caption-text' })
+    expect(captionText?.props.children).toBe('Live captions preview — drag, then release')
+
+    // Tap × on HUD
+    const closeBtn = renderer?.root.findByProps({ testID: 'pet-speak-caption-disable' })
+    await act(async () => {
+      closeBtn?.props.onPress()
+      await Promise.resolve()
+    })
+
+    // setPetSpeechCaptionsEnabled should NOT have been called
+    expect(setPetSpeechCaptionsEnabled).not.toHaveBeenCalled()
+
+    // Preview HUD should now be hidden
     expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
   })
 })

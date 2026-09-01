@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Play } from 'lucide-react-native'
+import { ChevronLeft, Play, Captions } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { styles } from '../src/pet-speak/pet-speech-settings-styles'
 import {
@@ -18,6 +18,12 @@ import {
   subscribePetSpeechPreferences,
   type PetSpeechPreferences
 } from '../src/pet-speak/pet-speech-preferences'
+import {
+  getPetSpeakCaptionPreview,
+  hidePetSpeakCaptionPreview,
+  showPetSpeakCaptionPreview,
+  subscribePetSpeakCaptionPreview
+} from '../src/pet-speak/pet-speak-caption-preview'
 import {
   getAvailablePetSpeechVoices,
   executeTestVoiceAsync
@@ -42,6 +48,17 @@ export default function PetSpeechSettingsScreen() {
   const [selectedLanguageTab, setSelectedLanguageTab] = useState<CanonicalLanguage>('yue-HK')
   const [testVoiceBusy, setTestVoiceBusy] = useState(false)
   const [testVoiceOutcome, setTestVoiceOutcome] = useState<string | null>(null)
+  const [previewActive, setPreviewActive] = useState<boolean>(
+    () => getPetSpeakCaptionPreview() !== null
+  )
+
+  useEffect(() => {
+    setPreviewActive(getPetSpeakCaptionPreview() !== null)
+    const unsub = subscribePetSpeakCaptionPreview((caption) => {
+      setPreviewActive(caption !== null)
+    })
+    return unsub
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -125,6 +142,14 @@ export default function PetSpeechSettingsScreen() {
     }
   }, [testVoiceBusy, prefs?.enabled, selectedLanguageTab, voices])
 
+  const handleToggleCaptionPreview = useCallback(() => {
+    if (previewActive) {
+      hidePetSpeakCaptionPreview()
+    } else {
+      showPetSpeakCaptionPreview()
+    }
+  }, [previewActive])
+
   const isEnabled = prefs?.enabled ?? false
   const captionsEnabled = prefs?.captionsEnabled ?? false
   const activeRate = prefs?.rate ?? 1
@@ -171,8 +196,8 @@ export default function PetSpeechSettingsScreen() {
               <View style={styles.rowContent}>
                 <Text style={styles.rowLabel}>Live captions</Text>
                 <Text style={styles.rowSublabel}>
-                  Show spoken pet text when you may not hear the speaker. Off by default. Drag the
-                  pill; tap × to turn off.
+                  Show spoken pet text when you may not hear the speaker. Off by default. Tap × on
+                  the pill to turn off.
                 </Text>
               </View>
               <Switch
@@ -194,6 +219,44 @@ export default function PetSpeechSettingsScreen() {
           </View>
         ) : (
           <>
+            <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEST</Text>
+            <View style={[styles.section, styles.sectionTopGap]}>
+              <Pressable
+                style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
+                disabled={testVoiceBusy}
+                onPress={() => void handleRunTestVoice()}
+              >
+                {testVoiceBusy ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Play size={16} color={colors.textPrimary} />
+                )}
+                <Text style={styles.testVoiceLabel}>Test Voice ({selectedLanguageTab})</Text>
+              </Pressable>
+              <Text style={styles.testOutcomeText}>
+                {`Selected voice: ${selectedVoiceForLang ?? 'Device default'}`}
+              </Text>
+              {testVoiceOutcome ? (
+                <Text style={styles.testOutcomeText}>Outcome: {testVoiceOutcome}</Text>
+              ) : null}
+
+              <View style={styles.separator} />
+
+              <Pressable
+                style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
+                onPress={handleToggleCaptionPreview}
+              >
+                <Captions size={16} color={colors.textPrimary} />
+                <Text style={styles.testVoiceLabel}>
+                  {previewActive ? 'Hide Live captions preview' : 'Test Live captions'}
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={styles.helperText}>
+              Preview the caption pill, drag it, then release to save the position. Saved with Pet
+              Speech settings so app upgrades keep it.
+            </Text>
+
             <Text style={[styles.groupHeading, styles.inputGroupGap]}>LANGUAGE POLICY</Text>
             <View style={[styles.section, styles.sectionTopGap]}>
               <View style={styles.row}>
@@ -287,28 +350,6 @@ export default function PetSpeechSettingsScreen() {
                   </View>
                 )
               })}
-            </View>
-
-            <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEST VOICE</Text>
-            <View style={[styles.section, styles.sectionTopGap]}>
-              <Pressable
-                style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
-                disabled={testVoiceBusy}
-                onPress={() => void handleRunTestVoice()}
-              >
-                {testVoiceBusy ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Play size={16} color={colors.textPrimary} />
-                )}
-                <Text style={styles.testVoiceLabel}>Test Voice ({selectedLanguageTab})</Text>
-              </Pressable>
-              <Text style={styles.testOutcomeText}>
-                {`Selected voice: ${selectedVoiceForLang ?? 'Device default'}`}
-              </Text>
-              {testVoiceOutcome ? (
-                <Text style={styles.testOutcomeText}>Outcome: {testVoiceOutcome}</Text>
-              ) : null}
             </View>
           </>
         )}

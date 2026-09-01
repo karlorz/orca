@@ -43,18 +43,29 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 })
 
 vi.mock('./pet-speech-preferences', () => ({
+  PET_SPEECH_STORAGE_KEYS: {
+    ENABLED: 'orca:petSpeech:enabled',
+    MIGRATION_COMPLETED: 'orca:petSpeech:migrationCompleted',
+    INSTALL_UUID: 'orca:petSpeech:installUuid',
+    RATE: 'orca:petSpeech:rate',
+    VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage',
+    CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled',
+    CAPTION_OFFSET: 'orca:petSpeech:captionOffset'
+  },
   loadPetSpeechPreferences: vi.fn(async () => ({
     enabled: true,
     migrationCompleted: true,
     installUuid: 'test-uuid',
     rate: 1,
     captionsEnabled: false,
+    captionOffset: { x: 0, y: 0 },
     voiceByLanguage: {}
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {
     return () => {}
   }),
-  setPetSpeechCaptionsEnabled: vi.fn(async () => {})
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
+  setPetSpeechCaptionOffset: vi.fn(async () => {})
 }))
 
 vi.mock('react-native', () => ({

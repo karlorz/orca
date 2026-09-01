@@ -8,10 +8,14 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+  PET_SPEECH_STORAGE_KEYS,
+  loadPetSpeechPreferences,
+  setPetSpeechCaptionOffset
+} from './pet-speech-preferences'
 import type { PetSpeakCaption } from './pet-speak-types'
 
-export const CAPTION_OFFSET_STORAGE_KEY = 'orca:petSpeech:captionOffset'
+export const CAPTION_OFFSET_STORAGE_KEY = PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET
 export const CAPTION_HUD_FONT_SIZE = 18
 export const CAPTION_HUD_DEFAULT_TOP = 56
 
@@ -77,18 +81,11 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
 
   useEffect(() => {
     let active = true
-    void AsyncStorage.getItem(CAPTION_OFFSET_STORAGE_KEY).then((raw) => {
-      if (!active || !raw) {
+    void loadPetSpeechPreferences().then((prefs) => {
+      if (!active) {
         return
       }
-      try {
-        const parsed = JSON.parse(raw) as CaptionOffset
-        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-          applyOffset({ x: parsed.x, y: parsed.y })
-        }
-      } catch {
-        // ignore corrupt offset
-      }
+      applyOffset(prefs.captionOffset)
     })
     return () => {
       active = false
@@ -97,7 +94,7 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
 
   const persistOffset = (next: CaptionOffset): void => {
     applyOffset(next)
-    void AsyncStorage.setItem(CAPTION_OFFSET_STORAGE_KEY, JSON.stringify(next))
+    void setPetSpeechCaptionOffset(next)
   }
 
   const panResponder = useMemo(

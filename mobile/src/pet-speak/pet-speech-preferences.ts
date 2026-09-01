@@ -4,6 +4,7 @@ import type { CanonicalLanguage } from './pet-language-normalizer'
 export interface PetSpeechPreferences {
   enabled: boolean
   captionsEnabled: boolean
+  captionOffset: { x: number; y: number }
   migrationCompleted: boolean
   installUuid: string
   rate: number
@@ -16,7 +17,8 @@ export const PET_SPEECH_STORAGE_KEYS = {
   INSTALL_UUID: 'orca:petSpeech:installUuid',
   RATE: 'orca:petSpeech:rate',
   VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage',
-  CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled'
+  CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled',
+  CAPTION_OFFSET: 'orca:petSpeech:captionOffset'
 } as const
 
 export const DEFAULT_PET_SPEECH_RATE = 1
@@ -84,6 +86,7 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     rawRate,
     rawVoiceByLanguage,
     rawCaptionsEnabled,
+    rawCaptionOffset,
     installUuid
   ] = await Promise.all([
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.ENABLED),
@@ -91,6 +94,7 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.RATE),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.VOICE_BY_LANGUAGE),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTIONS_ENABLED),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET),
     getOrCreateInstallUuid()
   ])
 
@@ -136,14 +140,38 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     }
   }
 
+  let captionOffset = { x: 0, y: 0 }
+  if (rawCaptionOffset) {
+    try {
+      const parsed = JSON.parse(rawCaptionOffset)
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        typeof parsed.x === 'number' &&
+        typeof parsed.y === 'number'
+      ) {
+        captionOffset = { x: parsed.x, y: parsed.y }
+      }
+    } catch {
+      captionOffset = { x: 0, y: 0 }
+    }
+  }
+
   return {
     enabled,
     captionsEnabled: rawCaptionsEnabled === 'true',
+    captionOffset,
     migrationCompleted,
     installUuid,
     rate,
     voiceByLanguage
   }
+}
+
+export async function setPetSpeechCaptionOffset(offset: { x: number; y: number }): Promise<void> {
+  await AsyncStorage.setItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET, JSON.stringify(offset))
+  notifyPreferencesListeners()
 }
 
 export async function setPetSpeechCaptionsEnabled(captionsEnabled: boolean): Promise<void> {

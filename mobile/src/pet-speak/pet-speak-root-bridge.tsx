@@ -15,6 +15,11 @@ import {
   subscribePetSpeechPreferences,
   type PetSpeechPreferences
 } from './pet-speech-preferences'
+import {
+  getPetSpeakCaptionPreview,
+  hidePetSpeakCaptionPreview,
+  subscribePetSpeakCaptionPreview
+} from './pet-speak-caption-preview'
 import { PetSpeakCaptionHud } from './pet-speak-caption-hud'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
@@ -294,25 +299,39 @@ export function usePetSpeakRootBridge(
 
 export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement | null {
   const [internalCaption, setInternalCaption] = useState<PetSpeakCaption | null>(null)
+  const [previewCaption, setPreviewCaption] = useState<PetSpeakCaption | null>(() =>
+    getPetSpeakCaptionPreview()
+  )
   const prefCaptionsEnabled = usePetSpeakRootBridge(props, setInternalCaption)
+
+  useEffect(() => {
+    setPreviewCaption(getPetSpeakCaptionPreview())
+    const unsub = subscribePetSpeakCaptionPreview((caption) => {
+      setPreviewCaption(caption)
+    })
+    return unsub
+  }, [])
 
   const captionsOn =
     props?.captionsEnabled !== undefined ? props.captionsEnabled : prefCaptionsEnabled
-  const activeCaption = captionsOn
-    ? props?.caption !== undefined
-      ? props.caption
-      : internalCaption
-    : null
+  const liveCaption = props?.caption !== undefined ? props.caption : internalCaption
+  const activeCaption = previewCaption ?? (captionsOn ? liveCaption : null)
 
   if (!activeCaption) {
     return null
   }
 
+  const isPreview = previewCaption !== null
+
   return (
     <PetSpeakCaptionHud
       caption={activeCaption}
       onDisable={() => {
-        void setPetSpeechCaptionsEnabled(false)
+        if (isPreview) {
+          hidePetSpeakCaptionPreview()
+        } else {
+          void setPetSpeechCaptionsEnabled(false)
+        }
       }}
     />
   )
