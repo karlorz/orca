@@ -14,6 +14,7 @@ import {
   verifyReleaseChecksums
 } from './fork-voice-release-metadata.mjs'
 import { packageDraftRelease } from './fork-voice-package-release.mjs'
+import { parseUpstreamMobileBase } from './fork-next-mobile-tag.mjs'
 
 const require = createRequire(import.meta.url)
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -181,9 +182,10 @@ describe('fork voice electron-builder config gate', () => {
 })
 
 describe('mobile version increment contract', () => {
-  it('mobile/app.json stays on upstream marketing 0.0.46 with a higher versionCode', () => {
+  it('mobile/app.json stays on the published upstream train with a higher versionCode', () => {
     const appJson = JSON.parse(readFileSync(join(projectDir, 'mobile/app.json'), 'utf8'))
-    expect(appJson.expo.version).toBe('0.0.46')
+    const train = parseUpstreamMobileBase(`mobile-android-v${appJson.expo.version}`)
+    expect(appJson.expo.version).toBe(train)
     expect(appJson.expo.android.versionCode).toBeGreaterThanOrEqual(30)
     expect(appJson.expo.android.package).toBe('com.stably.orca.mobile')
   })
