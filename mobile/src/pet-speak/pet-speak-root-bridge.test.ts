@@ -53,16 +53,21 @@ vi.mock('./pet-speech-preferences', () => ({
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {
     return () => {}
-  })
+  }),
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {})
 }))
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', Version: 18 },
   View: 'View',
   Text: 'Text',
+  Pressable: 'Pressable',
   StyleSheet: {
     create: (styles: unknown) => styles,
     hairlineWidth: 1
+  },
+  PanResponder: {
+    create: () => ({ panHandlers: {} })
   }
 }))
 

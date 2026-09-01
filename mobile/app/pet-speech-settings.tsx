@@ -171,7 +171,8 @@ export default function PetSpeechSettingsScreen() {
               <View style={styles.rowContent}>
                 <Text style={styles.rowLabel}>Live captions</Text>
                 <Text style={styles.rowSublabel}>
-                  Show the spoken pet line on screen. Off by default.
+                  Show spoken pet text when you may not hear the speaker. Off by default. Drag the
+                  pill; tap × to turn off.
                 </Text>
               </View>
               <Switch

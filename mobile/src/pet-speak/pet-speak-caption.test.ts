@@ -31,8 +31,12 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios', Version: 18 },
   View: 'View',
   Text: 'Text',
+  Pressable: 'Pressable',
   StyleSheet: {
     create: (styles: unknown) => styles
+  },
+  PanResponder: {
+    create: () => ({ panHandlers: {} })
   }
 }))
 
@@ -66,7 +70,8 @@ vi.mock('./pet-speech-preferences', () => ({
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {
     return () => {}
-  })
+  }),
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {})
 }))
 
 vi.mock('../notifications/notification-permissions', () => ({
@@ -368,9 +373,8 @@ describe('PetSpeakRootBridge caption UI rendering (TDD)', () => {
       await Promise.resolve()
     })
 
-    const textNodes = renderer?.root.findAllByType('Text')
-    expect(textNodes?.length).toBe(1)
-    expect(textNodes?.[0]?.props.children).toBe('測試字幕顯示')
+    const captionText = renderer?.root.findByProps({ testID: 'pet-speak-caption-text' })
+    expect(captionText?.props.children).toBe('測試字幕顯示')
 
     // Cleared caption
     await act(async () => {

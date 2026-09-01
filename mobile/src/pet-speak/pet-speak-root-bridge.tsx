@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { Platform } from 'react-native'
 import type { ConnectionState, HostCatalogEntry, HostProfile } from '../transport/types'
 import { loadHostCatalog } from '../transport/host-store'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
@@ -11,9 +11,11 @@ import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
 import {
   loadPetSpeechPreferences,
+  setPetSpeechCaptionsEnabled,
   subscribePetSpeechPreferences,
   type PetSpeechPreferences
 } from './pet-speech-preferences'
+import { PetSpeakCaptionHud } from './pet-speak-caption-hud'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
 import {
@@ -23,7 +25,6 @@ import {
   type PetSpeakSubscriptionEntry,
   type PetVoiceHoldRuntime
 } from './pet-speak-root-bridge-hold'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
@@ -41,39 +42,6 @@ export interface PetSpeakBridgeOptions {
   caption?: PetSpeakCaption | null
   captionsEnabled?: boolean
 }
-
-const captionStyles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 50,
-    left: spacing.md,
-    right: spacing.md,
-    zIndex: 9999,
-    alignItems: 'center',
-    pointerEvents: 'none'
-  },
-  banner: {
-    backgroundColor: 'rgba(26, 26, 26, 0.95)',
-    borderColor: colors.borderSubtle,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    maxWidth: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5
-  },
-  text: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 20
-  }
-})
 
 export function usePetSpeakRootBridge(
   options?: PetSpeakBridgeOptions,
@@ -341,12 +309,11 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
   }
 
   return (
-    <View style={captionStyles.container} pointerEvents="none">
-      <View style={captionStyles.banner}>
-        <Text style={captionStyles.text} numberOfLines={3}>
-          {activeCaption.text}
-        </Text>
-      </View>
-    </View>
+    <PetSpeakCaptionHud
+      caption={activeCaption}
+      onDisable={() => {
+        void setPetSpeechCaptionsEnabled(false)
+      }}
+    />
   )
 }

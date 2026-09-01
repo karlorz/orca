@@ -46,9 +46,13 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', Version: 34 },
   View: 'View',
   Text: 'Text',
+  Pressable: 'Pressable',
   StyleSheet: {
     create: (styles: unknown) => styles,
     hairlineWidth: 1
+  },
+  PanResponder: {
+    create: () => ({ panHandlers: {} })
   }
 }))
 
