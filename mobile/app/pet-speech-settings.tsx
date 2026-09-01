@@ -12,6 +12,7 @@ import {
 import {
   loadPetSpeechPreferences,
   setPetSpeechEnabled,
+  setPetSpeechCaptionsEnabled,
   setPetSpeechRate,
   setPetSpeechVoiceForLanguage,
   subscribePetSpeechPreferences,
@@ -79,6 +80,11 @@ export default function PetSpeechSettingsScreen() {
     await setPetSpeechEnabled(enabled)
   }, [])
 
+  const handleToggleCaptions = useCallback(async (captionsEnabled: boolean) => {
+    setPrefs((prev) => (prev ? { ...prev, captionsEnabled } : prev))
+    await setPetSpeechCaptionsEnabled(captionsEnabled)
+  }, [])
+
   const handleSelectSpeed = useCallback(async (speed: number) => {
     setPrefs((prev) => (prev ? { ...prev, rate: speed } : prev))
     await setPetSpeechRate(speed)
@@ -120,6 +126,7 @@ export default function PetSpeechSettingsScreen() {
   }, [testVoiceBusy, prefs?.enabled, selectedLanguageTab, voices])
 
   const isEnabled = prefs?.enabled ?? false
+  const captionsEnabled = prefs?.captionsEnabled ?? false
   const activeRate = prefs?.rate ?? 1
 
   // Same-language only: never show zh-TW/zh-HK under zh-CN (or vice versa).
@@ -159,6 +166,22 @@ export default function PetSpeechSettingsScreen() {
               thumbColor={colors.textPrimary}
             />
           </View>
+          {isEnabled ? (
+            <View style={styles.row}>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowLabel}>Live captions</Text>
+                <Text style={styles.rowSublabel}>
+                  Show the spoken pet line on screen. Off by default.
+                </Text>
+              </View>
+              <Switch
+                value={captionsEnabled}
+                onValueChange={(v) => void handleToggleCaptions(v)}
+                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+                thumbColor={colors.textPrimary}
+              />
+            </View>
+          ) : null}
         </View>
 
         {!isEnabled ? (

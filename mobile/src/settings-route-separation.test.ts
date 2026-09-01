@@ -97,10 +97,12 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
     migrationCompleted: true,
     installUuid: 'uuid-1',
     rate: 1,
+    captionsEnabled: false,
     voiceByLanguage: {}
   })),
   subscribePetSpeechPreferences: vi.fn((_cb: unknown) => () => {}),
   setPetSpeechEnabled: vi.fn(async () => {}),
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
   setPetSpeechRate: vi.fn(async () => {}),
   setPetSpeechVoiceForLanguage: vi.fn(async () => {})
 }))

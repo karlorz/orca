@@ -44,10 +44,12 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
     migrationCompleted: true,
     installUuid: 'uuid-1',
     rate: 1,
+    captionsEnabled: false,
     voiceByLanguage: {}
   })),
   subscribePetSpeechPreferences: vi.fn((_cb: unknown) => () => {}),
   setPetSpeechEnabled: vi.fn(async () => {}),
+  setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
   setPetSpeechRate: vi.fn(async () => {}),
   setPetSpeechVoiceForLanguage: vi.fn(async () => {})
 }))
@@ -94,6 +96,7 @@ describe('Pet Speech and Plugins Routes', () => {
 
     expect(labels).toContain('Pet Speech')
     expect(labels).toContain('Enable Pet Speech')
+    expect(labels).toContain('Live captions')
     expect(labels).toContain('Selected voice: Device default')
   })
 
@@ -104,6 +107,7 @@ describe('Pet Speech and Plugins Routes', () => {
       migrationCompleted: true,
       installUuid: 'uuid-1',
       rate: 1,
+      captionsEnabled: false,
       voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' }
     })
 

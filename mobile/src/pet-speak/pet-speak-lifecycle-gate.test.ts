@@ -149,6 +149,7 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
       migrationCompleted: false,
       installUuid: 'uuid-1',
       rate: 1,
+      captionsEnabled: false,
       voiceByLanguage: {}
     }
     acquireVoiceSessionMock = vi.fn(async () => ({ held: true }))

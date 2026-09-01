@@ -48,6 +48,7 @@ vi.mock('./pet-speech-preferences', () => ({
     migrationCompleted: true,
     installUuid: 'test-uuid',
     rate: 1,
+    captionsEnabled: false,
     voiceByLanguage: {}
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {

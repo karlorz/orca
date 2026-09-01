@@ -39,6 +39,7 @@ export interface PetSpeakBridgeOptions {
   loadPreferences?: () => Promise<PetSpeechPreferences>
   subscribePreferences?: (listener: (prefs: PetSpeechPreferences) => void) => () => void
   caption?: PetSpeakCaption | null
+  captionsEnabled?: boolean
 }
 
 const captionStyles = StyleSheet.create({
@@ -77,7 +78,7 @@ const captionStyles = StyleSheet.create({
 export function usePetSpeakRootBridge(
   options?: PetSpeakBridgeOptions,
   onCaptionChange?: (caption: PetSpeakCaption | null) => void
-): void {
+): boolean {
   const ctx = useRpcClientContext()
   const [connectableProfiles, setConnectableProfiles] = useState<HostProfile[]>([])
   const loadCatalogFn = options?.loadCatalog ?? loadHostCatalog
@@ -112,6 +113,7 @@ export function usePetSpeakRootBridge(
   }, [loadPreferencesFn, subscribePreferencesFn])
 
   const isEnabled = preferences !== null ? preferences.enabled : false
+  const captionsEnabled = preferences?.captionsEnabled === true
 
   const isAndroid = options?.isAndroid ?? Platform.OS === 'android'
   const ensureNotificationPermissionsFn =
@@ -318,13 +320,21 @@ export function usePetSpeakRootBridge(
       }
     }
   }, [releaseVoiceSessionFn])
+
+  return captionsEnabled
 }
 
 export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement | null {
   const [internalCaption, setInternalCaption] = useState<PetSpeakCaption | null>(null)
-  usePetSpeakRootBridge(props, setInternalCaption)
+  const prefCaptionsEnabled = usePetSpeakRootBridge(props, setInternalCaption)
 
-  const activeCaption = props?.caption !== undefined ? props.caption : internalCaption
+  const captionsOn =
+    props?.captionsEnabled !== undefined ? props.captionsEnabled : prefCaptionsEnabled
+  const activeCaption = captionsOn
+    ? props?.caption !== undefined
+      ? props.caption
+      : internalCaption
+    : null
 
   if (!activeCaption) {
     return null

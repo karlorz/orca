@@ -61,6 +61,7 @@ vi.mock('./pet-speech-preferences', () => ({
     migrationCompleted: true,
     installUuid: 'test-uuid',
     rate: 1,
+    captionsEnabled: false,
     voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' }
   })),
   subscribePetSpeechPreferences: vi.fn((_listener) => {
@@ -337,13 +338,29 @@ describe('PetSpeakRootBridge caption UI rendering (TDD)', () => {
     // Bridge mounted, initially no caption banner rendered
     expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
 
-    // Render with active caption
     await act(async () => {
       renderer?.update(
         createElement(
           RpcClientProvider,
           null,
           createElement(PetSpeakRootBridge, {
+            captionsEnabled: false,
+            caption: { eventId: 'evt-off', text: '不應該顯示' }
+          })
+        )
+      )
+      await Promise.resolve()
+    })
+
+    expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
+
+    await act(async () => {
+      renderer?.update(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            captionsEnabled: true,
             caption: { eventId: 'evt-1', text: '測試字幕顯示' }
           })
         )

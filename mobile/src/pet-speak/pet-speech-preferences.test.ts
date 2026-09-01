@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   loadPetSpeechPreferences,
   setPetSpeechEnabled,
+  setPetSpeechCaptionsEnabled,
   setPetSpeechRate,
   setPetSpeechVoiceForLanguage,
   subscribePetSpeechPreferences,
@@ -38,11 +39,32 @@ describe('PetSpeechPreferences - Storage and Migration', () => {
   it('fresh install (no existing pet speak keys) defaults to disabled (Off)', async () => {
     const prefs = await loadPetSpeechPreferences()
     expect(prefs.enabled).toBe(false)
+    expect(prefs.captionsEnabled).toBe(false)
     expect(prefs.migrationCompleted).toBe(false)
     expect(prefs.rate).toBe(1)
     expect(prefs.voiceByLanguage).toEqual({})
     expect(prefs.installUuid).toBeDefined()
     expect(prefs.installUuid.length).toBeGreaterThan(0)
+  })
+
+  it('captionsEnabled stays false when pet speech is on and the captions key is absent', async () => {
+    await setPetSpeechEnabled(true)
+    const prefs = await loadPetSpeechPreferences()
+    expect(prefs.enabled).toBe(true)
+    expect(prefs.captionsEnabled).toBe(false)
+  })
+
+  it('setPetSpeechCaptionsEnabled persists On and Off independently of pet speech enabled', async () => {
+    await setPetSpeechEnabled(true)
+    await setPetSpeechCaptionsEnabled(true)
+    let prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionsEnabled).toBe(true)
+    expect(await AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTIONS_ENABLED)).toBe('true')
+
+    await setPetSpeechCaptionsEnabled(false)
+    prefs = await loadPetSpeechPreferences()
+    expect(prefs.captionsEnabled).toBe(false)
+    expect(prefs.enabled).toBe(true)
   })
 
   it('detects participating install from existing watermark key and migrates On once', async () => {

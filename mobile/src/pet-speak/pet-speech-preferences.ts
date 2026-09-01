@@ -3,6 +3,7 @@ import type { CanonicalLanguage } from './pet-language-normalizer'
 
 export interface PetSpeechPreferences {
   enabled: boolean
+  captionsEnabled: boolean
   migrationCompleted: boolean
   installUuid: string
   rate: number
@@ -14,7 +15,8 @@ export const PET_SPEECH_STORAGE_KEYS = {
   MIGRATION_COMPLETED: 'orca:petSpeech:migrationCompleted',
   INSTALL_UUID: 'orca:petSpeech:installUuid',
   RATE: 'orca:petSpeech:rate',
-  VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage'
+  VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage',
+  CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled'
 } as const
 
 export const DEFAULT_PET_SPEECH_RATE = 1
@@ -76,14 +78,21 @@ function generateStableUuid(): string {
  *   - Never overwrites later explicit Off/On choices.
  */
 export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> {
-  const [rawEnabled, rawMigrationCompleted, rawRate, rawVoiceByLanguage, installUuid] =
-    await Promise.all([
-      AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.ENABLED),
-      AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.MIGRATION_COMPLETED),
-      AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.RATE),
-      AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.VOICE_BY_LANGUAGE),
-      getOrCreateInstallUuid()
-    ])
+  const [
+    rawEnabled,
+    rawMigrationCompleted,
+    rawRate,
+    rawVoiceByLanguage,
+    rawCaptionsEnabled,
+    installUuid
+  ] = await Promise.all([
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.ENABLED),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.MIGRATION_COMPLETED),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.RATE),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.VOICE_BY_LANGUAGE),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTIONS_ENABLED),
+    getOrCreateInstallUuid()
+  ])
 
   let migrationCompleted = rawMigrationCompleted === 'true'
   let enabled = false
@@ -129,11 +138,20 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
 
   return {
     enabled,
+    captionsEnabled: rawCaptionsEnabled === 'true',
     migrationCompleted,
     installUuid,
     rate,
     voiceByLanguage
   }
+}
+
+export async function setPetSpeechCaptionsEnabled(captionsEnabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(
+    PET_SPEECH_STORAGE_KEYS.CAPTIONS_ENABLED,
+    captionsEnabled ? 'true' : 'false'
+  )
+  notifyPreferencesListeners()
 }
 
 export async function setPetSpeechEnabled(enabled: boolean): Promise<void> {
