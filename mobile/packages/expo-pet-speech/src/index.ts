@@ -24,6 +24,12 @@ export interface PetSpeechResult {
   outcome: 'spoken' | 'voice-unavailable' | 'playback-error' | 'cancelled'
 }
 
+export interface PetSpeechCaptionRangeEvent {
+  eventId: string
+  start: number
+  end: number
+}
+
 export interface PetSpeechNativeModule {
   getAvailableVoicesAsync(): Promise<PetSpeechVoice[]>
   speakAsync(options: PetSpeechUtteranceOptions): Promise<PetSpeechResult>
@@ -31,6 +37,10 @@ export interface PetSpeechNativeModule {
   acquireVoiceSessionAsync(): Promise<{ held: boolean }>
   releaseVoiceSessionAsync(): Promise<void>
   updateVoiceSessionNotificationAsync?(text: string): Promise<void>
+  addListener?(
+    eventName: 'onCaptionRange',
+    listener: (event: PetSpeechCaptionRangeEvent) => void
+  ): { remove: () => void }
 }
 
 let nativeModule: PetSpeechNativeModule | null = null

@@ -1,9 +1,6 @@
 import { Platform } from 'react-native'
 import { getExpoPetSpeechModule } from './pet-speak-native-adapter'
-import {
-  applyPetSpeakCaptionRange,
-  type PetSpeakCaptionRangeEvent
-} from './pet-speak-caption-range'
+import { applyPetSpeakCaptionRange } from './pet-speak-caption-range'
 
 let attached = false
 
@@ -11,12 +8,7 @@ export function attachNativeCaptionRangeListener(): void {
   if (attached || Platform.OS !== 'android') {
     return
   }
-  const nativeModule = getExpoPetSpeechModule() as {
-    addListener?: (
-      eventName: string,
-      listener: (event: PetSpeakCaptionRangeEvent) => void
-    ) => { remove: () => void }
-  } | null
+  const nativeModule = getExpoPetSpeechModule()
   if (!nativeModule?.addListener) {
     return
   }

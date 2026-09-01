@@ -408,6 +408,7 @@ describe('PetSpeakRootBridge caption UI rendering (TDD)', () => {
 
   it('shows preview caption even when Live captions is Off, and × hides preview without disabling captions setting', async () => {
     hidePetSpeakCaptionPreview()
+    vi.mocked(setPetSpeechCaptionsEnabled).mockClear()
     let renderer: ReactTestRenderer | null = null
     await act(async () => {
       renderer = create(
@@ -441,8 +442,49 @@ describe('PetSpeakRootBridge caption UI rendering (TDD)', () => {
       await Promise.resolve()
     })
 
-    // setPetSpeechCaptionsEnabled should NOT have been called
+    // When captions are already Off, setPetSpeechCaptionsEnabled should NOT have been called
     expect(setPetSpeechCaptionsEnabled).not.toHaveBeenCalled()
+
+    // Preview HUD should now be hidden
+    expect(renderer?.root.findAllByType('Text')).toHaveLength(0)
+  })
+
+  it('when Live captions is On and preview is open, tapping × disables Live captions setting and hides preview', async () => {
+    hidePetSpeakCaptionPreview()
+    vi.mocked(setPetSpeechCaptionsEnabled).mockClear()
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            captionsEnabled: true,
+            caption: null
+          })
+        )
+      )
+      await Promise.resolve()
+    })
+
+    // Trigger preview
+    await act(async () => {
+      showPetSpeakCaptionPreview('Live captions preview — drag, then release')
+      await Promise.resolve()
+    })
+
+    const captionText = renderer?.root.findByProps({ testID: 'pet-speak-caption-text' })
+    expect(captionText?.props.children).toBe('Live captions preview — drag, then release')
+
+    // Tap × on HUD
+    const closeBtn = renderer?.root.findByProps({ testID: 'pet-speak-caption-disable' })
+    await act(async () => {
+      closeBtn?.props.onPress()
+      await Promise.resolve()
+    })
+
+    // setPetSpeechCaptionsEnabled(false) MUST have been called to disable captions
+    expect(setPetSpeechCaptionsEnabled).toHaveBeenCalledWith(false)
 
     // Preview HUD should now be hidden
     expect(renderer?.root.findAllByType('Text')).toHaveLength(0)

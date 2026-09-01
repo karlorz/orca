@@ -54,7 +54,6 @@ export default function PetSpeechSettingsScreen() {
   )
 
   useEffect(() => {
-    setPreviewActive(getPetSpeakCaptionPreview() !== null)
     const unsub = subscribePetSpeakCaptionPreview((caption) => {
       setPreviewActive(caption !== null)
     })

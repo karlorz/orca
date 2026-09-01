@@ -312,7 +312,6 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
   const prefCaptionsEnabled = usePetSpeakRootBridge(props, setInternalCaption)
 
   useEffect(() => {
-    setPreviewCaption(getPetSpeakCaptionPreview())
     const unsub = subscribePetSpeakCaptionPreview((caption) => {
       setPreviewCaption(caption)
     })
@@ -336,9 +335,7 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
 
   const isPreview = previewCaption !== null
   const karaokeRange =
-    highlightRange && highlightRange.eventId === activeCaption.eventId
-      ? { start: highlightRange.start, end: highlightRange.end }
-      : null
+    highlightRange && highlightRange.eventId === activeCaption.eventId ? highlightRange : null
 
   return (
     <PetSpeakCaptionHud
@@ -348,7 +345,8 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
         applyPetSpeakCaptionRange(null)
         if (isPreview) {
           hidePetSpeakCaptionPreview()
-        } else {
+        }
+        if (captionsOn) {
           void setPetSpeechCaptionsEnabled(false)
         }
       }}

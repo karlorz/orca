@@ -43,7 +43,23 @@ class PetSpeechPlaybackPrototypeTest {
     }
 
     @Test
-    fun selectablePlayerFactoryReturnsMedia3WhenSelected() {
+    fun selectablePlayerFactoryReceivesMedia3WhenSelected() {
+        PetSpeechPlayerProvider.playerFactory = { kind ->
+            object : PetSpeechAudioPlayer {
+                override val implementationName: String = kind.identifier
+                override fun play(
+                    context: Context,
+                    filePath: String,
+                    rate: Float,
+                    debug: Boolean,
+                    onComplete: () -> Unit,
+                    onError: (String) -> Unit,
+                    onStarted: () -> Unit
+                ) {}
+                override fun setVolume(volume: Float) {}
+                override fun stopAndRelease() {}
+            }
+        }
         PetSpeechPlayerProvider.defaultPlayerKind = PetSpeechPlayerKind.MEDIA3
         val player = PetSpeechPlayerProvider.createPlayer()
         assertEquals(PetSpeechPlayerKind.MEDIA3.identifier, player.implementationName)
@@ -116,8 +132,9 @@ class PetSpeechPlaybackPrototypeTest {
             timestampMs = playerStartTime
         )
 
+        val context = object : android.content.ContextWrapper(null) {}
         fakePlayer.play(
-            context = null as Context?,
+            context = context,
             filePath = "/tmp/test.wav",
             rate = 1.5f,
             debug = false,

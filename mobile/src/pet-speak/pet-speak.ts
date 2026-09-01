@@ -263,14 +263,12 @@ export class PetSpeakHandler {
       this.notifyCaption({ eventId, text })
       await this.tts.speak(text, locale)
       const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'spoken'
-      this.notifyCaption(null)
       if (this.onComplete) {
         await this.onComplete(eventId, outcome).catch(() => {})
       }
       item.resolve()
     } catch {
       const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'playback-error'
-      this.notifyCaption(null)
       if (this.onComplete) {
         await this.onComplete(eventId, outcome).catch(() => {})
       }

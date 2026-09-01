@@ -26,7 +26,6 @@ class ExpoPetSpeechModule : Module() {
 
     private val resourceOwnerRegistry = PetSpeechResourceOwnerRegistry()
     private val karaokeHandler = Handler(Looper.getMainLooper())
-    private val karaokeRunnables = mutableListOf<Runnable>()
 
     override fun definition() = ModuleDefinition {
         Name("ExpoPetSpeech")
@@ -412,6 +411,7 @@ class ExpoPetSpeechModule : Module() {
                 isDestroyed = true
             }
             try {
+                clearCaptionKaraoke()
                 resourceOwnerRegistry.stopAll()
             } catch (_: Exception) {}
         }
@@ -461,10 +461,7 @@ class ExpoPetSpeechModule : Module() {
     }
 
     private fun clearCaptionKaraoke() {
-        for (runnable in karaokeRunnables) {
-            karaokeHandler.removeCallbacks(runnable)
-        }
-        karaokeRunnables.clear()
+        karaokeHandler.removeCallbacksAndMessages(null)
     }
 
     private fun scheduleCaptionKaraoke(
@@ -478,7 +475,7 @@ class ExpoPetSpeechModule : Module() {
                 continue
             }
             val delay = PetSpeechKaraoke.wallDelayMs(range.startMs, rate)
-            val runnable = Runnable {
+            karaokeHandler.postDelayed({
                 sendEvent(
                     "onCaptionRange",
                     mapOf(
@@ -487,9 +484,7 @@ class ExpoPetSpeechModule : Module() {
                         "end" to range.end
                     )
                 )
-            }
-            karaokeRunnables.add(runnable)
-            karaokeHandler.postDelayed(runnable, delay)
+            }, delay)
         }
     }
 
