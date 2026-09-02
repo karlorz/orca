@@ -79,7 +79,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.stably.orca.mobile",
-      "versionCode": 42
+      "versionCode": 43
     },
     "plugins": [
       "expo-router",
