@@ -152,7 +152,10 @@ describe('PetSpeakCaptionHud', () => {
     expect(karaoke.props.children).toBe('世界')
     expect(karaoke.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ backgroundColor: 'rgba(255, 214, 10, 0.55)' })
+        expect.objectContaining({
+          backgroundColor: 'rgba(255, 214, 10, 0.55)',
+          color: '#FFD60A'
+        })
       ])
     )
   })

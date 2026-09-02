@@ -169,6 +169,33 @@ describe('PetSpeakHandler onCaption listener (TDD)', () => {
     expect(captions).toEqual([{ eventId: 'evt-cap-native-1', text: '原生語音字幕測試' }, null])
   })
 
+  it('includes originalText in onCaption when original_text is provided on payload', async () => {
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMediaSession,
+      onCaption: (caption) => {
+        captions.push(caption)
+      }
+    })
+
+    await handler.handleEvent({
+      type: 'pet.speak',
+      text: '你好！我係你嘅桌面寵物。',
+      lang: 'yue',
+      event_id: 'evt-orig-1',
+      original_text: 'Hello! I am your desktop pet.'
+    })
+
+    expect(captions).toEqual([
+      {
+        eventId: 'evt-orig-1',
+        text: '你好！我係你嘅桌面寵物。',
+        originalText: 'Hello! I am your desktop pet.'
+      },
+      null
+    ])
+  })
+
   it('does NOT show caption for invalid payloads or duplicate event ids', async () => {
     const handler = new PetSpeakHandler({
       tts: mockTts,

@@ -3,6 +3,7 @@ export type PetSpeakPayload = {
   text: string
   lang?: string
   event_id?: string
+  original_text?: string
   rate?: number
   voiceName?: string
   playerKind?: 'mediaplayer' | 'media3'

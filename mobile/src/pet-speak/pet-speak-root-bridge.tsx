@@ -20,6 +20,10 @@ import {
   hidePetSpeakCaptionPreview,
   subscribePetSpeakCaptionPreview
 } from './pet-speak-caption-preview'
+import {
+  getPetSpeakLiveCaption,
+  subscribePetSpeakLiveCaption
+} from './pet-speak-live-caption'
 import { PetSpeakCaptionHud } from './pet-speak-caption-hud'
 import {
   applyPetSpeakCaptionRange,
@@ -305,6 +309,9 @@ export function usePetSpeakRootBridge(
 
 export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement | null {
   const [internalCaption, setInternalCaption] = useState<PetSpeakCaption | null>(null)
+  const [localLiveCaption, setLocalLiveCaption] = useState<PetSpeakCaption | null>(() =>
+    getPetSpeakLiveCaption()
+  )
   const [previewCaption, setPreviewCaption] = useState<PetSpeakCaption | null>(() =>
     getPetSpeakCaptionPreview()
   )
@@ -319,6 +326,13 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
   }, [])
 
   useEffect(() => {
+    const unsub = subscribePetSpeakLiveCaption((caption) => {
+      setLocalLiveCaption(caption)
+    })
+    return unsub
+  }, [])
+
+  useEffect(() => {
     attachNativeCaptionRangeListener()
     const unsub = subscribePetSpeakCaptionRange(setHighlightRange)
     return unsub
@@ -326,7 +340,8 @@ export function PetSpeakRootBridge(props?: PetSpeakBridgeOptions): ReactElement 
 
   const captionsOn =
     props?.captionsEnabled !== undefined ? props.captionsEnabled : prefCaptionsEnabled
-  const liveCaption = props?.caption !== undefined ? props.caption : internalCaption
+  const liveCaption =
+    localLiveCaption ?? (props?.caption !== undefined ? props.caption : internalCaption)
   const activeCaption = previewCaption ?? (captionsOn ? liveCaption : null)
 
   if (!activeCaption) {

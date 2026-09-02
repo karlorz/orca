@@ -221,7 +221,13 @@ export class PetSpeakHandler {
 
     if (this.nativeAdapter) {
       try {
-        this.notifyCaption({ eventId, text })
+        this.notifyCaption({
+          eventId,
+          text,
+          ...(event.original_text && event.original_text.trim().length > 0
+            ? { originalText: event.original_text.trim() }
+            : {})
+        })
         const outcome = await this.nativeAdapter.speak(event)
         const finalOutcome = this.disposed || item.isCancelled ? 'cancelled' : outcome
         this.notifyCaption(null)
@@ -260,7 +266,13 @@ export class PetSpeakHandler {
         item.resolve()
         return
       }
-      this.notifyCaption({ eventId, text })
+      this.notifyCaption({
+        eventId,
+        text,
+        ...(event.original_text && event.original_text.trim().length > 0
+          ? { originalText: event.original_text.trim() }
+          : {})
+      })
       await this.tts.speak(text, locale)
       const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'spoken'
       if (this.onComplete) {

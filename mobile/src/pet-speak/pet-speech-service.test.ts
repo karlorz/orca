@@ -56,6 +56,11 @@ import {
   executeTestVoiceAsync
 } from './pet-speech-service'
 import {
+  applyPetSpeakLiveCaption,
+  subscribePetSpeakLiveCaption
+} from './pet-speak-live-caption'
+import type { PetSpeakCaption } from './pet-speak-types'
+import {
   setPetSpeechEnabled,
   setPetSpeechVoiceForLanguage,
   setPetSpeechRate
@@ -393,5 +398,43 @@ describe('PetSpeechService - Voice validation and Test Voice', () => {
     expect(nativeCalls[0].text).toBe(
       'Hello! I am your desktop pet. Let us handle 123 tasks together today!'
     )
+  })
+
+  it('executeTestVoiceAsync publishes a live caption with the same event_id as speak, including originalText, then clears', async () => {
+    await setPetSpeechEnabled(true)
+    await setPetSpeechVoiceForLanguage('yue-HK', 'yue-HK-voice-1')
+
+    applyPetSpeakLiveCaption(null)
+    const captions: Array<PetSpeakCaption | null> = []
+    const unsub = subscribePetSpeakLiveCaption((c) => {
+      captions.push(c)
+    })
+
+    const spoken: PetSpeakPayload[] = []
+    const mockAdapter: PetSpeechNativeAdapter = {
+      speak: async (payload) => {
+        spoken.push(payload)
+        return 'spoken'
+      }
+    }
+
+    try {
+      await executeTestVoiceAsync('yue-HK', {
+        nativeAdapter: mockAdapter,
+        availableVoices: sampleVoices
+      })
+
+      expect(spoken.length).toBe(1)
+      expect(spoken[0].event_id).toBeTruthy()
+      expect(spoken[0].original_text).toContain('Hello! I am your desktop pet')
+      expect(captions.length).toBeGreaterThanOrEqual(2)
+      expect(captions[0]?.eventId).toBe(spoken[0].event_id)
+      expect(captions[0]?.text).toContain('桌面寵物')
+      expect(captions[0]?.originalText).toContain('Hello! I am your desktop pet')
+      expect(captions[captions.length - 1]).toBeNull()
+    } finally {
+      unsub()
+      applyPetSpeakLiveCaption(null)
+    }
   })
 })

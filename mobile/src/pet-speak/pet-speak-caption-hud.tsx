@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   highlighted: {
     backgroundColor: 'rgba(255, 214, 10, 0.55)',
-    color: '#ffffff',
+    color: '#FFD60A',
     borderRadius: 3
   },
   close: {

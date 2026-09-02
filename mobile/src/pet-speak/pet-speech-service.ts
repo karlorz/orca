@@ -8,6 +8,8 @@ import {
 import { getExpoPetSpeechModule, type PetSpeechVoice } from './pet-speak-native-adapter'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
 import type { PreparedPetSpeakEventResult } from './pet-speak-types'
+import { PetSpeakHandler } from './pet-speak'
+import { applyPetSpeakLiveCaption } from './pet-speak-live-caption'
 
 export type { PreparedPetSpeakEventResult }
 
@@ -195,14 +197,15 @@ export async function executeTestVoiceAsync(
     return { outcome: 'voice-unavailable' }
   }
 
-  const text = (TEST_VOICE_SAMPLES[lang] ?? TEST_VOICE_SAMPLES['yue-HK']).spoken
+  const sample = TEST_VOICE_SAMPLES[lang] ?? TEST_VOICE_SAMPLES['yue-HK']
+  const eventId = `test-${Date.now()}`
   const voices = options?.availableVoices ?? (await getAvailablePetSpeechVoices())
   const resolved = await resolveEnabledSpeechOptions(
     {
       type: 'pet.speak',
-      text,
+      text: sample.spoken,
       lang,
-      event_id: `test-${Date.now()}`
+      event_id: eventId
     },
     voices
   )
@@ -220,13 +223,23 @@ export async function executeTestVoiceAsync(
 
   const eventPayload: PetSpeakPayload = {
     type: 'pet.speak',
-    text,
+    text: sample.spoken,
+    original_text: sample.original,
     lang,
-    event_id: `test-${Date.now()}`,
+    event_id: eventId,
     rate: resolved.rate,
     voiceName: resolved.voiceName
   }
 
-  const outcome = await adapter.speak(eventPayload)
-  return { outcome }
+  let terminal: PetSpeakTerminalOutcome = 'playback-error'
+  const handler = new PetSpeakHandler({
+    nativeAdapter: adapter,
+    onCaption: applyPetSpeakLiveCaption,
+    onComplete: async (_id, outcome) => {
+      terminal = outcome
+    }
+  })
+
+  await handler.handleEvent(eventPayload)
+  return { outcome: terminal }
 }

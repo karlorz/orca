@@ -1,5 +1,8 @@
 package expo.modules.petspeech
 
+import android.os.Bundle
+import android.speech.tts.TextToSpeech
+
 data class PetSpeechCaptionRange(
     val start: Int,
     val end: Int,
@@ -17,5 +20,19 @@ object PetSpeechKaraoke {
     fun wallDelayMs(startMs: Int, rate: Float): Long {
         val speed = if (rate > 0f) rate else 1f
         return (startMs.toFloat() / speed).toLong().coerceAtLeast(0L)
+    }
+
+    fun acceptsCallbackId(id: String?, utteranceId: String): Boolean {
+        return id == null || id == utteranceId
+    }
+
+    fun utteranceParams(
+        utteranceId: String,
+        onPut: ((key: String, value: String) -> Unit)? = null
+    ): Bundle {
+        onPut?.invoke(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+        return Bundle().apply {
+            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+        }
     }
 }

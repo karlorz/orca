@@ -162,7 +162,7 @@ describe('Pet Speech and Plugins Routes', () => {
     expect(labels).toContain('Selected voice: yue-hk-x-yuc-local')
   })
 
-  it('Test Voice shows Yue plus original English while speaking, then hides', async () => {
+  it('Test Voice calls executeTestVoiceAsync without showing caption preview', async () => {
     let resolveSpeak: (value: { outcome: string }) => void = () => {}
     vi.mocked(executeTestVoiceAsync).mockImplementation(
       () =>
@@ -197,9 +197,9 @@ describe('Pet Speech and Plugins Routes', () => {
       await Promise.resolve()
     })
 
-    const preview = getPetSpeakCaptionPreview()
-    expect(preview?.text).toContain('桌面寵物')
-    expect(preview?.originalText).toContain('Hello! I am your desktop pet')
+    // Settings Test Voice must NOT call showPetSpeakCaptionPreview
+    expect(getPetSpeakCaptionPreview()).toBeNull()
+    expect(executeTestVoiceAsync).toHaveBeenCalledWith('yue-HK', expect.anything())
 
     await act(async () => {
       resolveSpeak({ outcome: 'spoken' })

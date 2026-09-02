@@ -263,13 +263,13 @@ class ExpoPetSpeechModule : Module() {
                             audioFormat: Int,
                             channelCount: Int
                         ) {
-                            if (id == utteranceId) {
+                            if (PetSpeechKaraoke.acceptsCallbackId(id, utteranceId)) {
                                 karaokeSampleRate = sampleRateInHz
                             }
                         }
 
                         override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) {
-                            if (id == utteranceId) {
+                            if (PetSpeechKaraoke.acceptsCallbackId(id, utteranceId)) {
                                 karaokeRaw.add(intArrayOf(start, end, frame))
                             }
                         }
@@ -285,6 +285,7 @@ class ExpoPetSpeechModule : Module() {
                                         startMs = PetSpeechKaraoke.startMs(raw[2], karaokeSampleRate)
                                     )
                                 }
+                                android.util.Log.i("PetSpeechDebug", "karaoke eventId=$validEventId ranges=${ranges.size} sampleRate=$karaokeSampleRate")
                                 mainHandler.post {
                                     if (resourceOwnerRegistry.isCurrent(owner)) {
                                         startServicePlayback(
@@ -328,7 +329,7 @@ class ExpoPetSpeechModule : Module() {
                         }
                     })
 
-                    val params = Bundle()
+                    val params = PetSpeechKaraoke.utteranceParams(utteranceId)
                     val result = tts.synthesizeToFile(validText, params, tempFile, utteranceId)
                     if (result != TextToSpeech.SUCCESS) {
                         engineLifecycle.onSynthesisFailed()
