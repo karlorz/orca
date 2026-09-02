@@ -72,7 +72,7 @@ export class DesktopRelayService {
     })
     const resolvePreferredRegion = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
-      readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
+      readContext: (opt) => readRelayAuthContext(options.authConfig, options.userDataPath, opt),
       hasDemand: ({ identity }) =>
         this.demandLedger.hasDemand(
           `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`

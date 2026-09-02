@@ -302,4 +302,67 @@ describe('RelayAuthCoordinator', () => {
     expect(statuses.at(-1)).toBe('registered')
     expect(statuses.filter((status) => status === 'connecting')).toHaveLength(2)
   })
+
+  it('triggers force refresh when reminting access token for broker', async () => {
+    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    const readOptionsList: ({ forceRefresh?: boolean } | undefined)[] = []
+    const coordinator = new RelayAuthCoordinator({
+      readContext: vi.fn(async (options?: { forceRefresh?: boolean }) => {
+        readOptionsList.push(options)
+        return context
+      }),
+      openBroker: async (input) => {
+        refreshAccessToken = input.refreshAccessToken
+        return { closeNow: vi.fn() }
+      },
+      onStatus: vi.fn()
+    })
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(refreshAccessToken).not.toBeNull())
+    expect(readOptionsList).toHaveLength(1)
+    expect(readOptionsList[0]?.forceRefresh).toBeFalsy()
+
+    const token = await refreshAccessToken!()
+    expect(token).toBe(context.accessToken)
+    expect(readOptionsList).toHaveLength(2)
+    expect(readOptionsList[1]).toEqual({ forceRefresh: true })
+  })
+
+  it('rotates session to full TTL on broker remint rather than leaving <= 120s leftover', async () => {
+    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    const now = Date.now()
+    let parentSessionExpiresAt = now + 90_000 // <= 120s leftover
+
+    const coordinator = new RelayAuthCoordinator({
+      readContext: vi.fn(async (options?: { forceRefresh?: boolean }) => {
+        if (options?.forceRefresh) {
+          // Force refresh simulates token rotation to full 1h TTL
+          parentSessionExpiresAt = now + 3_600_000
+          return {
+            ...context,
+            accessToken: 'rotated-full-ttl-token'
+          }
+        }
+        return {
+          ...context,
+          accessToken: 'old-leftover-token'
+        }
+      }),
+      openBroker: async (input) => {
+        refreshAccessToken = input.refreshAccessToken
+        return { closeNow: vi.fn() }
+      },
+      onStatus: vi.fn()
+    })
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(refreshAccessToken).not.toBeNull())
+
+    // Before remint, session was nearly expiring
+    expect(parentSessionExpiresAt - now).toBeLessThanOrEqual(120_000)
+
+    const remintedToken = await refreshAccessToken!()
+    expect(remintedToken).toBe('rotated-full-ttl-token')
+    // After remint, parent session has a full TTL
+    expect(parentSessionExpiresAt - now).toBeGreaterThan(120_000)
+  })
 })

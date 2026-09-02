@@ -1,17 +1,35 @@
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
-import { readFreshOrcaCloudSession } from '../../orca-profiles/profile-cloud-session-refresh'
+import {
+  forceRefreshOrcaCloudSession,
+  readFreshOrcaCloudSession
+} from '../../orca-profiles/profile-cloud-session-refresh'
+import { readOrcaCloudSession } from '../../orca-profiles/profile-cloud-session-store'
 import type { RelayAuthContext } from './relay-auth-coordinator'
+
+export type ReadRelayAuthContextOptions = {
+  forceRefresh?: boolean
+}
 
 export async function readRelayAuthContext(
   authConfig: OrcaCloudAuthConfig,
-  userDataPath: string
+  userDataPath: string,
+  options?: ReadRelayAuthContextOptions
 ): Promise<RelayAuthContext | null> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (!active.profile.cloud) {
     return null
   }
-  const session = await readFreshOrcaCloudSession(authConfig, active, userDataPath)
+  let session
+  if (options?.forceRefresh) {
+    const stored = readOrcaCloudSession(active.profile.id, userDataPath)
+    if (stored.status !== 'found') {
+      return null
+    }
+    session = await forceRefreshOrcaCloudSession(authConfig, active, userDataPath, stored.session)
+  } else {
+    session = await readFreshOrcaCloudSession(authConfig, active, userDataPath)
+  }
   if (session.status !== 'found') {
     return null
   }
