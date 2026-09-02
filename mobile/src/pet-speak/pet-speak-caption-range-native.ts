@@ -10,10 +10,12 @@ export function attachNativeCaptionRangeListener(): void {
   }
   const nativeModule = getExpoPetSpeechModule()
   if (!nativeModule?.addListener) {
+    console.log(`[PetSpeakCaption] attach skipped: module=${nativeModule ? 'present' : 'null'} addListener=${typeof nativeModule?.addListener}`)
     return
   }
   try {
     nativeModule.addListener('onCaptionRange', (event) => {
+      console.log(`[PetSpeakCaption] onCaptionRange raw: ${safeStringify(event)}`)
       if (
         event &&
         typeof event.start === 'number' &&
@@ -25,10 +27,22 @@ export function attachNativeCaptionRangeListener(): void {
           start: event.start,
           end: event.end
         })
+      } else {
+        console.log('[PetSpeakCaption] onCaptionRange dropped by shape filter')
       }
     })
     attached = true
-  } catch {
+    console.log('[PetSpeakCaption] native onCaptionRange listener attached')
+  } catch (error) {
     // Debug shells without the rebuilt native module keep full-line captions.
+    console.log(`[PetSpeakCaption] attach failed: ${String(error)}`)
+  }
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
   }
 }

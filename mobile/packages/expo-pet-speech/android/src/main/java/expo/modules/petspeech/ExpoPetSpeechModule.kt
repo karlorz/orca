@@ -271,6 +271,7 @@ class ExpoPetSpeechModule : Module() {
                         override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) {
                             if (PetSpeechKaraoke.acceptsCallbackId(id, utteranceId)) {
                                 karaokeRaw.add(intArrayOf(start, end, frame))
+                                android.util.Log.i("PetSpeechDebug", "karaoke range eventId=$validEventId start=$start end=$end frame=$frame")
                             }
                         }
 
@@ -278,14 +279,16 @@ class ExpoPetSpeechModule : Module() {
                             if (id == utteranceId && resourceOwnerRegistry.isCurrent(owner)) {
                                 engineLifecycle.onSynthesisComplete()
                                 PetSpeechPlaybackInstrumentation.recordSynthesisCompleted(validEventId)
-                                val ranges = karaokeRaw.map { raw ->
-                                    PetSpeechCaptionRange(
-                                        start = raw[0],
-                                        end = raw[1],
-                                        startMs = PetSpeechKaraoke.startMs(raw[2], karaokeSampleRate)
-                                    )
-                                }
-                                android.util.Log.i("PetSpeechDebug", "karaoke eventId=$validEventId ranges=${ranges.size} sampleRate=$karaokeSampleRate")
+                                val interpreted = PetSpeechKaraoke.interpretRangesDetailed(
+                                    karaokeRaw,
+                                    validText.length,
+                                    karaokeSampleRate
+                                )
+                                val ranges = interpreted.ranges
+                                android.util.Log.i(
+                                    "PetSpeechDebug",
+                                    "karaoke eventId=$validEventId ranges=${ranges.size} sampleRate=$karaokeSampleRate order=${interpreted.order.label}"
+                                )
                                 mainHandler.post {
                                     if (resourceOwnerRegistry.isCurrent(owner)) {
                                         startServicePlayback(
@@ -471,12 +474,18 @@ class ExpoPetSpeechModule : Module() {
         rate: Float
     ) {
         clearCaptionKaraoke()
+        var scheduled = 0
         for (range in ranges) {
             if (range.end <= range.start) {
                 continue
             }
             val delay = PetSpeechKaraoke.wallDelayMs(range.startMs, rate)
+            scheduled += 1
             karaokeHandler.postDelayed({
+                android.util.Log.i(
+                    "PetSpeechDebug",
+                    "karaoke sendEvent eventId=$eventId start=${range.start} end=${range.end} delayMs=$delay"
+                )
                 sendEvent(
                     "onCaptionRange",
                     mapOf(
@@ -487,6 +496,10 @@ class ExpoPetSpeechModule : Module() {
                 )
             }, delay)
         }
+        android.util.Log.i(
+            "PetSpeechDebug",
+            "karaoke scheduled eventId=$eventId scheduled=$scheduled of ${ranges.size} rate=$rate"
+        )
     }
 
     private fun startServicePlayback(
