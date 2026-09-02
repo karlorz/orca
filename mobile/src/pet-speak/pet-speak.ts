@@ -177,6 +177,11 @@ export class PetSpeakHandler {
     }
   }
 
+  private captionFor(eventId: string, text: string, originalText?: string): PetSpeakCaption {
+    const trimmed = originalText?.trim()
+    return trimmed ? { eventId, text, originalText: trimmed } : { eventId, text }
+  }
+
   private async playItem(item: QueuedItem): Promise<void> {
     const rawEvent = item.event
     const text = rawEvent.text
@@ -221,13 +226,7 @@ export class PetSpeakHandler {
 
     if (this.nativeAdapter) {
       try {
-        this.notifyCaption({
-          eventId,
-          text,
-          ...(event.original_text && event.original_text.trim().length > 0
-            ? { originalText: event.original_text.trim() }
-            : {})
-        })
+        this.notifyCaption(this.captionFor(eventId, text, event.original_text))
         const outcome = await this.nativeAdapter.speak(event)
         const finalOutcome = this.disposed || item.isCancelled ? 'cancelled' : outcome
         this.notifyCaption(null)
@@ -266,13 +265,7 @@ export class PetSpeakHandler {
         item.resolve()
         return
       }
-      this.notifyCaption({
-        eventId,
-        text,
-        ...(event.original_text && event.original_text.trim().length > 0
-          ? { originalText: event.original_text.trim() }
-          : {})
-      })
+      this.notifyCaption(this.captionFor(eventId, text, event.original_text))
       await this.tts.speak(text, locale)
       const outcome = this.disposed || item.isCancelled ? 'cancelled' : 'spoken'
       if (this.onComplete) {
