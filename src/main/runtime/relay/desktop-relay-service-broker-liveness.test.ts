@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { deriveRelayHostId } from './relay-http-client'
 
 const fakes = vi.hoisted(() => ({
   readRelayAuthContext: vi.fn(),
-  brokers: [] as { live: boolean }[]
+  brokers: [] as { live: boolean; onBadOuterCredential: (() => void) | null }[]
 }))
 
 vi.mock('./relay-auth-context', () => ({ readRelayAuthContext: fakes.readRelayAuthContext }))
@@ -13,6 +14,7 @@ vi.mock('./relay-session-broker', () => {
   // Mirrors the real broker: a control that died rejects with relay_control_not_active.
   class RelaySessionBroker {
     live = true
+    onBadOuterCredential: (() => void) | null = null
     readonly hostId = 'relay-host-1'
     readonly ownerIdentityKey = 'user-1\0profile-1\0org-1'
     readonly endpoint = { v: 1 as const, relayHostId: 'relay-host-1' }
@@ -28,8 +30,9 @@ vi.mock('./relay-session-broker', () => {
       }
       return { v: 1, relayHostId: this.hostId, relayDeviceId, inviteExpiresAt: 0 }
     }
-    static connect = vi.fn(async () => {
+    static connect = vi.fn(async (options: { onBadOuterCredential?: () => void }) => {
       const broker = new RelaySessionBroker()
+      broker.onBadOuterCredential = options.onBadOuterCredential ?? null
       fakes.brokers.push(broker)
       return broker
     })
@@ -55,7 +58,22 @@ function service(): DesktopRelayService {
     getMobileSocketWiring: () => ({ attachTransport: () => () => {} }),
     getRelayRevokeOutbox: () => ({ pendingFor: () => [], remove: vi.fn() }),
     getDeviceRegistry: () => ({
-      listDevices: () => [],
+      listDevices: () => [
+        {
+          deviceId: 'device-1',
+          name: 'phone-1',
+          token: 't',
+          scope: 'mobile',
+          pairedAt: 0,
+          lastSeenAt: 0,
+          // Standing demand: keeps the coordinator's broker alive between ops.
+          relayBinding: {
+            relayHostId: deriveRelayHostId(new Uint8Array(32).fill(7)),
+            relayDeviceId: 'device-1',
+            ownerIdentityKey: 'user-1\0profile-1\0org-1'
+          }
+        }
+      ],
       getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
       getMobilePairingConnectionMode: () => 'automatic'
     })
@@ -103,6 +121,37 @@ describe('DesktopRelayService broker liveness', () => {
       expect(fakes.brokers).toHaveLength(1)
     } finally {
       relayService.stop()
+    }
+  })
+
+  it('remints within seconds, not the 5-minute liveness tick, after a 4401 close', async () => {
+    vi.useFakeTimers()
+    try {
+      const relayService = service()
+      try {
+        relayService.start()
+        await vi.advanceTimersByTimeAsync(0)
+        expect(fakes.brokers).toHaveLength(1)
+
+        fakes.readRelayAuthContext.mockClear()
+        fakes.brokers[0]!.onBadOuterCredential!()
+
+        // The dead broker is fenced and a new one opens on a force-refreshed
+        // session within milliseconds — no liveness-tick or retry wait.
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(fakes.brokers).toHaveLength(2)
+        expect(fakes.brokers[0]!.live).toBe(false)
+        expect(fakes.brokers[1]!.live).toBe(true)
+        expect(fakes.readRelayAuthContext).toHaveBeenLastCalledWith(
+          expect.objectContaining({ relayDirectorUrl: 'https://relay.example.test' }),
+          '/tmp/orca-relay-liveness-test',
+          { forceRefresh: true }
+        )
+      } finally {
+        relayService.stop()
+      }
+    } finally {
+      vi.useRealTimers()
     }
   })
 })

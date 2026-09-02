@@ -333,10 +333,12 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         leaseExpiresAt: 10_000
       })
 
-      const broker = await RelaySessionBroker.connect(brokerOptions({
-        now: () => 0,
-        random: () => 0
-      }))
+      const broker = await RelaySessionBroker.connect(
+        brokerOptions({
+          now: () => 0,
+          random: () => 0
+        })
+      )
 
       // Control rebind should not have been called immediately at t=0
       expect(fakes.controlConnect).toHaveBeenCalledTimes(1)
@@ -443,6 +445,52 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       broker.closeNow()
       await vi.advanceTimersByTimeAsync(5 * 60_000)
       expect(fakes.assign).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a pending drain retry and escalates a 4401 close to the owner', async () => {
+    vi.useFakeTimers()
+    try {
+      const ack: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(ack)
+      fakes.assign
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay.example.test',
+          assignmentEpoch: 1,
+          leaseExpiresAt: 1_000_000
+        })
+        .mockRejectedValue(new RelayHttpError('assignment', 503))
+      const onBadOuterCredential = vi.fn()
+      const broker = await RelaySessionBroker.connect(
+        brokerOptions({ onBadOuterCredential, random: () => 0.5 })
+      )
+
+      // A director outage arms the drain retry with the current relay token.
+      fakes.controls[0]!.options.onDrain({
+        type: 'drain',
+        graceMs: 0,
+        recovery: 'resolve-director'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fakes.assign).toHaveBeenCalledTimes(2)
+
+      // The 4401 arrives while that retry is still pending: the dead token
+      // must not be drain-retried, and the owner is told to remint instead.
+      fakes.controls[0]!.options.onClose(4401)
+      expect(onBadOuterCredential).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(fakes.assign).toHaveBeenCalledTimes(2)
+      expect(broker.isLive()).toBe(false)
     } finally {
       vi.useRealTimers()
     }

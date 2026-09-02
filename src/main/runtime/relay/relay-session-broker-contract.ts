@@ -22,6 +22,7 @@ export type RelaySessionBrokerOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   refreshAccessToken: () => Promise<string | null>
+  onBadOuterCredential?: () => void
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   onStatus: (status: RelayBrokerStatus) => void
   fetch?: typeof globalThis.fetch

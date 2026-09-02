@@ -1,4 +1,5 @@
 import type WebSocket from 'ws'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayControlOrigin } from './relay-control-origin'
@@ -9,6 +10,13 @@ import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
 import type { RelayRegion } from './relay-region-preference'
 
+// Why: an origin close without a drain message is an immediate drain.
+const DRAIN_ON_CLOSE: RelayDrainMessage = {
+  type: 'drain',
+  graceMs: 0,
+  recovery: 'resolve-director'
+}
+
 type RelayOriginPoolOptions = {
   directorUrl: string
   relayHostId: string
@@ -18,6 +26,7 @@ type RelayOriginPoolOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   onStatus: (status: RelayBrokerStatus) => void
+  onBadOuterCredential?: () => void
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   fetch?: typeof globalThis.fetch
   createControlSocket?: (url: string, relayJwt: string) => WebSocket
@@ -84,10 +93,8 @@ export class RelayOriginPool {
       return
     }
     this.closed = true
-    if (this.rotationTimer) {
-      clearTimeout(this.rotationTimer)
-      this.rotationTimer = null
-    }
+    clearTimeout(this.rotationTimer ?? undefined)
+    this.rotationTimer = null
     this.drainRetry.cancel()
     for (const timer of this.drainTimers.values()) {
       clearTimeout(timer)
@@ -125,14 +132,18 @@ export class RelayOriginPool {
         this.maybeCloseDrainedOrigin(origin)
       },
       onDrain: (origin, message) => this.handleDrain(origin, message),
-      onClose: (origin) => {
+      onClose: (origin, code) => {
         if (origin === this.activeOrigin && this.isCurrent()) {
           this.options.onStatus('offline')
-          this.handleDrain(origin, {
-            type: 'drain',
-            graceMs: 0,
-            recovery: 'resolve-director'
-          })
+          if (code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL) {
+            // Why: the relay token's parent session is dead; drain-retry would
+            // loop assignment requests against 401s with it. The owner remints
+            // through a fresh (force-refreshed) session instead.
+            this.drainRetry.cancel()
+            this.options.onBadOuterCredential?.()
+            return
+          }
+          this.handleDrain(origin, DRAIN_ON_CLOSE)
         }
       }
     })
@@ -238,13 +249,9 @@ export class RelayOriginPool {
       clearTimeout(this.rotationTimer)
     }
     const origin = this.activeOrigin
-    if (!origin || this.closed) {
-      this.rotationTimer = null
-      return
-    }
     const now = (this.options.now ?? Date.now)()
-    const remainingMs = origin.controlLeaseExpiresAt - now
-    if (remainingMs <= 0) {
+    const remainingMs = origin ? origin.controlLeaseExpiresAt - now : 0
+    if (!origin || this.closed || remainingMs <= 0) {
       this.rotationTimer = null
       return
     }
@@ -280,14 +287,9 @@ export class RelayOriginPool {
   }
 
   private scheduleDrainDeadline(origin: RelayControlOrigin, graceMs: number): void {
-    const existing = this.drainTimers.get(origin)
-    if (existing) {
-      clearTimeout(existing)
-    }
-    this.drainTimers.set(
-      origin,
-      setTimeout(() => this.closeOrigin(origin), graceMs)
-    )
+    clearTimeout(this.drainTimers.get(origin))
+    const timer = setTimeout(() => this.closeOrigin(origin), graceMs)
+    this.drainTimers.set(origin, timer)
   }
 
   private maybeCloseDrainedOrigin(origin: RelayControlOrigin): void {
@@ -305,11 +307,8 @@ export class RelayOriginPool {
     if (origin === this.activeOrigin) {
       return
     }
-    const timer = this.drainTimers.get(origin)
-    if (timer) {
-      clearTimeout(timer)
-      this.drainTimers.delete(origin)
-    }
+    clearTimeout(this.drainTimers.get(origin))
+    this.drainTimers.delete(origin)
     for (const [connectionId, owner] of this.basisOrigins) {
       if (owner === origin) {
         this.basisOrigins.delete(connectionId)

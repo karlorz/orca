@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RelayHttpError } from './relay-http-client'
 import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
 
 function deferred<T>() {
@@ -364,5 +365,46 @@ describe('RelayAuthCoordinator', () => {
     expect(remintedToken).toBe('rotated-full-ttl-token')
     // After remint, parent session has a full TTL
     expect(parentSessionExpiresAt - now).toBeGreaterThan(120_000)
+  })
+
+  it('clears a scheduled retry and force-refreshes on 4401 recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const readOptionsList: ({ forceRefresh?: boolean } | undefined)[] = []
+      const readContext = vi.fn(async (options?: { forceRefresh?: boolean }) => {
+        readOptionsList.push(options)
+        return context
+      })
+      const secondBroker = { closeNow: vi.fn(), isLive: () => true }
+      const openBroker = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          throw new RelayHttpError('assignment', 503)
+        })
+        .mockResolvedValueOnce(secondBroker)
+      const coordinator = new RelayAuthCoordinator({
+        readContext,
+        openBroker,
+        onStatus: vi.fn(),
+        random: () => 0.9
+      })
+      coordinator.reconcile()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(openBroker).toHaveBeenCalledTimes(1)
+
+      // A retry (~900ms) is now scheduled; ensureLive would be blocked by it.
+      coordinator.reconcileAfterBadOuterCredential()
+
+      // Recovery opens a broker immediately on a force-refreshed session...
+      await vi.advanceTimersByTimeAsync(1)
+      expect(openBroker).toHaveBeenCalledTimes(2)
+      expect(readOptionsList.at(-1)).toEqual({ forceRefresh: true })
+
+      // ...and the cleared retry never fires afterwards.
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(openBroker).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

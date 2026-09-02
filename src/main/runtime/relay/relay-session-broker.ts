@@ -45,6 +45,7 @@ export class RelaySessionBroker {
       mobileSocketWiring: options.mobileSocketWiring,
       isCurrent: () => this.isCurrent(),
       onStatus: (status) => this.publishStatus(status),
+      onBadOuterCredential: options.onBadOuterCredential,
       resolvePreferredRegion: options.resolvePreferredRegion,
       fetch: options.fetch,
       createControlSocket: options.createControlSocket,

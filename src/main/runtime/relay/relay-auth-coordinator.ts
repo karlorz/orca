@@ -54,6 +54,9 @@ export class RelayAuthCoordinator {
   private lingerTimer: ReturnType<typeof setTimeout> | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private retryAttempt = 0
+  // Why: only the reconcile minted by reconcileAfterBadOuterCredential (and
+  // its retries) reads the context force-refreshed; other reconciles stay plain.
+  private refreshEpoch = 0
   private stopped = false
 
   constructor(options: RelayAuthCoordinatorOptions) {
@@ -61,6 +64,16 @@ export class RelayAuthCoordinator {
   }
 
   reconcile(): void {
+    this.beginReconcile(true)
+  }
+
+  // Why: a 4401 control close means the relay token's parent session is dead.
+  // Fencing closes the dead broker and clears any scheduled retry so the
+  // remint runs now on a force-refreshed session, not after drain-retry jitter.
+  reconcileAfterBadOuterCredential(): void {
+    this.fenceAndCloseNow()
+    // Why: epoch-scoped so exactly this remint rotates the cloud session.
+    this.refreshEpoch = this.authEpoch + 1
     this.beginReconcile(true)
   }
 
@@ -110,8 +123,7 @@ export class RelayAuthCoordinator {
     if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
       return
     }
-    const ownership = this.ownership
-    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+    if (this.ownership?.valid && (this.ownership.broker?.isLive?.() ?? true)) {
       return
     }
     this.beginReconcile(false)
@@ -140,7 +152,14 @@ export class RelayAuthCoordinator {
   private async reconcileEpoch(epoch: number, expectedIdentityKey?: string): Promise<void> {
     let retryIdentityKey: string | undefined
     try {
-      const context = await this.options.readContext()
+      // Why: the forced remint must rotate the cloud session before the next
+      // relay exchange, or it reproduces the 401 the cell just sent on 4401.
+      const context =
+        this.refreshEpoch !== epoch
+          ? await this.options.readContext()
+          : this.options.forceReadContext
+            ? await this.options.forceReadContext()
+            : await this.options.readContext({ forceRefresh: true })
       if (!this.isEpochCurrent(epoch)) {
         return
       }
@@ -222,6 +241,9 @@ export class RelayAuthCoordinator {
         this.options.onStatus('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+          // Why: keep retries of the forced remint forced, so a transient
+          // blip during the rotate cannot fall back to the unrotated session.
+          this.refreshEpoch = this.refreshEpoch === epoch ? epoch + 1 : this.refreshEpoch
           this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
         }
       }
@@ -279,8 +301,8 @@ export class RelayAuthCoordinator {
     this.ownership = null
     if (ownership) {
       ownership.valid = false
-      ownership.broker?.closeNow()
     }
+    ownership?.broker?.closeNow()
   }
 
   private scheduleLinger(context: RelayAuthContext, ownership: BrokerOwnership): void {

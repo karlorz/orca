@@ -87,6 +87,10 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
+          // Why: a 4401 control close means the relay token's parent session
+          // is dead; the coordinator fences that broker and remints through a
+          // force-refreshed session within seconds, not a drain-retry loop.
+          onBadOuterCredential: () => this.coordinator.reconcileAfterBadOuterCredential(),
           resolvePreferredRegion,
           onStatus: options.onStatus
         })
