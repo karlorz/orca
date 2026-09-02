@@ -20,10 +20,7 @@ import {
   hidePetSpeakCaptionPreview,
   subscribePetSpeakCaptionPreview
 } from './pet-speak-caption-preview'
-import {
-  getPetSpeakLiveCaption,
-  subscribePetSpeakLiveCaption
-} from './pet-speak-live-caption'
+import { getPetSpeakLiveCaption, subscribePetSpeakLiveCaption } from './pet-speak-live-caption'
 import { PetSpeakCaptionHud } from './pet-speak-caption-hud'
 import {
   applyPetSpeakCaptionRange,

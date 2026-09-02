@@ -55,10 +55,7 @@ import {
   preparePetSpeakEvent,
   executeTestVoiceAsync
 } from './pet-speech-service'
-import {
-  applyPetSpeakLiveCaption,
-  subscribePetSpeakLiveCaption
-} from './pet-speak-live-caption'
+import { applyPetSpeakLiveCaption, subscribePetSpeakLiveCaption } from './pet-speak-live-caption'
 import type { PetSpeakCaption } from './pet-speak-types'
 import {
   setPetSpeechEnabled,
