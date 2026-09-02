@@ -55,14 +55,7 @@ export function executeIssueRefreshTokenSqlite(
       ) VALUES (
         ?, ?, ?, ?, ?, ?, NULL
       )
-    `).run(
-      tokenHash,
-      input.sessionId,
-      acc.account_id,
-      acc.auth_epoch,
-      expiresAt,
-      now
-    )
+    `).run(tokenHash, input.sessionId, acc.account_id, acc.auth_epoch, expiresAt, now)
 
     db.exec('COMMIT;')
   } catch (err) {
@@ -90,7 +83,14 @@ export function executeLookupRefreshTokenSqlite(
         AND s.revoked_at IS NULL
         AND s.auth_epoch = a.auth_epoch
     `)
-    .get(hash, now) as { token_hash: string; session_id: string; expires_at: number | null; cloud_profile_id: string } | undefined
+    .get(hash, now) as
+    | {
+        token_hash: string
+        session_id: string
+        expires_at: number | null
+        cloud_profile_id: string
+      }
+    | undefined
 
   if (!row) {
     return null
@@ -200,14 +200,15 @@ export function executeRotateRefreshTokenSqlite(
       ) VALUES (
         ?, ?, ?, ?, ?, ?, NULL
       )
-    `).run(
-      newTokenHash,
-      newSessionId,
-      acc.account_id,
-      acc.auth_epoch,
-      newRefreshExpiresAt,
-      now
-    )
+    `).run(newTokenHash, newSessionId, acc.account_id, acc.auth_epoch, newRefreshExpiresAt, now)
+
+    // Re-parent unrevoked relay grants onto the new session
+    db.prepare(`
+      UPDATE relay_grants
+      SET parent_session_id = ?
+      WHERE parent_session_id = ?
+        AND revoked_at IS NULL
+    `).run(newSessionId, oldSession.session_id)
 
     db.exec('COMMIT;')
     return {
@@ -234,10 +235,9 @@ export function executeRevokeRefreshTokensForSessionSqlite(
   sessionId: string,
   now: number
 ): void {
-  db.prepare('UPDATE refresh_tokens SET revoked_at = ? WHERE session_id = ? AND revoked_at IS NULL').run(
-    now,
-    sessionId
-  )
+  db.prepare(
+    'UPDATE refresh_tokens SET revoked_at = ? WHERE session_id = ? AND revoked_at IS NULL'
+  ).run(now, sessionId)
 }
 
 export function executeIsHostKeyExpiryDisabledSqlite(
@@ -291,7 +291,9 @@ export function executeIsDeviceKeyExpiryDisabledSqlite(
   relayDeviceId: string
 ): boolean {
   const row = db
-    .prepare('SELECT key_expiry_disabled FROM device_credentials WHERE relay_host_id = ? AND relay_device_id = ?')
+    .prepare(
+      'SELECT key_expiry_disabled FROM device_credentials WHERE relay_host_id = ? AND relay_device_id = ?'
+    )
     .get(relayHostId, relayDeviceId) as { key_expiry_disabled: number } | undefined
   if (!row) {
     return true

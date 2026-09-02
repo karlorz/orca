@@ -106,7 +106,11 @@ export function rotateRefreshTokenMemory(
 
   const oldSession = ctx.sessionsById.get(oldRefreshRecord.sessionId)
   // Session must exist, not be revoked, and match auth epoch (access wall-clock expiry ignored for refresh rotation)
-  if (!oldSession || oldSession.revokedAt !== undefined || oldSession.authEpoch !== ctx.account.authEpoch) {
+  if (
+    !oldSession ||
+    oldSession.revokedAt !== undefined ||
+    oldSession.authEpoch !== ctx.account.authEpoch
+  ) {
     return null
   }
 
@@ -133,6 +137,13 @@ export function rotateRefreshTokenMemory(
   }
   ctx.sessionsById.set(newSessionId, newSession)
   ctx.sessionsByAccessHash.set(newAccessTokenHash, newSessionId)
+
+  // Re-parent unrevoked relay grants onto the new session
+  for (const grant of ctx.grantsById.values()) {
+    if (grant.parentSessionId === oldSession.sessionId && grant.revokedAt === undefined) {
+      grant.parentSessionId = newSessionId
+    }
+  }
 
   // Create new refresh token
   const newTokenHash = sha256Base64Url(input.newRawRefreshToken)
