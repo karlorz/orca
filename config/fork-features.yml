@@ -159,6 +159,16 @@ features:
       - mobile/src/pet-speak
     wiki: projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings
 
+  - id: pet-speech-karaoke-test-voice
+    title: Test Voice uses live captions; karaoke highlights swapped Google TTS onRangeStart triples
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/app/pet-speech-settings.tsx
+      - mobile/packages/expo-pet-speech
+    wiki: projects/orca/work/2026-09-02-mobile-pet-speak-captions
+
   - id: fork-sync-own-relay-followup
     title: Fork-sync files wiki follow-ups when own-mobile-relay protocol/client paths change
     kind: ci
