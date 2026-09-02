@@ -271,7 +271,6 @@ class ExpoPetSpeechModule : Module() {
                         override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) {
                             if (PetSpeechKaraoke.acceptsCallbackId(id, utteranceId)) {
                                 karaokeRaw.add(intArrayOf(start, end, frame))
-                                android.util.Log.i("PetSpeechDebug", "karaoke range eventId=$validEventId start=$start end=$end frame=$frame")
                             }
                         }
 
@@ -482,10 +481,6 @@ class ExpoPetSpeechModule : Module() {
             val delay = PetSpeechKaraoke.wallDelayMs(range.startMs, rate)
             scheduled += 1
             karaokeHandler.postDelayed({
-                android.util.Log.i(
-                    "PetSpeechDebug",
-                    "karaoke sendEvent eventId=$eventId start=${range.start} end=${range.end} delayMs=$delay"
-                )
                 sendEvent(
                     "onCaptionRange",
                     mapOf(

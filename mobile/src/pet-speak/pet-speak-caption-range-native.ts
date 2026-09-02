@@ -15,7 +15,6 @@ export function attachNativeCaptionRangeListener(): void {
   }
   try {
     nativeModule.addListener('onCaptionRange', (event) => {
-      console.log(`[PetSpeakCaption] onCaptionRange raw: ${safeStringify(event)}`)
       if (
         event &&
         typeof event.start === 'number' &&
@@ -32,17 +31,8 @@ export function attachNativeCaptionRangeListener(): void {
       }
     })
     attached = true
-    console.log('[PetSpeakCaption] native onCaptionRange listener attached')
   } catch (error) {
     // Debug shells without the rebuilt native module keep full-line captions.
     console.log(`[PetSpeakCaption] attach failed: ${String(error)}`)
-  }
-}
-
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? String(value)
-  } catch {
-    return String(value)
   }
 }
