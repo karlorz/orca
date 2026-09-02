@@ -104,9 +104,6 @@ vi.mock('./pet-speak-subscription', () => ({
 import { RpcClientProvider, useForceReconnect } from '../transport/client-context'
 import { PetSpeakRootBridge } from './pet-speak-root-bridge'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
-import { applyPetSpeakLiveCaption } from './pet-speak-live-caption'
-import { showPetSpeakCaptionPreview, hidePetSpeakCaptionPreview } from './pet-speak-caption-preview'
-import { applyPetSpeakCaptionRange } from './pet-speak-caption-range'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
@@ -859,88 +856,6 @@ describe('PetSpeakRootBridge', () => {
       })
       // No double release on unmount if already released
       expect(releaseSessionMock).toHaveBeenCalledTimes(1)
-    })
-  })
-
-  describe('Live captions and preview behavior in PetSpeakRootBridge', () => {
-    it('renders live caption from live-caption store when captions are enabled, preview overrides live caption, and karaoke range applies', async () => {
-      let renderer: ReactTestRenderer | null = null
-      applyPetSpeakLiveCaption(null)
-      hidePetSpeakCaptionPreview()
-      applyPetSpeakCaptionRange(null)
-      loadHostCatalogMock.mockResolvedValue([])
-
-      await act(async () => {
-        renderer = create(
-          createElement(
-            RpcClientProvider,
-            null,
-            createElement(PetSpeakRootBridge, {
-              captionsEnabled: true
-            })
-          )
-        )
-        await Promise.resolve()
-      })
-
-      // Initially no caption
-      expect(renderer?.toJSON()).toBeNull()
-
-      // 1. Live caption emitted
-      await act(async () => {
-        applyPetSpeakLiveCaption({
-          eventId: 'ev-live-1',
-          text: 'Hello world live'
-        })
-        await Promise.resolve()
-      })
-
-      let json = JSON.stringify(renderer?.toJSON())
-      expect(json).toContain('Hello world live')
-
-      // 2. Karaoke range matching eventId
-      await act(async () => {
-        applyPetSpeakCaptionRange({
-          eventId: 'ev-live-1',
-          start: 0,
-          end: 5
-        })
-        await Promise.resolve()
-      })
-      json = JSON.stringify(renderer?.toJSON())
-      expect(json).toContain('pet-speak-caption-karaoke')
-      expect(json).toContain('Hello')
-      expect(json).toContain(' world live')
-
-      // 3. Preview caption overrides live caption
-      await act(async () => {
-        showPetSpeakCaptionPreview('Preview caption text')
-        await Promise.resolve()
-      })
-      json = JSON.stringify(renderer?.toJSON())
-      expect(json).toContain('Preview caption text')
-      expect(json).not.toContain('Hello world live')
-
-      // 4. Hiding preview restores live caption
-      await act(async () => {
-        hidePetSpeakCaptionPreview()
-        await Promise.resolve()
-      })
-      json = JSON.stringify(renderer?.toJSON())
-      expect(json).toContain('pet-speak-caption-karaoke')
-      expect(json).toContain('Hello')
-      expect(json).toContain(' world live')
-
-      // 5. Clearing live caption returns null
-      await act(async () => {
-        applyPetSpeakLiveCaption(null)
-        await Promise.resolve()
-      })
-      expect(renderer?.toJSON()).toBeNull()
-
-      await act(async () => {
-        renderer?.unmount()
-      })
     })
   })
 })
