@@ -20,7 +20,6 @@ export type CoordinatedRelayBroker = {
 
 export type RelayAuthCoordinatorOptions = {
   readContext: (options?: { forceRefresh?: boolean }) => Promise<RelayAuthContext | null>
-  forceReadContext?: () => Promise<RelayAuthContext | null>
   hasDemand?: (context: RelayAuthContext) => boolean
   openBroker: (input: {
     context: RelayAuthContext
@@ -157,9 +156,7 @@ export class RelayAuthCoordinator {
       const context =
         this.refreshEpoch !== epoch
           ? await this.options.readContext()
-          : this.options.forceReadContext
-            ? await this.options.forceReadContext()
-            : await this.options.readContext({ forceRefresh: true })
+          : await this.options.readContext({ forceRefresh: true })
       if (!this.isEpochCurrent(epoch)) {
         return
       }
@@ -282,9 +279,7 @@ export class RelayAuthCoordinator {
       return null
     }
     const epoch = this.authEpoch
-    const context = this.options.forceReadContext
-      ? await this.options.forceReadContext()
-      : await this.options.readContext({ forceRefresh: true })
+    const context = await this.options.readContext({ forceRefresh: true })
     if (
       !ownership.valid ||
       !this.isEpochCurrent(epoch) ||
