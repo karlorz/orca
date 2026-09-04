@@ -150,4 +150,19 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('--prerelease')
     expect(rawYaml).toContain('--latest=false')
   })
+
+  it('installs node dependencies in publish-release before verifying artifacts with yaml dependency', () => {
+    const workflow = readWorkflow(workflowPath)
+    const steps = workflow.jobs['publish-release'].steps
+    const installIndex = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const verifyIndex = steps.findIndex(
+      (step) =>
+        typeof step.run === 'string' &&
+        step.run.includes('verify-fork-desktop-release-artifacts.mjs')
+    )
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(verifyIndex).toBeGreaterThan(installIndex)
+  })
 })
