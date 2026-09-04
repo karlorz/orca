@@ -12,6 +12,12 @@ export const REQUIRED_FORK_DESKTOP_ARCHIVES = Object.freeze([
 
 export const UPDATE_MANIFEST_FILENAME = 'latest-mac.yml'
 
+export const PLATFORM_MANIFESTS = Object.freeze({
+  mac: 'latest-mac.yml',
+  linux: 'latest-linux.yml',
+  windows: 'latest.yml'
+})
+
 export function extractManifestRelativeAssetNames(manifestContent) {
   if (typeof manifestContent !== 'string') {
     throw new Error('Update manifest content must be a string')
@@ -31,7 +37,6 @@ export function extractManifestRelativeAssetNames(manifestContent) {
   }
 
   const referencedNames = new Set()
-
   const record = parsed
 
   const checkPathValue = (val, fieldLabel) => {
@@ -94,32 +99,46 @@ export function extractManifestRelativeAssetNames(manifestContent) {
   return [...referencedNames].sort()
 }
 
-export function verifyForkDesktopReleaseArtifacts(directoryPath) {
-  if (!directoryPath || typeof directoryPath !== 'string') {
-    throw new Error('Directory path must be provided')
+function verifySinglePlatform(absDir, platform, presentFiles) {
+  const manifestName = PLATFORM_MANIFESTS[platform]
+  if (!manifestName) {
+    throw new Error(`Unsupported platform for verification: ${platform}`)
   }
 
-  const absDir = resolve(directoryPath)
-  if (!existsSync(absDir)) {
-    throw new Error(`Artifact directory does not exist: ${absDir}`)
-  }
-  const stat = lstatSync(absDir)
-  if (!stat.isDirectory()) {
-    throw new Error(`Artifact directory path is not a directory: ${absDir}`)
-  }
-
-  const manifestPath = join(absDir, UPDATE_MANIFEST_FILENAME)
+  const manifestPath = join(absDir, manifestName)
   if (!existsSync(manifestPath)) {
     throw new Error(
-      `Missing required update manifest ${UPDATE_MANIFEST_FILENAME} in artifact directory: ${absDir}`
+      `Missing required update manifest ${manifestName} in artifact directory: ${absDir}`
     )
   }
 
   const missingArchives = []
-  for (const archiveName of REQUIRED_FORK_DESKTOP_ARCHIVES) {
-    const archivePath = join(absDir, archiveName)
-    if (!existsSync(archivePath)) {
-      missingArchives.push(archiveName)
+
+  if (platform === 'mac') {
+    for (const archiveName of REQUIRED_FORK_DESKTOP_ARCHIVES) {
+      if (!existsSync(join(absDir, archiveName))) {
+        missingArchives.push(archiveName)
+      }
+    }
+  } else if (platform === 'linux') {
+    const hasAppImage = presentFiles.some((f) => f.endsWith('.AppImage'))
+    const hasDeb = presentFiles.some((f) => f.endsWith('.deb'))
+    const hasRpm = presentFiles.some((f) => f.endsWith('.rpm'))
+    if (!hasAppImage) {
+      missingArchives.push('*.AppImage')
+    }
+    if (!hasDeb) {
+      missingArchives.push('*.deb')
+    }
+    if (!hasRpm) {
+      missingArchives.push('*.rpm')
+    }
+  } else if (platform === 'windows') {
+    if (!existsSync(join(absDir, 'orca-windows-setup.exe'))) {
+      missingArchives.push('orca-windows-setup.exe')
+    }
+    if (!existsSync(join(absDir, 'orca-windows-setup.exe.blockmap'))) {
+      missingArchives.push('orca-windows-setup.exe.blockmap')
     }
   }
 
@@ -134,36 +153,90 @@ export function verifyForkDesktopReleaseArtifacts(directoryPath) {
 
   const missingReferenced = []
   for (const name of referencedNames) {
-    const assetPath = join(absDir, name)
-    if (!existsSync(assetPath)) {
+    if (!existsSync(join(absDir, name))) {
       missingReferenced.push(name)
     }
   }
 
   if (missingReferenced.length > 0) {
     throw new Error(
-      `Update manifest ${UPDATE_MANIFEST_FILENAME} references asset(s) not present in artifact directory:\n  ${missingReferenced.join('\n  ')}`
+      `Update manifest ${manifestName} references asset(s) not present in artifact directory:\n  ${missingReferenced.join('\n  ')}`
     )
   }
 
-  const presentFiles = readdirSync(absDir).sort()
+  return {
+    manifest: manifestName,
+    referencedAssets: referencedNames
+  }
+}
 
+export function verifyForkDesktopReleaseArtifacts(directoryPath, options = {}) {
+  if (!directoryPath || typeof directoryPath !== 'string') {
+    throw new Error('Directory path must be provided')
+  }
+
+  const absDir = resolve(directoryPath)
+  if (!existsSync(absDir)) {
+    throw new Error(`Artifact directory does not exist: ${absDir}`)
+  }
+  const stat = lstatSync(absDir)
+  if (!stat.isDirectory()) {
+    throw new Error(`Artifact directory path is not a directory: ${absDir}`)
+  }
+
+  const presentFiles = readdirSync(absDir).sort()
+  const platformOption = options.platform ?? 'mac'
+
+  if (platformOption === 'all') {
+    const platforms = ['mac', 'linux', 'windows']
+    const results = {}
+    for (const p of platforms) {
+      results[p] = verifySinglePlatform(absDir, p, presentFiles)
+    }
+    return {
+      directory: absDir,
+      platforms,
+      details: results,
+      presentFiles
+    }
+  }
+
+  const single = verifySinglePlatform(absDir, platformOption, presentFiles)
   return {
     directory: absDir,
-    manifest: UPDATE_MANIFEST_FILENAME,
-    requiredArchives: [...REQUIRED_FORK_DESKTOP_ARCHIVES],
-    referencedAssets: referencedNames,
+    manifest: single.manifest,
+    requiredArchives: platformOption === 'mac' ? [...REQUIRED_FORK_DESKTOP_ARCHIVES] : [],
+    referencedAssets: single.referencedAssets,
     presentFiles
   }
 }
 
+function parseCliArgs(args) {
+  let dir = 'desktop-artifacts'
+  let platform = 'mac'
+  for (const arg of args) {
+    if (arg.startsWith('--platform=')) {
+      platform = arg.slice('--platform='.length).trim()
+    } else if (!arg.startsWith('--')) {
+      dir = arg
+    }
+  }
+  return { dir, platform }
+}
+
 function main() {
-  const dir = process.argv[2] || 'desktop-artifacts'
+  const { dir, platform } = parseCliArgs(process.argv.slice(2))
   try {
-    const result = verifyForkDesktopReleaseArtifacts(dir)
-    console.log(
-      `Verified ${result.requiredArchives.length} required archives and ${result.referencedAssets.length} manifest-referenced assets in ${result.directory}`
-    )
+    const result = verifyForkDesktopReleaseArtifacts(dir, { platform })
+    if (result.platforms) {
+      console.log(
+        `Verified all platform artifacts (${result.platforms.join(', ')}) in ${result.directory}`
+      )
+    } else {
+      console.log(
+        `Verified platform '${platform}' with manifest ${result.manifest} and ${result.referencedAssets.length} referenced assets in ${result.directory}`
+      )
+    }
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
     process.exit(1)

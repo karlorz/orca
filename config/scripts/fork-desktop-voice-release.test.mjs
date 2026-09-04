@@ -97,4 +97,57 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).not.toContain('unsigned / ad-hoc')
     expect(rawYaml).toContain('self-signed')
   })
+
+  it('includes build-linux job that builds Linux packages and verifies artifacts', () => {
+    const workflow = readWorkflow(workflowPath)
+    expect(workflow.jobs['build-linux']).toBeDefined()
+    expect(workflow.jobs['build-linux'].needs).toContain('verify')
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('build-linux:')
+    expect(rawYaml).toContain('ubuntu-latest')
+    expect(rawYaml).toMatch(
+      /electron-builder[^\n]*--linux[^\n]*AppImage[^\n]*deb[^\n]*rpm[^\n]*--publish never/
+    )
+    expect(rawYaml).toContain(
+      'verify-fork-desktop-release-artifacts.mjs desktop-artifacts-linux --platform=linux'
+    )
+    expect(rawYaml).toContain('desktop-artifacts-linux')
+  })
+
+  it('includes build-windows job on windows-2022 building unsigned NSIS installer and blockmap', () => {
+    const workflow = readWorkflow(workflowPath)
+    expect(workflow.jobs['build-windows']).toBeDefined()
+    expect(workflow.jobs['build-windows'].needs).toContain('verify')
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('build-windows:')
+    expect(rawYaml).toContain('windows-2022')
+    expect(rawYaml).toContain('build-windows-cli-launcher.mjs')
+    expect(rawYaml).toMatch(/electron-builder[^\n]*--win[^\n]*--publish never/)
+    expect(rawYaml).toContain('generate-windows-blockmap.mjs')
+    expect(rawYaml).toContain(
+      'verify-fork-desktop-release-artifacts.mjs desktop-artifacts-windows --platform=windows'
+    )
+    expect(rawYaml).toContain('desktop-artifacts-windows')
+  })
+
+  it('combines mac, linux, and windows artifacts into one release with combined SHA256SUMS and fences', () => {
+    const workflow = readWorkflow(workflowPath)
+    const pub = workflow.jobs['publish-release']
+    expect(pub.needs).toContain('verify')
+    expect(pub.needs).toContain('build-mac')
+    expect(pub.needs).toContain('build-linux')
+    expect(pub.needs).toContain('build-windows')
+
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    expect(rawYaml).toContain('desktop-artifacts-mac')
+    expect(rawYaml).toContain('desktop-artifacts-linux')
+    expect(rawYaml).toContain('desktop-artifacts-windows')
+    expect(rawYaml).toContain(
+      'verify-fork-desktop-release-artifacts.mjs all-desktop-artifacts --platform=all'
+    )
+    expect(rawYaml).toContain('shasum -a 256 * > SHA256SUMS.txt')
+    expect(rawYaml).toContain('Refusing overwrite')
+    expect(rawYaml).toContain('--prerelease')
+    expect(rawYaml).toContain('--latest=false')
+  })
 })

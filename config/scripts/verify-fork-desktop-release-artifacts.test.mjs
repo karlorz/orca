@@ -153,4 +153,88 @@ path: orca-macos-x64.zip
       /references asset\(s\) not present in artifact directory:\n  orca-macos-arm64-extra.zip/
     )
   })
+
+  it('verifies Linux release artifacts when platform is linux', () => {
+    writeFileSync(join(testDir, 'orca-linux.AppImage'), 'mock appimage')
+    writeFileSync(join(testDir, 'orca-ide_1.4.197-0_amd64.deb'), 'mock deb')
+    writeFileSync(join(testDir, 'orca-ide-1.4.197-0.x86_64.rpm'), 'mock rpm')
+    const linuxManifest = `
+version: 1.4.197-0
+files:
+  - url: orca-linux.AppImage
+    sha512: dGVzdA==
+path: orca-linux.AppImage
+sha512: dGVzdA==
+`
+    writeFileSync(join(testDir, 'latest-linux.yml'), linuxManifest)
+
+    const result = verifyForkDesktopReleaseArtifacts(testDir, { platform: 'linux' })
+    expect(result.manifest).toBe('latest-linux.yml')
+    expect(result.referencedAssets).toEqual(['orca-linux.AppImage'])
+    expect(result.presentFiles).toContain('orca-linux.AppImage')
+  })
+
+  it('fails Linux verification when latest-linux.yml or required Linux packages are missing', () => {
+    expect(() => verifyForkDesktopReleaseArtifacts(testDir, { platform: 'linux' })).toThrow(
+      /Missing required update manifest latest-linux.yml/
+    )
+
+    writeFileSync(
+      join(testDir, 'latest-linux.yml'),
+      'version: 1.4.197-0\npath: orca-linux.AppImage\n'
+    )
+    expect(() => verifyForkDesktopReleaseArtifacts(testDir, { platform: 'linux' })).toThrow(
+      /missing required release archive\(s\)/
+    )
+  })
+
+  it('verifies Windows release artifacts when platform is windows', () => {
+    writeFileSync(join(testDir, 'orca-windows-setup.exe'), 'mock exe')
+    writeFileSync(join(testDir, 'orca-windows-setup.exe.blockmap'), 'mock blockmap')
+    const winManifest = `
+version: 1.4.197-0
+files:
+  - url: orca-windows-setup.exe
+    sha512: dGVzdA==
+path: orca-windows-setup.exe
+sha512: dGVzdA==
+`
+    writeFileSync(join(testDir, 'latest.yml'), winManifest)
+
+    const result = verifyForkDesktopReleaseArtifacts(testDir, { platform: 'windows' })
+    expect(result.manifest).toBe('latest.yml')
+    expect(result.referencedAssets).toEqual(['orca-windows-setup.exe'])
+    expect(result.presentFiles).toContain('orca-windows-setup.exe')
+  })
+
+  it('fails Windows verification when latest.yml, installer, or blockmap is missing', () => {
+    expect(() => verifyForkDesktopReleaseArtifacts(testDir, { platform: 'windows' })).toThrow(
+      /Missing required update manifest latest.yml/
+    )
+
+    writeFileSync(join(testDir, 'latest.yml'), 'version: 1.4.197-0\npath: orca-windows-setup.exe\n')
+    expect(() => verifyForkDesktopReleaseArtifacts(testDir, { platform: 'windows' })).toThrow(
+      /missing required release archive\(s\)/
+    )
+  })
+
+  it('verifies all platform artifacts when platform is all', () => {
+    populateValidArtifacts()
+    writeFileSync(join(testDir, 'orca-linux.AppImage'), 'mock appimage')
+    writeFileSync(join(testDir, 'orca-ide_1.4.197-0_amd64.deb'), 'mock deb')
+    writeFileSync(join(testDir, 'orca-ide-1.4.197-0.x86_64.rpm'), 'mock rpm')
+    writeFileSync(
+      join(testDir, 'latest-linux.yml'),
+      'version: 1.4.197-0\nfiles:\n  - url: orca-linux.AppImage\npath: orca-linux.AppImage\n'
+    )
+    writeFileSync(join(testDir, 'orca-windows-setup.exe'), 'mock exe')
+    writeFileSync(join(testDir, 'orca-windows-setup.exe.blockmap'), 'mock blockmap')
+    writeFileSync(
+      join(testDir, 'latest.yml'),
+      'version: 1.4.197-0\nfiles:\n  - url: orca-windows-setup.exe\npath: orca-windows-setup.exe\n'
+    )
+
+    const result = verifyForkDesktopReleaseArtifacts(testDir, { platform: 'all' })
+    expect(result.platforms).toEqual(['mac', 'linux', 'windows'])
+  })
 })

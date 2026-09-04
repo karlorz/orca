@@ -1,4 +1,4 @@
-name: Fork Desktop macOS Release
+name: Fork Desktop Release
 
 # Fork desktop tags are v<base>-<N> (e.g. v1.4.190-0, v1.4.190-1).
 # Base is the newest upstream desktop tag (rc counts, -rc.N dropped).
@@ -129,7 +129,7 @@ jobs:
       - name: Stage mac artifacts
         run: |
           set -euo pipefail
-          mkdir -p desktop-artifacts
+          mkdir -p desktop-artifacts-mac
           shopt -s nullglob
           for archive in orca-macos-x64.dmg orca-macos-arm64.dmg orca-macos-x64.zip orca-macos-arm64.zip latest-mac.yml; do
             if [[ ! -f "dist/$archive" ]]; then
@@ -137,33 +137,253 @@ jobs:
               ls -la dist || true
               exit 1
             fi
-            cp "dist/$archive" desktop-artifacts/
+            cp "dist/$archive" desktop-artifacts-mac/
           done
           for blockmap in dist/*.blockmap; do
-            cp "$blockmap" desktop-artifacts/
+            cp "$blockmap" desktop-artifacts-mac/
           done
-          (cd desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
-          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts-mac --platform=mac
 
       - name: Upload mac artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-artifacts
-          path: desktop-artifacts/*
+          name: desktop-artifacts-mac
+          path: desktop-artifacts-mac/*
+          if-no-files-found: error
+
+  build-linux:
+    needs: [verify]
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-linux-
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
+      - name: Resolve fork build version
+        id: version
+        env:
+          FORK_DESKTOP_TAG: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: node config/scripts/fork-desktop-build-version.mjs
+
+      - name: Build package inputs
+        run: |
+          status=0
+          pnpm run build:cli || status=1
+
+          scripts=(build:relay build:electron-vite:parallel)
+          pids=()
+          for script in "${scripts[@]}"; do
+            pnpm run "$script" &
+            pids+=("$!")
+          done
+
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+      - name: Project web client from renderer build
+        run: pnpm run build:web-from-renderer
+
+      - name: Build native components
+        run: pnpm run build:native
+
+      - name: Install Linux package tooling
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
+      - name: Build Linux packages
+        env:
+          ORCA_FORK_VOICE_BUILD: '1'
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ github.sha }}
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: |
+          set -euo pipefail
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish never
+
+      - name: Stage linux artifacts
+        env:
+          FORK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p desktop-artifacts-linux
+          shopt -s nullglob
+          for pattern in orca-linux.AppImage "orca-ide_${FORK_VERSION}_amd64.deb" "orca-ide-${FORK_VERSION}.x86_64.rpm" latest-linux.yml; do
+            matched=(dist/$pattern)
+            if [[ ${#matched[@]} -eq 0 || ! -f "${matched[0]}" ]]; then
+              echo "Expected dist/$pattern" >&2
+              ls -la dist || true
+              exit 1
+            fi
+            cp dist/$pattern desktop-artifacts-linux/
+          done
+          for blockmap in dist/*.blockmap; do
+            cp "$blockmap" desktop-artifacts-linux/
+          done
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts-linux --platform=linux
+
+      - name: Upload linux artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-artifacts-linux
+          path: desktop-artifacts-linux/*
+          if-no-files-found: error
+
+  build-windows:
+    needs: [verify]
+    if: github.repository == 'karlorz/orca'
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - uses: ./.github/actions/install-node-dependencies
+        id: deps
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
+
+      - name: Resolve fork build version
+        id: version
+        shell: bash
+        env:
+          FORK_DESKTOP_TAG: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: node config/scripts/fork-desktop-build-version.mjs
+
+      - name: Cache Windows CLI launcher
+        uses: actions/cache@v5
+        with:
+          path: native/windows-cli-launcher/.build
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs') }}
+
+      - name: Build Windows native helpers
+        shell: pwsh
+        run: |
+          node config/scripts/build-windows-cli-launcher.mjs
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+
+      - name: Build package inputs
+        shell: bash
+        env:
+          ORCA_REUSE_WINDOWS_CLI_LAUNCHER: '1'
+        run: pnpm run build:release:parallel
+
+      - name: Prepare Electron native runtime
+        shell: bash
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Build unsigned Windows NSIS installer
+        shell: pwsh
+        env:
+          ORCA_FORK_VOICE_BUILD: '1'
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ github.sha }}
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: |
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+
+      - name: Stage windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path desktop-artifacts-windows -Force
+          foreach ($file in @('orca-windows-setup.exe', 'orca-windows-setup.exe.blockmap', 'latest.yml')) {
+            $src = Join-Path 'dist' $file
+            if (-not (Test-Path $src)) {
+              throw "Expected $src"
+            }
+            Copy-Item -Path $src -Destination desktop-artifacts-windows/ -Force
+          }
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts-windows --platform=windows
+
+      - name: Upload windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-artifacts-windows
+          path: desktop-artifacts-windows/*
           if-no-files-found: error
 
   publish-release:
-    needs: [verify, build-mac]
+    needs: [verify, build-mac, build-linux, build-windows]
     if: github.repository == 'karlorz/orca'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
       - name: Download mac artifacts
         uses: actions/download-artifact@v6
         with:
-          name: desktop-artifacts
-          path: desktop-artifacts
+          name: desktop-artifacts-mac
+          path: all-desktop-artifacts
+
+      - name: Download linux artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: desktop-artifacts-linux
+          path: all-desktop-artifacts
+
+      - name: Download windows artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: desktop-artifacts-windows
+          path: all-desktop-artifacts
+
+      - name: Combine checksums and verify all release artifacts
+        run: |
+          set -euo pipefail
+          rm -f all-desktop-artifacts/SHA256SUMS.txt
+          (cd all-desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs all-desktop-artifacts --platform=all
 
       - name: Create draft then publish prerelease
         env:
@@ -177,12 +397,12 @@ jobs:
             exit 1
           fi
           cat << 'EOF' > release-notes.md
-          ### Orca Desktop macOS Development Release
+          ### Orca Desktop Development Release
 
-          - Fork desktop train only (self-signed; not notarized)
+          - Fork desktop train (macOS self-signed; Linux AppImage/deb/rpm; Windows unsigned NSIS)
           - Tracks upstream desktop train tag matching the base version
           - Separate from upstream v1.4.x cuts and from mobile-android tags
-          - Never attach these DMG/ZIP files to a mobile-android tag
+          - Never attach these desktop files to a mobile-android tag
           EOF
           gh release create "$TAG_NAME" \
             --repo karlorz/orca \
@@ -191,5 +411,5 @@ jobs:
             --prerelease \
             --title "$TAG_NAME" \
             --notes-file release-notes.md \
-            desktop-artifacts/*
+            all-desktop-artifacts/*
           gh release edit "$TAG_NAME" --repo karlorz/orca --draft=false --prerelease --latest=false

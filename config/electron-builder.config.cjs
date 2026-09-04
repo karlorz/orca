@@ -402,10 +402,7 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
-      signForkSelfSignedApp(
-        context.appOutDir,
-        context.packager.appInfo.productFilename
-      )
+      signForkSelfSignedApp(context.appOutDir, context.packager.appInfo.productFilename)
     }
   },
   win: {
@@ -421,7 +418,7 @@ module.exports = {
     // name is absent. An unsigned build that still claimed 'SignPath Foundation'
     // would therefore reject its own channel's next build — and its way back to
     // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    ...(isWinDevChannel
+    ...(isWinDevChannel || isForkVoiceBuild
       ? { verifyUpdateCodeSignature: false }
       : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
     extraResources: [
@@ -752,9 +749,7 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
   execFileSync('codesign', codesignArgs(identity, helperAppPath), { stdio: 'inherit' })
   execFileSync(
     'codesign',
-    isMacRelease
-      ? ['--verify', '--deep', '--strict', helperAppPath]
-      : ['--verify', helperAppPath],
+    isMacRelease ? ['--verify', '--deep', '--strict', helperAppPath] : ['--verify', helperAppPath],
     { stdio: 'inherit' }
   )
 }
