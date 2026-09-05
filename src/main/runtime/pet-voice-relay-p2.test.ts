@@ -150,6 +150,69 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
+  it('forwards original_text on live speak-intent emit and drops if empty or >240 chars', async () => {
+    const { captured, connectFn } = captureSubscriberConnectFn()
+
+    const relay = new PetVoiceRelay({
+      connectFn,
+      petSocketPath: '/tmp/test-pet.sock'
+    })
+    await new Promise((r) => process.nextTick(r))
+
+    const emitted: PetSpeakEvent[] = []
+    relay.onSpeak((ev) => emitted.push(ev))
+    await relay.onVoiceSubscriptionPresenceChange(1)
+
+    // 1. Normal speak-intent with original_text
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '搞掂喇',
+      original_text: 'Done with task 4!',
+      lang: 'yue'
+    })
+
+    // 2. Speak-intent without original_text
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '冇原文',
+      lang: 'yue'
+    })
+
+    // 3. Speak-intent with whitespace-only original_text -> dropped
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '空白原文',
+      original_text: '   ',
+      lang: 'yue'
+    })
+
+    // 4. Speak-intent with overlong original_text (>240 unicode chars) -> dropped
+    emitCapturedSpeakIntent(captured, {
+      kind: 'speak-intent',
+      text: '超長原文',
+      original_text: 'x'.repeat(241),
+      lang: 'yue'
+    })
+
+    expect(emitted.length).toBe(4)
+    expect(emitted[0].text).toBe('搞掂喇')
+    expect(emitted[0].original_text).toBe('Done with task 4!')
+
+    expect(emitted[1].text).toBe('冇原文')
+    expect(emitted[1].original_text).toBeUndefined()
+    expect('original_text' in emitted[1]).toBe(false)
+
+    expect(emitted[2].text).toBe('空白原文')
+    expect(emitted[2].original_text).toBeUndefined()
+    expect('original_text' in emitted[2]).toBe(false)
+
+    expect(emitted[3].text).toBe('超長原文')
+    expect(emitted[3].original_text).toBeUndefined()
+    expect('original_text' in emitted[3]).toBe(false)
+
+    relay.destroy()
+  })
+
   it('forwards speak-complete to pet socket as exact single JSON line with no replay', async () => {
     const sentLines: string[] = []
     const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(

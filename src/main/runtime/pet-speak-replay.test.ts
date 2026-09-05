@@ -75,4 +75,21 @@ describe('PetSpeakReplayBuffer', () => {
     const missed = buffer.getMissedSince(0, buffer.epoch)
     expect(missed.map((e) => e.event_id)).toEqual(['ev-2', 'ev-3', 'ev-4'])
   })
+
+  it('preserves original_text in recorded and replayed events', () => {
+    const buffer = new PetSpeakReplayBuffer()
+    const recorded = buffer.record({
+      type: 'pet.speak',
+      text: '搞掂',
+      event_id: 'ev-replay-1',
+      original_text: 'Done!',
+      rate: 1.2
+    })
+    expect(recorded.original_text).toBe('Done!')
+
+    const missed = buffer.getMissedSince(0, buffer.epoch)
+    expect(missed.length).toBe(1)
+    expect(missed[0].original_text).toBe('Done!')
+    expect(missed[0].replayed).toBe(true)
+  })
 })

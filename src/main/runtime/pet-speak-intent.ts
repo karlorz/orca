@@ -7,6 +7,7 @@ export type PetSpeakEvent = {
   text: string
   lang?: CanonicalLanguage
   event_id?: string
+  original_text?: string
   rate: number
   voiceName?: string
   debug?: boolean
@@ -52,6 +53,16 @@ export function parseSpeakIntentMessage(
   }
 
   const debug = typeof message.debug === 'boolean' ? message.debug : undefined
+
+  let originalText: string | undefined
+  if (typeof message.original_text === 'string') {
+    const trimmedOriginalText = message.original_text.trim()
+    const originalTextChars = Array.from(trimmedOriginalText)
+    if (originalTextChars.length > 0 && originalTextChars.length <= 240) {
+      originalText = trimmedOriginalText
+    }
+  }
+
   return {
     charsCount: textChars.length,
     event: {
@@ -59,6 +70,7 @@ export function parseSpeakIntentMessage(
       text: rawText,
       ...(normalizedLang ? { lang: normalizedLang } : {}),
       event_id: eventId,
+      ...(originalText ? { original_text: originalText } : {}),
       rate: parsePetSpeakRate(message.rate),
       ...(voiceName ? { voiceName } : {}),
       ...(debug !== undefined ? { debug } : {})

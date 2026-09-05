@@ -76,6 +76,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
     liveListener!({
       type: 'pet.speak',
       text: 'live 3',
+      original_text: 'Live three!',
       event_id: 'ev-3',
       rate: 1.2,
       seq: 3,
@@ -84,7 +85,8 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
 
     expect(emitted[2]).toMatchObject({
       type: 'pet.speak',
-      event_id: 'ev-3'
+      event_id: 'ev-3',
+      original_text: 'Live three!'
     })
   })
 
