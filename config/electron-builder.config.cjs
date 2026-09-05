@@ -410,6 +410,11 @@ module.exports = {
         context.packager
       )
       await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-speech'),
+        'orca-speech',
+        context.packager
+      )
+      await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-keyboard-layout'),
         'orca-keyboard-layout',
         context.packager
@@ -496,6 +501,7 @@ module.exports = {
       NSLocalNetworkUsageDescription:
         'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+      NSSpeechRecognitionUsageDescription: "Orca uses speech recognition for dictation.",
       NSAudioCaptureUsageDescription:
         'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
       NSBonjourServices: ['_http._tcp', '_https._tcp'],
@@ -542,6 +548,10 @@ module.exports = {
       {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'
+      },
+      {
+        from: 'native/speech-macos/.build/release/orca-speech',
+        to: 'MacOS/orca-speech'
       },
       {
         from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',

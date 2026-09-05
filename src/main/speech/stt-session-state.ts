@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import type { AppleSpeechSession } from './apple-speech-session'
 import type { ModelManager } from './model-manager'
 import type { OpenAiTranscriptionSession } from './openai-transcription-client'
 import type { SttEventSink } from './stt-service'
@@ -12,6 +13,7 @@ export type StopInFlight = {
 export type SttSessionState = {
   worker: Worker | null
   cloudSession: OpenAiTranscriptionSession | null
+  appleSession: AppleSpeechSession | null
   modelManager: ModelManager
   activeModelId: string | null
   activeHotwordsFilePath: string | undefined
@@ -31,6 +33,7 @@ export function createSttSessionState(modelManager: ModelManager): SttSessionSta
   return {
     worker: null,
     cloudSession: null,
+    appleSession: null,
     modelManager,
     activeModelId: null,
     activeHotwordsFilePath: undefined,

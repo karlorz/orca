@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads'
+import { AppleSpeechSession } from './apple-speech-session'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
@@ -32,7 +33,11 @@ export async function startSttDictation(
     }
     return
   }
-  if ((state.worker || state.cloudSession) && state.activeOwner && state.activeOwner !== owner) {
+  if (
+    (state.worker || state.cloudSession || state.appleSession) &&
+    state.activeOwner &&
+    state.activeOwner !== owner
+  ) {
     throw new Error('dictation_already_active')
   }
   state.starting = true
@@ -68,7 +73,28 @@ async function startSttSession(
   }
 
   if (manifest.provider === 'system') {
-    throw new Error(`System speech not implemented: ${modelId}`)
+    if (process.platform !== 'darwin') {
+      throw new Error(`Model not ready: unavailable`)
+    }
+    if (state.worker) {
+      const existingWorker = state.worker
+      await stopSttDictation(state, owner, { cancelStarting: false })
+      await teardownSttWorker(state, existingWorker)
+    }
+    if (state.cloudSession) {
+      await stopSttDictation(state, owner, { cancelStarting: false })
+    }
+    const modelState = await state.modelManager.getModelState(modelId)
+    if (modelState.status !== 'ready') {
+      throw new Error(`Model not ready: ${modelState.status}`)
+    }
+    const session = new AppleSpeechSession(modelId, (event) => state.eventSink?.(event))
+    state.appleSession = session
+    state.activeModelId = modelId
+    state.activeHotwordsFilePath = undefined
+    state.eventSink = sink
+    await session.start()
+    return
   }
 
   if (manifest.provider === 'openai') {
@@ -76,6 +102,9 @@ async function startSttSession(
       const existingWorker = state.worker
       await stopSttDictation(state, owner, { cancelStarting: false })
       await teardownSttWorker(state, existingWorker)
+    }
+    if (state.appleSession) {
+      await stopSttDictation(state, owner, { cancelStarting: false })
     }
     const modelState = await state.modelManager.getModelState(modelId)
     if (modelState.status !== 'ready') {
@@ -90,6 +119,9 @@ async function startSttSession(
   }
 
   if (state.cloudSession) {
+    await stopSttDictation(state, owner, { cancelStarting: false })
+  }
+  if (state.appleSession) {
     await stopSttDictation(state, owner, { cancelStarting: false })
   }
   const reusableWorker = state.worker

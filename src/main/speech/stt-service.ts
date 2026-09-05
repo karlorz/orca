@@ -45,6 +45,10 @@ export class SttService {
       this.state.cloudSession.feedAudio(samples, sampleRate)
       return
     }
+    if (this.state.appleSession) {
+      this.state.appleSession.feedAudio(samples, sampleRate)
+      return
+    }
     this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
       samples.buffer as ArrayBuffer
     ])
@@ -58,7 +62,11 @@ export class SttService {
   }
 
   isActive(): boolean {
-    return this.state.worker !== null || this.state.cloudSession !== null
+    return (
+      this.state.worker !== null ||
+      this.state.cloudSession !== null ||
+      this.state.appleSession !== null
+    )
   }
 
   getActiveModelId(): string | null {
