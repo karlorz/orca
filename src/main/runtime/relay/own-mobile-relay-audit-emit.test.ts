@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { WebSocket } from 'ws'
 import nacl from 'tweetnacl'
 import { deriveRelayHostId } from './relay-http-client'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
@@ -337,7 +338,7 @@ describe('OwnMobileRelay Audit Emission Slice 5', () => {
 
       // Send raw client close with specific code 4000 and reason 'client_restarting'
       // Access underlying socket to close with custom code/reason
-      const clientSocket = (client as unknown as { socket: import('ws').WebSocket }).socket
+      const clientSocket = (client as unknown as { socket: WebSocket }).socket
       clientSocket.close(4000, 'client_restarting')
 
       await new Promise((resolve) => setTimeout(resolve, 50))
