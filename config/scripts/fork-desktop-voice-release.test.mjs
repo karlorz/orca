@@ -98,6 +98,19 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('self-signed')
   })
 
+  it('builds orca-speech before electron-builder and fails closed if packed Orca.app lacks Contents/MacOS/orca-speech', () => {
+    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const notifBuildIdx = rawYaml.indexOf('pnpm run build:notification-status-macos')
+    const speechBuildIdx = rawYaml.indexOf('pnpm run build:speech-macos')
+    const ensureIdx = rawYaml.indexOf('pnpm run ensure:electron-runtime')
+    const electronBuilderIdx = rawYaml.indexOf('pnpm exec electron-builder')
+    expect(notifBuildIdx).toBeGreaterThan(-1)
+    expect(speechBuildIdx).toBeGreaterThan(notifBuildIdx)
+    expect(ensureIdx).toBeGreaterThan(speechBuildIdx)
+    expect(electronBuilderIdx).toBeGreaterThan(ensureIdx)
+    expect(rawYaml).toMatch(/\[\[\s*!\s*-x\s*"\$app\/Contents\/MacOS\/orca-speech"\s*\]\]/)
+  })
+
   it('includes build-linux job that builds Linux packages and verifies artifacts', () => {
     const workflow = readWorkflow(workflowPath)
     expect(workflow.jobs['build-linux']).toBeDefined()

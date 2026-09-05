@@ -136,6 +136,8 @@ describe('Electron runtime package contract', () => {
     expect(scripts['build:linux']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:keyboard-layout-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:speech-macos')
+    expect(scripts['build:mac:release']).toContain('build:speech-macos')
     expect(scripts['build:release']).toContain('pnpm run build:native')
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })

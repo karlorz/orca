@@ -170,6 +170,17 @@ features:
       - mobile/packages/expo-pet-speech
     wiki: projects/orca/work/2026-09-02-mobile-pet-speak-captions
 
+  - id: mac-system-speech
+    title: Mac speech STT backend with packaged orca-speech helper
+    kind: product
+    status: landed
+    paths:
+      - native/speech-macos
+      - src/main/speech
+      - .github/workflows/fork-desktop-voice-release.yml
+      - config/electron-builder.config.cjs
+    wiki: projects/orca/work/2026-09-05-orca-dictation-stt-backends-no-macos-system
+
   - id: fork-sync-own-relay-followup
     title: Fork-sync files wiki follow-ups when own-mobile-relay protocol/client paths change
     kind: ci

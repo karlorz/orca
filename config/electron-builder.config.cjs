@@ -778,7 +778,7 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
 
 async function signMacStandaloneHelper(helperPath, helperName, packager) {
   if (!existsSync(helperPath)) {
-    if (isMacRelease) {
+    if (isMacRelease || isForkVoiceBuild) {
       throw new Error(`Missing ${helperName} helper at ${helperPath}`)
     }
     return

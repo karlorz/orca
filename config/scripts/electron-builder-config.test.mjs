@@ -207,6 +207,30 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the mac speech helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/speech-macos/.build/release/orca-speech',
+          to: 'MacOS/orca-speech'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-speech' })])
+    )
+  })
+
+  it('fails closed when standalone helper is missing during release or fork voice packaging', async () => {
+    const configSource = await readFile(
+      join(REPO_ROOT, 'config', 'electron-builder.config.cjs'),
+      'utf8'
+    )
+    expect(configSource).toMatch(
+      /if\s*\(!existsSync\(helperPath\)\)\s*\{\s*if\s*\(isMacRelease\s*\|\|\s*isForkVoiceBuild\)\s*\{\s*throw new Error\(`Missing \$\{helperName\} helper at \$\{helperPath\}`\)/
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining([
