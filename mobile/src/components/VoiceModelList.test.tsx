@@ -37,6 +37,8 @@ function makeModel(overrides: Partial<MobileSpeechModel>): MobileSpeechModel {
 function makeSetup(models: MobileSpeechModel[], selectedModelId = ''): MobileSpeechSetup {
   return {
     enabled: true,
+    useMacSpeech: false,
+    macSpeechAvailable: false,
     selectedModelId,
     dictationMode: 'toggle',
     models

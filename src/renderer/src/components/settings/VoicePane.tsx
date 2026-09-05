@@ -9,6 +9,7 @@ import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
+import { VoiceMacSpeechSection } from './VoiceMacSpeechSection'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from './settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
@@ -138,7 +139,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const showOpenAiSettingsRow =
     voiceSettings.openAiApiKeyConfigured ||
     selectedModel?.provider === 'openai' ||
-    (settingsSearchQuery.trim() !== '' &&
+    (Boolean(settingsSearchQuery?.trim()) &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
@@ -217,6 +218,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onToggleVoiceDictation={() => void toggleVoiceDictation()}
         onUpdateVoiceSettings={updateVoiceSettings}
       />
+
+      <VoiceMacSpeechSection
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <Separator />
 
       <VoiceSpeechModelSection
         voiceSettings={voiceSettings}

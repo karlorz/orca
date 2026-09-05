@@ -130,7 +130,8 @@ describe('AppleSpeechSession', () => {
   it('tears down child process and closes stdin when stopped', async () => {
     const events: SttEvent[] = []
     const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
-      helperPath: '/custom/path/orca-speech'
+      helperPath: '/custom/path/orca-speech',
+      stopFlushTimeoutMs: 0
     })
 
     await session.start()
@@ -138,6 +139,106 @@ describe('AppleSpeechSession', () => {
 
     expect(mockChild.stdin.end).toHaveBeenCalled()
     expect(mockChild.kill).toHaveBeenCalled()
+    expect(events).toContainEqual({ type: 'stopped' })
+  })
+
+  it('promotes the last partial to final on stop when the helper never finalizes', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech',
+      stopFlushTimeoutMs: 0
+    })
+    await session.start()
+    mockChild.stdout.write(`${JSON.stringify({ type: 'partial', text: 'Testing Testing' })}\n`)
+
+    await session.stop()
+
+    expect(events).toContainEqual({ type: 'final', text: 'Testing Testing' })
+    const types = events.map((event) => event.type)
+    expect(types.lastIndexOf('final')).toBeLessThan(types.lastIndexOf('stopped'))
+  })
+
+  it('does not synthesize a final on stop when there was no partial', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech',
+      stopFlushTimeoutMs: 0
+    })
+    await session.start()
+    await session.stop()
+
+    expect(events.filter((event) => event.type === 'final')).toEqual([])
+    expect(events).toContainEqual({ type: 'stopped' })
+  })
+
+  it('keeps a helper-provided final instead of duplicating the last partial', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech',
+      stopFlushTimeoutMs: 0
+    })
+    await session.start()
+    mockChild.stdout.write(`${JSON.stringify({ type: 'partial', text: 'hello' })}\n`)
+    mockChild.stdout.write(`${JSON.stringify({ type: 'final', text: 'hello world' })}\n`)
+
+    await session.stop()
+
+    expect(events.filter((event) => event.type === 'final')).toEqual([
+      { type: 'final', text: 'hello world' }
+    ])
+  })
+
+  it('uses a helper final that arrives after stdin closes', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech',
+      stopFlushTimeoutMs: 40
+    })
+    await session.start()
+    mockChild.stdout.write(`${JSON.stringify({ type: 'partial', text: 'hello' })}\n`)
+    mockChild.kill.mockImplementation(() => {
+      mockChild.killed = true
+      return true
+    })
+
+    const stopPromise = session.stop()
+    setTimeout(() => {
+      mockChild.stdout.write(`${JSON.stringify({ type: 'final', text: 'hello world' })}\n`)
+    }, 10)
+    await stopPromise
+
+    expect(events.filter((event) => event.type === 'final')).toEqual([
+      { type: 'final', text: 'hello world' }
+    ])
+    const types = events.map((event) => event.type)
+    expect(types.lastIndexOf('final')).toBeLessThan(types.lastIndexOf('stopped'))
+  })
+
+  it('emits final then stopped when the helper exits after an endpoint final', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech'
+    })
+    await session.start()
+    mockChild.stdout.write(`${JSON.stringify({ type: 'final', text: '喂今日天氣好唔好' })}\n`)
+    mockChild.emit('exit', 0, null)
+
+    expect(events).toContainEqual({ type: 'final', text: '喂今日天氣好唔好' })
+    expect(events).toContainEqual({ type: 'stopped' })
+    const types = events.map((event) => event.type)
+    expect(types.lastIndexOf('final')).toBeLessThan(types.lastIndexOf('stopped'))
+  })
+
+  it('promotes the last partial when the helper exits without an explicit stop', async () => {
+    const events: SttEvent[] = []
+    const session = new AppleSpeechSession('mac-system-speech', (e) => events.push(e), {
+      helperPath: '/custom/path/orca-speech'
+    })
+    await session.start()
+    mockChild.stdout.write(`${JSON.stringify({ type: 'partial', text: '喂今日天氣好唔好' })}\n`)
+    mockChild.emit('exit', 0, null)
+
+    expect(events).toContainEqual({ type: 'final', text: '喂今日天氣好唔好' })
     expect(events).toContainEqual({ type: 'stopped' })
   })
 

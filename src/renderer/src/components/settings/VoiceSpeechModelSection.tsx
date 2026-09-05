@@ -15,6 +15,7 @@ import {
 } from '../ui/dropdown-menu'
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { isMacSpeechSelected } from '../../../../shared/voice-dictation-selection'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -44,10 +45,10 @@ export function VoiceSpeechModelSection({
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
 
-  const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
-  const selectedModelState = voiceSettings.sttModel
-    ? getModelState(voiceSettings.sttModel)
-    : undefined
+  const isLocked = !voiceSettings.enabled || isMacSpeechSelected(voiceSettings)
+  const nonSystemCatalog = catalog.filter((m) => m.provider !== 'system')
+  const selectedModel = nonSystemCatalog.find((m) => m.id === voiceSettings.sttModel)
+  const selectedModelState = selectedModel ? getModelState(selectedModel.id) : undefined
   const selectedIsReady = selectedModelState?.status === 'ready'
 
   return (
@@ -68,7 +69,7 @@ export function VoiceSpeechModelSection({
           <Button
             variant="outline"
             size="sm"
-            disabled={!voiceSettings.enabled}
+            disabled={isLocked}
             className="shrink-0 gap-1.5"
           >
             {selectedModel && selectedIsReady
@@ -78,28 +79,26 @@ export function VoiceSpeechModelSection({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-96">
-          {catalog.map((manifest) => {
+          {nonSystemCatalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
-            const isUnavailable = mState?.status === 'unavailable'
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
-            const isSystem = manifest.provider === 'system'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
             return (
               <DropdownMenuItem
                 key={manifest.id}
-                disabled={isDownloading || (isSystem && isUnavailable)}
+                disabled={isDownloading}
                 onSelect={(event) => {
                   if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
-                  } else if (!isSystem && !isDownloading) {
+                  } else if (!isDownloading) {
                     // Why: download progress appears in this menu, so starting one should not dismiss it.
                     event.preventDefault()
                     void window.api.speech.downloadModel(manifest.id).catch((error: unknown) =>
@@ -131,7 +130,7 @@ export function VoiceSpeechModelSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
-                    {!isCloud && !isSystem && (
+                    {!isCloud && (
                       <span className="text-[10px] px-1 py-px rounded-full leading-none bg-muted text-muted-foreground">
                         {manifest.streaming
                           ? translate('auto.components.settings.VoicePane.d504ab05f0', 'streaming')
@@ -151,7 +150,7 @@ export function VoiceSpeechModelSection({
                               'Extracting...'
                             )
                           : `${Math.round(mState.progress * 100)}%`
-                        : isCloud || isSystem
+                        : isCloud
                           ? null
                           : translate(
                               'auto.components.settings.VoicePane.91980ce124',
@@ -159,17 +158,12 @@ export function VoiceSpeechModelSection({
                               { value0: sizeMb }
                             )}
                     </span>
-                    {isSystem && isUnavailable && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {translate('auto.components.settings.VoicePane.b5cda3665b', 'Mac only')}
-                      </span>
-                    )}
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
                     {manifest.description}
                   </p>
                 </div>
-                {!isCloud && !isSystem && isReady ? (
+                {!isCloud && isReady ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -224,7 +218,7 @@ export function VoiceSpeechModelSection({
                       <Trash2 className="size-3" />
                     )}
                   </Button>
-                ) : !isCloud && !isSystem && !isReady && !isDownloading ? (
+                ) : !isCloud && !isReady && !isDownloading ? (
                   <span className="shrink-0 p-1 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity">
                     <Download className="size-3" />
                   </span>

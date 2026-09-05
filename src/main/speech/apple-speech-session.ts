@@ -30,12 +30,20 @@ export function resolveAppleSpeechHelperPath(): string | null {
 
 export type AppleSpeechSessionOptions = {
   helperPath?: string
+  // Why: tests skip the helper-flush wait; production gives Apple time to emit isFinal.
+  stopFlushTimeoutMs?: number
 }
+
+const DEFAULT_STOP_FLUSH_TIMEOUT_MS = 1500
 
 export class AppleSpeechSession {
   private child: ChildProcess | null = null
   private stdoutBuffer = ''
   private stopped = false
+  private closed = false
+  private lastPartialText = ''
+  private sawFinal = false
+  private flushWait: { resolve: () => void } | null = null
 
   constructor(
     readonly modelId: string,
@@ -73,15 +81,21 @@ export class AppleSpeechSession {
     })
 
     child.on('exit', (code, signal) => {
-      if (!this.stopped) {
-        if (code !== 0 && code !== null) {
-          this.sink({
-            type: 'error',
-            error: `orca-speech exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`
-          })
-        }
-        this.sink({ type: 'stopped' })
+      if (this.stopped) {
+        return
       }
+      this.stopped = true
+      this.closed = true
+      if (code !== 0 && code !== null) {
+        this.sink({
+          type: 'error',
+          error: `orca-speech exited with code ${code}${signal ? ` (signal: ${signal})` : ''}`
+        })
+      } else if (!this.sawFinal && this.lastPartialText.trim()) {
+        this.sawFinal = true
+        this.sink({ type: 'final', text: this.lastPartialText })
+      }
+      this.sink({ type: 'stopped' })
     })
 
     // Perform handshake: write sampleRate JSON
@@ -112,12 +126,48 @@ export class AppleSpeechSession {
 
     if (child) {
       child.stdin?.end()
-      child.kill('SIGTERM')
+      const timeoutMs = this.options.stopFlushTimeoutMs ?? DEFAULT_STOP_FLUSH_TIMEOUT_MS
+      if (timeoutMs > 0 && !this.sawFinal) {
+        await this.waitForStopFlush(child, timeoutMs)
+      }
+      this.closed = true
+      if (!child.killed) {
+        child.kill('SIGTERM')
+      }
+    } else {
+      this.closed = true
+    }
+
+    if (!this.sawFinal && this.lastPartialText.trim()) {
+      this.sawFinal = true
+      this.sink({ type: 'final', text: this.lastPartialText })
     }
     this.sink({ type: 'stopped' })
   }
 
+  private waitForStopFlush(child: ChildProcess, timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        this.flushWait = null
+        clearTimeout(timer)
+        child.off('exit', finish)
+        resolve()
+      }
+      this.flushWait = { resolve: finish }
+      const timer = setTimeout(finish, timeoutMs)
+      child.once('exit', finish)
+    })
+  }
+
   private handleStdout(data: string): void {
+    if (this.closed) {
+      return
+    }
     this.stdoutBuffer += data
     const lines = this.stdoutBuffer.split('\n')
     this.stdoutBuffer = lines.pop() ?? ''
@@ -142,12 +192,21 @@ export class AppleSpeechSession {
               `[apple-speech] resolved locale: ${parsed.locale} (source: ${parsed.source})`
             )
             break
-          case 'partial':
-            this.sink({ type: 'partial', text: parsed.text ?? '' })
+          case 'partial': {
+            const text = typeof parsed.text === 'string' ? parsed.text : ''
+            if (text.trim()) {
+              this.lastPartialText = text
+            }
+            this.sink({ type: 'partial', text })
             break
-          case 'final':
-            this.sink({ type: 'final', text: parsed.text ?? '' })
+          }
+          case 'final': {
+            const text = typeof parsed.text === 'string' ? parsed.text : ''
+            this.sawFinal = true
+            this.flushWait?.resolve()
+            this.sink({ type: 'final', text })
             break
+          }
           case 'error':
             this.sink({ type: 'error', error: parsed.error ?? 'Apple speech recognition error' })
             break

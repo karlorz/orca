@@ -88,6 +88,8 @@ export type RuntimeSpeechModelSummary = {
 
 export type RuntimeSpeechSetupState = {
   enabled: boolean
+  useMacSpeech: boolean
+  macSpeechAvailable: boolean
   selectedModelId: string
   dictationMode: 'toggle' | 'hold'
   models: RuntimeSpeechModelSummary[]

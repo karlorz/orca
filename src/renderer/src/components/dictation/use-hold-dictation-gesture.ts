@@ -5,6 +5,8 @@ import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 
+import { canStartVoiceDictation } from '../../../../shared/voice-dictation-selection'
+
 type HoldDictationGestureOptions = {
   dictationStateRef: MutableRefObject<DictationState>
   holdGestureActiveRef: MutableRefObject<boolean>
@@ -125,7 +127,7 @@ export function useHoldDictationGesture({
 
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
-        if (!settings?.voice?.enabled || !settings.voice.sttModel) {
+        if (!canStartVoiceDictation(settings?.voice)) {
           return
         }
         e.preventDefault()
@@ -191,6 +193,8 @@ export function useHoldDictationGesture({
     settings?.voice?.dictationMode,
     settings?.voice?.enabled,
     settings?.voice?.sttModel,
+    settings?.voice?.useMacSpeech,
+    settings?.voice,
     keybindings,
     startDictation,
     stopDictation,

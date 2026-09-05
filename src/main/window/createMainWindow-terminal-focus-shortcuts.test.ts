@@ -58,7 +58,12 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: 'toggle' | 'hold' } = {
+    const voice: {
+      enabled: boolean
+      sttModel: string
+      useMacSpeech?: boolean
+      dictationMode: 'toggle' | 'hold'
+    } = {
       enabled: false,
       sttModel: '',
       dictationMode: 'toggle'
@@ -116,6 +121,18 @@ describe('createMainWindow', () => {
     )
     expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).not.toHaveBeenCalled()
+
+    // When useMacSpeech is true and sttModel is empty, intercept toggle dictation
+    webContents.send.mockClear()
+    voice.sttModel = ''
+    voice.useMacSpeech = true
+    const macSpeechPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: macSpeechPreventDefault } as never,
+      dictationInput as never
+    )
+    expect(macSpeechPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
   it('only intercepts double-tap dictation when enabled toggle mode can handle it', () => {

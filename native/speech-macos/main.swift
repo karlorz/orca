@@ -118,7 +118,12 @@ class SpeechCoordinator {
   private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   private var recognitionTask: SFSpeechRecognitionTask?
   private var lastDeliveredText = ""
+  private var lastPartialText = ""
+  private var emittedFinal = false
+  private var requestGeneration = 0
+  private var rollingFromGeneration: Int?
   private var rearmTimer: DispatchSourceTimer?
+  private var stopFlushTimer: DispatchSourceTimer?
   private let queue = DispatchQueue(label: "com.stablyai.orca.speech-coordinator")
   private var isStopped = false
 
@@ -152,6 +157,8 @@ class SpeechCoordinator {
     self.recognitionRequest = request
 
     let currentPrefix = lastDeliveredText
+    requestGeneration += 1
+    let generation = requestGeneration
 
     self.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
       guard let self = self else { return }
@@ -175,8 +182,18 @@ class SpeechCoordinator {
           let fullText = currentPrefix.isEmpty ? recognized : (currentPrefix + " " + recognized)
           if result.isFinal {
             self.lastDeliveredText = fullText
+            self.lastPartialText = fullText
+            // Why: the 50s re-arm calls endAudio() and must not look like a
+            // user pause. Apple pause/endpoint isFinal ends the listen session.
+            if self.rollingFromGeneration == generation {
+              self.rollingFromGeneration = nil
+              return
+            }
+            self.emittedFinal = true
             emitJson(["type": "final", "text": fullText])
-          } else {
+            self.finishAndExit()
+          } else if generation == self.requestGeneration {
+            self.lastPartialText = fullText
             emitJson(["type": "partial", "text": fullText])
           }
         }
@@ -196,6 +213,7 @@ class SpeechCoordinator {
   private func rollRequest() {
     guard !isStopped else { return }
     logDebug("Rolling recognition request re-arm")
+    rollingFromGeneration = requestGeneration
     recognitionRequest?.endAudio()
     armRequest()
   }
@@ -227,8 +245,35 @@ class SpeechCoordinator {
       self.rearmTimer = nil
       self.recognitionRequest?.endAudio()
       self.recognitionTask?.finish()
-      exit(0)
+
+      // Why: Apple emits isFinal asynchronously after endAudio(); exiting here
+      // dropped the last partial and made desktop dictation toast "No speech detected."
+      let timer = DispatchSource.makeTimerSource(queue: self.queue)
+      timer.schedule(deadline: .now() + 1.0)
+      timer.setEventHandler { [weak self] in
+        guard let self = self else {
+          exit(0)
+        }
+        if !self.emittedFinal {
+          let text = self.lastPartialText.isEmpty ? self.lastDeliveredText : self.lastPartialText
+          if !text.isEmpty {
+            self.emittedFinal = true
+            emitJson(["type": "final", "text": text])
+          }
+        }
+        self.finishAndExit()
+      }
+      timer.resume()
+      self.stopFlushTimer = timer
     }
+  }
+
+  private func finishAndExit() {
+    stopFlushTimer?.cancel()
+    stopFlushTimer = nil
+    recognitionTask = nil
+    recognitionRequest = nil
+    exit(0)
   }
 }
 

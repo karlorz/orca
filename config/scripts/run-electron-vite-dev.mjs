@@ -234,7 +234,8 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
+    path.join(appPath, 'Contents', 'MacOS', 'orca-speech')
   ]
 
   function copiedAppIsUsable() {
@@ -352,6 +353,24 @@ function prepareMacDevElectronApp() {
   } catch (error) {
     console.warn(
       `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
+    )
+  }
+
+  // Why: local dev uses the native Apple Speech helper for Mac dictation without packaging.
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-speech-macos.mjs'),
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-speech')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] speech helper build failed (Mac speech dictation unavailable in dev): ${error?.message ?? error}`
     )
   }
 

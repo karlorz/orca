@@ -100,6 +100,30 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   },
   getOpenaiTranscriptionSearchEntry(),
   {
+    title: translate('auto.components.settings.VoicePane.useMacSpeech', 'Use Mac speech'),
+    description: translate(
+      'auto.components.settings.VoicePane.useMacSpeechDesc',
+      'Use built-in Apple Speech. Language follows System Dictation. Speech Model is locked while this is on.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.3d8b853963', 'speech'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.a12a0a9890',
+        'Mac speech'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.a1516b7e65',
+        'system speech'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.2c66d6cffc',
+        'Apple Speech'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),
     description: translate(
       'auto.components.settings.voice.pane.search.56defcd6c3',
@@ -116,19 +140,7 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.04c25a6fb0', 'openai'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
-      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud'),
-      ...translateSearchKeyword(
-        'auto.components.settings.voice.pane.search.a12a0a9890',
-        'Mac speech'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.voice.pane.search.a1516b7e65',
-        'system speech'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.voice.pane.search.2c66d6cffc',
-        'Apple Speech'
-      )
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud')
     ]
   }
 ])

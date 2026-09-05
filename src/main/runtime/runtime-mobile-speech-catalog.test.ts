@@ -38,14 +38,16 @@ describe('RuntimeMobileSpeechCatalog', () => {
           : never
     })
   })
-  it('passes system provider through and reflects availability and mac-only reason', async () => {
+
+  it('omits system provider from models list and reflects mac speech availability and selection', async () => {
     const originalPlatform = process.platform
     try {
       const mockStore = {
         getSettings: () => ({
           voice: {
             enabled: true,
-            sttModel: 'mac-system-speech',
+            sttModel: 'parakeet-tdt-0.6b-v3-int8',
+            useMacSpeech: true,
             dictationMode: 'toggle'
           }
         }),
@@ -54,34 +56,33 @@ describe('RuntimeMobileSpeechCatalog', () => {
 
       const catalog = new RuntimeMobileSpeechCatalog(() => mockStore)
 
-      // On darwin: mac-system-speech should be ready without unavailableReason
+      // On darwin: list() omits mac-system-speech from models; macSpeechAvailable is true, useMacSpeech is true
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       const macList = await catalog.list()
       const macSystemModel = macList.models.find((m) => m.id === 'mac-system-speech')
-      expect(macSystemModel).toBeDefined()
-      expect(macSystemModel?.provider).toBe('system')
-      expect(macSystemModel?.status).toBe('ready')
-      expect(macSystemModel?.unavailableReason).toBeUndefined()
+      expect(macSystemModel).toBeUndefined()
+      expect(macList.macSpeechAvailable).toBe(true)
+      expect(macList.useMacSpeech).toBe(true)
+      expect(macList.selectedModelId).toBe('parakeet-tdt-0.6b-v3-int8')
 
-      // On linux: mac-system-speech should be unavailable with unavailableReason: 'mac-only'
+      // On linux: macSpeechAvailable is false
       Object.defineProperty(process, 'platform', { value: 'linux' })
       const linuxList = await catalog.list()
       const linuxSystemModel = linuxList.models.find((m) => m.id === 'mac-system-speech')
-      expect(linuxSystemModel).toBeDefined()
-      expect(linuxSystemModel?.provider).toBe('system')
-      expect(linuxSystemModel?.status).toBe('unavailable')
-      expect(linuxSystemModel?.unavailableReason).toBe('mac-only')
+      expect(linuxSystemModel).toBeUndefined()
+      expect(linuxList.macSpeechAvailable).toBe(false)
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform })
     }
   })
 
-  it('rejects configure selecting system speech model on non-Mac host', async () => {
+  it('configures useMacSpeech and rejects on non-Mac host', async () => {
     const originalPlatform = process.platform
     try {
       let voiceSettings = {
         enabled: true,
         sttModel: 'parakeet-tdt-0.6b-v3-int8',
+        useMacSpeech: false,
         dictationMode: 'toggle' as const
       }
       const mockStore = {
@@ -97,23 +98,26 @@ describe('RuntimeMobileSpeechCatalog', () => {
 
       const catalog = new RuntimeMobileSpeechCatalog(() => mockStore)
 
+      // Non-Mac rejects useMacSpeech: true
       Object.defineProperty(process, 'platform', { value: 'linux' })
+      await expect(catalog.configure({ useMacSpeech: true })).rejects.toThrow(
+        'voice_model_unavailable_on_host'
+      )
+      // Old client sending modelId: 'mac-system-speech' on non-Mac also rejected
       await expect(catalog.configure({ modelId: 'mac-system-speech' })).rejects.toThrow(
         'voice_model_unavailable_on_host'
       )
-      expect(mockStore.updateSettings).not.toHaveBeenCalled()
 
-      // Still rejects unknown model ids with voice_model_unknown
-      await expect(catalog.configure({ modelId: 'non-existent-model' })).rejects.toThrow(
-        'voice_model_unknown'
-      )
-
-      // Succeeds on darwin
+      // Darwin succeeds configuring useMacSpeech: true and keeps catalog model as selectedModelId
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      await expect(catalog.configure({ modelId: 'mac-system-speech' })).resolves.toMatchObject({
-        selectedModelId: 'mac-system-speech'
-      })
-      expect(mockStore.updateSettings).toHaveBeenCalled()
+      const res = await catalog.configure({ useMacSpeech: true })
+      expect(res.useMacSpeech).toBe(true)
+      expect(res.selectedModelId).toBe('parakeet-tdt-0.6b-v3-int8')
+
+      // Darwin handling legacy modelId: 'mac-system-speech' treats it as useMacSpeech: true and does not store id as sttModel
+      await catalog.configure({ modelId: 'mac-system-speech' })
+      expect(voiceSettings.useMacSpeech).toBe(true)
+      expect(voiceSettings.sttModel).not.toBe('mac-system-speech')
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform })
     }

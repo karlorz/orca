@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
@@ -18,16 +18,14 @@ import { useFocusedSettingsHostClients } from '../src/transport/settings-host-cl
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
+import { VoiceSpeechModelSection } from '../src/components/VoiceSpeechModelSection'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
-  deleteDictationModel,
-  downloadDictationModel,
   fetchDictationSetup,
   isModelInFlight,
-  setDictationConfig,
-  type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../src/dictation/mobile-dictation-setup'
+import { useVoiceSettingsActions } from '../src/dictation/use-voice-settings-actions'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -35,8 +33,6 @@ const DICTATION_MODES = [
   { value: 'toggle', label: 'Toggle' },
   { value: 'hold', label: 'Hold' }
 ] as const
-
-type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
 export default function VoiceSettingsScreen(): React.JSX.Element {
   const router = useRouter()
@@ -57,7 +53,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
@@ -90,104 +85,31 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     }
   }, [routeFocused, client, setup])
 
-  const handleToggleEnabled = useCallback(
-    async (enabled: boolean) => {
-      if (!client) {
-        return
-      }
-      setError(null)
-      // Optimistic flip so the switch responds instantly; reconcile below.
-      setSetup((prev) => (prev ? { ...prev, enabled } : prev))
-      try {
-        setSetup(await setDictationConfig(client, { enabled }))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
-        void refreshSetup()
-      }
-    },
-    [client, refreshSetup]
-  )
-
-  const handleSelectMode = useCallback(
-    async (dictationMode: 'toggle' | 'hold') => {
-      if (!client) {
-        return
-      }
-      setError(null)
-      setSetup((prev) => (prev ? { ...prev, dictationMode } : prev))
-      try {
-        setSetup(await setDictationConfig(client, { dictationMode }))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
-        void refreshSetup()
-      }
-    },
-    [client, refreshSetup]
-  )
-
-  const handleUseModel = useCallback(
-    async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
-      setBusyAction({ modelId: model.id, type: 'select' })
-      setError(null)
-      try {
-        setSetup(await setDictationConfig(client, { enabled: true, modelId: model.id }))
-        setModelDrawerOpen(false)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not select model')
-      } finally {
-        setBusyAction(null)
-      }
-    },
-    [client]
-  )
-
-  const handleDownload = useCallback(
-    async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
-      setBusyAction({ modelId: model.id, type: 'download' })
-      setError(null)
-      try {
-        await downloadDictationModel(client, model.id)
-        await refreshSetup()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Download failed')
-      } finally {
-        setBusyAction(null)
-      }
-    },
-    [client, refreshSetup]
-  )
-
-  const handleDelete = useCallback(
-    async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
-      const deletedSelectedModel = setup?.selectedModelId === model.id
-      setBusyAction({ modelId: model.id, type: 'delete' })
-      setError(null)
-      try {
-        setSetup(await deleteDictationModel(client, model.id))
-        if (deletedSelectedModel) {
-          setModelDrawerOpen(false)
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed')
-      } finally {
-        setBusyAction(null)
-      }
-    },
-    [client, setup?.selectedModelId]
-  )
+  const {
+    busyAction,
+    handleToggleEnabled,
+    handleToggleUseMacSpeech,
+    handleSelectMode,
+    handleUseModel,
+    handleDownload,
+    handleDelete
+  } = useVoiceSettingsActions({
+    client,
+    setup,
+    setSetup,
+    setError,
+    refreshSetup,
+    setModelDrawerOpen
+  })
 
   const enabled = setup?.enabled ?? false
+  const macSpeechAvailable = setup?.macSpeechAvailable ?? false
+  const useMacSpeech = (setup?.useMacSpeech ?? false) && macSpeechAvailable
+  const speechModelLocked = !enabled || useMacSpeech
   const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
-  const selectedModelLabel = selectedModel?.label ?? 'None selected'
+  const selectedModelLabel = useMacSpeech
+    ? 'Apple Speech'
+    : (selectedModel?.label ?? 'None selected')
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -263,26 +185,16 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
             </View>
           </View>
 
-          <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                !enabled && styles.disabled,
-                pressed && styles.rowPressed
-              ]}
-              disabled={!enabled}
-              onPress={() => setModelDrawerOpen(true)}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Speech Model</Text>
-                <Text style={styles.rowSublabel} numberOfLines={1}>
-                  {selectedModelLabel}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <VoiceSpeechModelSection
+            setup={setup}
+            enabled={enabled}
+            macSpeechAvailable={macSpeechAvailable}
+            useMacSpeech={useMacSpeech}
+            speechModelLocked={speechModelLocked}
+            selectedModelLabel={selectedModelLabel}
+            onToggleUseMacSpeech={(v) => void handleToggleUseMacSpeech(v)}
+            onOpenModelDrawer={() => setModelDrawerOpen(true)}
+          />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>

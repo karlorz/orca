@@ -323,4 +323,125 @@ describe('VoicePane', () => {
       }
     })
   })
+
+  it('toggles Use Mac speech switch on macOS and persists updates', async () => {
+    installWindowApi(async () => ({
+      id: 'microphone',
+      status: 'granted',
+      openedSystemSettings: false
+    }))
+    useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        modelStates: [],
+        refreshModelStates: vi.fn(),
+        markFeatureTipsSeen: vi.fn(),
+        recordFeatureInteraction: vi.fn(),
+        settingsSearchQuery: ''
+      })
+    )
+
+    const originalUserAgent = navigator.userAgent
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    })
+
+    try {
+      const updateSettings = vi.fn()
+      const initialSettings = {
+        voice: {
+          ...getDefaultVoiceSettings(),
+          enabled: true,
+          useMacSpeech: false,
+          sttModel: 'whisper-base'
+        }
+      } as GlobalSettings
+
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      await act(async () => {
+        root.render(<VoicePane settings={initialSettings} updateSettings={updateSettings} />)
+      })
+
+      const macSpeechSwitch = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Use Mac speech"]'
+      )
+      expect(macSpeechSwitch).not.toBeNull()
+      expect(macSpeechSwitch?.getAttribute('aria-checked')).toBe('false')
+
+      await act(async () => {
+        macSpeechSwitch!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      expect(updateSettings).toHaveBeenCalledWith({
+        voice: {
+          ...getDefaultVoiceSettings(),
+          enabled: true,
+          useMacSpeech: true,
+          sttModel: 'whisper-base'
+        }
+      })
+      root.unmount()
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
+
+  it('disables Use Mac speech switch on non-Mac platforms', async () => {
+    installWindowApi(async () => ({
+      id: 'microphone',
+      status: 'granted',
+      openedSystemSettings: false
+    }))
+    useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        modelStates: [],
+        refreshModelStates: vi.fn(),
+        markFeatureTipsSeen: vi.fn(),
+        recordFeatureInteraction: vi.fn(),
+        settingsSearchQuery: ''
+      })
+    )
+
+    const originalUserAgent = navigator.userAgent
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+
+    try {
+      const updateSettings = vi.fn()
+      const initialSettings = {
+        voice: {
+          ...getDefaultVoiceSettings(),
+          enabled: true,
+          useMacSpeech: false
+        }
+      } as GlobalSettings
+
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      await act(async () => {
+        root.render(<VoicePane settings={initialSettings} updateSettings={updateSettings} />)
+      })
+
+      const macSpeechSwitch = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Use Mac speech"]'
+      )
+      expect(macSpeechSwitch).not.toBeNull()
+      expect(macSpeechSwitch?.disabled).toBe(true)
+      expect(container.textContent).toContain('Mac only')
+      root.unmount()
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: originalUserAgent
+      })
+    }
+  })
 })

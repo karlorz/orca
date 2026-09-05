@@ -25,6 +25,7 @@ import { useNativeChatSessionOptionCommand } from './use-native-chat-session-opt
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import { canStartVoiceDictation } from '../../../../shared/voice-dictation-selection'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -102,7 +103,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     )
     const dictationState = useAppStore((store) => store.dictationState)
     const voiceSettings = useAppStore((store) => store.settings?.voice)
-    const dictationDisabled = voiceSettings?.enabled !== true || !voiceSettings.sttModel
+    const dictationDisabled = !canStartVoiceDictation(voiceSettings)
     const isDictating =
       dictationPressed ||
       dictationState === 'starting' ||

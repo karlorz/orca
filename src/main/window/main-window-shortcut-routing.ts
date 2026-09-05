@@ -16,6 +16,7 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { canStartVoiceDictation } from '../../shared/voice-dictation-selection'
 import type { Store } from '../persistence'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
@@ -71,10 +72,10 @@ export function installMainWindowShortcutRouting(args: {
     // Why: hold-mode dictation needs renderer keyup events, so main only consumes single-keydown dictation toggles.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+      if (!canStartVoiceDictation(voiceSettings)) {
         return false
       }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+      const dictationMode = voiceSettings?.dictationMode ?? 'toggle'
       if (dictationMode === 'hold') {
         return false
       }

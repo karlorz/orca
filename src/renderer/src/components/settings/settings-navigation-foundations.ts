@@ -95,11 +95,17 @@ export function getSettingsNavGroupDefinitionsForSearch(
   })
 }
 
+import { effectiveSttModel, isMacSpeechSelected } from '../../../../shared/voice-dictation-selection'
+
 export function hasReadyVoiceModel(
   settings: GlobalSettings,
   modelStates: readonly SpeechModelState[]
 ): boolean {
   const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
+  if (isMacSpeechSelected(voiceSettings)) {
+    const effective = effectiveSttModel(voiceSettings)
+    return modelStates.some((state) => state.id === effective && state.status === 'ready')
+  }
   if (
     voiceSettings.sttModel !== '' &&
     modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')

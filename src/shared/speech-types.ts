@@ -76,6 +76,7 @@ export type DictationMode = 'toggle' | 'hold'
 export type VoiceSettings = {
   enabled: boolean
   sttModel: string
+  useMacSpeech?: boolean
   modelsDir: string
   language: string
   dictationMode: DictationMode

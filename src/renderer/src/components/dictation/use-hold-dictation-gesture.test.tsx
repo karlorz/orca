@@ -106,6 +106,43 @@ afterEach(async () => {
 })
 
 describe('useHoldDictationGesture', () => {
+  it('starts hold dictation when useMacSpeech is true and sttModel is empty', async () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const macSpeechSettings = {
+      voice: {
+        enabled: true,
+        useMacSpeech: true,
+        sttModel: '',
+        dictationMode: 'hold'
+      }
+    } as unknown as GlobalSettings
+
+    function MacSpeechProbe(): null {
+      useHoldDictationGesture({
+        dictationStateRef,
+        holdGestureActiveRef,
+        insertionTargetRef,
+        intentionalTargetCancellationRef,
+        keybindings: {},
+        settings: macSpeechSettings,
+        startDictation,
+        stopDictation
+      })
+      return null
+    }
+
+    await act(async () => {
+      root?.render(<MacSpeechProbe />)
+    })
+
+    beginHold()
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(holdGestureActiveRef.current).toBe(true)
+  })
+
   it('stops when the shortcut key is released after the modifier', async () => {
     await renderProbe()
 

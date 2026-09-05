@@ -181,6 +181,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
   return {
     enabled: false,
     sttModel: '',
+    useMacSpeech: false,
     modelsDir: '',
     language: 'en',
     dictationMode: 'toggle' as const,

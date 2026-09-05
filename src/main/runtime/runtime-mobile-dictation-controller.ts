@@ -1,4 +1,9 @@
 import { getDefaultVoiceSettings } from '../../shared/constants'
+import {
+  effectiveSttModel,
+  isMacSpeechSelected,
+  MAC_SYSTEM_SPEECH_MODEL_ID
+} from '../../shared/voice-dictation-selection'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { RuntimeStore } from './runtime-store-contract'
 
@@ -29,7 +34,10 @@ export class RuntimeMobileDictationController {
     if (!voice.enabled) {
       throw new Error('voice_dictation_disabled')
     }
-    const modelId = params.modelId || voice.sttModel
+    const modelId =
+      isMacSpeechSelected(voice) || params.modelId === MAC_SYSTEM_SPEECH_MODEL_ID
+        ? MAC_SYSTEM_SPEECH_MODEL_ID
+        : params.modelId || effectiveSttModel(voice)
     if (!modelId) {
       throw new Error('voice_model_not_selected')
     }
@@ -84,7 +92,10 @@ export class RuntimeMobileDictationController {
   }): { dictationId: string } {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
-      throw new Error('dictation_stream_closing')
+      // Why: Mac speech ends the listen after a pause; the phone may still
+      // flush a few chunks. Keep the collected text for finish() instead of
+      // turning that into a stream error.
+      return { dictationId: params.dictationId }
     }
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
@@ -173,6 +184,8 @@ export class RuntimeMobileDictationController {
         session.finalTexts.push(text)
         session.partialText = ''
       }
+    } else if (event.type === 'stopped') {
+      session.state = 'closing'
     } else if (event.type === 'error') {
       session.errors.push(event.error ?? 'Speech worker error')
     }

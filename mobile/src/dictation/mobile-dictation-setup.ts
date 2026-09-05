@@ -78,7 +78,12 @@ export async function deleteDictationModel(
 
 export async function setDictationConfig(
   client: Pick<RpcClient, 'sendRequest'>,
-  params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
+  params: {
+    enabled?: boolean
+    modelId?: string
+    useMacSpeech?: boolean
+    dictationMode?: 'toggle' | 'hold'
+  }
 ): Promise<MobileSpeechSetup> {
   const response = await client.sendRequest('speech.dictation.setup', params)
   if (!response.ok) {
@@ -92,9 +97,15 @@ export function isModelInFlight(model: MobileSpeechModel): boolean {
   return model.status === 'downloading' || model.status === 'extracting'
 }
 
-// Whether dictation can be used right now: enabled + a selected model that's ready.
+// Whether dictation can be used right now: enabled + (Mac speech or a selected model that's ready).
 export function isDictationReady(setup: MobileSpeechSetup): boolean {
-  if (!setup.enabled || !setup.selectedModelId) {
+  if (!setup.enabled) {
+    return false
+  }
+  if (setup.useMacSpeech && setup.macSpeechAvailable) {
+    return true
+  }
+  if (!setup.selectedModelId) {
     return false
   }
   const selected = setup.models.find((m) => m.id === setup.selectedModelId)
