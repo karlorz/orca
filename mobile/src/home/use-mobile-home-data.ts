@@ -184,6 +184,7 @@ export function useMobileHomeData() {
     connectedHosts,
     hostCatalog,
     hostPairingRejected: hostConnectionProjection.hostPairingRejected,
+    hostSignedOut: hostConnectionProjection.hostSignedOut,
     hostPaths: hostConnectionProjection.hostPaths,
     hostPendingPaths: hostConnectionProjection.hostPendingPaths,
     primaryHost,
