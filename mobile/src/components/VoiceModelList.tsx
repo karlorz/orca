@@ -28,6 +28,9 @@ function modelMeta(model: MobileSpeechModel): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
+  if (model.provider === 'system') {
+    return ''
+  }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
     return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
@@ -75,6 +78,34 @@ export function VoiceModelList({
                 <Text style={styles.modelStateText}>
                   {model.status === 'ready' ? 'API key set' : 'Set up on desktop'}
                 </Text>
+              ) : model.provider === 'system' ? (
+                model.status === 'ready' ? (
+                  <View style={styles.readyActions}>
+                    {isSelected ? (
+                      <View style={styles.selectedTag}>
+                        <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                        <Text style={styles.selectedText}>In use</Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.actionButton,
+                          pressed && styles.actionPressed
+                        ]}
+                        disabled={anyBusy}
+                        onPress={() => onUseModel(model)}
+                      >
+                        {selectBusy ? (
+                          <ActivityIndicator size="small" color={colors.textSecondary} />
+                        ) : (
+                          <Text style={styles.actionText}>Use</Text>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.modelStateText}>Mac only</Text>
+                )
               ) : model.status === 'ready' ? (
                 <View style={styles.readyActions}>
                   {isSelected ? (

@@ -31,7 +31,6 @@ import type {
   InternalOperatorSessionRecord,
   InternalSessionRecord
 } from './own-mobile-relay-security-state-types'
-import { cleanupExpiredRecords } from './own-mobile-relay-security-state-device-cleanup'
 import {
   assertOpen,
   bootstrapAccountMemory,
@@ -65,6 +64,10 @@ import {
   lookupOperatorSessionMemory,
   revokeOperatorSessionMemory
 } from './own-mobile-relay-security-state-operator-ops'
+import {
+  cleanupExpiredMemory,
+  closeMemoryStore
+} from './own-mobile-relay-security-state-memory-lifecycle'
 import {
   issueRefreshTokenMemory,
   lookupRefreshTokenMemory,
@@ -209,10 +212,7 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       return setHostKeyExpiryDisabledMemory(ctx, relayHostId, disabled)
     },
 
-    async isDeviceKeyExpiryDisabled(
-      relayHostId: string,
-      relayDeviceId: string
-    ): Promise<boolean> {
+    async isDeviceKeyExpiryDisabled(relayHostId: string, relayDeviceId: string): Promise<boolean> {
       return isDeviceKeyExpiryDisabledMemory(ctx, relayHostId, relayDeviceId)
     },
 
@@ -316,45 +316,11 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
       maxBatchSize?: number
       now?: number
     }): Promise<SecurityStateCleanupResult> {
-      assertOpen(ctx)
-      const now = options?.now ?? Date.now()
-      const maxBatch = options?.maxBatchSize ?? 1000
-      const keepSessionIds = new Set<string>()
-      if (ctx.account) {
-        for (const record of ctx.refreshTokensByHash.values()) {
-          if (
-            record.revokedAt === undefined &&
-            (record.expiresAt === null || record.expiresAt > now) &&
-            record.authEpoch === ctx.account.authEpoch
-          ) {
-            keepSessionIds.add(record.sessionId)
-          }
-        }
-      }
-      return cleanupExpiredRecords(
-        {
-          byId: ctx.sessionsById,
-          byAccess: ctx.sessionsByAccessHash
-        },
-        { byId: ctx.grantsById, byToken: ctx.grantsByTokenHash },
-        ctx.devicesByKey,
-        ctx.account,
-        maxBatch,
-        now,
-        keepSessionIds
-      )
+      return cleanupExpiredMemory(ctx, options)
     },
 
     async close(): Promise<void> {
-      ctx.isClosed = true
-      ctx.sessionsById.clear()
-      ctx.sessionsByAccessHash.clear()
-      ctx.grantsById.clear()
-      ctx.grantsByTokenHash.clear()
-      ctx.devicesByKey.clear()
-      ctx.operatorSessionsById.clear()
-      ctx.operatorSessionsByTokenHash.clear()
-      ctx.account = null
+      closeMemoryStore(ctx)
     }
   }
 }

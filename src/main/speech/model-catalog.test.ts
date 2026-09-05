@@ -45,4 +45,18 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.downloadFiles).toHaveLength(2)
     expect(model?.downloadFiles?.map(({ name }) => name)).toEqual(['model.int8.onnx', 'tokens.txt'])
   })
+
+  it('registers Mac speech as a system streaming model with no download files', () => {
+    const model = getCatalogModel('mac-system-speech')
+    expect(model).toBeDefined()
+    expect(model?.id).toBe('mac-system-speech')
+    expect(model?.label).toBe('Mac speech')
+    expect(model?.type).toBe('system')
+    expect(model?.provider).toBe('system')
+    expect(model?.language).toBe('system-dictation')
+    expect(model?.sampleRate).toBe(16000)
+    expect(model?.streaming).toBe(true)
+    expect(model?.downloadFiles).toBeUndefined()
+    expect(model?.sizeBytes).toBeUndefined()
+  })
 })

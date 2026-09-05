@@ -78,10 +78,11 @@ export type RuntimeGitLocalBranches = {
 export type RuntimeSpeechModelSummary = {
   id: string
   label: string
-  provider: 'local' | 'openai'
+  provider: 'local' | 'openai' | 'system'
   sizeBytes: number | null
   recommended: boolean
-  status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error'
+  status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error' | 'unavailable'
+  unavailableReason?: 'mac-only'
   progress: number | null
 }
 

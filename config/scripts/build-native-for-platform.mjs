@@ -16,6 +16,7 @@ if (process.platform !== 'darwin') {
 runPnpmScript('build:computer-macos')
 runPnpmScript('build:keyboard-layout-macos')
 runPnpmScript('build:notification-status-macos')
+runPnpmScript('build:speech-macos')
 process.exit(0)
 
 function runPnpmScript(scriptName) {

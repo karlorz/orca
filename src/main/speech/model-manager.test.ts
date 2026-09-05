@@ -170,6 +170,35 @@ describe('ModelManager', () => {
     }
   })
 
+  it('marks system speech models ready on darwin and unavailable on other platforms', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    const originalPlatform = process.platform
+    try {
+      const manager = new ModelManager(dir)
+
+      Object.defineProperty(process, 'platform', { value: 'darwin' })
+      await expect(manager.getModelState('mac-system-speech')).resolves.toEqual({
+        id: 'mac-system-speech',
+        status: 'ready'
+      })
+
+      Object.defineProperty(process, 'platform', { value: 'linux' })
+      await expect(manager.getModelState('mac-system-speech')).resolves.toEqual({
+        id: 'mac-system-speech',
+        status: 'unavailable'
+      })
+
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      await expect(manager.getModelState('mac-system-speech')).resolves.toEqual({
+        id: 'mac-system-speech',
+        status: 'unavailable'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('deletes a ready local model and reports it as not downloaded', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {

@@ -143,6 +143,16 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'multilingual',
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'mac-system-speech',
+    label: 'Mac speech',
+    description: 'Built-in Apple Speech recognition on macOS. No download required.',
+    type: 'system',
+    provider: 'system',
+    language: 'system-dictation',
+    sampleRate: 16000,
+    streaming: true
   }
 ]
 

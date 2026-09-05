@@ -13,7 +13,7 @@ export async function stopSttDictation(
   if (options.cancelStarting !== false && state.startingOwner === owner) {
     state.canceledOwners.add(owner)
   }
-  if (!state.worker && !state.cloudSession) {
+  if (!state.worker && !state.cloudSession && !state.appleSession) {
     return
   }
   const currentOwner = state.activeOwner ?? state.startingOwner
@@ -38,6 +38,30 @@ export async function stopSttDictation(
         })
       } finally {
         state.eventSink?.({ type: 'stopped' })
+        state.activeModelId = null
+        state.activeHotwordsFilePath = undefined
+        state.activeOwner = null
+        state.eventSink = null
+      }
+    } finally {
+      state.stopping = false
+    }
+    return
+  }
+
+  if (state.appleSession) {
+    state.stopping = true
+    try {
+      const session = state.appleSession
+      state.appleSession = null
+      try {
+        await session.stop()
+      } catch (error) {
+        state.eventSink?.({
+          type: 'error',
+          error: error instanceof Error ? error.message : String(error)
+        })
+      } finally {
         state.activeModelId = null
         state.activeHotwordsFilePath = undefined
         state.activeOwner = null

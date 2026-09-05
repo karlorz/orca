@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  MockAppleSpeechSession,
   MockOpenAiTranscriptionSession,
   MockWorker,
+  getAppleSpeechSessions,
   getCloudSessions,
   getCreatedWorkerCount,
   getLastWorker,
   readOpenAiSpeechApiKeyMock,
+  resetAppleSpeechSessions,
   resetCloudSessions,
   resetWorkers
 } = vi.hoisted(() => {
@@ -97,13 +100,48 @@ const {
     }
   }
 
+  class HoistedMockAppleSpeechSession {
+    static instances: HoistedMockAppleSpeechSession[] = []
+    feedCalls: { samples: Float32Array; sampleRate: number }[] = []
+    started = false
+    stopped = false
+
+    constructor(
+      readonly modelId: string,
+      readonly sink: (event: unknown) => void
+    ) {
+      HoistedMockAppleSpeechSession.instances.push(this)
+    }
+
+    start(): Promise<void> {
+      this.started = true
+      this.sink({ type: 'ready' })
+      return Promise.resolve()
+    }
+
+    feedAudio(samples: Float32Array, sampleRate: number): void {
+      this.feedCalls.push({ samples, sampleRate })
+    }
+
+    stop(): Promise<void> {
+      this.stopped = true
+      this.sink({ type: 'stopped' })
+      return Promise.resolve()
+    }
+  }
+
   return {
+    MockAppleSpeechSession: HoistedMockAppleSpeechSession,
     MockOpenAiTranscriptionSession: HoistedMockOpenAiTranscriptionSession,
     MockWorker: HoistedMockWorker,
+    getAppleSpeechSessions: () => HoistedMockAppleSpeechSession.instances,
     getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
     readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
+    resetAppleSpeechSessions: () => {
+      HoistedMockAppleSpeechSession.instances = []
+    },
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
     },
@@ -137,14 +175,22 @@ vi.mock('./model-catalog', () => ({
           streaming: false,
           sampleRate: 16000
         }
-      : {
-          id: 'model-a',
-          type: 'transducer',
-          provider: 'local',
-          streaming: true,
-          sampleRate: 16000,
-          files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-        }
+      : id === 'mac-system-speech'
+        ? {
+            id,
+            type: 'system',
+            provider: 'system',
+            streaming: true,
+            sampleRate: 16000
+          }
+        : {
+            id: 'model-a',
+            type: 'transducer',
+            provider: 'local',
+            streaming: true,
+            sampleRate: 16000,
+            files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+          }
 }))
 
 vi.mock('./openai-api-key-store', () => ({
@@ -155,10 +201,15 @@ vi.mock('./openai-transcription-client', () => ({
   OpenAiTranscriptionSession: MockOpenAiTranscriptionSession
 }))
 
+vi.mock('./apple-speech-session', () => ({
+  AppleSpeechSession: MockAppleSpeechSession
+}))
+
 import { IDLE_WORKER_TEARDOWN_MS, START_DICTATION_TIMEOUT_MS, SttService } from './stt-service'
 
 describe('SttService', () => {
   beforeEach(() => {
+    resetAppleSpeechSessions()
     resetCloudSessions()
     resetWorkers()
     readOpenAiSpeechApiKeyMock.mockClear()
@@ -299,6 +350,46 @@ describe('SttService', () => {
     expect(worker!.messages.some((message) => message.type === 'teardown')).toBe(true)
     expect(worker!.terminated).toBe(true)
     expect(service.isActive()).toBe(false)
+  })
+
+  it('routes feedAudio to AppleSpeechSession when system speech is active', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+    } as never)
+
+    const sink = vi.fn()
+    await service.startDictation('mac-system-speech', sink, undefined, 'desktop')
+
+    const sessions = getAppleSpeechSessions()
+    expect(sessions.length).toBe(1)
+    expect(sessions[0].started).toBe(true)
+    expect(service.isActive()).toBe(true)
+    expect(service.getActiveModelId()).toBe('mac-system-speech')
+
+    const pcm = new Float32Array([0.1, 0.2, 0.3])
+    service.feedAudio(pcm, 16000, 'desktop')
+    expect(sessions[0].feedCalls).toEqual([{ samples: pcm, sampleRate: 16000 }])
+
+    await service.stopDictation('desktop')
+    expect(sessions[0].stopped).toBe(true)
+    expect(service.isActive()).toBe(false)
+    expect(getCreatedWorkerCount()).toBe(0)
+  })
+
+  it('rejects system speech start when modelState is not ready', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'unavailable' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+    } as never)
+
+    const sink = vi.fn()
+    await expect(
+      service.startDictation('mac-system-speech', sink, undefined, 'desktop')
+    ).rejects.toThrow('Model not ready: unavailable')
+
+    expect(getAppleSpeechSessions().length).toBe(0)
+    expect(getCreatedWorkerCount()).toBe(0)
   })
 
   it('rejects deletion prep when a target warm worker cannot be torn down during another start', async () => {

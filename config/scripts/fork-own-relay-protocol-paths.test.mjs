@@ -1,5 +1,4 @@
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   loadOwnRelayProtocolPathConfig,
@@ -7,7 +6,7 @@ import {
   staleOwnRelayProtocolIncludeGlobs
 } from './fork-own-relay-protocol-paths.mjs'
 
-const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const projectDir = resolve(import.meta.dirname, '../..')
 
 describe('own-relay protocol path allowlist', () => {
   const config = loadOwnRelayProtocolPathConfig(projectDir)

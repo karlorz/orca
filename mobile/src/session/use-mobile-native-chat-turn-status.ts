@@ -38,9 +38,15 @@ export function useMobileNativeChatTurnStatus({
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   activeTurnKey: string
 } {
-  const latestUserIndex = enabled
-    ? messages.findLastIndex((message) => message.role === 'user')
-    : -1
+  let latestUserIndex = -1
+  if (enabled) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === 'user') {
+        latestUserIndex = i
+        break
+      }
+    }
+  }
   const hasCurrentTurnResponse = enabled && nativeChatTurnHasResponse(messages, latestUserIndex)
   const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
   const activeTurnKey = latestUserId ?? MOBILE_UNANCHORED_TURN_KEY

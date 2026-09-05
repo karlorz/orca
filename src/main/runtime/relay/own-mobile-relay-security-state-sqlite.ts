@@ -36,9 +36,9 @@ import {
   executeInstallDeviceCredentialSqlite,
   executeGetDeviceCredentialInstallStatusSqlite,
   executeMatchDeviceCredentialSqlite,
-  executeRevokeDeviceCredentialSqlite,
-  executeCleanupExpiredSqlite
+  executeRevokeDeviceCredentialSqlite
 } from './own-mobile-relay-security-state-sqlite-device-ops'
+import { executeCleanupExpiredSqlite } from './own-mobile-relay-security-state-sqlite-cleanup'
 import {
   executeListAccessSessionsSqlite,
   executeListRelayGrantsSqlite,
