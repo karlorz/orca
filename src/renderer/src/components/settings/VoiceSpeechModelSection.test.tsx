@@ -4,7 +4,11 @@ import { act } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
+import type {
+  SpeechModelManifest,
+  SpeechModelState,
+  VoiceSettings
+} from '../../../../shared/speech-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
@@ -76,17 +80,30 @@ const secondLocalModel: SpeechModelManifest = {
   label: 'Second Local Model'
 }
 
+const systemModel: SpeechModelManifest = {
+  id: 'mac-system-speech',
+  label: 'Mac speech',
+  description: 'Built-in Apple Speech recognition on macOS. No download required.',
+  type: 'system',
+  provider: 'system',
+  language: 'system-dictation',
+  sampleRate: 16000,
+  streaming: true
+}
+
 function renderSection(args: {
-  deleteModel: (modelId: string) => Promise<void>
+  deleteModel?: (modelId: string) => Promise<void>
   downloadModel?: (modelId: string) => Promise<void>
   catalog?: SpeechModelManifest[]
   modelStates?: SpeechModelState[]
   refreshModelStates?: () => void
+  onUpdateVoiceSettings?: (updates: Partial<{ sttModel: string }>) => void
+  voiceSettings?: VoiceSettings
 }): { container: HTMLDivElement; root: Root } {
   Object.assign(window, {
     api: {
       speech: {
-        deleteModel: vi.fn(args.deleteModel),
+        deleteModel: vi.fn(args.deleteModel ?? (() => Promise.resolve())),
         downloadModel: vi.fn(args.downloadModel ?? (() => Promise.resolve()))
       }
     }
@@ -95,7 +112,11 @@ function renderSection(args: {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
-  const voiceSettings = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel.id }
+  const voiceSettings = args.voiceSettings ?? {
+    ...getDefaultVoiceSettings(),
+    enabled: true,
+    sttModel: localModel.id
+  }
   const catalog = args.catalog ?? [localModel]
   const modelStates = args.modelStates ?? [{ id: localModel.id, status: 'ready' }]
   act(() => {
@@ -104,7 +125,7 @@ function renderSection(args: {
         voiceSettings={voiceSettings}
         catalog={catalog}
         modelStates={modelStates}
-        onUpdateVoiceSettings={vi.fn()}
+        onUpdateVoiceSettings={args.onUpdateVoiceSettings ?? vi.fn()}
         onOpenOpenAiDialog={vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
@@ -240,6 +261,60 @@ describe('VoiceSpeechModelSection', () => {
 
     expect(window.api.speech.downloadModel).toHaveBeenCalledWith(localModel.id)
     expect(menuDismissMock).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
+  it('renders a ready system model row as selectable with no delete, no download, and no MB size', async () => {
+    const onUpdateVoiceSettings = vi.fn()
+    const { container, root } = renderSection({
+      catalog: [systemModel],
+      modelStates: [{ id: systemModel.id, status: 'ready' }],
+      onUpdateVoiceSettings
+    })
+    const option = container.querySelector<HTMLElement>('[role="option"]')
+    expect(option).not.toBeNull()
+    expect(option?.getAttribute('aria-disabled')).toBe('false')
+
+    // No delete button
+    expect(container.querySelector('button[aria-label*="Delete"]')).toBeNull()
+    // No download icon
+    expect(container.querySelector('.lucide-download')).toBeNull()
+    // No size MB label
+    expect(option?.textContent).not.toContain('MB')
+    // No cloud icon
+    expect(container.querySelector('.lucide-cloud')).toBeNull()
+
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onUpdateVoiceSettings).toHaveBeenCalledWith({ sttModel: systemModel.id })
+    root.unmount()
+  })
+
+  it('renders an unavailable system model row as disabled with "Mac only" note and does not download on click', async () => {
+    const onUpdateVoiceSettings = vi.fn()
+    const downloadModel = vi.fn().mockResolvedValue(undefined)
+    const { container, root } = renderSection({
+      catalog: [systemModel],
+      modelStates: [{ id: systemModel.id, status: 'unavailable' }],
+      onUpdateVoiceSettings,
+      downloadModel
+    })
+    const option = container.querySelector<HTMLElement>('[role="option"]')
+    expect(option).not.toBeNull()
+    expect(option?.getAttribute('aria-disabled')).toBe('true')
+    expect(option?.textContent).toContain('Mac only')
+
+    // No download button or action
+    expect(container.querySelector('.lucide-download')).toBeNull()
+
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onUpdateVoiceSettings).not.toHaveBeenCalled()
+    expect(downloadModel).not.toHaveBeenCalled()
     root.unmount()
   })
 })

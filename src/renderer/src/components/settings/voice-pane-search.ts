@@ -116,7 +116,19 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.04c25a6fb0', 'openai'),
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.2d206de105', 'api key'),
-      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud')
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.f6e0dfa61c', 'cloud'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.a12a0a9890',
+        'Mac speech'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.a1516b7e65',
+        'system speech'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.2c66d6cffc',
+        'Apple Speech'
+      )
     ]
   }
 ])

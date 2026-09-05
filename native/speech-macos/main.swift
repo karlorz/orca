@@ -58,15 +58,17 @@ func resolveDictationLocale() -> (locale: Locale, source: String, identifier: St
   }
 
   guard let chosenId = candidateId else {
-    return nil
+    emitJson(["type": "error", "error": "apple_speech_locale_unsupported:unknown"])
+    exit(1)
   }
 
   if let matched = findSupported(identifier: chosenId) {
     return (matched, source, chosenId)
   }
 
-  // Not supported by SFSpeechRecognizer
-  return (Locale(identifier: chosenId), source, chosenId)
+  // Not supported by SFSpeechRecognizer: fail closed
+  emitJson(["type": "error", "error": "apple_speech_locale_unsupported:\(chosenId)"])
+  exit(1)
 }
 
 // 2. Perform Handshake: Read first line from stdin for {"sampleRate": 16000}
