@@ -19,13 +19,15 @@ export class RuntimeMobileSpeechCatalog {
     const stateById = new Map(states.map((state) => [state.id, state]))
     const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.map((manifest) => {
       const state = stateById.get(manifest.id)
+      const status = state?.status ?? 'not-downloaded'
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        provider: manifest.provider,
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
-        status: state?.status ?? 'not-downloaded',
+        status,
+        ...(status === 'unavailable' ? { unavailableReason: 'mac-only' as const } : {}),
         progress: state?.progress ?? null
       }
     })
@@ -76,8 +78,14 @@ export class RuntimeMobileSpeechCatalog {
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
-    if (params.modelId !== undefined && params.modelId !== '' && !getCatalogModel(params.modelId)) {
-      throw new Error('voice_model_unknown')
+    if (params.modelId !== undefined && params.modelId !== '') {
+      const manifest = getCatalogModel(params.modelId)
+      if (!manifest) {
+        throw new Error('voice_model_unknown')
+      }
+      if (manifest.provider === 'system' && process.platform !== 'darwin') {
+        throw new Error('voice_model_unavailable_on_host')
+      }
     }
     const nextVoice: VoiceSettings = {
       ...current,

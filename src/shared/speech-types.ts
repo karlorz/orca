@@ -5,7 +5,8 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+  | 'system'
+export type SpeechModelProvider = 'local' | 'openai' | 'system'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -32,7 +33,13 @@ export type SpeechModelManifest = {
   recommended?: boolean
 }
 
-export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'
+export type SpeechModelStatus =
+  | 'not-downloaded'
+  | 'downloading'
+  | 'extracting'
+  | 'ready'
+  | 'error'
+  | 'unavailable'
 
 export type SpeechModelState = {
   id: string

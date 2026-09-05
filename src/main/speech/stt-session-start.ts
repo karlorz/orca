@@ -67,6 +67,10 @@ async function startSttSession(
     throw new Error(`Unknown model: ${modelId}`)
   }
 
+  if (manifest.provider === 'system') {
+    throw new Error(`System speech not implemented: ${modelId}`)
+  }
+
   if (manifest.provider === 'openai') {
     if (state.worker) {
       const existingWorker = state.worker

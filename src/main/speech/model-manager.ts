@@ -97,6 +97,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
+    if (manifest.provider === 'system') {
+      return {
+        id: modelId,
+        status: process.platform === 'darwin' ? 'ready' : 'unavailable'
+      }
+    }
+
     if (manifest.provider === 'openai') {
       return {
         id: modelId,
