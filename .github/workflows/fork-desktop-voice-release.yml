@@ -105,6 +105,7 @@ jobs:
           pnpm run build:computer-macos
           pnpm run build:keyboard-layout-macos
           pnpm run build:notification-status-macos
+          pnpm run build:speech-macos
           pnpm run ensure:electron-runtime
           # --publish never: tag pushes default to onTagOrDraft and demand GH_TOKEN;
           # our publish-release job owns release creation.
@@ -113,6 +114,11 @@ jobs:
           if [[ -z "$app" ]]; then
             echo "Packed Orca.app not found under dist/" >&2
             ls -la dist || true
+            exit 1
+          fi
+          if [[ ! -x "$app/Contents/MacOS/orca-speech" ]]; then
+            echo "Packed app missing executable $app/Contents/MacOS/orca-speech" >&2
+            ls -la "$app/Contents/MacOS" || true
             exit 1
           fi
           dump="$(codesign -dv --verbose=2 "$app" 2>&1)"
