@@ -104,13 +104,13 @@ describe('without Intl.Segmenter (Hermes fallback)', () => {
     vi.resetModules()
   })
 
-  async function loadFallbackModule(): Promise<typeof import('./dictation-live-delta')> {
+  async function loadFallbackModule() {
     vi.resetModules()
     const originalIntl = globalThis.Intl
     const intlWithoutSegmenter = Object.create(originalIntl) as typeof Intl
     Object.defineProperty(intlWithoutSegmenter, 'Segmenter', { value: undefined })
     vi.stubGlobal('Intl', intlWithoutSegmenter)
-    return import('./dictation-live-delta')
+    return import('./dictation-live-delta.js')
   }
 
   it('computes Cantonese extension deltas', async () => {
