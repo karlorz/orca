@@ -29,7 +29,7 @@ class FakeChildProcess extends EventEmitter {
   }
 }
 
-import { AppleSpeechSession } from './apple-speech-session'
+import { AppleSpeechSession, DEFAULT_STOP_FLUSH_TIMEOUT_MS } from './apple-speech-session'
 import type { SttEvent } from './stt-service'
 
 describe('AppleSpeechSession', () => {
@@ -59,8 +59,12 @@ describe('AppleSpeechSession', () => {
 
     // Simulate helper replying with ready event
     mockChild.stdout.write(`${JSON.stringify({ type: 'ready' })}\n`)
+    mockChild.stdout.write(
+      `${JSON.stringify({ type: 'config', addsPunctuation: true, source: 'assistant-support' })}\n`
+    )
 
     expect(events).toContainEqual({ type: 'ready' })
+    expect(events.some((event) => (event as { type: string }).type === 'config')).toBe(false)
   })
 
   it('translates partial, final, and error events to the event sink', async () => {
@@ -186,6 +190,11 @@ describe('AppleSpeechSession', () => {
     expect(events.filter((event) => event.type === 'final')).toEqual([
       { type: 'final', text: 'hello world' }
     ])
+  })
+
+  it('defaults stop-flush longer than the helper 2s endAudio wait', () => {
+    // SuperCmd waits 2s after endAudio; the Node session must not SIGTERM first.
+    expect(DEFAULT_STOP_FLUSH_TIMEOUT_MS).toBe(2500)
   })
 
   it('uses a helper final that arrives after stdin closes', async () => {

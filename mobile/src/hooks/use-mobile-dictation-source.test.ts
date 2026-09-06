@@ -52,7 +52,7 @@ describe('useMobileDictation source invariants', () => {
     expect(mirrorEffect).toContain('enabledRef.current = enabled')
     expect(mirrorEffect).toContain('onTranscriptRef.current = onTranscript')
     expect(mirrorEffect).toContain('onErrorRef.current = onError')
-    expect(mirrorEffect).toContain('}, [client, enabled, onTranscript, onError])')
+    expect(mirrorEffect).toContain('}, [client, enabled, onTranscript, onLiveTranscript, onError])')
   })
 
   it('reserves pending audio bytes before encoding microphone chunks', () => {

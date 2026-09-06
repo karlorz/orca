@@ -238,4 +238,13 @@ describe('terminal WebView bundled engine', () => {
     expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
     expect(terminalHtmlSource).toContain("notify({ type: 'pong', pingId: msg.id })")
   })
+
+  it('retries notify until ReactNativeWebView is injected', () => {
+    // Why: Android can run the inlined IIFE before the RN bridge exists;
+    // a one-shot notify({type:'web-ready'}) is then dropped and the 15s
+    // watchdog paints a blank terminal forever.
+    expect(terminalHtmlSource).toContain('function notify(msg)')
+    expect(terminalHtmlSource).toContain('setTimeout(send, 50)')
+    expect(terminalHtmlSource).toContain('attempts < 100')
+  })
 })

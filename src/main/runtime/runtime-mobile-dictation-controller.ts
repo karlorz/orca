@@ -5,7 +5,16 @@ import {
   MAC_SYSTEM_SPEECH_MODEL_ID
 } from '../../shared/voice-dictation-selection'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { joinTranscriptSegments } from '../../shared/dictation-segment-format'
 import type { RuntimeStore } from './runtime-store-contract'
+
+export type MobileDictationLiveSnapshot = {
+  dictationId: string
+  revision: number
+  committedText: string
+  partialText: string
+  live: boolean
+}
 
 type MobileDictationSession = {
   id: string
@@ -16,6 +25,18 @@ type MobileDictationSession = {
   partialText: string
   finalTexts: string[]
   errors: string[]
+  revision: number
+  live: boolean
+}
+
+function snapshotFor(session: MobileDictationSession): MobileDictationLiveSnapshot {
+  return {
+    dictationId: session.id,
+    revision: session.revision,
+    committedText: joinTranscriptSegments(session.finalTexts),
+    partialText: session.partialText,
+    live: session.live
+  }
 }
 
 export class RuntimeMobileDictationController {
@@ -61,7 +82,9 @@ export class RuntimeMobileDictationController {
       state: 'starting',
       partialText: '',
       finalTexts: [],
-      errors: []
+      errors: [],
+      revision: 0,
+      live: isMacSpeechSelected(voice) || modelId === MAC_SYSTEM_SPEECH_MODEL_ID
     }
     try {
       await getSpeechSttService(store).startDictation(
@@ -89,13 +112,10 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     clientId?: string
     connectionId?: string
-  }): { dictationId: string } {
+  }): MobileDictationLiveSnapshot {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
-      // Why: Mac speech ends the listen after a pause; the phone may still
-      // flush a few chunks. Keep the collected text for finish() instead of
-      // turning that into a stream error.
-      return { dictationId: params.dictationId }
+      return snapshotFor(session)
     }
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
@@ -106,7 +126,7 @@ export class RuntimeMobileDictationController {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
     getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
-    return { dictationId: params.dictationId }
+    return snapshotFor(session)
   }
 
   async finish(params: {
@@ -123,7 +143,7 @@ export class RuntimeMobileDictationController {
       }
       return {
         dictationId: params.dictationId,
-        text: [...session.finalTexts, session.partialText].join(' ').trim()
+        text: joinTranscriptSegments([...session.finalTexts, session.partialText])
       }
     } finally {
       if (this.session?.id === session.id) {
@@ -177,12 +197,18 @@ export class RuntimeMobileDictationController {
       return
     }
     if (event.type === 'partial') {
-      session.partialText = event.text ?? ''
+      const partial = event.text ?? ''
+      if (partial.trim().length === 0) {
+        return
+      }
+      session.partialText = partial
+      session.revision += 1
     } else if (event.type === 'final') {
       const text = event.text?.trim()
       if (text) {
         session.finalTexts.push(text)
         session.partialText = ''
+        session.revision += 1
       }
     } else if (event.type === 'stopped') {
       session.state = 'closing'

@@ -181,6 +181,18 @@ features:
       - config/electron-builder.config.cjs
     wiki: projects/orca/work/2026-09-05-orca-dictation-stt-backends-no-macos-system
 
+  - id: mac-speech-live-insert
+    title: Mac speech live-insert into focused pane; hold-to-talk on mobile
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/components/dictation
+      - src/renderer/src/components/terminal-pane
+      - src/main/runtime/runtime-mobile-dictation-controller.ts
+      - mobile/src/session
+      - native/speech-macos
+    wiki: projects/orca/work/2026-09-05-orca-dictation-stt-backends-no-macos-system
+
   - id: fork-sync-own-relay-followup
     title: Fork-sync files wiki follow-ups when own-mobile-relay protocol/client paths change
     kind: ci

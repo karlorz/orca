@@ -6,10 +6,19 @@ import type { RpcClient } from '../transport/rpc-client'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
+export type MobileDictationLiveSnapshot = {
+  dictationId?: string
+  revision?: number
+  committedText?: string
+  partialText?: string
+  live?: boolean
+}
+
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
   onTranscript: (text: string) => void
+  onLiveTranscript?: (snapshot: MobileDictationLiveSnapshot) => void
   onError?: (error: Error) => void
 }
 

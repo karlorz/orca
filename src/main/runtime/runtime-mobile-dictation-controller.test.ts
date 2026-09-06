@@ -165,14 +165,18 @@ describe('RuntimeMobileDictationController', () => {
     eventSink?.({ type: 'final', text: '喂今日天氣好唔好' })
     eventSink?.({ type: 'stopped' })
 
-    expect(() =>
-      controller.feed({
-        dictationId: 'd5',
-        clientId: 'c1',
-        audioBase64: Buffer.alloc(4).toString('base64'),
-        sampleRate: 16000
-      })
-    ).not.toThrow()
+    const snapshot = controller.feed({
+      dictationId: 'd5',
+      clientId: 'c1',
+      audioBase64: Buffer.alloc(4).toString('base64'),
+      sampleRate: 16000
+    })
+    expect(snapshot).toMatchObject({
+      dictationId: 'd5',
+      live: true,
+      committedText: '喂今日天氣好唔好',
+      partialText: ''
+    })
     expect(feedAudioMock).not.toHaveBeenCalled()
 
     const finished = await controller.finish({
@@ -181,5 +185,79 @@ describe('RuntimeMobileDictationController', () => {
     })
     expect(finished.text).toBe('喂今日天氣好唔好')
     expect(stopDictationMock).toHaveBeenCalledWith('mobile:d5')
+  })
+
+  it('ignores empty Apple partials so revision does not bump and partialText is not cleared', async () => {
+    let eventSink: ((event: { type: string; text?: string }) => void) | undefined
+    startDictationMock.mockImplementation(async (_options, sink) => {
+      eventSink = sink
+      return 'mobile:d6'
+    })
+
+    const mockStore = {
+      getSettings: () => ({
+        voice: {
+          enabled: true,
+          useMacSpeech: true,
+          sttModel: ''
+        }
+      })
+    } as unknown as RuntimeStore
+
+    const controller = new RuntimeMobileDictationController(() => mockStore)
+    await controller.start({
+      dictationId: 'd6',
+      clientId: 'c1'
+    })
+
+    // First non-empty partial
+    eventSink?.({ type: 'partial', text: '我想' })
+    const snapshot1 = controller.feed({
+      dictationId: 'd6',
+      clientId: 'c1',
+      audioBase64: Buffer.alloc(4).toString('base64'),
+      sampleRate: 16000
+    })
+    expect(snapshot1).toMatchObject({
+      dictationId: 'd6',
+      live: true,
+      committedText: '',
+      partialText: '我想'
+    })
+    expect(snapshot1.revision).toBeGreaterThanOrEqual(1)
+    const revAfterFirst = snapshot1.revision
+
+    // Empty or whitespace-only Apple partial must NOT clear partialText and must NOT bump revision
+    eventSink?.({ type: 'partial', text: '' })
+    eventSink?.({ type: 'partial', text: '   ' })
+    const snapshot2 = controller.feed({
+      dictationId: 'd6',
+      clientId: 'c1',
+      audioBase64: Buffer.alloc(4).toString('base64'),
+      sampleRate: 16000
+    })
+    expect(snapshot2).toMatchObject({
+      dictationId: 'd6',
+      live: true,
+      committedText: '',
+      partialText: '我想',
+      revision: revAfterFirst
+    })
+
+    // Subsequent real partial bumps revision
+    eventSink?.({ type: 'partial', text: '我想食飯' })
+    const snapshot3 = controller.feed({
+      dictationId: 'd6',
+      clientId: 'c1',
+      audioBase64: Buffer.alloc(4).toString('base64'),
+      sampleRate: 16000
+    })
+    expect(snapshot3).toMatchObject({
+      dictationId: 'd6',
+      live: true,
+      committedText: '',
+      partialText: '我想食飯',
+      revision: revAfterFirst + 1
+    })
   })
 })

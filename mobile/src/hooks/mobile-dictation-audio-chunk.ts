@@ -12,6 +12,7 @@ type MobileDictationAudioChunkQueue = {
   pendingAudioBudget: MobileDictationPendingAudioBudget
   shouldReleaseBudget: (dictationId: string) => boolean
   failActiveDictation: (dictationId: string, err: unknown) => void
+  onLiveSnapshot?: (snapshot: unknown) => void
 }
 
 export function enqueueMobileDictationAudioChunk(
@@ -40,6 +41,7 @@ export function enqueueMobileDictationAudioChunk(
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+      queue.onLiveSnapshot?.(response.result)
     })
     .catch((err) => queue.failActiveDictation(dictationId, err))
     .finally(() => {

@@ -203,6 +203,15 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     writeCoalescer.clear()
   }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
 
+  const handleLoadEnd = useCallback(() => {
+    if (isWebReadyRef.current) {
+      return
+    }
+    // Why: the document IIFE may have posted web-ready before Android injected
+    // ReactNativeWebView. Ping once load finishes so a late bridge still unsticks.
+    pendingPingIdRef.current = sendToWebView({ type: 'ping' })
+  }, [sendToWebView])
+
   const handleReload = useCallback(() => {
     clearEngineError()
     webViewRef.current?.reload()
@@ -380,6 +389,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
         textZoom={100}
         onLoadStart={handleLoadStart}
+        onLoadEnd={handleLoadEnd}
         onMessage={handleMessage}
         onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
         onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}

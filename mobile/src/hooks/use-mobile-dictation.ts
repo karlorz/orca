@@ -18,6 +18,7 @@ import {
 import { startMobileDictationDesktopSession } from './mobile-dictation-desktop-start'
 import type {
   DictationStatus,
+  MobileDictationLiveSnapshot,
   UseMobileDictationOptions,
   UseMobileDictationResult
 } from './mobile-dictation-session-state'
@@ -25,7 +26,7 @@ import type {
 export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
-  const { client, enabled, onTranscript, onError } = options
+  const { client, enabled, onTranscript, onLiveTranscript, onError } = options
   const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +34,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const clientRef = useRef(client)
   const enabledRef = useRef(enabled)
   const onTranscriptRef = useRef(onTranscript)
+  const onLiveTranscriptRef = useRef(onLiveTranscript)
   const onErrorRef = useRef(onError)
+  const liveAppliedRef = useRef(false)
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const acceptingChunksRef = useRef(false)
@@ -46,8 +49,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     clientRef.current = client
     enabledRef.current = enabled
     onTranscriptRef.current = onTranscript
+    onLiveTranscriptRef.current = onLiveTranscript
     onErrorRef.current = onError
-  }, [client, enabled, onTranscript, onError])
+  }, [client, enabled, onTranscript, onLiveTranscript, onError])
 
   const reportError = useCallback((err: unknown) => {
     const normalized = err instanceof Error ? err : new Error(String(err))
@@ -97,7 +101,15 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingAudioBudget: pendingAudioBudgetRef.current,
       shouldReleaseBudget: (id: string) =>
         activeIdRef.current === id || finishingIdRef.current === id,
-      failActiveDictation
+      failActiveDictation,
+      onLiveSnapshot: (raw: unknown) => {
+        const snapshot = raw as MobileDictationLiveSnapshot | undefined
+        if (!snapshot || snapshot.live !== true) {
+          return
+        }
+        liveAppliedRef.current = true
+        onLiveTranscriptRef.current?.(snapshot)
+      }
     }
     const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const client = clientRef.current
@@ -118,6 +130,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
     const generation = generationRef.current + 1
     generationRef.current = generation
+    liveAppliedRef.current = false
     setError(null)
     setStatus('starting')
     const permission = await requestMicrophonePermissionsAsync()
@@ -237,9 +250,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
       setStatus('idle')
+      const streamed = liveAppliedRef.current
+      liveAppliedRef.current = false
       if (text) {
         onTranscriptRef.current(text)
-      } else {
+      } else if (!streamed) {
         reportError(new Error('No speech detected.'))
       }
     } catch (err) {

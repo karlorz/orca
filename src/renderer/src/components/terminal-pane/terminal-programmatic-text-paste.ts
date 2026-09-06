@@ -24,13 +24,13 @@ export function handleTerminalProgrammaticTextPaste({
   worktreeId,
   getManager,
   getPaneTransports
-}: HandleTerminalProgrammaticTextPasteArgs): void {
+}: HandleTerminalProgrammaticTextPasteArgs): Promise<void> {
   if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
-    return
+    return Promise.resolve()
   }
   const manager = getManager()
   if (!manager) {
-    return
+    return Promise.resolve()
   }
   const panes = manager.getPanes()
   const pane =
@@ -38,14 +38,14 @@ export function handleTerminalProgrammaticTextPaste({
       ? (panes.find((candidate) => candidate.id === detail.paneId) ?? null)
       : (manager.getActivePane() ?? panes[0])
   if (!pane) {
-    return
+    return Promise.resolve()
   }
   const paneTransports = getPaneTransports()
   const transport = paneTransports.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
   const platform = getShortcutPlatform()
   const connectionId = getConnectionId(worktreeId) ?? null
-  void planTerminalPasteWithYield({
+  return planTerminalPasteWithYield({
     text: detail.text,
     source: 'programmatic',
     target: {

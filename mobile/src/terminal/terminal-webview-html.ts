@@ -35,4 +35,10 @@ export const XTERM_HTML = [
   TERMINAL_HTML_MESSAGE_BRIDGE_AND_DOCUMENT_CLOSE
 ].join('')
 
-export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
+export const XTERM_WEBVIEW_SOURCE = {
+  html: XTERM_HTML,
+  // Why: Android loadData without a base URL uses a null origin; WebView 94
+  // on this tablet then drops ReactNativeWebView.postMessage, so web-ready
+  // never arrives and the watchdog paints "Terminal failed to load".
+  baseUrl: 'https://localhost/'
+}

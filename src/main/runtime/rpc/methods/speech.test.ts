@@ -12,7 +12,13 @@ describe('speech RPC methods', () => {
   it('feeds valid base64 dictation chunks to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      feedMobileDictation: vi.fn().mockReturnValue({ dictationId: 'dict-1' })
+      feedMobileDictation: vi.fn().mockReturnValue({
+        dictationId: 'dict-1',
+        revision: 2,
+        committedText: '你好',
+        partialText: '世界',
+        live: true
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
 
@@ -24,7 +30,16 @@ describe('speech RPC methods', () => {
       })
     )
 
-    expect(response).toMatchObject({ ok: true, result: { dictationId: 'dict-1' } })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        dictationId: 'dict-1',
+        revision: 2,
+        committedText: '你好',
+        partialText: '世界',
+        live: true
+      }
+    })
     expect(runtime.feedMobileDictation).toHaveBeenCalledWith({
       dictationId: 'dict-1',
       audioBase64: 'AAAA',

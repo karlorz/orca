@@ -162,4 +162,12 @@ describe('DictationIndicator', () => {
     expect(screen.getByText('A polished voice visualizer')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('Listening')
   })
+
+  it('hides the transcript row when live insertion leaves partialTranscript empty', () => {
+    storeState.partialTranscript = ''
+    const { container } = render(<DictationIndicator />)
+    expect(screen.getByText('Listening', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+    expect(container.querySelector('p')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Stop dictation' })).toBeTruthy()
+  })
 })

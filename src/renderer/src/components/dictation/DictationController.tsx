@@ -18,8 +18,10 @@ import { useDictationStartStopBindings } from './use-dictation-start-stop-bindin
 
 import {
   canStartVoiceDictation,
-  effectiveSttModel
+  effectiveSttModel,
+  isMacSpeechSelected
 } from '../../../../shared/voice-dictation-selection'
+import { createDictationLiveInserter, type DictationLiveInserter } from './dictation-live-insertion'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -54,6 +56,7 @@ export function DictationController() {
   // not once per press, while the selected mic stays gone.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
+  const liveInserterRef = useRef<DictationLiveInserter>(createDictationLiveInserter(null))
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -91,17 +94,27 @@ export function DictationController() {
       // transcript delivery is renderer IPC. Wait for this session's stopped
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-      const stopAction = resolveDictationStopTranscript({
-        sessionErrored: erroredSessionIdsRef.current.delete(sessionId),
-        receivedFinal: finalTranscriptReceivedRef.current,
-        lastPartial: lastPartialTranscriptRef.current,
-        capturedChunkCount: getCapturedChunkCount()
-      })
-      if (stopAction.type === 'commit') {
-        commitFinalTranscript(stopAction.text)
-      } else if (stopAction.type === 'empty') {
+      const liveTarget = liveInserterRef.current.hasTarget
+      if (!liveTarget) {
+        const stopAction = resolveDictationStopTranscript({
+          sessionErrored: erroredSessionIdsRef.current.delete(sessionId),
+          receivedFinal: finalTranscriptReceivedRef.current,
+          lastPartial: lastPartialTranscriptRef.current,
+          capturedChunkCount: getCapturedChunkCount()
+        })
+        if (stopAction.type === 'commit') {
+          commitFinalTranscript(stopAction.text)
+        } else if (stopAction.type === 'empty') {
+          showNoSpeechDetectedToast()
+        }
+      } else if (
+        !finalTranscriptReceivedRef.current &&
+        !lastPartialTranscriptRef.current.trim() &&
+        getCapturedChunkCount() > 0
+      ) {
         showNoSpeechDetectedToast()
       }
+      liveInserterRef.current = createDictationLiveInserter(null)
       insertionTargetRef.current = null
       finalTranscriptReceivedRef.current = false
       lastPartialTranscriptRef.current = ''
@@ -156,6 +169,9 @@ export function DictationController() {
     dictationRunRef.current = runId
     activeSessionIdRef.current = sessionId
     insertionTargetRef.current = captureInsertionTarget()
+    liveInserterRef.current = isMacSpeechSelected(settings?.voice)
+      ? createDictationLiveInserter(insertionTargetRef.current)
+      : createDictationLiveInserter(null)
     stopRequestedDuringStartRef.current = false
     finalTranscriptReceivedRef.current = false
     lastPartialTranscriptRef.current = ''
@@ -257,6 +273,7 @@ export function DictationController() {
       discardBufferedAudio()
       const message = String(err)
       insertionTargetRef.current = null
+      liveInserterRef.current = createDictationLiveInserter(null)
       intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
       finalTranscriptReceivedRef.current = false
@@ -337,11 +354,23 @@ export function DictationController() {
         return
       }
       lastPartialTranscriptRef.current = data.text
+      if (liveInserterRef.current.hasTarget) {
+        liveInserterRef.current.applyPartial(data.text)
+        setPartialTranscript('')
+        return
+      }
       setPartialTranscript(data.text)
     })
 
     const cleanupFinal = window.api.speech.onFinalTranscript((data) => {
       if (data.sessionId !== activeSessionIdRef.current || !data.text) {
+        return
+      }
+      if (liveInserterRef.current.hasTarget) {
+        liveInserterRef.current.freezeSegment(data.text)
+        finalTranscriptReceivedRef.current = true
+        lastPartialTranscriptRef.current = ''
+        setPartialTranscript('')
         return
       }
       commitFinalTranscript(data.text)

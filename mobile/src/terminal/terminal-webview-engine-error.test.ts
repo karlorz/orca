@@ -161,6 +161,40 @@ describe('TerminalWebView engine errors', () => {
     }
   })
 
+  it('pings the document on load end when web-ready has not arrived', () => {
+    const { renderer } = createTerminalWebViewRenderer()
+    const webView = renderer.root.findByType('WebView')
+    nativeWebViewMethods.postMessage.mockClear()
+    act(() => {
+      webView.props.onLoadEnd({ nativeEvent: {} })
+    })
+    expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
+  })
+
+  it('waits longer on Android before treating silence as a dead document', () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mutablePlatform = Platform as { OS: string }
+    mutablePlatform.OS = 'android'
+    try {
+      const { onEngineError, renderer } = createTerminalWebViewRenderer()
+      act(() => {
+        vi.advanceTimersByTime(15000)
+      })
+      expect(onEngineError).not.toHaveBeenCalled()
+      expect(renderedText(renderer)).not.toContain('Terminal failed to load')
+      act(() => {
+        vi.advanceTimersByTime(15000)
+      })
+      expect(onEngineError).toHaveBeenCalledWith(
+        'Terminal did not initialize - no ready signal from the terminal view'
+      )
+    } finally {
+      mutablePlatform.OS = 'ios'
+      vi.useRealTimers()
+    }
+  })
+
   it('does not fire the watchdog once web-ready has arrived', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})

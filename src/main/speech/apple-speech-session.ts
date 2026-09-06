@@ -34,7 +34,9 @@ export type AppleSpeechSessionOptions = {
   stopFlushTimeoutMs?: number
 }
 
-const DEFAULT_STOP_FLUSH_TIMEOUT_MS = 1500
+// SuperCmd waits 2s after endAudio(); stay slightly longer so SIGTERM
+// does not cut the helper's last isFinal.
+export const DEFAULT_STOP_FLUSH_TIMEOUT_MS = 2500
 
 export class AppleSpeechSession {
   private child: ChildProcess | null = null
@@ -127,7 +129,7 @@ export class AppleSpeechSession {
     if (child) {
       child.stdin?.end()
       const timeoutMs = this.options.stopFlushTimeoutMs ?? DEFAULT_STOP_FLUSH_TIMEOUT_MS
-      if (timeoutMs > 0 && !this.sawFinal) {
+      if (timeoutMs > 0) {
         await this.waitForStopFlush(child, timeoutMs)
       }
       this.closed = true
@@ -190,6 +192,11 @@ export class AppleSpeechSession {
           case 'locale':
             console.log(
               `[apple-speech] resolved locale: ${parsed.locale} (source: ${parsed.source})`
+            )
+            break
+          case 'config':
+            console.log(
+              `[apple-speech] addsPunctuation: ${parsed.addsPunctuation} (source: ${parsed.source})`
             )
             break
           case 'partial': {

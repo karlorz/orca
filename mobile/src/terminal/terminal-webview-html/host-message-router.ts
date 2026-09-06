@@ -3,9 +3,17 @@ import { TERMINAL_REFLOW_JS } from '../terminal-webview-reflow-injected'
 export const TERMINAL_HTML_HOST_MESSAGE_ROUTER = `  ${TERMINAL_REFLOW_JS}
 
   function notify(msg) {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+    var payload = JSON.stringify(msg);
+    var attempts = 0;
+    function send() {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(payload);
+        return;
+      }
+      attempts++;
+      if (attempts < 100) setTimeout(send, 50);
     }
+    send();
   }
 
   function engineErrorText(err) {

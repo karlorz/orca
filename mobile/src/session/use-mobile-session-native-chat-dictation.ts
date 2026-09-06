@@ -1,4 +1,9 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
+import {
+  applyMobileLiveFinish,
+  applyMobileLiveSnapshot,
+  resetMobileLiveSession
+} from './mobile-dictation-live-session'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
@@ -89,10 +94,42 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
+  const liveSessionRef = useRef({
+    revision: { current: 0 },
+    baseline: { current: null as string | null },
+    spoken: { current: '' }
+  }).current
+
   const dictation = useMobileDictation({
     client,
     enabled: canSend,
+    onLiveTranscript: (snapshot) => {
+      applyMobileLiveSnapshot({
+        snapshot,
+        refs: liveSessionRef,
+        showNativeChat: showNativeChatRef.current,
+        liveInputEnabled,
+        insertHandle: dictationRouteContextRef.current?.handle ?? activeHandleRef.current,
+        setChatComposerText: nativeChatController.setChatComposerText,
+        setInput,
+        sendLiveTerminalInput
+      })
+    },
     onTranscript: (text) => {
+      if (
+        applyMobileLiveFinish({
+          text,
+          refs: liveSessionRef,
+          showNativeChat: showNativeChatRef.current,
+          liveInputEnabled,
+          insertHandle: dictationRouteContextRef.current?.handle ?? activeHandleRef.current,
+          setChatComposerText: nativeChatController.setChatComposerText,
+          setInput,
+          sendLiveTerminalInput
+        })
+      ) {
+        return
+      }
       // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
       if (showNativeChatRef.current) {
         nativeChatController.setChatComposerText((current) =>
@@ -141,6 +178,7 @@ export function useMobileSessionNativeChatDictation(
   })
 
   const startDictation = useCallback(() => {
+    resetMobileLiveSession(liveSessionRef)
     const routeContext = activeHandle
       ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
       : null
@@ -155,6 +193,7 @@ export function useMobileSessionNativeChatDictation(
   }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
 
   const cancelDictation = useCallback(() => {
+    resetMobileLiveSession(liveSessionRef)
     dictationRouteContextRef.current = null
     void dictation.cancel()
   }, [dictation])

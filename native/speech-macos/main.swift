@@ -22,6 +22,20 @@ func logDebug(_ msg: String) {
 // Try com.apple.speech.recognition.AppleSpeechRecognition.prefs:
 // DictationIMLocaleIdentifier -> DictationIMNetworkBasedLocaleIdentifier -> DictationIMPreferredLanguageIdentifiers.first
 // Else fallback to Locale.current
+func resolveAddsPunctuation() -> (enabled: Bool, source: String) {
+  let domain = "com.apple.assistant.support" as CFString
+  let key = "Dictation Auto Punctuation Enabled" as CFString
+  if let flag = CFPreferencesCopyAppValue(key, domain) as? Bool {
+    return (flag, "assistant-support")
+  }
+  if let number = CFPreferencesCopyAppValue(key, domain) as? NSNumber {
+    return (number.boolValue, "assistant-support")
+  }
+  // Why: System Settings default is on; fail open to that rather than stripping
+  // punctuation when the undocumented key is missing.
+  return (true, "default-on")
+}
+
 func resolveDictationLocale() -> (locale: Locale, source: String, identifier: String)? {
   let supported = SFSpeechRecognizer.supportedLocales()
 
@@ -104,33 +118,91 @@ guard let resolved = resolveDictationLocale() else {
 // Log locale and source as per protocol:
 // {type: "locale", locale: "<locale>", source: "dictation-prefs" | "system-fallback"}
 emitJson(["type": "locale", "locale": resolved.locale.identifier, "source": resolved.source])
+let punctuation = resolveAddsPunctuation()
+emitJson([
+  "type": "config",
+  "addsPunctuation": punctuation.enabled,
+  "source": punctuation.source
+])
 
 guard let recognizer = SFSpeechRecognizer(locale: resolved.locale), recognizer.isAvailable else {
   emitJson(["type": "error", "error": "apple_speech_locale_unsupported:\(resolved.identifier)"])
   exit(1)
 }
 
+func isCjkScalar(_ scalar: Unicode.Scalar) -> Bool {
+  switch scalar.value {
+  case 0x3040...0x30FF,        // Hiragana + Katakana
+       0x3400...0x4DBF,        // Han extension A
+       0x4E00...0x9FFF,        // Han
+       0xF900...0xFAFF,        // Han compatibility
+       0x20000...0x2FA1F,      // Han extensions B+
+       0xAC00...0xD7AF,        // Hangul syllables
+       0x3000...0x303F,        // CJK punctuation
+       0xFF00...0xFFEF:        // fullwidth forms
+    return true
+  default:
+    return false
+  }
+}
+
+// Join the carried roll prefix with newly recognized text. Latin gets a
+// separating space; CJK boundaries (the Cantonese path) must not.
+func joinWithPrefix(_ prefix: String, _ recognized: String) -> String {
+  if prefix.isEmpty { return recognized }
+  if recognized.isEmpty { return prefix }
+  guard let last = prefix.unicodeScalars.last, let first = recognized.unicodeScalars.first else {
+    return prefix + recognized
+  }
+  if CharacterSet.whitespaces.contains(last) || CharacterSet.whitespaces.contains(first) {
+    return prefix + recognized
+  }
+  if isCjkScalar(last) || isCjkScalar(first) {
+    return prefix + recognized
+  }
+  return prefix + " " + recognized
+}
+
+// Session model:
+// - A dictation run is ONE helper process that stays alive until stdin closes.
+// - An Apple endpoint pause (isFinal) is a SEGMENT boundary: emit `final`,
+//   reset state, re-arm a new recognition request, keep listening.
+// - The 50s rolling re-arm (Apple ~1min server request limit) is invisible:
+//   its isFinal emits nothing; the finalized text is carried as a prefix so
+//   partials keep showing the whole in-progress utterance.
+// - Only stdin EOF (user stop) or a fatal error ends the process.
 class SpeechCoordinator {
   private let recognizer: SFSpeechRecognizer
   private let sampleRate: Double
   private let audioFormat: AVAudioFormat
+  private let addsPunctuation: Bool
 
   private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   private var recognitionTask: SFSpeechRecognitionTask?
-  private var lastDeliveredText = ""
+  // Text finalized by 50s rolls, carried within the current segment.
+  private var currentPrefix = ""
+  // Latest full text (prefix + recognized) for the active segment.
   private var lastPartialText = ""
-  private var emittedFinal = false
   private var requestGeneration = 0
   private var rollingFromGeneration: Int?
   private var rearmTimer: DispatchSourceTimer?
+  private var rollTimeoutTimer: DispatchSourceTimer?
   private var stopFlushTimer: DispatchSourceTimer?
+  // Audio arriving during the roll/pause re-arm seam, replayed after arming.
+  private var pendingAudio: [Data] = []
+  private var pendingAudioBytes = 0
+  // 10 seconds of float32 mono at the handshake rate.
+  private let maxPendingAudioBytes: Int
   private let queue = DispatchQueue(label: "com.stablyai.orca.speech-coordinator")
   private var isStopped = false
+  private var stopCompleted = false
 
-  init(recognizer: SFSpeechRecognizer, sampleRate: Double) {
+  init(recognizer: SFSpeechRecognizer, sampleRate: Double, addsPunctuation: Bool) {
     self.recognizer = recognizer
     self.sampleRate = sampleRate
+    self.addsPunctuation = addsPunctuation
     self.audioFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
+    self.maxPendingAudioBytes = Int(sampleRate) * MemoryLayout<Float>.size * 10
   }
 
   func start() {
@@ -143,98 +215,190 @@ class SpeechCoordinator {
   private func armRequest() {
     guard !isStopped else { return }
 
-    // Cancel old timer if active
     rearmTimer?.cancel()
     rearmTimer = nil
+    rollTimeoutTimer?.cancel()
+    rollTimeoutTimer = nil
 
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
-    if #available(macOS 10.15, *) {
-      if recognizer.supportsOnDeviceRecognition {
-        request.requiresOnDeviceRecognition = false
-      }
+    request.taskHint = .dictation
+    if #available(macOS 13.0, *) {
+      request.addsPunctuation = addsPunctuation
     }
-    self.recognitionRequest = request
+    recognitionRequest = request
 
-    let currentPrefix = lastDeliveredText
+    let prefix = currentPrefix
     requestGeneration += 1
     let generation = requestGeneration
 
-    self.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+    recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
       guard let self = self else { return }
       self.queue.async {
-        if let error = error as? NSError {
-          // If stopped or canceled as part of re-arm, ignore cancellation error
-          if self.isStopped {
-            return
-          }
-          let isCancelled = error.domain == "kAFAssistantErrorDomain" && (error.code == 203 || error.code == 216)
-            || error.domain == "kLSRErrorDomain" && error.code == 201
-          if isCancelled {
-            return
-          }
-          emitJson(["type": "error", "error": error.localizedDescription])
+        if let error = error as NSError? {
+          self.handleRecognitionError(generation: generation, error: error)
           return
         }
-
-        if let result = result {
-          let recognized = result.bestTranscription.formattedString
-          let fullText = currentPrefix.isEmpty ? recognized : (currentPrefix + " " + recognized)
-          if result.isFinal {
-            self.lastDeliveredText = fullText
-            self.lastPartialText = fullText
-            // Why: the 50s re-arm calls endAudio() and must not look like a
-            // user pause. Apple pause/endpoint isFinal ends the listen session.
-            if self.rollingFromGeneration == generation {
-              self.rollingFromGeneration = nil
-              return
-            }
-            self.emittedFinal = true
-            emitJson(["type": "final", "text": fullText])
-            self.finishAndExit()
-          } else if generation == self.requestGeneration {
-            self.lastPartialText = fullText
+        guard let result = result else { return }
+        let recognized = result.bestTranscription.formattedString
+        let fullText = joinWithPrefix(prefix, recognized)
+        if result.isFinal {
+          self.handleFinal(generation: generation, fullText: fullText)
+        } else if generation == self.requestGeneration {
+          self.lastPartialText = fullText
+          if !self.isStopped {
             emitJson(["type": "partial", "text": fullText])
           }
         }
       }
     }
 
-    // Schedule rolling re-arm at 50 seconds (before Apple 60s cloud limit)
+    flushPendingAudio()
+
+    // Schedule rolling re-arm at 50 seconds (before Apple's ~60s cloud limit).
     let timer = DispatchSource.makeTimerSource(queue: queue)
     timer.schedule(deadline: .now() + 50.0)
     timer.setEventHandler { [weak self] in
       self?.rollRequest()
     }
     timer.resume()
-    self.rearmTimer = timer
+    rearmTimer = timer
+  }
+
+  private func handleFinal(generation: Int, fullText: String) {
+    if generation == rollingFromGeneration {
+      // 50s re-arm: not a user pause. Carry the finalized text as the prefix
+      // and keep the same segment going. Nothing is emitted.
+      rollingFromGeneration = nil
+      currentPrefix = fullText
+      lastPartialText = fullText
+      if isStopped {
+        completeStop(with: fullText)
+        return
+      }
+      armRequest()
+      return
+    }
+    if isStopped {
+      completeStop(with: fullText)
+      return
+    }
+    if generation != requestGeneration {
+      // Stale final from a generation the roll timeout already replaced.
+      return
+    }
+    // Genuine endpoint pause: commit the segment, keep listening.
+    if !fullText.isEmpty {
+      emitJson(["type": "final", "text": fullText])
+    }
+    currentPrefix = ""
+    lastPartialText = ""
+    armRequest()
+  }
+
+  private func handleRecognitionError(generation: Int, error: NSError) {
+    if isStopped {
+      if generation == requestGeneration || generation == rollingFromGeneration {
+        completeStop(with: nil)
+      }
+      return
+    }
+    if generation == rollingFromGeneration {
+      // The rolling window ended in an error (e.g. silence): keep the best
+      // known text as the prefix and continue the segment.
+      rollingFromGeneration = nil
+      currentPrefix = lastPartialText
+      armRequest()
+      return
+    }
+    if generation != requestGeneration {
+      return
+    }
+    let isCancelled = (error.domain == "kAFAssistantErrorDomain" && error.code == 216)
+      || (error.domain == "kLSRErrorDomain" && error.code == 201)
+    let isNoSpeech = error.domain == "kAFAssistantErrorDomain" && (error.code == 203 || error.code == 1110)
+    if isCancelled || isNoSpeech {
+      // Silence or a benign request end: commit anything we heard, keep listening.
+      if !lastPartialText.isEmpty {
+        emitJson(["type": "final", "text": lastPartialText])
+      }
+      currentPrefix = ""
+      lastPartialText = ""
+      armRequest()
+      return
+    }
+    emitJson(["type": "error", "error": error.localizedDescription])
+    exit(1)
   }
 
   private func rollRequest() {
-    guard !isStopped else { return }
+    guard !isStopped, recognitionRequest != nil else { return }
     logDebug("Rolling recognition request re-arm")
     rollingFromGeneration = requestGeneration
     recognitionRequest?.endAudio()
-    armRequest()
+    // Buffer audio during the seam; the rolling final's text becomes the prefix.
+    recognitionRequest = nil
+
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + 2.0)
+    timer.setEventHandler { [weak self] in
+      guard let self = self, !self.isStopped, self.rollingFromGeneration != nil else { return }
+      logDebug("Roll final timed out; carrying last partial as prefix")
+      self.rollingFromGeneration = nil
+      self.currentPrefix = self.lastPartialText
+      self.armRequest()
+    }
+    timer.resume()
+    rollTimeoutTimer = timer
   }
 
   func feedAudio(data: Data) {
     queue.async {
-      guard !self.isStopped, let request = self.recognitionRequest else { return }
-      let frameCount = UInt32(data.count / MemoryLayout<Float>.size)
-      guard frameCount > 0,
-            let pcmBuffer = AVAudioPCMBuffer(pcmFormat: self.audioFormat, frameCapacity: frameCount) else {
+      guard !self.isStopped else { return }
+      guard let request = self.recognitionRequest else {
+        self.stashPendingAudio(data)
         return
       }
-      pcmBuffer.frameLength = frameCount
-      data.withUnsafeBytes { raw in
-        if let base = raw.baseAddress?.assumingMemoryBound(to: Float.self),
-           let channel = pcmBuffer.floatChannelData?[0] {
-          channel.initialize(from: base, count: Int(frameCount))
-        }
+      if let buffer = self.makePcmBuffer(from: data) {
+        request.append(buffer)
       }
-      request.append(pcmBuffer)
     }
+  }
+
+  private func stashPendingAudio(_ data: Data) {
+    pendingAudio.append(data)
+    pendingAudioBytes += data.count
+    while pendingAudioBytes > maxPendingAudioBytes, !pendingAudio.isEmpty {
+      let dropped = pendingAudio.removeFirst()
+      pendingAudioBytes -= dropped.count
+    }
+  }
+
+  private func flushPendingAudio() {
+    guard let request = recognitionRequest, !pendingAudio.isEmpty else { return }
+    for data in pendingAudio {
+      if let buffer = makePcmBuffer(from: data) {
+        request.append(buffer)
+      }
+    }
+    pendingAudio.removeAll()
+    pendingAudioBytes = 0
+  }
+
+  private func makePcmBuffer(from data: Data) -> AVAudioPCMBuffer? {
+    let frameCount = UInt32(data.count / MemoryLayout<Float>.size)
+    guard frameCount > 0,
+          let pcmBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: frameCount) else {
+      return nil
+    }
+    pcmBuffer.frameLength = frameCount
+    data.withUnsafeBytes { raw in
+      if let base = raw.baseAddress?.assumingMemoryBound(to: Float.self),
+         let channel = pcmBuffer.floatChannelData?[0] {
+        channel.initialize(from: base, count: Int(frameCount))
+      }
+    }
+    return pcmBuffer
   }
 
   func stop() {
@@ -243,29 +407,33 @@ class SpeechCoordinator {
       self.isStopped = true
       self.rearmTimer?.cancel()
       self.rearmTimer = nil
-      self.recognitionRequest?.endAudio()
-      self.recognitionTask?.finish()
-
-      // Why: Apple emits isFinal asynchronously after endAudio(); exiting here
-      // dropped the last partial and made desktop dictation toast "No speech detected."
+      self.rollTimeoutTimer?.cancel()
+      self.rollTimeoutTimer = nil
+      if let request = self.recognitionRequest {
+        request.endAudio()
+        self.recognitionTask?.finish()
+      }
+      // Why: Apple emits isFinal asynchronously after endAudio(); exiting
+      // immediately dropped the last partial and made desktop dictation toast
+      // "No speech detected." SuperCmd waits 2s for the same flush.
       let timer = DispatchSource.makeTimerSource(queue: self.queue)
-      timer.schedule(deadline: .now() + 1.0)
+      timer.schedule(deadline: .now() + 2.0)
       timer.setEventHandler { [weak self] in
-        guard let self = self else {
-          exit(0)
-        }
-        if !self.emittedFinal {
-          let text = self.lastPartialText.isEmpty ? self.lastDeliveredText : self.lastPartialText
-          if !text.isEmpty {
-            self.emittedFinal = true
-            emitJson(["type": "final", "text": text])
-          }
-        }
-        self.finishAndExit()
+        self?.completeStop(with: nil)
       }
       timer.resume()
       self.stopFlushTimer = timer
     }
+  }
+
+  private func completeStop(with finalText: String?) {
+    guard !stopCompleted else { return }
+    stopCompleted = true
+    let text = (finalText?.isEmpty == false) ? finalText! : lastPartialText
+    if !text.isEmpty {
+      emitJson(["type": "final", "text": text])
+    }
+    finishAndExit()
   }
 
   private func finishAndExit() {
@@ -277,7 +445,11 @@ class SpeechCoordinator {
   }
 }
 
-let coordinator = SpeechCoordinator(recognizer: recognizer, sampleRate: Double(sampleRate))
+let coordinator = SpeechCoordinator(
+  recognizer: recognizer,
+  sampleRate: Double(sampleRate),
+  addsPunctuation: punctuation.enabled
+)
 coordinator.start()
 
 // Background thread to read binary Float32 PCM from stdin

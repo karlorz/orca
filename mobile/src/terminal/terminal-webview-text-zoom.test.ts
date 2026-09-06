@@ -83,9 +83,9 @@ describe('TerminalWebView text zoom', () => {
     const end = terminalWebViewSource.indexOf('/>', start)
     expect(end).toBeGreaterThan(start)
     const webViewProps = terminalWebViewSource.slice(start, end)
-    expect(terminalHtmlModuleSource).toContain(
-      'export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }'
-    )
+    expect(terminalHtmlModuleSource).toContain('export const XTERM_WEBVIEW_SOURCE = {')
+    expect(terminalHtmlModuleSource).toContain('html: XTERM_HTML')
+    expect(terminalHtmlModuleSource).toContain("baseUrl: 'https://localhost/'")
     expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
     expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
   })
