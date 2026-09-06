@@ -13,7 +13,9 @@ export type ModelBusyAction = { modelId: string; type: 'download' | 'select' | '
 type UseVoiceSettingsActionsParams = {
   client: RpcClient | null
   setup: MobileSpeechSetup | null
-  setSetup: (value: MobileSpeechSetup | null | ((prev: MobileSpeechSetup | null) => MobileSpeechSetup | null)) => void
+  setSetup: (
+    value: MobileSpeechSetup | null | ((prev: MobileSpeechSetup | null) => MobileSpeechSetup | null)
+  ) => void
   setError: (error: string | null) => void
   refreshSetup: () => Promise<void>
   setModelDrawerOpen: (open: boolean) => void

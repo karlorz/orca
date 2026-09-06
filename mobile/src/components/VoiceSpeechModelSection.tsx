@@ -46,7 +46,6 @@ export function VoiceSpeechModelSection({
             thumbColor={colors.textPrimary}
           />
         </View>
-
       </View>
 
       <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
