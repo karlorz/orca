@@ -313,6 +313,7 @@ export function MobileNativeChatView({
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
+              windowSize={7}
               // Let link/file taps land while the composer keyboard is up
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
