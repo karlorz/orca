@@ -156,6 +156,12 @@ describe('MobileNativeChatView', () => {
     })
   }
 
+  it('virtualizes the chat FlatList with windowSize 7', async () => {
+    await render()
+    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    expect(list.props.windowSize).toBe(7)
+  })
+
   it('renders the route-reported failure verbatim', async () => {
     await render({ sendErrorMessage: 'Permission reply failed' })
 
