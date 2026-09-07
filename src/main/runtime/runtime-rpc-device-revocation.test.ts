@@ -87,6 +87,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
+      platform: 'linux',
       enableWebSocket: true,
       wsPort: 0
     })
