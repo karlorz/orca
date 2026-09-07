@@ -84,6 +84,25 @@ describe('PetSpeak Replay & Watermark (Phase C)', () => {
     unsub()
   })
 
+  it('omits replay watermark when a recovery subscription opts out', async () => {
+    await savePetSpeakWatermark('host-recovery', { seq: 9, epoch: 'epoch-old' })
+    const mockClient = {
+      getState: () => 'connected',
+      subscribe: vi.fn(() => () => {}),
+      sendRequest: vi.fn().mockResolvedValue({})
+    } as unknown as RpcClient
+
+    const unsub = subscribeToPetSpeak(mockClient, { resumeMissed: false }, 'host-recovery')
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(mockClient.subscribe).toHaveBeenCalledWith(
+      'pet.speak.subscribe',
+      expect.not.objectContaining({ last_seen_seq: expect.anything(), epoch: expect.anything() }),
+      expect.any(Function)
+    )
+    unsub()
+  })
+
   it('updates watermark on every received pet.speak event', async () => {
     let streamCallback: ((data: unknown) => void) | null = null
     const mockClient = {

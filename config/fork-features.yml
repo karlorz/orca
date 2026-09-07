@@ -66,6 +66,14 @@ features:
       - mobile/src/pet-speak
       - mobile/packages/expo-pet-speech
     wiki: projects/grok-desktop-pet/work/2026-08-25-pet-voice-fgs-hysteresis
+  - id: pet-speech-session-recovery
+    title: Ready-gated mobile pet speech with connection cleanup and bounded resubscribe
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - src/main/runtime
+    wiki: projects/grok-desktop-pet/work/2026-09-08-mobile-speech-session-recovery
   - id: mobile-all-usage-providers
     title: Mobile Settings Account usage switches including opt-in Grok
     kind: product

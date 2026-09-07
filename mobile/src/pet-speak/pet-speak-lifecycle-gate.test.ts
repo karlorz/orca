@@ -16,12 +16,13 @@ vi.mock('expo-speech', () => ({
 
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 
 const openHostLogicalClientMock = vi.fn()
 const loadHostCatalogMock = vi.fn()
+const subscribeToPetSpeakMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@react-native-async-storage/async-storage', () => {
   const store = new Map<string, string>()
@@ -72,7 +73,7 @@ vi.mock('../transport/connection-revival-triggers', () => ({
 }))
 
 vi.mock('./pet-speak-subscription', () => ({
-  subscribeToPetSpeak: vi.fn(() => vi.fn())
+  subscribeToPetSpeak: subscribeToPetSpeakMock
 }))
 
 import { RpcClientProvider } from '../transport/client-context'
@@ -147,6 +148,7 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    subscribeToPetSpeakMock.mockImplementation(() => vi.fn())
     prefsListeners = new Set()
     prefsState = {
       enabled: false,
@@ -159,6 +161,10 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
     }
     acquireVoiceSessionMock = vi.fn(async () => ({ held: true }))
     releaseVoiceSessionMock = vi.fn(async () => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   function updatePrefs(next: Partial<PetSpeechPreferences>) {
@@ -252,6 +258,67 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
     })
 
     expect(releaseVoiceSessionMock).toHaveBeenCalled()
+
+    root.unmount()
+  })
+
+  it('disabling cancels a pending speech retry, unsubscribes, reports status, and releases', async () => {
+    vi.useFakeTimers()
+    prefsState.enabled = true
+    const clientA = makeFakeClient('connected')
+    openHostLogicalClientMock.mockReturnValue(clientA)
+    loadHostCatalogMock.mockResolvedValue([makeProfile('host-1', 'Host 1')])
+
+    let lifecycleOptions: { onTerminal?: (reason: 'end' | 'error') => void } = {}
+    const subscriptionCleanup = vi.fn()
+    subscribeToPetSpeakMock.mockImplementation(
+      (_client: unknown, options?: { onTerminal?: (reason: 'end' | 'error') => void }) => {
+        lifecycleOptions = options ?? {}
+        return subscriptionCleanup
+      }
+    )
+
+    let root: { unmount: () => void }
+    await act(async () => {
+      root = create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            isAndroid: true,
+            loadPreferences: () => Promise.resolve(prefsState),
+            subscribePreferences: (listener) => {
+              prefsListeners.add(listener)
+              return () => prefsListeners.delete(listener)
+            },
+            acquireVoiceSession: acquireVoiceSessionMock,
+            releaseVoiceSession: releaseVoiceSessionMock
+          })
+        )
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      lifecycleOptions.onTerminal?.('error')
+      await Promise.resolve()
+    })
+    expect(subscriptionCleanup).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      updatePrefs({ enabled: false })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(60_000)
+      await Promise.resolve()
+    })
+
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(1)
+    expect(releaseVoiceSessionMock).toHaveBeenCalledTimes(1)
+    expect(clientA.sendRequest).toHaveBeenCalledWith('pet.speak.status', expect.any(Object))
 
     root.unmount()
   })

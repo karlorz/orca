@@ -10,6 +10,9 @@ import {
 
 export interface SubscribeToPetSpeakOptions extends PetSpeakHandlerOptions {
   status?: PetSpeechDeviceStatusPayload
+  onReady?: () => void
+  onTerminal?: (reason: 'end' | 'error') => void
+  resumeMissed?: boolean
 }
 
 export function subscribeToPetSpeak(
@@ -47,6 +50,8 @@ export function subscribeToPetSpeak(
   })
 
   let subscriptionId: string | null = null
+  let readyReported = false
+  let terminalReported = false
 
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
@@ -62,31 +67,25 @@ export function subscribeToPetSpeak(
       seq: 0,
       epoch: ''
     }
-    let status: PetSpeechDeviceStatusPayload | undefined = options?.status
-
     try {
       watermark = await loadPetSpeakWatermark(targetHostId)
     } catch {}
-
-    if (!status) {
-      try {
-        status = await buildPetSpeechDeviceStatus()
-      } catch {}
-    }
 
     if (disposed) {
       return
     }
 
-    const params: Record<string, unknown> = {
-      ...(watermark.stored && watermark.seq > 0 && watermark.epoch
+    const params: Record<string, unknown> =
+      options?.resumeMissed !== false && watermark.stored && watermark.seq > 0 && watermark.epoch
         ? { last_seen_seq: watermark.seq, epoch: watermark.epoch }
-        : {}),
-      ...(status ? { status } : {})
-    }
+        : {}
 
     unsubscribeStream = client.subscribe('pet.speak.subscribe', params, (data: unknown) => {
-      const event = data as PetSpeakPayload | PetSpeakSubscribeResult | { type: 'end' }
+      const event = data as
+        | PetSpeakPayload
+        | PetSpeakSubscribeResult
+        | { type: 'end' }
+        | { type: 'error'; message?: string }
       if (!event || typeof event !== 'object') {
         return
       }
@@ -98,13 +97,27 @@ export function subscribeToPetSpeak(
             unsubscribeServer(subscriptionId)
           }
           unsubscribeStream?.()
+        } else if (!readyReported) {
+          readyReported = true
+          options?.onReady?.()
+          void Promise.resolve(options?.status)
+            .then((status) => status ?? buildPetSpeechDeviceStatus())
+            .then((freshStatus) => {
+              if (client.getState() === 'connected' && !disposed) {
+                client.sendRequest('pet.speak.status', freshStatus).catch(() => {})
+              }
+            })
+            .catch(() => {})
         }
         return
       }
 
-      if (event.type === 'end') {
+      if (event.type === 'end' || event.type === 'error') {
         if (disposed) {
           unsubscribeStream?.()
+        } else if (!terminalReported) {
+          terminalReported = true
+          options?.onTerminal?.(event.type)
         }
         return
       }

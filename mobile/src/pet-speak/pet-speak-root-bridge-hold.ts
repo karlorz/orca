@@ -7,6 +7,7 @@ import {
 } from './pet-voice-hold-decision'
 
 export type PetSpeakSubscriptionEntry = { client: RpcClient; unsub: () => void }
+export type PetSpeakSessionState = 'connecting' | 'ready' | 'reconnecting' | 'disabled'
 
 export type PetVoiceHoldRuntime = {
   isAndroid: boolean
@@ -15,6 +16,7 @@ export type PetVoiceHoldRuntime = {
   graceTimer: { current: ReturnType<typeof setTimeout> | null }
   currentSubs: Map<string, PetSpeakSubscriptionEntry>
   hostStates: Map<string, ConnectionState>
+  speechStates: Map<string, PetSpeakSessionState>
   ensureNotificationPermissions: () => Promise<boolean>
   acquireVoiceSession: () => Promise<{ held: boolean }>
   releaseVoiceSession: () => Promise<void>
@@ -42,23 +44,33 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
     return
   }
 
-  const connectedCount = runtime.currentSubs.size
-  let reconnectingCount = 0
-  let stillTryingCount = 0
-  for (const state of runtime.hostStates.values()) {
+  let connectedCount = 0
+  const reconnectingHosts = new Set<string>()
+  const stillTryingHosts = new Set<string>()
+  for (const [hostId, state] of runtime.speechStates) {
+    if (state === 'ready') {
+      connectedCount++
+    } else if (state === 'reconnecting') {
+      reconnectingHosts.add(hostId)
+      stillTryingHosts.add(hostId)
+    } else if (state === 'connecting') {
+      stillTryingHosts.add(hostId)
+    }
+  }
+  for (const [hostId, state] of runtime.hostStates) {
     if (state === 'reconnecting') {
-      reconnectingCount++
+      reconnectingHosts.add(hostId)
     }
     if (state === 'reconnecting' || state === 'connecting' || state === 'handshaking') {
-      stillTryingCount++
+      stillTryingHosts.add(hostId)
     }
   }
 
   const action = decidePetVoiceHoldAction({
     state: runtime.holdState.current,
     connectedCount,
-    reconnectingCount,
-    stillTryingCount,
+    reconnectingCount: reconnectingHosts.size,
+    stillTryingCount: stillTryingHosts.size,
     now
   })
 
@@ -95,6 +107,7 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
               : null
           }
           if (res.held) {
+            void runtime.updateVoiceSessionNotification(action.notificationText)
             evaluatePetVoiceHold(runtime)
           }
         })

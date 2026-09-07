@@ -5,7 +5,6 @@ import { loadHostCatalog } from '../transport/host-store'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { useRpcClientContext } from '../transport/client-context'
-import { subscribeToPetSpeak } from './pet-speak-subscription'
 import type { PetSpeakCaption, PetSpeakHandlerOptions } from './pet-speak-types'
 import { getPetSpeechNativeAdapter } from './pet-speak-native-adapter'
 import { ensureNotificationPermissions as defaultEnsureNotificationPermissions } from '../notifications/notification-permissions'
@@ -37,8 +36,14 @@ import {
   type PetSpeakSubscriptionEntry,
   type PetVoiceHoldRuntime
 } from './pet-speak-root-bridge-hold'
+import {
+  createPetSpeakSubscriptionRecovery,
+  PET_SPEAK_RETRY_DELAYS_MS
+} from './pet-speak-subscription-recovery'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
+
+export { PET_SPEAK_RETRY_DELAYS_MS }
 
 export interface PetSpeakBridgeOptions {
   loadCatalog?: () => Promise<HostCatalogEntry[]>
@@ -93,6 +98,8 @@ export function usePetSpeakRootBridge(
   }, [loadPreferencesFn, subscribePreferencesFn])
 
   const isEnabled = preferences !== null ? preferences.enabled : false
+  const isEnabledRef = useRef(isEnabled)
+  isEnabledRef.current = isEnabled
   const captionsEnabled = preferences?.captionsEnabled === true
 
   const isAndroid = options?.isAndroid ?? Platform.OS === 'android'
@@ -176,31 +183,52 @@ export function usePetSpeakRootBridge(
 
   const subscriptionsRef = useRef<Map<string, PetSpeakSubscriptionEntry>>(new Map())
   const hostStatesRef = useRef<Map<string, ConnectionState>>(new Map())
+  const speechStatesRef = useRef<PetVoiceHoldRuntime['speechStates']>(new Map())
+  const retryTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const retryAttemptsRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     const currentSubs = subscriptionsRef.current
     const hostStates = hostStatesRef.current
+    const speechStates = speechStatesRef.current
+    const retryTimers = retryTimersRef.current
+    const retryAttempts = retryAttemptsRef.current
     const holdRuntime: PetVoiceHoldRuntime = {
       isAndroid,
-      isDisposed: () => isDisposedRef.current,
+      isDisposed: () => isDisposedRef.current || !isEnabledRef.current,
       holdState: holdStateRef,
       graceTimer: graceTimerRef,
       currentSubs,
       hostStates,
+      speechStates,
       ensureNotificationPermissions: ensureNotificationPermissionsFn,
       acquireVoiceSession: acquireVoiceSessionFn,
       releaseVoiceSession: releaseVoiceSessionFn,
       updateVoiceSessionNotification: updateVoiceSessionNotificationFn
     }
 
+    const recovery = createPetSpeakSubscriptionRecovery({
+      currentSubs,
+      speechStates,
+      retryTimers,
+      retryAttempts,
+      handlerOptions: effectiveHandlerOptions,
+      isDisposed: () => isDisposedRef.current,
+      isEnabled: () => isEnabledRef.current,
+      evaluateHold: () => evaluatePetVoiceHold(holdRuntime)
+    })
+
     if (!isEnabled) {
       clearPetVoiceGraceTimer(graceTimerRef)
+      recovery.cancelAllRetries()
       for (const sub of currentSubs.values()) {
         sub.unsub()
       }
       currentSubs.clear()
-      if (holdStateRef.current.isSessionHeld) {
-        holdStateRef.current = idlePetVoiceHoldState()
+      speechStates.clear()
+      const wasHeld = holdStateRef.current.isSessionHeld
+      holdStateRef.current = idlePetVoiceHoldState()
+      if (wasHeld) {
         void releaseVoiceSessionFn()
       }
       for (const entry of clients) {
@@ -228,8 +256,8 @@ export function usePetSpeakRootBridge(
             currentSubs.get(entry.hostId)?.client !== entry.client
           ) {
             currentSubs.get(entry.hostId)?.unsub()
-            const unsub = subscribeToPetSpeak(entry.client, effectiveHandlerOptions, entry.hostId)
-            currentSubs.set(entry.hostId, { client: entry.client, unsub })
+            currentSubs.delete(entry.hostId)
+            recovery.startSubscription(entry)
             subscriptionChanged = true
           }
         } else {
@@ -239,6 +267,13 @@ export function usePetSpeakRootBridge(
             currentSubs.delete(entry.hostId)
             subscriptionChanged = true
           }
+          recovery.cancelRetry(entry.hostId)
+          speechStates.set(
+            entry.hostId,
+            state === 'reconnecting' || state === 'connecting' || state === 'handshaking'
+              ? 'reconnecting'
+              : 'disabled'
+          )
         }
         if (previous !== state || subscriptionChanged) {
           evaluatePetVoiceHold(holdRuntime)
@@ -256,12 +291,18 @@ export function usePetSpeakRootBridge(
       if (!activeHostIds.has(hostId)) {
         sub.unsub()
         currentSubs.delete(hostId)
+        recovery.cancelRetry(hostId)
+        retryAttempts.delete(hostId)
+        speechStates.delete(hostId)
         removedAny = true
       }
     }
     for (const hostId of Array.from(hostStates.keys())) {
       if (!activeHostIds.has(hostId)) {
         hostStates.delete(hostId)
+        recovery.cancelRetry(hostId)
+        retryAttempts.delete(hostId)
+        speechStates.delete(hostId)
         removedAny = true
       }
     }
@@ -289,11 +330,17 @@ export function usePetSpeakRootBridge(
   useEffect(() => {
     return () => {
       clearPetVoiceGraceTimer(graceTimerRef)
+      for (const timer of retryTimersRef.current.values()) {
+        clearTimeout(timer)
+      }
+      retryTimersRef.current.clear()
+      retryAttemptsRef.current.clear()
       for (const sub of subscriptionsRef.current.values()) {
         sub.unsub()
       }
       subscriptionsRef.current.clear()
       hostStatesRef.current.clear()
+      speechStatesRef.current.clear()
       if (holdStateRef.current.isSessionHeld) {
         holdStateRef.current = idlePetVoiceHoldState()
         void releaseVoiceSessionFn()

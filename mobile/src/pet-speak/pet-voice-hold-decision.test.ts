@@ -180,6 +180,33 @@ describe('decidePetVoiceHoldAction', () => {
     })
   })
 
+  it('acquires a reconnecting session while transport is connected but speech is not ready', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: false,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: null
+    }
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 1,
+      stillTryingCount: 1,
+      now: 5000
+    })
+
+    expect(action).toEqual({
+      type: 'acquire',
+      notificationText: 'Orca Pet — Reconnecting...',
+      nextState: {
+        isSessionHeld: false,
+        isAcquiring: true,
+        reconnectingSince: 5000,
+        lastNotificationText: null
+      }
+    })
+  })
+
   it('releases immediately when 0 connected and 0 reconnecting (e.g. disconnected or auth-failed)', () => {
     const state: PetVoiceHoldState = {
       isSessionHeld: true,

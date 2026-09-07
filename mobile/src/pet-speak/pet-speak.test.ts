@@ -454,6 +454,41 @@ describe('PetSpeakHandler', () => {
 })
 
 describe('subscribeToPetSpeak', () => {
+  it('reports ready and terminal stream state without treating cleanup as failure', async () => {
+    let streamCallback: ((data: unknown) => void) | null = null
+    const unsubscribeStream = vi.fn()
+    const mockClient = {
+      subscribe: vi.fn((_method: string, _params: unknown, cb: (data: unknown) => void) => {
+        streamCallback = cb
+        return unsubscribeStream
+      }),
+      sendRequest: vi.fn(async () => ({ ok: true })),
+      getState: vi.fn(() => 'connected')
+    } as unknown as RpcClient
+    const onReady = vi.fn()
+    const onTerminal = vi.fn()
+
+    const unsubscribe = subscribeToPetSpeak(mockClient, { onReady, onTerminal })
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockClient.subscribe).toHaveBeenCalledWith(
+      'pet.speak.subscribe',
+      expect.not.objectContaining({ status: expect.anything() }),
+      expect.any(Function)
+    )
+
+    streamCallback!({ type: 'ready', subscriptionId: 'sub-lifecycle-1' })
+    expect(onReady).toHaveBeenCalledTimes(1)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockClient.sendRequest).toHaveBeenCalledWith('pet.speak.status', expect.any(Object))
+
+    streamCallback!({ type: 'error', message: 'Connection interrupted' })
+    expect(onTerminal).toHaveBeenCalledWith('error')
+
+    unsubscribe()
+    streamCallback!({ type: 'end' })
+    expect(onTerminal).toHaveBeenCalledTimes(1)
+  })
+
   it('subscribes to pet.speak.subscribe RPC and routes events to handler', async () => {
     let streamCallback: ((data: unknown) => void) | null = null
     const mockClient = {

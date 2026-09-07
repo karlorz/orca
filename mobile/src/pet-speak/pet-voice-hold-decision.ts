@@ -84,6 +84,18 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
   }
 
   // connectedCount === 0
+  if (activeTryingCount > 0 && !state.isSessionHeld && !state.isAcquiring) {
+    return {
+      type: 'acquire',
+      notificationText: PET_VOICE_RECONNECTING_TEXT,
+      nextState: {
+        ...state,
+        isAcquiring: true,
+        reconnectingSince: state.reconnectingSince ?? now
+      }
+    }
+  }
+
   if (activeTryingCount > 0 && state.isSessionHeld) {
     const reconnectingSince = state.reconnectingSince ?? now
     const elapsed = now - reconnectingSince

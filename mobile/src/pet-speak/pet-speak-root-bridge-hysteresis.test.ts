@@ -22,6 +22,7 @@ import type { RpcClient } from '../transport/rpc-client'
 
 const openHostLogicalClientMock = vi.fn()
 const loadHostCatalogMock = vi.fn()
+const subscribeToPetSpeakMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@react-native-async-storage/async-storage', () => {
   const store = new Map<string, string>()
@@ -98,11 +99,11 @@ vi.mock('../transport/connection-revival-triggers', () => ({
 }))
 
 vi.mock('./pet-speak-subscription', () => ({
-  subscribeToPetSpeak: vi.fn(() => vi.fn())
+  subscribeToPetSpeak: subscribeToPetSpeakMock
 }))
 
 import { RpcClientProvider } from '../transport/client-context'
-import { PetSpeakRootBridge } from './pet-speak-root-bridge'
+import { PET_SPEAK_RETRY_DELAYS_MS, PetSpeakRootBridge } from './pet-speak-root-bridge'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
@@ -170,11 +171,117 @@ describe('PetSpeakRootBridge reconnect hysteresis', () => {
   beforeEach(() => {
     openHostLogicalClientMock.mockReset()
     loadHostCatalogMock.mockReset()
+    subscribeToPetSpeakMock.mockReset()
+    subscribeToPetSpeakMock.mockImplementation(
+      (_client: unknown, options?: { onReady?: () => void }) => {
+        options?.onReady?.()
+        return vi.fn()
+      }
+    )
     vi.useFakeTimers()
   })
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('waits for stream readiness and schedules only one bounded resubscribe', async () => {
+    const clientA = makeFakeClient('connected')
+    openHostLogicalClientMock.mockReturnValue(clientA)
+    loadHostCatalogMock.mockResolvedValue([hostCatalogEntry(HOST_A)])
+
+    const lifecycleOptions: Array<{
+      onReady?: () => void
+      onTerminal?: (reason: 'end' | 'error') => void
+      resumeMissed?: boolean
+    }> = []
+    const subscriptionCleanups: Array<ReturnType<typeof vi.fn>> = []
+    subscribeToPetSpeakMock.mockImplementation(
+      (
+        _client: unknown,
+        options?: {
+          onReady?: () => void
+          onTerminal?: (reason: 'end' | 'error') => void
+          resumeMissed?: boolean
+        }
+      ) => {
+        lifecycleOptions.push(options ?? {})
+        const cleanup = vi.fn()
+        subscriptionCleanups.push(cleanup)
+        return cleanup
+      }
+    )
+
+    const ensurePermissionsMock = vi.fn().mockResolvedValue(true)
+    const acquireSessionMock = vi.fn().mockResolvedValue({ held: true })
+    const releaseSessionMock = vi.fn().mockResolvedValue(undefined)
+    const updateNotificationMock = vi.fn().mockResolvedValue(undefined)
+
+    await act(async () => {
+      create(
+        createElement(
+          RpcClientProvider,
+          null,
+          createElement(PetSpeakRootBridge, {
+            isAndroid: true,
+            ensureNotificationPermissions: ensurePermissionsMock,
+            acquireVoiceSession: acquireSessionMock,
+            releaseVoiceSession: releaseSessionMock,
+            updateVoiceSessionNotification: updateNotificationMock
+          })
+        )
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(1)
+    expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+    expect(updateNotificationMock).not.toHaveBeenCalledWith('Pet voice connected')
+
+    await act(async () => {
+      lifecycleOptions[0]?.onReady?.()
+      await Promise.resolve()
+    })
+    expect(updateNotificationMock).toHaveBeenCalledWith('Pet voice connected')
+
+    await act(async () => {
+      lifecycleOptions[0]?.onTerminal?.('end')
+      lifecycleOptions[0]?.onTerminal?.('error')
+      await Promise.resolve()
+    })
+    expect(subscriptionCleanups[0]).toHaveBeenCalledTimes(1)
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(1)
+    expect(updateNotificationMock).toHaveBeenCalledWith('Orca Pet — Reconnecting...')
+
+    await act(async () => {
+      vi.advanceTimersByTime(999)
+      await Promise.resolve()
+    })
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+    })
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(2)
+    expect(lifecycleOptions[1]?.resumeMissed).toBe(false)
+
+    for (const delay of PET_SPEAK_RETRY_DELAYS_MS.slice(1)) {
+      await act(async () => {
+        lifecycleOptions.at(-1)?.onTerminal?.('error')
+        vi.advanceTimersByTime(delay)
+        await Promise.resolve()
+      })
+    }
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(6)
+
+    await act(async () => {
+      lifecycleOptions.at(-1)?.onTerminal?.('error')
+      vi.advanceTimersByTime(60_000)
+      await Promise.resolve()
+    })
+    expect(subscribeToPetSpeakMock).toHaveBeenCalledTimes(6)
   })
 
   it('does not release voice session on reconnecting blip and updates notification to Reconnecting...', async () => {
