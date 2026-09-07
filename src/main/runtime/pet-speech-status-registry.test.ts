@@ -159,6 +159,7 @@ describe('PetSpeechDeviceRegistry', () => {
     )
 
     registry.cleanupConnection('conn-1')
+    registry.cleanupConnection('conn-1')
 
     const dev1 = registry.getStatus('uuid-1')
     const dev2 = registry.getStatus('uuid-2')

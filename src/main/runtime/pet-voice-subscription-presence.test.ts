@@ -168,6 +168,10 @@ describe('PetVoiceSubscriptionTracker', () => {
     expect(tracker.activeCount).toBe(0)
     expect(voiceTransitions).toEqual([1, 2, 1, 0])
 
+    runtime.cleanupSubscriptionsForConnection('conn-1')
+    expect(tracker.activeCount).toBe(0)
+    expect(voiceTransitions).toEqual([1, 2, 1, 0])
+
     await Promise.all([done1, done2])
   })
 

@@ -11,7 +11,10 @@ import {
   connectWs,
   nextWsMessage,
   waitForWsClose,
-  authenticateMobileWs
+  authenticateMobileWs,
+  authenticateMobileWsSession,
+  createEncryptedWsResponseReader,
+  sendEncryptedWsRequest
 } from './runtime-rpc-mobile-ws-test-harness'
 
 vi.mock('../git/worktree', () => {
@@ -73,6 +76,69 @@ describe('OrcaRuntimeRpcServer', () => {
           server['mobileSocketWiring']?.channelCount === 0 &&
           server['mobileSocketWiring']?.connectionCount === 0
       )
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('marks only the closing WebSocket pet speech devices disconnected', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'mobile-test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const registry = runtime.getPetSpeechDeviceRegistry()
+      const responses = createEncryptedWsResponseReader(session)
+      sendEncryptedWsRequest(session, {
+        id: 'pet-status',
+        method: 'pet.speak.status',
+        params: {
+          installUuid: 'closing-device',
+          modelName: 'Closing device',
+          enabled: true,
+          availability: 'available'
+        }
+      })
+      await expect(responses.next('pet-status')).resolves.toMatchObject({
+        result: { acknowledged: true }
+      })
+      responses.dispose()
+      const connectionId = registry.getStatus('closing-device')?.connectionId
+      expect(connectionId).toBeTruthy()
+      registry.reportStatus(
+        {
+          installUuid: 'other-device',
+          modelName: 'Other device',
+          enabled: true,
+          availability: 'available'
+        },
+        'other-connection'
+      )
+
+      session.ws.close()
+      await waitForWsClose(session.ws)
+      await waitFor(() => server.getMobileSocketWiring()?.connectionCount === 0)
+
+      expect(registry.getStatus('closing-device')?.connected).toBe(false)
+      expect(registry.getStatus('closing-device')?.connectionId).toBe(connectionId)
+      expect(registry.getStatus('other-device')?.connected).toBe(true)
     } finally {
       await server.stop()
     }
