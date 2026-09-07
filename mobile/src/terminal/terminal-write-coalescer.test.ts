@@ -16,6 +16,10 @@ function createDeliverySink() {
 }
 
 describe('terminal write coalescer', () => {
+  it('pins TERMINAL_WRITE_MAX_PENDING_UNITS to 512 KiB UTF-16 units', () => {
+    expect(TERMINAL_WRITE_MAX_PENDING_UNITS).toBe(512 * 1024)
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })
