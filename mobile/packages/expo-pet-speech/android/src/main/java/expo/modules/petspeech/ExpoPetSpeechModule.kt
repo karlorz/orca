@@ -234,7 +234,7 @@ class ExpoPetSpeechModule : Module() {
                     val defaultEngine = tts.defaultEngine ?: ""
                     android.util.Log.i(
                         "PetSpeechDebug",
-                        "speakAsync eventId=$validEventId requestedVoiceName=$voiceName appliedVoiceName=${decision.effectiveVoiceName} setVoiceResult=$setVoiceResult locale=${targetLocale.toLanguageTag()} engine=$defaultEngine rate=$rate networkVoice=${decision.networkRequired} filePath=$tempFilePath durationMs=-1 teardown=reset-stop-release"
+                        "speakAsync eventId=$validEventId requestedVoiceName=$voiceName appliedVoiceName=${decision.effectiveVoiceName} setVoiceResult=$setVoiceResult locale=${targetLocale.toLanguageTag()} engine=$defaultEngine rate=$rate networkVoice=${decision.networkRequired} filePath=$tempFilePath durationMs=-1 teardown=release"
                     )
 
                     if (!decision.shouldProceed) {

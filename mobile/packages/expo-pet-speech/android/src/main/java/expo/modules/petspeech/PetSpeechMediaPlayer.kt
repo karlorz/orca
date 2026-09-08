@@ -10,7 +10,11 @@ class PetSpeechMediaPlayer : PetSpeechAudioPlayer {
 
     override val implementationName: String = PetSpeechPlayerKind.MEDIA_PLAYER.identifier
 
-    private var mediaPlayer: MediaPlayer? = null
+    private val playerLifecycle = PetSpeechPlayerLifecycle<MediaPlayer> { player ->
+        try {
+            player.release()
+        } catch (_: Exception) {}
+    }
 
     override fun play(
         context: Context,
@@ -23,7 +27,7 @@ class PetSpeechMediaPlayer : PetSpeechAudioPlayer {
     ) {
         try {
             stopAndRelease()
-            mediaPlayer = MediaPlayer().apply {
+            playerLifecycle.current = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -62,20 +66,11 @@ class PetSpeechMediaPlayer : PetSpeechAudioPlayer {
 
     override fun setVolume(volume: Float) {
         try {
-            mediaPlayer?.setVolume(volume, volume)
+            playerLifecycle.current?.setVolume(volume, volume)
         } catch (_: Exception) {}
     }
 
     override fun stopAndRelease() {
-        try {
-            mediaPlayer?.reset()
-        } catch (_: Exception) {}
-        try {
-            mediaPlayer?.stop()
-        } catch (_: Exception) {}
-        try {
-            mediaPlayer?.release()
-        } catch (_: Exception) {}
-        mediaPlayer = null
+        playerLifecycle.releaseCurrent()
     }
 }
