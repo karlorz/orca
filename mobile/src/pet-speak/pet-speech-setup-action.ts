@@ -1,5 +1,9 @@
 import { normalizePetLanguage, type CanonicalLanguage } from './pet-language-normalizer'
-import type { PetSpeechVoice } from './pet-speak-native-adapter'
+
+type PetSpeechVoiceLike = {
+  language?: string
+  locale?: string
+}
 
 export const GOOGLE_TTS_MARKET_URL = 'market://details?id=com.google.android.tts'
 export const GOOGLE_TTS_HTTPS_URL =
@@ -52,7 +56,7 @@ export function resolvePetSpeechSetupAction({
 }
 
 export function petSpeechVoiceMatchesLanguage(
-  voice: PetSpeechVoice,
+  voice: PetSpeechVoiceLike,
   canonicalLang: CanonicalLanguage
 ): boolean {
   if (voice.language && voice.language === canonicalLang) {
@@ -63,7 +67,7 @@ export function petSpeechVoiceMatchesLanguage(
 }
 
 export function countMatchingPetSpeechVoices(
-  voices: PetSpeechVoice[],
+  voices: PetSpeechVoiceLike[],
   canonicalLang: CanonicalLanguage
 ): number {
   let count = 0
