@@ -6,6 +6,7 @@ import {
   type PetSpeakTerminalOutcome
 } from './pet-speak-adapters'
 import { getExpoPetSpeechModule, type PetSpeechVoice } from './pet-speak-native-adapter'
+import { petSpeechVoiceMatchesLanguage } from './pet-speech-setup-action'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
 import type { PreparedPetSpeakEventResult } from './pet-speak-types'
 import { PetSpeakHandler } from './pet-speak'
@@ -55,13 +56,9 @@ export function validatePetSpeechVoice(
   persistedVoiceName: string | undefined,
   availableVoices: PetSpeechVoice[]
 ): VoiceValidationResult {
-  const sameLangVoices = availableVoices.filter((v) => {
-    if (v.language && v.language === canonicalLang) {
-      return true
-    }
-    const langFromLocale = normalizePetLanguage(v.locale)
-    return langFromLocale === canonicalLang
-  })
+  const sameLangVoices = availableVoices.filter((v) =>
+    petSpeechVoiceMatchesLanguage(v, canonicalLang)
+  )
 
   if (sameLangVoices.length === 0) {
     return {

@@ -172,5 +172,13 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: spacing.xs,
     paddingHorizontal: spacing.xs
+  },
+  setupHelperText: {
+    fontSize: typography.metaSize,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    textAlign: 'center'
   }
 })

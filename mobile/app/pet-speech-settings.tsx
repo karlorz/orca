@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  AppState,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  View
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Play, Captions } from 'lucide-react-native'
@@ -28,6 +38,12 @@ import {
   getAvailablePetSpeechVoices,
   executeTestVoiceAsync
 } from '../src/pet-speak/pet-speech-service'
+import {
+  countMatchingPetSpeechVoices,
+  petSpeechVoiceMatchesLanguage,
+  resolvePetSpeechSetupAction,
+  openPetSpeechSetupAction
+} from '../src/pet-speak/pet-speech-setup-action'
 import type { PetSpeechVoice } from '../src/pet-speak/pet-speak-native-adapter'
 
 const SPEEDS = [0.8, 1, 1.2, 1.5, 2] as const
@@ -79,15 +95,27 @@ export default function PetSpeechSettingsScreen() {
 
   useEffect(() => {
     let active = true
-    if (prefs?.enabled) {
-      void getAvailablePetSpeechVoices().then((v) => {
-        if (active) {
-          setVoices(v)
-        }
-      })
+    const refreshVoices = () => {
+      if (prefs?.enabled) {
+        void getAvailablePetSpeechVoices().then((v) => {
+          if (active) {
+            setVoices(v)
+          }
+        })
+      }
     }
+
+    refreshVoices()
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        refreshVoices()
+      }
+    })
+
     return () => {
       active = false
+      subscription.remove()
     }
   }, [prefs?.enabled])
 
@@ -153,8 +181,17 @@ export default function PetSpeechSettingsScreen() {
   const captionsEnabled = prefs?.captionsEnabled ?? false
   const activeRate = prefs?.rate ?? 1
 
+  const matchingVoiceCount = countMatchingPetSpeechVoices(voices, selectedLanguageTab)
+  const setupAction = resolvePetSpeechSetupAction({
+    platform: Platform.OS,
+    matchingVoiceCount,
+    catalogVoiceCount: voices.length
+  })
+
   // Same-language only: never show zh-TW/zh-HK under zh-CN (or vice versa).
-  const voicesForActiveLang = voices.filter((v) => v.language === selectedLanguageTab)
+  const voicesForActiveLang = voices.filter((v) =>
+    petSpeechVoiceMatchesLanguage(v, selectedLanguageTab)
+  )
 
   const selectedVoiceForLang = prefs?.voiceByLanguage[selectedLanguageTab]
 
@@ -237,6 +274,30 @@ export default function PetSpeechSettingsScreen() {
               </Text>
               {testVoiceOutcome ? (
                 <Text style={styles.testOutcomeText}>Outcome: {testVoiceOutcome}</Text>
+              ) : null}
+
+              {setupAction.kind !== 'none' ? (
+                <>
+                  <View style={styles.separator} />
+                  <Pressable
+                    style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
+                    onPress={() => {
+                      void openPetSpeechSetupAction(setupAction, Linking).catch(() => {})
+                    }}
+                  >
+                    <Play size={16} color={colors.textPrimary} />
+                    <Text style={styles.testVoiceLabel}>
+                      {setupAction.kind === 'install-engine'
+                        ? 'Install Google speech engine'
+                        : 'Open text-to-speech settings'}
+                    </Text>
+                  </Pressable>
+                  <Text style={styles.setupHelperText}>
+                    Engine and voice data are installed by the system, not Orca. Airplane mode
+                    blocks Google Play. After installing, pick the engine and language in system
+                    text-to-speech settings.
+                  </Text>
+                </>
               ) : null}
 
               <View style={styles.separator} />

@@ -32,6 +32,14 @@ describe('expo-pet-speech module source manifest and autolinking configuration',
     expect(content).toContain('android:stopWithTask="false"')
   })
 
+  it('declares queries block with TTS_SERVICE intent action in package source', () => {
+    expect(existsSync(moduleManifestPath)).toBe(true)
+    const content = readFileSync(moduleManifestPath, 'utf8')
+
+    expect(content).toContain('<queries>')
+    expect(content).toContain('<action android:name="android.intent.action.TTS_SERVICE" />')
+  })
+
   it('registers Android module correctly in expo-module.config.json', () => {
     expect(existsSync(expoModuleConfigPath)).toBe(true)
     const config = JSON.parse(readFileSync(expoModuleConfigPath, 'utf8'))
