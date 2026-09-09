@@ -16,32 +16,19 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from './relay-revoke-outbox'
-import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
+import { pairingAuthorizationForContext } from './relay-pairing-authorization'
+
+export { pairingAuthorizationForContext } from './relay-pairing-authorization'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus) => void
-}
-
-export function pairingAuthorizationForContext(
-  context: MobilePairingConnectionContext,
-  relayHostId: string
-): DeviceCredentialInstallAuthorization | null {
-  if (context.transport.transport === 'direct') {
-    return { mode: 'authenticated-direct', directAuthId: context.connectionId }
-  }
-  if (context.transport.relayHostId !== relayHostId) {
-    throw new Error('stale_relay_connection')
-  }
-  return context.transport.credentialKind === 'invite'
-    ? { mode: 'relay-basis', basisConnId: context.transport.basisConnId }
-    : null
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
 // Why: a broker that died without arming a retry (sleep past token expiry,
@@ -71,7 +58,7 @@ export class DesktopRelayService {
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
-    const resolvePreferredRegion = createRelayRegionPreferenceReader(options)
+    const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: (opt) => readRelayAuthContext(options.authConfig, options.userDataPath, opt),
       hasDemand: ({ identity }) =>
@@ -92,7 +79,8 @@ export class DesktopRelayService {
           // is dead; the coordinator fences that broker and remints through a
           // force-refreshed session within seconds, not a drain-retry loop.
           onBadOuterCredential: () => this.coordinator.reconcileAfterBadOuterCredential(),
-          resolvePreferredRegion,
+          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
+          onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)

@@ -136,8 +136,6 @@ describe('Electron runtime package contract', () => {
     expect(scripts['build:linux']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:keyboard-layout-macos')
-    expect(scripts['build:mac']).toContain('pnpm run build:speech-macos')
-    expect(scripts['build:mac:release']).toContain('build:speech-macos')
     expect(scripts['build:release']).toContain('pnpm run build:native')
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
@@ -581,6 +579,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
+    const goldenCommand = packageScripts['test:e2e:terminal-rendering-golden']
+    expect(goldenCommand).toContain('--project electron-headless')
+    expect(goldenCommand).toContain('--project electron-headful')
     expect(packageScripts['test:e2e:windows-fresh-startup-golden']).toContain(
       'golden-windows-fresh-startup.spec.ts'
     )

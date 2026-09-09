@@ -109,6 +109,18 @@ function setPlistValue(plistPath, key, value) {
   execFileSync('/usr/bin/plutil', ['-replace', key, '-string', value, plistPath])
 }
 
+function buildOptionalMacHelper(scriptName, args, failureMessage) {
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(repoRoot, 'config', 'scripts', scriptName), ...args],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(`[orca-dev] ${failureMessage}: ${error?.message ?? error}`)
+  }
+}
+
 function sanitizeMacAppBundleName(value) {
   return (
     Array.from(value, (char) => {
@@ -320,59 +332,30 @@ function prepareMacDevElectronApp() {
   // embedded/code-sign identifier — macOS keys notification records to the
   // signing identifier. Non-fatal: without swiftc the permission card falls
   // back to delivery-probe heuristics.
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-notification-status-macos.mjs'),
-        '--bundle-id',
-        bundleId,
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-notification-status')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
-    )
-  }
+  buildOptionalMacHelper(
+    'build-notification-status-macos.mjs',
+    [
+      '--bundle-id',
+      bundleId,
+      '--single-arch',
+      '--output',
+      path.join(appPath, 'Contents', 'MacOS', 'orca-notification-status')
+    ],
+    'notification-status helper build failed (permission card falls back to probes)'
+  )
 
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
-    )
-  }
+  buildOptionalMacHelper(
+    'build-keyboard-layout-macos.mjs',
+    ['--single-arch', '--output', path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')],
+    'keyboard-layout helper build failed (shifted Option composition stays conservative)'
+  )
 
   // Why: local dev uses the native Apple Speech helper for Mac dictation without packaging.
-  try {
-    execFileSync(
-      process.execPath,
-      [
-        path.join(repoRoot, 'config', 'scripts', 'build-speech-macos.mjs'),
-        '--single-arch',
-        '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-speech')
-      ],
-      { stdio: 'inherit' }
-    )
-  } catch (error) {
-    console.warn(
-      `[orca-dev] speech helper build failed (Mac speech dictation unavailable in dev): ${error?.message ?? error}`
-    )
-  }
+  buildOptionalMacHelper(
+    'build-speech-macos.mjs',
+    ['--single-arch', '--output', path.join(appPath, 'Contents', 'MacOS', 'orca-speech')],
+    'speech helper build failed (Mac speech dictation unavailable in dev)'
+  )
 
   // Why: the plist edits above (and the copy itself) break the bundle's
   // ad-hoc seal, and macOS refuses Notification Center registration for
@@ -635,7 +618,7 @@ if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
 // Why: automation launches this app while someone is working; announce that the
 // window will come up without taking the foreground so the mode is visible in logs.
 if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
-  console.error('[orca-dev] Background launch: window shows without stealing focus')
+  console.error('[orca-dev] Background launch: window stays off screen; automate through CDP')
 }
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {

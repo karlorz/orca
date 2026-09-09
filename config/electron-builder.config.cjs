@@ -19,6 +19,7 @@ const {
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -435,9 +436,17 @@ module.exports = {
     // name is absent. An unsigned build that still claimed 'SignPath Foundation'
     // would therefore reject its own channel's next build — and its way back to
     // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    ...(isWinDevChannel || isForkVoiceBuild
-      ? { verifyUpdateCodeSignature: false }
-      : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
+    // Why a sign hook on a build that does not sign: it is the only moment
+    // electron-builder exposes the NSIS uninstaller (built in its own makensis
+    // pass, embedded, then deleted). The hook signs nothing — it relays the file
+    // to and from the CI SignPath request, and is inert when the relay env vars are
+    // unset, so local, dev, and fork builds are unaffected. publisherName stays on
+    // the signed stable channel only.
+    signtoolOptions: {
+      sign: signWindowsUninstallerViaSignPath,
+      ...(isWinDevChannel || isForkVoiceBuild ? {} : { publisherName: 'SignPath Foundation' })
+    },
+    ...(isWinDevChannel || isForkVoiceBuild ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),
@@ -501,7 +510,7 @@ module.exports = {
       NSLocalNetworkUsageDescription:
         'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
-      NSSpeechRecognitionUsageDescription: "Orca uses speech recognition for dictation.",
+      NSSpeechRecognitionUsageDescription: 'Orca uses speech recognition for dictation.',
       NSAudioCaptureUsageDescription:
         'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
       NSBonjourServices: ['_http._tcp', '_https._tcp'],

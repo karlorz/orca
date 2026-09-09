@@ -166,9 +166,9 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
             <Text style={styles.text} numberOfLines={3} testID="pet-speak-caption-text">
               {spokenSegments.length === 1 && !spokenSegments[0]?.highlighted
                 ? props.caption.text
-                : spokenSegments.map((segment, index) => (
+                : spokenSegments.map((segment) => (
                     <Text
-                      key={`${index}-${segment.highlighted ? 'h' : 'n'}`}
+                      key={`${segment.start}-${segment.highlighted ? 'h' : 'n'}`}
                       style={segment.highlighted ? [styles.text, styles.highlighted] : styles.text}
                       testID={segment.highlighted ? 'pet-speak-caption-karaoke' : undefined}
                     >

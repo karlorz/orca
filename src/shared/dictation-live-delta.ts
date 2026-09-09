@@ -98,11 +98,7 @@ function graphemeBoundariesUpTo(text: string, limit: number): number[] {
         boundaries.push(index)
       }
     }
-    if (isRegionalIndicator(codePoint)) {
-      openRegionalIndicatorPair = !openRegionalIndicatorPair
-    } else {
-      openRegionalIndicatorPair = false
-    }
+    openRegionalIndicatorPair = isRegionalIndicator(codePoint) ? !openRegionalIndicatorPair : false
     previousCodePoint = codePoint
     index += width
   }

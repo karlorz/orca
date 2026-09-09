@@ -155,7 +155,6 @@ export class RelayOriginPool {
     if (!this.isCurrent() || origin !== this.activeOrigin) {
       return
     }
-    origin.markDraining()
     this.drainingOrigins.add(origin)
     this.options.onStatus('draining')
     if (!this.rotationPromise && !this.drainRetry.pending) {
@@ -258,7 +257,11 @@ export class RelayOriginPool {
       return
     }
     const random = this.options.random ?? Math.random
-    const delay = relayRenewalDelayMs(origin.controlLeaseExpiresAt, now, random)
+    const renewalDelay = relayRenewalDelayMs(origin.controlLeaseExpiresAt, now, random)
+    // Why: malformed short leases can fall entirely inside the normal safety margin;
+    // keep their retry positive and before expiry instead of spinning at zero delay.
+    const shortLeaseFloor = Math.min(5_000, Math.max(1, Math.floor(remainingMs / 2)))
+    const delay = Math.max(renewalDelay, shortLeaseFloor)
     this.rotationTimer = setTimeout(() => void this.rebindActiveControl(origin), delay)
   }
 
