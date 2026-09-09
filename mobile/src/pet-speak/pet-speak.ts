@@ -171,13 +171,11 @@ export class PetSpeakHandler {
   }
 
   private notifyCaption(caption: PetSpeakCaption | null): void {
-    if (caption) {
-      this.activeCaptionEventId = caption.eventId
-      this.onCaption?.(caption)
-    } else if (this.activeCaptionEventId !== null) {
-      this.activeCaptionEventId = null
-      this.onCaption?.(null)
+    if (!caption && this.activeCaptionEventId === null) {
+      return
     }
+    this.activeCaptionEventId = caption?.eventId ?? null
+    this.onCaption?.(caption)
   }
 
   private captionFor(eventId: string, text: string, originalText?: string): PetSpeakCaption {
