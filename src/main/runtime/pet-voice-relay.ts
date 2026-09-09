@@ -51,6 +51,7 @@ export class PetVoiceRelay {
   private subscriberSocket: Socket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private currentReconnectDelayMs: number
+  private oneShotTail: Promise<void> = Promise.resolve()
   private destroyed = false
   private readBuffer = ''
 
@@ -115,6 +116,12 @@ export class PetVoiceRelay {
   }
 
   private async sendOneShotMessage(message: Record<string, unknown>): Promise<void> {
+    const queued = this.oneShotTail.then(() => this.writeOneShotMessage(message))
+    this.oneShotTail = queued.catch(() => {})
+    await queued
+  }
+
+  private async writeOneShotMessage(message: Record<string, unknown>): Promise<void> {
     if (this.destroyed) {
       return
     }
@@ -282,6 +289,14 @@ export class PetVoiceRelay {
       kind: 'speak-complete',
       event_id: eventId,
       outcome,
+      speak: false
+    })
+  }
+
+  async sendSpeakAccepted(eventId: string): Promise<void> {
+    await this.sendOneShotMessage({
+      kind: 'speak-accepted',
+      event_id: eventId,
       speak: false
     })
   }

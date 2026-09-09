@@ -50,6 +50,7 @@ export class PetSpeakHandler {
   private readonly seenSeqs: ReturnType<typeof createSeenGuard>
   private readonly inFlightPromises = new Map<string, Promise<void>>()
   private readonly maxQueueCapacity: number
+  private readonly onAccepted?: (eventId: string) => Promise<void>
   private readonly onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
   private readonly onCaption?: (caption: PetSpeakCaption | null) => void
   private queue: QueuedItem[] = []
@@ -73,6 +74,7 @@ export class PetSpeakHandler {
     this.seenEventIds = createSeenGuard(maxSeen)
     this.seenSeqs = createSeenGuard(maxSeen)
     this.maxQueueCapacity = options?.maxQueueCapacity ?? 16
+    this.onAccepted = options?.onAccepted
     this.onComplete = options?.onComplete
     this.onCaption = options?.onCaption
   }
@@ -130,6 +132,7 @@ export class PetSpeakHandler {
         reject,
         isCancelled: false
       })
+      void this.onAccepted?.(eventId).catch(() => {})
       void this.processQueue()
     })
 
@@ -152,8 +155,8 @@ export class PetSpeakHandler {
       this.activeItem = item
 
       if (this.disposed || item.isCancelled) {
-        if (item.event.event_id && this.onComplete) {
-          await this.onComplete(item.event.event_id, 'cancelled').catch(() => {})
+        if (item.event.event_id) {
+          await this.onComplete?.(item.event.event_id, 'cancelled').catch(() => {})
         }
         item.resolve()
         this.activeItem = null

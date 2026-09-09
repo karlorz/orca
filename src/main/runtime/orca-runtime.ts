@@ -14,6 +14,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
   private petSpeakCompleteHandler:
     | ((eventId: string, outcome: PetSpeakOutcome) => Promise<{ completed: boolean }>)
     | null = null
+  private petSpeakAcceptedHandler: ((eventId: string) => Promise<{ accepted: boolean }>) | null =
+    null
   private petVoiceRelay: PetVoiceRelay | null = null
   private readonly petSpeechDeviceRegistry = new PetSpeechDeviceRegistry()
 
@@ -51,6 +53,12 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
     this.petSpeakCompleteHandler = handler
   }
 
+  setPetSpeakAcceptedHandler(
+    handler: ((eventId: string) => Promise<{ accepted: boolean }>) | null
+  ): void {
+    this.petSpeakAcceptedHandler = handler
+  }
+
   setPetVoiceRelay(relay: PetVoiceRelay | null): void {
     this.petVoiceRelay = relay
   }
@@ -63,6 +71,13 @@ class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
       return await this.petSpeakCompleteHandler(eventId, outcome)
     }
     return { completed: false }
+  }
+
+  async handlePetSpeakAccepted(eventId: string): Promise<{ accepted: boolean }> {
+    if (this.petSpeakAcceptedHandler) {
+      return await this.petSpeakAcceptedHandler(eventId)
+    }
+    return { accepted: false }
   }
 
   getPetSpeechDeviceRegistry(): PetSpeechDeviceRegistry {

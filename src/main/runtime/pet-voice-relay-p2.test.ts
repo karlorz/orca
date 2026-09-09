@@ -244,6 +244,102 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
+  it('forwards speak-accepted to pet socket as one exact non-replayable JSON line', async () => {
+    const sentLines: string[] = []
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        const sock = createMockPetSocket((data) => sentLines.push(data))
+        if (onConnect) {
+          process.nextTick(onConnect)
+        }
+        return sock as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({
+      connectFn: mockConnect,
+      petSocketPath: '/tmp/test-pet.sock'
+    })
+
+    await relay.sendSpeakAccepted('ev-accepted-1')
+
+    expect(sentLines.filter((line) => line.includes('speak-accepted'))).toEqual([
+      `${JSON.stringify({
+        kind: 'speak-accepted',
+        event_id: 'ev-accepted-1',
+        speak: false
+      })}\n`
+    ])
+    relay.destroy()
+  })
+
+  it('serializes accepted before complete when the accepted socket connection is delayed', async () => {
+    const sentLines: string[] = []
+    let releaseAcceptedConnect: (() => void) | undefined
+    let connectCount = 0
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        connectCount++
+        const sock = createMockPetSocket((data) => sentLines.push(data))
+        if (connectCount === 2) {
+          sock.connecting = true
+          sock.writable = false
+          releaseAcceptedConnect = () => {
+            sock.connecting = false
+            sock.writable = true
+            onConnect?.()
+          }
+        } else {
+          if (onConnect) {
+            process.nextTick(onConnect)
+          }
+        }
+        return sock as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({
+      connectFn: mockConnect,
+      petSocketPath: '/tmp/test-pet.sock'
+    })
+
+    const accepted = relay.sendSpeakAccepted('ev-ordered')
+    const completed = relay.sendSpeakComplete('ev-ordered', 'spoken')
+    await new Promise((resolve) => process.nextTick(resolve))
+    expect(connectCount).toBe(2)
+
+    releaseAcceptedConnect?.()
+    await Promise.all([accepted, completed])
+    expect(
+      sentLines
+        .map((line) => JSON.parse(line) as { kind: string })
+        .map((row) => row.kind)
+        .filter((kind) => kind !== 'subscribe')
+    ).toEqual(['speak-accepted', 'speak-complete'])
+    relay.destroy()
+  })
+
+  it('registers pet.speak.accepted RPC and delegates exact validated event identity', async () => {
+    const acceptedMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.accepted') as RpcMethod
+    expect(acceptedMethod).toBeDefined()
+    expect(acceptedMethod.params?.parse({ event_id: 'ev-accepted-2' })).toEqual({
+      event_id: 'ev-accepted-2'
+    })
+    expect(() => acceptedMethod.params?.parse({ event_id: '' })).toThrow()
+    expect(() => acceptedMethod.params?.parse({ event_id: '語'.repeat(129) })).toThrow()
+
+    const runtime = new OrcaRuntimeService()
+    expect(await runtime.handlePetSpeakAccepted('ev-unhandled')).toEqual({ accepted: false })
+    const handler = vi.fn().mockResolvedValue({ accepted: true })
+    runtime.setPetSpeakAcceptedHandler(handler)
+
+    const result = await acceptedMethod.handler({ event_id: 'ev-accepted-2' }, {
+      runtime,
+      connectionId: 'conn-mobile'
+    } as unknown as RpcContext)
+    expect(result).toEqual({ accepted: true })
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler).toHaveBeenCalledWith('ev-accepted-2')
+  })
+
   it('registers pet.speak.complete RPC method and validates params schema', async () => {
     const completeMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.complete') as RpcMethod
     expect(completeMethod).toBeDefined()

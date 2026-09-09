@@ -147,6 +147,10 @@ export class RuntimeRpcState {
     if (this.petVoiceRelay) {
       const relay = this.petVoiceRelay
       this.runtime.setPetVoiceRelay?.(relay)
+      this.runtime.setPetSpeakAcceptedHandler?.(async (eventId) => {
+        await relay.sendSpeakAccepted(eventId)
+        return { accepted: true }
+      })
       this.runtime.setPetSpeakCompleteHandler?.(async (eventId, outcome) => {
         await relay.sendSpeakComplete(eventId, outcome)
         return { completed: true }

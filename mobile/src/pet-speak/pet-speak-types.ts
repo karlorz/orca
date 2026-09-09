@@ -45,6 +45,7 @@ export interface PetSpeakHandlerOptions {
   prepareEvent?: PetSpeakEventPreparer
   maxSeenEvents?: number
   maxQueueCapacity?: number
+  onAccepted?: (eventId: string) => Promise<void>
   onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
   onCaption?: (caption: PetSpeakCaption | null) => void
 }

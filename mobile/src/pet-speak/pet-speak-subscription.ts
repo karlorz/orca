@@ -25,6 +25,16 @@ export function subscribeToPetSpeak(
 
   const handler = new PetSpeakHandler({
     ...options,
+    onAccepted: async (eventId) => {
+      void options?.onAccepted?.(eventId).catch(() => {})
+      if (client.getState() === 'connected') {
+        await client
+          .sendRequest('pet.speak.accepted', {
+            event_id: eventId
+          })
+          .catch(() => {})
+      }
+    },
     onComplete: async (eventId, outcome) => {
       if (options?.onComplete) {
         await options.onComplete(eventId, outcome).catch(() => {})

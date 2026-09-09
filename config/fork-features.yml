@@ -211,3 +211,14 @@ features:
       - config/scripts/fork-own-relay-followup.mjs
       - .github/workflows/fork-sync-main.yml
     wiki: projects/orca/work/2026-08-31-fork-sync-own-relay-followup
+
+  - id: pet-speech-acceptance-handshake
+    title: Correlated mobile speech admission before progress-aware completion timeout
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - src/main/runtime/pet-voice-relay.ts
+      - src/main/runtime/rpc/methods/pet-speak.ts
+      - src/main/runtime/runtime-rpc
+    wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout

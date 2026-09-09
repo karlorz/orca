@@ -33,11 +33,17 @@ const PetSpeakUnsubscribeParams = z.object({
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
 
+const PetSpeakEventId = z
+  .string()
+  .min(1, 'Missing event_id')
+  .refine((id) => Array.from(id).length <= 128, 'event_id exceeds 128 Unicode characters')
+
+const PetSpeakAcceptedParams = z.object({
+  event_id: PetSpeakEventId
+})
+
 const PetSpeakCompleteParams = z.object({
-  event_id: z
-    .string()
-    .min(1, 'Missing event_id')
-    .refine((id) => Array.from(id).length <= 128, 'event_id exceeds 128 Unicode characters'),
+  event_id: PetSpeakEventId,
   outcome: z.enum(['spoken', 'voice-unavailable', 'playback-error', 'cancelled'])
 })
 
@@ -133,6 +139,16 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
         connectionId
       )
       return { unsubscribed }
+    }
+  }),
+  defineMethod({
+    name: 'pet.speak.accepted',
+    params: PetSpeakAcceptedParams,
+    handler: async (params, { runtime }) => {
+      if (runtime.handlePetSpeakAccepted) {
+        return await runtime.handlePetSpeakAccepted(params.event_id)
+      }
+      return { accepted: false }
     }
   }),
   defineMethod({

@@ -176,6 +176,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'notifications.unsubscribe',
   'pet.speak.subscribe',
   'pet.speak.unsubscribe',
+  'pet.speak.accepted',
   'pet.speak.complete',
   'pet.speak.status',
   'pairing.getEndpoints',

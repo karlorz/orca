@@ -99,6 +99,35 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     }
   })
 
+  it('reports queue admission exactly once before truthful completion and ignores send failure', async () => {
+    const lifecycle: string[] = []
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      onAccepted: async (eventId) => {
+        lifecycle.push(`accepted:${eventId}`)
+        throw new Error('desktop temporarily disconnected')
+      },
+      onComplete: async (eventId, outcome) => {
+        lifecycle.push(`completed:${eventId}:${outcome}`)
+      }
+    })
+
+    const event = {
+      type: 'pet.speak' as const,
+      text: 'Admission ordering',
+      lang: 'yue-HK',
+      event_id: 'ev-admission-order'
+    }
+    await Promise.all([handler.handleEvent(event), handler.handleEvent(event)])
+
+    expect(lifecycle).toEqual([
+      'accepted:ev-admission-order',
+      'completed:ev-admission-order:spoken'
+    ])
+    expect(mockTts.spoken.map((item) => item.text)).toEqual(['Admission ordering'])
+  })
+
   it('serializes rapid accepted events in FIFO order with max concurrent 1', async () => {
     mockTts.speakDelayMs = 25
     const handler = new PetSpeakHandler({
@@ -346,10 +375,19 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
 
     await new Promise((r) => setTimeout(r, 50))
 
+    expect(mockClient.sendRequest).toHaveBeenCalledWith('pet.speak.accepted', {
+      event_id: 'ev-rpc-1'
+    })
+
     expect(mockClient.sendRequest).toHaveBeenCalledWith('pet.speak.complete', {
       event_id: 'ev-rpc-1',
       outcome: 'spoken'
     })
+    const calls = vi.mocked(mockClient.sendRequest).mock.calls
+    const acceptedIndex = calls.findIndex(([method]) => method === 'pet.speak.accepted')
+    const completedIndex = calls.findIndex(([method]) => method === 'pet.speak.complete')
+    expect(acceptedIndex).toBeGreaterThanOrEqual(0)
+    expect(completedIndex).toBeGreaterThan(acceptedIndex)
 
     unsub()
   })
