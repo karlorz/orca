@@ -363,6 +363,8 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const pane = await openAgentPane()
     await driveToLiveIdle(client, pane)
 
+    // Two plain terminals, neither in a Run: `send --to <handle>` must still land durably. It
+    // files under the unbound Run, so a reopen never reads it as pre-Runs state (#19542 regression).
     const stdinBeforeScan = pane.agent.readStdin()
     const refusal = await sendMail(client, pane.handle, { subject: 'Unbound direct mail' }).then(
       () => undefined,
@@ -397,6 +399,7 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     // The ledger only proves anything once the push window has fully elapsed.
     await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
     expect(readMailbox(userDataDir, pane.handle)).toEqual([])
+
     expect(pane.agent.readStdin()).toBe(stdinBeforeScan)
   })
 
