@@ -5,7 +5,7 @@ import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
+import { getDefaultWorkspaceSession } from './default-workspace-session'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
@@ -297,6 +297,7 @@ export function getDefaultUIState(): PersistedUIState {
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     dismissedUpdateVersion: null,
+    dismissedUnexpectedSignoutVersion: null,
     lastUpdateCheckAt: null,
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
@@ -324,21 +325,4 @@ export function getDefaultUIState(): PersistedUIState {
   }
 }
 
-export function getDefaultWorkspaceSession(): WorkspaceSessionState {
-  return {
-    activeRepoId: null,
-    activeWorktreeId: null,
-    activeTabId: null,
-    tabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    openFilesByWorktree: {},
-    markdownFrontmatterVisible: {},
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    activeBrowserTabIdByWorktree: {},
-    activeFileIdByWorktree: {},
-    activeTabTypeByWorktree: {},
-    browserUrlHistory: [],
-    defaultTerminalTabsAppliedByWorktreeId: {}
-  }
-}
+export { getDefaultWorkspaceSession } from './default-workspace-session'
