@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './index'
-import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from '../core'
+import {
+  eraseRpcMethods,
+  isStreamingMethod,
+  type RpcContext,
+  type RpcStreamingMethod
+} from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
 
 describe('pet.speak.subscribe RPC with replay and emit failure', () => {
   it('accepts optional last_seen_seq and epoch params', () => {
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
     expect(subscribeMethod).toBeDefined()
@@ -23,7 +28,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
   })
 
   it('emits replayed events newer than last_seen_seq then live events when epoch matches', async () => {
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
 
@@ -91,7 +96,7 @@ describe('pet.speak.subscribe RPC with replay and emit failure', () => {
   })
 
   it('on emit failure (dead connection), releases tracker subscription and marks event as voice-unavailable', async () => {
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
 

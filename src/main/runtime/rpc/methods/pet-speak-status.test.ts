@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './index'
-import type { RpcMethod } from '../core'
+import { eraseRpcMethods, type RpcMethod } from '../core'
 import type { PetSpeechDeviceStatus } from '../../pet-speech-status-registry'
 
 describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
   it('registers pet.speak.status RPC method in ALL_RPC_METHODS', () => {
-    const statusMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.status') as RpcMethod
+    const statusMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
+      (m) => m.name === 'pet.speak.status'
+    ) as RpcMethod
     expect(statusMethod).toBeDefined()
   })
 
   it('validates pet.speak.status params and delegates to runtime.handlePetSpeechStatus', async () => {
-    const statusMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.status') as RpcMethod
+    const statusMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
+      (m) => m.name === 'pet.speak.status'
+    ) as RpcMethod
     const mockRuntime = {
       handlePetSpeechStatus: vi.fn().mockResolvedValue({ acknowledged: true })
     }
@@ -38,7 +42,9 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
   })
 
   it('accepts disabled/unavailable payload with minimal fields', async () => {
-    const statusMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.status') as RpcMethod
+    const statusMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
+      (m) => m.name === 'pet.speak.status'
+    ) as RpcMethod
     const mockRuntime = {
       handlePetSpeechStatus: vi.fn().mockResolvedValue({ acknowledged: true })
     }
@@ -68,7 +74,9 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
   })
 
   it('rejects pet.speak.status if installUuid or modelName is missing', () => {
-    const statusMethod = ALL_RPC_METHODS.find((m) => m.name === 'pet.speak.status') as RpcMethod
+    const statusMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
+      (m) => m.name === 'pet.speak.status'
+    ) as RpcMethod
     expect(statusMethod).toBeDefined()
 
     const statusParams = statusMethod.params
@@ -94,9 +102,9 @@ describe('pet.speak.status and pet.speak.subscribe status RPC', () => {
   })
 
   it('allows pet.speak.subscribe ready message to accept additive status field optionally', () => {
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
       (m) => m.name === 'pet.speak.subscribe'
-    ) as RpcMethod
+    )!
     expect(subscribeMethod).toBeDefined()
     const subscribeParams = subscribeMethod.params
     expect(subscribeParams).toBeTruthy()

@@ -4,7 +4,13 @@ import { PetVoiceRelay } from './pet-voice-relay'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { ALL_RPC_METHODS } from './rpc/methods'
-import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from './rpc/core'
+import {
+  eraseRpcMethods,
+  isStreamingMethod,
+  type RpcContext,
+  type RpcMethod,
+  type RpcStreamingMethod
+} from './rpc/core'
 import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,6 +21,8 @@ type ReadyCollector = {
   getSubscriptionId(): string
   onEvent(event: unknown): void
 }
+
+const PET_SPEAK_RPC = eraseRpcMethods(ALL_RPC_METHODS)
 
 function createReadyCollector(): ReadyCollector {
   let subId = ''
@@ -123,13 +131,13 @@ describe('PetVoiceSubscriptionTracker', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setPetVoiceSubscriptionTracker(tracker)
 
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = PET_SPEAK_RPC.find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
 
-    const unsubscribeMethod = ALL_RPC_METHODS.find(
+    const unsubscribeMethod = PET_SPEAK_RPC.find(
       (m) => m.name === 'pet.speak.unsubscribe' && !isStreamingMethod(m)
-    )!
+    ) as RpcMethod
 
     const collector1 = createReadyCollector()
     const done1 = subscribeMethod.handler(
@@ -155,8 +163,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     // Explicit unsubscribe on sub1
     const unsubResult = await unsubscribeMethod.handler(
       { subscriptionId: collector1.getSubscriptionId() },
-      { runtime, connectionId: 'conn-1' } as RpcContext,
-      () => {}
+      { runtime, connectionId: 'conn-1' } as RpcContext
     )
     expect(unsubResult).toEqual({ unsubscribed: true })
 
@@ -186,13 +193,13 @@ describe('PetVoiceSubscriptionTracker', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setPetVoiceSubscriptionTracker(tracker)
 
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = PET_SPEAK_RPC.find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
 
-    const unsubscribeMethod = ALL_RPC_METHODS.find(
+    const unsubscribeMethod = PET_SPEAK_RPC.find(
       (m) => m.name === 'pet.speak.unsubscribe' && !isStreamingMethod(m)
-    )!
+    ) as RpcMethod
 
     // 1. Connection A subscribes
     const collectorA = createReadyCollector()
@@ -207,8 +214,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     // 2. Connection B attempts to unsubscribe subIdA -> fails / returns false, tracker unchanged
     const strangerResult = await unsubscribeMethod.handler(
       { subscriptionId: collectorA.getSubscriptionId() },
-      { runtime, connectionId: 'conn-B' } as RpcContext,
-      () => {}
+      { runtime, connectionId: 'conn-B' } as RpcContext
     )
     expect(strangerResult).toEqual({ unsubscribed: false })
     expect(tracker.activeCount).toBe(1)
@@ -216,8 +222,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     // 3. Stale old connection attempt: simulated reconnect scenario
     const staleResult = await unsubscribeMethod.handler(
       { subscriptionId: collectorA.getSubscriptionId() },
-      { runtime, connectionId: 'conn-stale' } as RpcContext,
-      () => {}
+      { runtime, connectionId: 'conn-stale' } as RpcContext
     )
     expect(staleResult).toEqual({ unsubscribed: false })
     expect(tracker.activeCount).toBe(1)
@@ -225,8 +230,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     // 4. Missing subscription returns true per runtime API semantics (already gone)
     const missingResult = await unsubscribeMethod.handler(
       { subscriptionId: 'pet-speak-nonexistent-999' },
-      { runtime, connectionId: 'conn-A' } as RpcContext,
-      () => {}
+      { runtime, connectionId: 'conn-A' } as RpcContext
     )
     expect(missingResult).toEqual({ unsubscribed: true })
 
@@ -240,8 +244,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     expect(tracker.activeCount).toBe(2)
     const inprocResult = await unsubscribeMethod.handler(
       { subscriptionId: collectorInproc.getSubscriptionId() },
-      { runtime } as RpcContext,
-      () => {}
+      { runtime } as RpcContext
     )
     expect(inprocResult).toEqual({ unsubscribed: true })
     expect(tracker.activeCount).toBe(1)
@@ -249,8 +252,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     // 6. Legitimate owner Connection A unsubscribes subIdA -> succeeds
     const ownerResult = await unsubscribeMethod.handler(
       { subscriptionId: collectorA.getSubscriptionId() },
-      { runtime, connectionId: 'conn-A' } as RpcContext,
-      () => {}
+      { runtime, connectionId: 'conn-A' } as RpcContext
     )
     expect(ownerResult).toEqual({ unsubscribed: true })
     expect(tracker.activeCount).toBe(0)
@@ -294,7 +296,7 @@ describe('PetVoiceSubscriptionTracker', () => {
     expect(petVoiceRelay.getAudioSessionState()).toBe('dead')
 
     // 2. Client subscribes to pet.speak.subscribe on connection 'conn-ws-1'
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = PET_SPEAK_RPC.find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
 

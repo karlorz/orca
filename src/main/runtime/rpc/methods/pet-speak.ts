@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import { defineStreamingMethod, defineMethod } from '../core'
 import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
 import { PET_SPEAK_CANCEL_REASONS } from '../../pet-speak-observability'
 
@@ -53,7 +53,7 @@ const PetSpeakCompleteParams = z.object({
   timestamps: PetSpeakTimestamps
 })
 
-export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
+export const PET_SPEAK_METHODS = [
   defineStreamingMethod({
     name: 'pet.speak.subscribe',
     params: PetSpeakSubscribeParams,

@@ -11,7 +11,12 @@ import {
   type PetVoiceRelayOptions
 } from './pet-voice-relay'
 import { ALL_RPC_METHODS } from './rpc/methods'
-import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from './rpc/core'
+import {
+  eraseRpcMethods,
+  isStreamingMethod,
+  type RpcContext,
+  type RpcStreamingMethod
+} from './rpc/core'
 import type { OrcaRuntimeService } from './orca-runtime'
 
 type MockPetSocket = EventEmitter & {
@@ -448,7 +453,7 @@ describe('PetVoiceRelay', () => {
   })
 
   it('provides pet.speak.subscribe RPC streaming method', async () => {
-    const subscribeMethod = ALL_RPC_METHODS.find(
+    const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
       (m) => m.name === 'pet.speak.subscribe' && isStreamingMethod(m)
     ) as RpcStreamingMethod
     expect(subscribeMethod).toBeDefined()
