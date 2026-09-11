@@ -230,3 +230,14 @@ features:
       - src/main/runtime/rpc/methods/pet-speak.ts
       - src/main/runtime/runtime-rpc
     wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout
+
+  - id: pet-speak-rec4-truthful-settlement
+    title: Rec 4 truthful mobile settlement (2000-grapheme cap, exact receipt, silent-nack, FIFO void stop)
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/packages/expo-pet-speech
+      - src/main/runtime
+      - src/shared/pet-speak-limits.ts
+    wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout
