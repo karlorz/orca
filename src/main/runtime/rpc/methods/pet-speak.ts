@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
 import type { ReplayablePetSpeakEvent } from '../../pet-speak-replay'
+import { PET_SPEAK_CANCEL_REASONS } from '../../pet-speak-observability'
 
 let petSpeakSubscriptionSeq = 0
 
@@ -38,13 +39,18 @@ const PetSpeakEventId = z
   .min(1, 'Missing event_id')
   .refine((id) => Array.from(id).length <= 128, 'event_id exceeds 128 Unicode characters')
 
+const PetSpeakTimestamps = z.record(z.string(), z.number().finite()).optional()
+
 const PetSpeakAcceptedParams = z.object({
-  event_id: PetSpeakEventId
+  event_id: PetSpeakEventId,
+  timestamps: PetSpeakTimestamps
 })
 
 const PetSpeakCompleteParams = z.object({
   event_id: PetSpeakEventId,
-  outcome: z.enum(['spoken', 'voice-unavailable', 'playback-error', 'cancelled'])
+  outcome: z.enum(['spoken', 'voice-unavailable', 'playback-error', 'cancelled']),
+  reason: z.enum(PET_SPEAK_CANCEL_REASONS).optional(),
+  timestamps: PetSpeakTimestamps
 })
 
 export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
@@ -145,6 +151,13 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
     name: 'pet.speak.accepted',
     params: PetSpeakAcceptedParams,
     handler: async (params, { runtime }) => {
+      if (params.timestamps) {
+        runtime.getPetVoiceRelay?.()?.getLogger().logBoundary({
+          event_id: params.event_id,
+          boundary: 'acceptance_send',
+          timestamps: params.timestamps
+        })
+      }
       if (runtime.handlePetSpeakAccepted) {
         return await runtime.handlePetSpeakAccepted(params.event_id)
       }
@@ -155,8 +168,21 @@ export const PET_SPEAK_METHODS: readonly RpcAnyMethod[] = [
     name: 'pet.speak.complete',
     params: PetSpeakCompleteParams,
     handler: async (params, { runtime }) => {
+      if (params.timestamps || params.reason) {
+        runtime
+          .getPetVoiceRelay?.()
+          ?.getLogger()
+          .logBoundary({
+            event_id: params.event_id,
+            boundary: params.outcome === 'cancelled' ? 'cancellation_send' : 'completion_send',
+            reason: params.reason,
+            timestamps: params.timestamps
+          })
+      }
       if (runtime.handlePetSpeakComplete) {
-        return await runtime.handlePetSpeakComplete(params.event_id, params.outcome)
+        return params.reason
+          ? await runtime.handlePetSpeakComplete(params.event_id, params.outcome, params.reason)
+          : await runtime.handlePetSpeakComplete(params.event_id, params.outcome)
       }
       return { completed: false }
     }

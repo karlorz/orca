@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { preparePetSpeakEvent } from './pet-speech-service'
 import { setPetSpeechEnabled, setPetSpeechVoiceForLanguage } from './pet-speech-preferences'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
+import { resetPetSpeakCrossHostForTests } from './pet-speak-cross-host'
 import type { RpcClient } from '../transport/rpc-client'
 
 vi.mock('expo-notifications', () => ({
@@ -168,6 +169,7 @@ describe('PetSpeakHandler', () => {
 
   beforeEach(async () => {
     await AsyncStorage.clear()
+    resetPetSpeakCrossHostForTests()
     mockTts = {
       getAvailableVoices: vi.fn(async () => ['yue-HK', 'zh-HK']),
       speak: vi.fn(async (_text: string, _locale: string) => {})
@@ -496,7 +498,12 @@ describe('subscribeToPetSpeak', () => {
         streamCallback = cb
         return () => {}
       }),
-      sendRequest: vi.fn(async () => ({ ok: true })),
+      sendRequest: vi.fn(async (method: string, params: unknown) => {
+        if (method === 'pet.speak.accepted') {
+          return { accepted: true, event_id: (params as { event_id: string }).event_id }
+        }
+        return { ok: true }
+      }),
       getState: vi.fn(() => 'connected')
     } as unknown as RpcClient
 

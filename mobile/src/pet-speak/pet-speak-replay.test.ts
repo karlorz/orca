@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadPetSpeakWatermark, savePetSpeakWatermark } from './pet-speak-watermark'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
+import { resetPetSpeakCrossHostForTests } from './pet-speak-cross-host'
 import type { RpcClient } from '../transport/rpc-client'
 
 vi.mock('expo-notifications', () => ({
@@ -46,6 +47,7 @@ describe('PetSpeak Replay & Watermark (Phase C)', () => {
   beforeEach(async () => {
     await AsyncStorage.clear()
     vi.clearAllMocks()
+    resetPetSpeakCrossHostForTests()
   })
 
   it('persists and loads lastSeenSeq and epoch in AsyncStorage', async () => {
@@ -147,7 +149,12 @@ describe('PetSpeak Replay & Watermark (Phase C)', () => {
         streamCallback = cb
         return () => {}
       }),
-      sendRequest: vi.fn().mockResolvedValue({})
+      sendRequest: vi.fn().mockImplementation(async (method: string, params: unknown) => {
+        if (method === 'pet.speak.accepted') {
+          return { accepted: true, event_id: (params as { event_id: string }).event_id }
+        }
+        return {}
+      })
     } as unknown as RpcClient & { hostId?: string }
     ;(mockClient as { hostId: string }).hostId = 'host-1'
 

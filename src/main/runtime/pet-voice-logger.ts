@@ -2,6 +2,11 @@ import { join } from 'node:path'
 import { getLogsDirectory } from '../observability/logs-directory'
 import { createLocalFileSink, type LocalFileSink } from '../observability/local-file-sink'
 import type { AudioSessionState, PetSpeakOutcome } from './pet-voice-relay'
+import type {
+  PetSpeakBoundary,
+  PetSpeakBoundaryTimestamps,
+  PetSpeakCancelReason
+} from './pet-speak-observability'
 
 export type PetVoiceLogEvent =
   | {
@@ -37,7 +42,17 @@ export type PetVoiceLogEvent =
       kind: 'speak-complete'
       event_id: string
       outcome: PetSpeakOutcome
+      reason?: PetSpeakCancelReason
       timestamp: number
+    }
+  | {
+      kind: 'boundary'
+      event_id: string
+      boundary: PetSpeakBoundary
+      timestamp: number
+      accepted?: boolean
+      reason?: PetSpeakCancelReason
+      timestamps?: PetSpeakBoundaryTimestamps
     }
   | {
       kind: 'emit-error'
@@ -102,7 +117,11 @@ export class PetVoiceLogger {
     })
   }
 
-  logPresenceChange(data: { state: AudioSessionState; activeCount: number; reporter?: string }): void {
+  logPresenceChange(data: {
+    state: AudioSessionState
+    activeCount: number
+    reporter?: string
+  }): void {
     this.sink.push({
       kind: 'presence-change',
       ...data,
@@ -110,11 +129,30 @@ export class PetVoiceLogger {
     })
   }
 
-  logSpeakComplete(data: { event_id: string; outcome: PetSpeakOutcome }): void {
+  logSpeakComplete(data: {
+    event_id: string
+    outcome: PetSpeakOutcome
+    reason?: PetSpeakCancelReason
+  }): void {
     this.sink.push({
       kind: 'speak-complete',
       ...data,
       timestamp: Date.now()
+    })
+  }
+
+  logBoundary(data: {
+    event_id: string
+    boundary: PetSpeakBoundary
+    timestamp?: number
+    accepted?: boolean
+    reason?: PetSpeakCancelReason
+    timestamps?: PetSpeakBoundaryTimestamps
+  }): void {
+    this.sink.push({
+      kind: 'boundary',
+      ...data,
+      timestamp: data.timestamp ?? Date.now()
     })
   }
 

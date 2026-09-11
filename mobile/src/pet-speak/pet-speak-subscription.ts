@@ -4,6 +4,13 @@ import { PetSpeakHandler } from './pet-speak'
 import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import { loadPetSpeakWatermark, savePetSpeakWatermark } from './pet-speak-watermark'
 import {
+  compactBoundaryTimestamps,
+  isPetSpeakCancelReason,
+  normalizeAdmissionDecision,
+  stampBoundary,
+  type PetSpeakBoundaryTimestamps
+} from './pet-speak-observability'
+import {
   buildPetSpeechDeviceStatus,
   type PetSpeechDeviceStatusPayload
 } from './pet-speech-device-status'
@@ -25,25 +32,52 @@ export function subscribeToPetSpeak(
 
   const handler = new PetSpeakHandler({
     ...options,
-    onAccepted: async (eventId) => {
-      void options?.onAccepted?.(eventId).catch(() => {})
-      if (client.getState() === 'connected') {
-        await client
-          .sendRequest('pet.speak.accepted', {
-            event_id: eventId
-          })
-          .catch(() => {})
+    crossHostOwnerId: options?.crossHostOwnerId ?? targetHostId,
+    onAccepted: async (eventId, timestamps) => {
+      if (options?.onAccepted) {
+        const accepted = await options.onAccepted(eventId, timestamps).catch(() => false)
+        const decision = normalizeAdmissionDecision(accepted)
+        if (!decision.accepted) {
+          return decision
+        }
+      }
+      if (client.getState() !== 'connected') {
+        return { accepted: false, reason: 'disconnection' as const }
+      }
+      const trace: PetSpeakBoundaryTimestamps = { ...timestamps }
+      stampBoundary(trace, 'acceptance_send')
+      const compact = compactBoundaryTimestamps(trace)
+      try {
+        const response = await client.sendRequest('pet.speak.accepted', {
+          event_id: eventId,
+          ...(compact ? { timestamps: compact } : {})
+        })
+        if (
+          !!response &&
+          typeof response === 'object' &&
+          (response as { accepted?: unknown }).accepted === true
+        ) {
+          return { accepted: true }
+        }
+        const reasonValue = (response as { reason?: unknown } | null)?.reason
+        const reason = isPetSpeakCancelReason(reasonValue) ? reasonValue : undefined
+        return { accepted: false, ...(reason ? { reason } : {}) }
+      } catch {
+        return { accepted: false, reason: 'transport_teardown' as const }
       }
     },
-    onComplete: async (eventId, outcome) => {
+    onComplete: async (eventId, outcome, reason, timestamps) => {
       if (options?.onComplete) {
-        await options.onComplete(eventId, outcome).catch(() => {})
+        await options.onComplete(eventId, outcome, reason, timestamps).catch(() => {})
       }
       if (client.getState() === 'connected') {
+        const compact = compactBoundaryTimestamps(timestamps)
         await client
           .sendRequest('pet.speak.complete', {
             event_id: eventId,
-            outcome
+            outcome,
+            ...(reason ? { reason } : {}),
+            ...(compact ? { timestamps: compact } : {})
           })
           .catch(() => {})
 
@@ -141,7 +175,7 @@ export function subscribeToPetSpeak(
         if (payload.seq !== undefined && payload.epoch) {
           void savePetSpeakWatermark(targetHostId, { seq: payload.seq, epoch: payload.epoch })
         }
-        void handler.handleEvent(payload).catch(() => {})
+        void handler.handleEvent(payload, { socketReceivedAt: Date.now() }).catch(() => {})
       }
     })
   }

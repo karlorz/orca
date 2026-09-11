@@ -4,6 +4,7 @@ import type { Socket } from 'node:net'
 import { ALL_RPC_METHODS } from './rpc/methods'
 import type { RpcContext, RpcMethod } from './rpc/core'
 import { PetVoiceRelay, type PetSpeakEvent, type PetVoiceRelayOptions } from './pet-voice-relay'
+import { RuntimeRpcState } from './runtime-rpc/runtime-rpc-state'
 import { OrcaRuntimeService } from './orca-runtime'
 
 type MockPetSocket = EventEmitter & {
@@ -244,11 +245,24 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
-  it('forwards speak-accepted to pet socket as one exact non-replayable JSON line', async () => {
+  it('forwards speak-accepted and returns only the exact GrokPet receipt', async () => {
     const sentLines: string[] = []
     const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
       (_path: string, onConnect?: () => void) => {
-        const sock = createMockPetSocket((data) => sentLines.push(data))
+        const sock = createMockPetSocket((data) => {
+          sentLines.push(data)
+          const request = JSON.parse(data) as { kind?: string; event_id?: string }
+          if (request.kind === 'speak-accepted') {
+            process.nextTick(() => {
+              sock.emit(
+                'data',
+                Buffer.from(
+                  `${JSON.stringify({ ok: true, accepted: true, event_id: request.event_id })}\n`
+                )
+              )
+            })
+          }
+        })
         if (onConnect) {
           process.nextTick(onConnect)
         }
@@ -260,7 +274,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
       petSocketPath: '/tmp/test-pet.sock'
     })
 
-    await relay.sendSpeakAccepted('ev-accepted-1')
+    await expect(relay.sendSpeakAccepted('ev-accepted-1')).resolves.toEqual({ accepted: true })
 
     expect(sentLines.filter((line) => line.includes('speak-accepted'))).toEqual([
       `${JSON.stringify({
@@ -272,6 +286,110 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
+  it('buffers split acceptance receipts and rejects malformed or explicit false replies', async () => {
+    const replies: Record<string, string[]> = {
+      'ev-split': ['{"ok":true,"accepted":', 'true,"event_id":"ev-split"}\n'],
+      'ev-malformed': ['not-json\n'],
+      'ev-false': ['{"ok":true,"accepted":false,"event_id":"ev-false"}\n']
+    }
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        const sock = createMockPetSocket((data) => {
+          if (!data.includes('speak-accepted')) {
+            return
+          }
+          const request = JSON.parse(data) as { event_id: string }
+          for (const chunk of replies[request.event_id] ?? []) {
+            process.nextTick(() => sock.emit('data', Buffer.from(chunk)))
+          }
+        })
+        process.nextTick(() => onConnect?.())
+        return sock as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({ connectFn: mockConnect, petSocketPath: '/tmp/test-pet.sock' })
+
+    await expect(relay.sendSpeakAccepted('ev-split')).resolves.toEqual({ accepted: true })
+    await expect(relay.sendSpeakAccepted('ev-malformed')).resolves.toEqual({
+      accepted: false,
+      reason: 'transport_teardown'
+    })
+    await expect(relay.sendSpeakAccepted('ev-false')).resolves.toEqual({ accepted: false })
+    relay.destroy()
+  })
+
+  it('destroys the acceptance socket when the response deadline expires', async () => {
+    vi.useFakeTimers()
+    const socket = createMockPetSocket()
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        process.nextTick(() => onConnect?.())
+        return socket as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({
+      connectFn: mockConnect,
+      petSocketPath: '/tmp/test-pet.sock',
+      acceptanceDeadlineMs: 10
+    })
+
+    const result = relay.sendSpeakAccepted('ev-no-response')
+    await vi.advanceTimersByTimeAsync(10)
+    await expect(result).resolves.toEqual({ accepted: false, reason: 'receipt_timeout' })
+    expect(socket.destroy).toHaveBeenCalledOnce()
+    relay.destroy()
+    vi.useRealTimers()
+  })
+
+  it('expires queued acceptance work instead of draining a stale backlog', async () => {
+    vi.useFakeTimers()
+    let connectCount = 0
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        connectCount++
+        const sock = createMockPetSocket()
+        process.nextTick(() => onConnect?.())
+        return sock as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({
+      connectFn: mockConnect,
+      petSocketPath: '/tmp/test-pet.sock',
+      acceptanceDeadlineMs: 10
+    })
+
+    const first = relay.sendSpeakAccepted('ev-stalled-first')
+    const stale = relay.sendSpeakAccepted('ev-stale-second')
+    await vi.advanceTimersByTimeAsync(10)
+    await vi.advanceTimersByTimeAsync(10)
+
+    await expect(first).resolves.toEqual({ accepted: false, reason: 'receipt_timeout' })
+    await expect(stale).resolves.toEqual({ accepted: false, reason: 'receipt_timeout' })
+    expect(connectCount).toBe(2)
+    relay.destroy()
+    vi.useRealTimers()
+  })
+
+  it('rejects a mismatched GrokPet acceptance receipt', async () => {
+    const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
+      (_path: string, onConnect?: () => void) => {
+        const sock = createMockPetSocket((data) => {
+          if (data.includes('speak-accepted')) {
+            process.nextTick(() => {
+              sock.emit('data', Buffer.from('{"ok":true,"accepted":true,"event_id":"ev-stale"}\n'))
+            })
+          }
+        })
+        process.nextTick(() => onConnect?.())
+        return sock as unknown as Socket
+      }
+    )
+    const relay = new PetVoiceRelay({ connectFn: mockConnect, petSocketPath: '/tmp/test-pet.sock' })
+
+    await expect(relay.sendSpeakAccepted('ev-current')).resolves.toEqual({ accepted: false })
+    relay.destroy()
+  })
+
   it('serializes accepted before complete when the accepted socket connection is delayed', async () => {
     const sentLines: string[] = []
     let releaseAcceptedConnect: (() => void) | undefined
@@ -279,7 +397,20 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     const mockConnect: PetVoiceRelayOptions['connectFn'] = vi.fn(
       (_path: string, onConnect?: () => void) => {
         connectCount++
-        const sock = createMockPetSocket((data) => sentLines.push(data))
+        const sock = createMockPetSocket((data) => {
+          sentLines.push(data)
+          const request = JSON.parse(data) as { kind?: string; event_id?: string }
+          if (request.kind === 'speak-accepted') {
+            process.nextTick(() => {
+              sock.emit(
+                'data',
+                Buffer.from(
+                  `${JSON.stringify({ ok: true, accepted: true, event_id: request.event_id })}\n`
+                )
+              )
+            })
+          }
+        })
         if (connectCount === 2) {
           sock.connecting = true
           sock.writable = false
@@ -315,6 +446,27 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
         .filter((kind) => kind !== 'subscribe')
     ).toEqual(['speak-accepted', 'speak-complete'])
     relay.destroy()
+  })
+
+  it('runtime RPC state propagates the relay acceptance decision unchanged', async () => {
+    const runtime = new OrcaRuntimeService()
+    const relay = {
+      sendSpeakAccepted: vi.fn().mockResolvedValue({ accepted: false }),
+      sendSpeakComplete: vi.fn(),
+      onVoiceSubscriptionPresenceChange: vi.fn(),
+      sendDeviceStatus: vi.fn()
+    } as unknown as PetVoiceRelay
+    new RuntimeRpcState({
+      runtime,
+      userDataPath: '/tmp/orca-rec4-runtime-state',
+      platform: 'linux',
+      petVoiceRelay: relay
+    })
+
+    await expect(runtime.handlePetSpeakAccepted('ev-rejected')).resolves.toEqual({
+      accepted: false
+    })
+    expect(relay.sendSpeakAccepted).toHaveBeenCalledWith('ev-rejected')
   })
 
   it('registers pet.speak.accepted RPC and delegates exact validated event identity', async () => {

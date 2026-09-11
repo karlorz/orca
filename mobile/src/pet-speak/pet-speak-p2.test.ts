@@ -99,14 +99,169 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     }
   })
 
-  it('reports queue admission exactly once before truthful completion and ignores send failure', async () => {
+  it('expires a stalled admission and advances to the next FIFO item', async () => {
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      admissionTimeoutMs: 10,
+      onAccepted: async (eventId) => {
+        if (eventId === 'ev-stalled') {
+          return await new Promise<boolean>(() => {})
+        }
+        return true
+      },
+      onComplete
+    })
+
+    const stalled = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Never authorize',
+      lang: 'yue-HK',
+      event_id: 'ev-stalled'
+    })
+    const fresh = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Fresh authorized event',
+      lang: 'yue-HK',
+      event_id: 'ev-fresh-after-stall'
+    })
+
+    await Promise.all([stalled, fresh])
+    expect(mockTts.spoken.map((item) => item.text)).toEqual(['Fresh authorized event'])
+  })
+
+  it('disposal releases an item awaiting admission and late true cannot resurrect it', async () => {
+    let resolveAdmission: ((accepted: boolean) => void) | undefined
+    const admission = new Promise<boolean>((resolve) => {
+      resolveAdmission = resolve
+    })
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      admissionTimeoutMs: 10_000,
+      onAccepted: async () => await admission,
+      onComplete
+    })
+
+    const pending = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Disposed while waiting',
+      lang: 'yue-HK',
+      event_id: 'ev-disposed-admission'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    handler.dispose()
+    await pending
+    resolveAdmission?.(true)
+    await Promise.resolve()
+
+    expect(mockTts.spoken).toEqual([])
+  })
+
+  it('contains the success-then-stall incident and plays the first fresh exact event once', async () => {
+    const receiptAttempts: string[] = []
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      admissionTimeoutMs: 10,
+      onAccepted: async (eventId) => {
+        receiptAttempts.push(eventId)
+        if (eventId === 'ev-b-212ms' || eventId === 'ev-stale-398ms') {
+          return await new Promise<boolean>(() => {})
+        }
+        return true
+      },
+      onComplete
+    })
+
+    await handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Event A succeeds',
+      lang: 'yue-HK',
+      event_id: 'ev-a-success'
+    })
+    await Promise.all([
+      handler.handleEvent({
+        type: 'pet.speak',
+        text: 'Event B stalls after 212 milliseconds',
+        lang: 'yue-HK',
+        event_id: 'ev-b-212ms'
+      }),
+      handler.handleEvent({
+        type: 'pet.speak',
+        text: 'Stale event after 398 milliseconds',
+        lang: 'yue-HK',
+        event_id: 'ev-stale-398ms'
+      }),
+      handler.handleEvent({
+        type: 'pet.speak',
+        text: 'First fresh exact event',
+        lang: 'yue-HK',
+        event_id: 'ev-fresh-exact'
+      })
+    ])
+
+    expect(receiptAttempts).toEqual([
+      'ev-a-success',
+      'ev-b-212ms',
+      'ev-stale-398ms',
+      'ev-fresh-exact'
+    ])
+    expect(mockTts.spoken.map((item) => item.text)).toEqual([
+      'Event A succeeds',
+      'First fresh exact event'
+    ])
+    expect(mockTts.spoken.filter((item) => item.text === 'First fresh exact event')).toHaveLength(1)
+  })
+
+  it('waits for exact admission before playback and drops a rejected event', async () => {
+    let resolveAdmission: ((accepted: boolean) => void) | undefined
+    const admission = new Promise<boolean>((resolve) => {
+      resolveAdmission = resolve
+    })
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      onAccepted: async () => await admission,
+      onComplete
+    })
+
+    const pending = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Wait for receipt',
+      lang: 'yue-HK',
+      event_id: 'ev-wait-receipt'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(mockTts.spoken).toEqual([])
+
+    resolveAdmission?.(true)
+    await pending
+    expect(mockTts.spoken.map((item) => item.text)).toEqual(['Wait for receipt'])
+
+    const rejected = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      onAccepted: async () => false,
+      onComplete
+    })
+    await rejected.handleEvent({
+      type: 'pet.speak',
+      text: 'Stale event',
+      lang: 'yue-HK',
+      event_id: 'ev-stale-receipt'
+    })
+    expect(mockTts.spoken.map((item) => item.text)).not.toContain('Stale event')
+  })
+
+  it('reports queue admission exactly once before truthful completion', async () => {
     const lifecycle: string[] = []
     const handler = new PetSpeakHandler({
       tts: mockTts,
       mediaSession: mockMedia,
       onAccepted: async (eventId) => {
         lifecycle.push(`accepted:${eventId}`)
-        throw new Error('desktop temporarily disconnected')
+        return true
       },
       onComplete: async (eventId, outcome) => {
         lifecycle.push(`completed:${eventId}:${outcome}`)
@@ -347,10 +502,46 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     ])
   })
 
+  it('subscription rejects playback when acceptance RPC rejects or the client disconnects', async () => {
+    for (const mode of ['reject', 'disconnect'] as const) {
+      const client: RpcClient = {
+        getState: vi.fn(() => (mode === 'disconnect' ? 'disconnected' : 'connected')),
+        sendRequest: vi.fn().mockImplementation(async (method: string) => {
+          if (method === 'pet.speak.accepted') {
+            throw new Error('acceptance unavailable')
+          }
+          return { ok: true }
+        }),
+        subscribe: vi.fn((_channel: string, _params: unknown, onData: (ev: unknown) => void) => {
+          setTimeout(() => {
+            onData({ type: 'ready', subscriptionId: `sub-${mode}` })
+            onData({
+              type: 'pet.speak',
+              text: `Must not play ${mode}`,
+              lang: 'yue-HK',
+              event_id: `ev-${mode}`
+            })
+          }, 0)
+          return () => {}
+        })
+      } as unknown as RpcClient
+      const unsubscribe = subscribeToPetSpeak(client, { tts: mockTts, mediaSession: mockMedia })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      unsubscribe()
+    }
+
+    expect(mockTts.spoken).toEqual([])
+  })
+
   it('subscribeToPetSpeak sends pet.speak.complete RPC over client connection when events resolve', async () => {
     const mockClient: RpcClient = {
       getState: vi.fn(() => 'connected'),
-      sendRequest: vi.fn().mockResolvedValue({ ok: true }),
+      sendRequest: vi.fn().mockImplementation(async (method: string, params: unknown) => {
+        if (method === 'pet.speak.accepted') {
+          return { accepted: true, event_id: (params as { event_id: string }).event_id }
+        }
+        return { ok: true }
+      }),
       subscribe: vi.fn((channel: string, _params: unknown, onData: (ev: unknown) => void) => {
         if (channel === 'pet.speak.subscribe') {
           setTimeout(() => {
@@ -375,14 +566,20 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
 
     await new Promise((r) => setTimeout(r, 50))
 
-    expect(mockClient.sendRequest).toHaveBeenCalledWith('pet.speak.accepted', {
-      event_id: 'ev-rpc-1'
-    })
+    expect(mockClient.sendRequest).toHaveBeenCalledWith(
+      'pet.speak.accepted',
+      expect.objectContaining({
+        event_id: 'ev-rpc-1'
+      })
+    )
 
-    expect(mockClient.sendRequest).toHaveBeenCalledWith('pet.speak.complete', {
-      event_id: 'ev-rpc-1',
-      outcome: 'spoken'
-    })
+    expect(mockClient.sendRequest).toHaveBeenCalledWith(
+      'pet.speak.complete',
+      expect.objectContaining({
+        event_id: 'ev-rpc-1',
+        outcome: 'spoken'
+      })
+    )
     const calls = vi.mocked(mockClient.sendRequest).mock.calls
     const acceptedIndex = calls.findIndex(([method]) => method === 'pet.speak.accepted')
     const completedIndex = calls.findIndex(([method]) => method === 'pet.speak.complete')

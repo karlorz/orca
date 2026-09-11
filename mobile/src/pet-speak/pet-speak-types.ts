@@ -25,6 +25,11 @@ import type {
   MediaSessionAdapter,
   PetSpeechNativeAdapter
 } from './pet-speak-adapters'
+import type {
+  PetSpeakAdmissionDecision,
+  PetSpeakBoundaryTimestamps,
+  PetSpeakCancelReason
+} from './pet-speak-observability'
 
 export type PreparedPetSpeakEventResult =
   | { status: 'prepared'; event: PetSpeakPayload }
@@ -45,7 +50,18 @@ export interface PetSpeakHandlerOptions {
   prepareEvent?: PetSpeakEventPreparer
   maxSeenEvents?: number
   maxQueueCapacity?: number
-  onAccepted?: (eventId: string) => Promise<void>
-  onComplete?: (eventId: string, outcome: PetSpeakTerminalOutcome) => Promise<void>
+  admissionTimeoutMs?: number
+  onAccepted?: (
+    eventId: string,
+    timestamps?: PetSpeakBoundaryTimestamps
+  ) => Promise<boolean | PetSpeakAdmissionDecision>
+  onComplete?: (
+    eventId: string,
+    outcome: PetSpeakTerminalOutcome,
+    reason?: PetSpeakCancelReason,
+    timestamps?: PetSpeakBoundaryTimestamps
+  ) => Promise<void>
   onCaption?: (caption: PetSpeakCaption | null) => void
+  /** When set, event_id is claimed process-wide so a second host cannot play or clear captions. */
+  crossHostOwnerId?: string
 }

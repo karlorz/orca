@@ -3,7 +3,18 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { PetVoiceLogger } from './pet-voice-logger'
 import { buildDeviceStatusMessage } from './pet-speak-rate'
-import { parseSpeakIntentMessage, type PetSpeakEvent } from './pet-speak-intent'
+import type { PetSpeakEvent } from './pet-speak-intent'
+import { dispatchPetVoiceSpeakIntent } from './pet-voice-relay-intent'
+import {
+  type PetSpeakBoundaryTimestamps,
+  type PetSpeakCancelReason,
+  stampBoundary
+} from './pet-speak-observability'
+import {
+  readPetVoiceAcceptanceReceipt,
+  writePetVoiceOneShotMessage,
+  type PetVoiceOneShotHost
+} from './pet-voice-relay-oneshot'
 
 export type AudioSessionState = 'live' | 'dead'
 export {
@@ -22,6 +33,7 @@ export type PetVoiceRelayOptions = {
   connectFn?: (path: string, onConnect?: () => void) => Socket
   reconnectBaseDelayMs?: number
   reconnectMaxDelayMs?: number
+  acceptanceDeadlineMs?: number
   onSpeak?: (event: PetSpeakEvent) => void
   logger?: PetVoiceLogger
   reporterId?: string
@@ -43,6 +55,7 @@ export class PetVoiceRelay {
   private readonly connectFn: (path: string, onConnect?: () => void) => Socket
   private readonly reconnectBaseDelayMs: number
   private readonly reconnectMaxDelayMs: number
+  private readonly acceptanceDeadlineMs: number
   private readonly listeners = new Set<(event: PetSpeakEvent) => void>()
   private readonly logger: PetVoiceLogger
   private readonly reporterId: string
@@ -60,6 +73,7 @@ export class PetVoiceRelay {
     this.connectFn = options.connectFn ?? ((path, onConnect) => netConnect(path, onConnect))
     this.reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? DEFAULT_RECONNECT_BASE_DELAY_MS
     this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? DEFAULT_RECONNECT_MAX_DELAY_MS
+    this.acceptanceDeadlineMs = options.acceptanceDeadlineMs ?? 1500
     this.currentReconnectDelayMs = this.reconnectBaseDelayMs
     this.logger = options.logger ?? new PetVoiceLogger()
     this.reporterId = options.reporterId ?? `orca-${process.pid}`
@@ -101,8 +115,7 @@ export class PetVoiceRelay {
       activeCount: activeSubscriptionCount,
       reporter: this.reporterId
     })
-    // Always push. A failed unix write used to stick pet on the opposite
-    // session while we no-op'd later same-state reports.
+    // Always push so a failed unix write cannot stick the opposite session.
     await this.sendConfigPresence(newState)
   }
 
@@ -116,71 +129,20 @@ export class PetVoiceRelay {
   }
 
   private async sendOneShotMessage(message: Record<string, unknown>): Promise<void> {
-    const queued = this.oneShotTail.then(() => this.writeOneShotMessage(message))
+    const queued = this.oneShotTail.then(() =>
+      writePetVoiceOneShotMessage(this.oneshotHost(), message)
+    )
     this.oneShotTail = queued.catch(() => {})
     await queued
   }
 
-  private async writeOneShotMessage(message: Record<string, unknown>): Promise<void> {
-    if (this.destroyed) {
-      return
+  private oneshotHost(): PetVoiceOneShotHost {
+    return {
+      isDestroyed: () => this.destroyed,
+      connectFn: this.connectFn,
+      petSocketPath: this.petSocketPath,
+      logger: this.logger
     }
-    const payload = `${JSON.stringify(message)}\n`
-
-    await new Promise<void>((resolve) => {
-      let settled = false
-      const finish = (): void => {
-        if (!settled) {
-          settled = true
-          resolve()
-        }
-      }
-
-      let sock: Socket | undefined
-      let wrote = false
-      const writePayload = (): void => {
-        if (wrote || this.destroyed || !sock) {
-          return
-        }
-        const activeSock = sock
-        wrote = true
-        try {
-          activeSock.write(payload, (err) => {
-            if (err) {
-              activeSock.destroy()
-            } else {
-              activeSock.end()
-            }
-            finish()
-          })
-        } catch {
-          activeSock.destroy()
-          finish()
-        }
-      }
-
-      try {
-        sock = this.connectFn(this.petSocketPath, writePayload)
-      } catch {
-        finish()
-        return
-      }
-
-      sock.once('connect', writePayload)
-      sock.once('error', () => {
-        sock.destroy()
-        finish()
-      })
-      const timeout = setTimeout(() => {
-        sock.destroy()
-        finish()
-      }, 1500)
-      timeout.unref?.()
-
-      if (!sock.connecting && sock.writable) {
-        writePayload()
-      }
-    })
   }
 
   private startSubscriber(): void {
@@ -248,7 +210,7 @@ export class PetVoiceRelay {
       try {
         const message = JSON.parse(trimmed) as Record<string, unknown>
         if (message.kind === 'speak-intent') {
-          this.handleSpeakIntent(message)
+          dispatchPetVoiceSpeakIntent(message, this.audioSessionState, this.listeners, this.logger)
         }
       } catch {
         // Ignore unparseable JSON lines
@@ -256,49 +218,59 @@ export class PetVoiceRelay {
     }
   }
 
-  private handleSpeakIntent(message: Record<string, unknown>): void {
-    if (this.audioSessionState !== 'live') {
-      return
-    }
-    const parsed = parseSpeakIntentMessage(message)
-    if (!parsed) {
-      return
-    }
-    const { event, charsCount } = parsed
-    this.logger.logSpeakIntent({
-      event_id: event.event_id ?? '',
-      charsCount,
-      rate: event.rate
-    })
-    for (const listener of this.listeners) {
-      try {
-        listener(event)
-      } catch (err) {
-        this.logger.logEmitError({
-          event_id: event.event_id ?? '',
-          error: err instanceof Error ? err.message : String(err)
-        })
-        console.error('[pet-voice-relay] Listener error:', err)
-      }
-    }
-  }
-
-  async sendSpeakComplete(eventId: string, outcome: PetSpeakOutcome): Promise<void> {
-    this.logger.logSpeakComplete({ event_id: eventId, outcome })
+  async sendSpeakComplete(
+    eventId: string,
+    outcome: PetSpeakOutcome,
+    reason?: PetSpeakCancelReason
+  ): Promise<void> {
+    this.logger.logSpeakComplete({ event_id: eventId, outcome, reason })
     await this.sendOneShotMessage({
       kind: 'speak-complete',
       event_id: eventId,
       outcome,
+      ...(reason ? { reason } : {}),
       speak: false
     })
   }
 
-  async sendSpeakAccepted(eventId: string): Promise<void> {
-    await this.sendOneShotMessage({
-      kind: 'speak-accepted',
+  async sendSpeakAccepted(
+    eventId: string
+  ): Promise<{ accepted: boolean; reason?: PetSpeakCancelReason }> {
+    const timestamps: PetSpeakBoundaryTimestamps = {}
+    stampBoundary(timestamps, 'relay_enqueue')
+    this.logger.logBoundary({
       event_id: eventId,
-      speak: false
+      boundary: 'relay_enqueue',
+      timestamp: timestamps.relay_enqueue,
+      timestamps
     })
+    const enqueuedAt = timestamps.relay_enqueue ?? Date.now()
+    const queued = this.oneShotTail.then(async () => {
+      const remainingMs = this.acceptanceDeadlineMs - (Date.now() - enqueuedAt)
+      if (remainingMs <= 0) {
+        stampBoundary(timestamps, 'relay_receipt')
+        this.logger.logBoundary({
+          event_id: eventId,
+          boundary: 'relay_receipt',
+          timestamp: timestamps.relay_receipt,
+          accepted: false,
+          reason: 'receipt_timeout',
+          timestamps
+        })
+        return { accepted: false, reason: 'receipt_timeout' as const }
+      }
+      return await readPetVoiceAcceptanceReceipt(
+        this.oneshotHost(),
+        eventId,
+        remainingMs,
+        timestamps
+      )
+    })
+    this.oneShotTail = queued.then(
+      () => undefined,
+      () => undefined
+    )
+    return await queued
   }
 
   async sendDeviceStatus(status: Record<string, unknown>, connectionId?: string): Promise<void> {

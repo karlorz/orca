@@ -74,6 +74,14 @@ features:
       - mobile/src/pet-speak
       - src/main/runtime
     wiki: projects/grok-desktop-pet/work/2026-09-08-mobile-speech-session-recovery
+  - id: pet-speak-exact-event-ownership
+    title: Exact-event pet.speak.accepted plus process-wide phone event_id claim
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - src/main/runtime
+    wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout
   - id: mobile-all-usage-providers
     title: Mobile Settings Account usage switches including opt-in Grok
     kind: product

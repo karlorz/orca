@@ -148,11 +148,10 @@ export class RuntimeRpcState {
       const relay = this.petVoiceRelay
       this.runtime.setPetVoiceRelay?.(relay)
       this.runtime.setPetSpeakAcceptedHandler?.(async (eventId) => {
-        await relay.sendSpeakAccepted(eventId)
-        return { accepted: true }
+        return await relay.sendSpeakAccepted(eventId)
       })
-      this.runtime.setPetSpeakCompleteHandler?.(async (eventId, outcome) => {
-        await relay.sendSpeakComplete(eventId, outcome)
+      this.runtime.setPetSpeakCompleteHandler?.(async (eventId, outcome, reason) => {
+        await relay.sendSpeakComplete(eventId, outcome, reason)
         return { completed: true }
       })
       const tracker = new PetVoiceSubscriptionTracker({
