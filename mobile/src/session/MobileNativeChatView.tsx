@@ -39,6 +39,7 @@ export function MobileNativeChatView({
   agentWorking,
   canStop = agentWorking,
   structuredActivityUi = false,
+  turnIndicator = null,
   workingStartedAt,
   settledTurns,
   onStop,
@@ -162,14 +163,17 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
-  // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
-  // owns them; the bridge lane keeps its three-dot indicator.
+  // Per-turn status rows: one live indicator while the turn runs, then a settled
+  // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
+  // three-dot indicator.
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
     isWorking: agentWorking === true,
     workingStartedAt,
     settledTurns,
+    thinking: turnIndicator?.thinking === true,
+    activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })
 
@@ -238,11 +242,12 @@ export function MobileNativeChatView({
                 ) : null
               }
               ListFooterComponent={
-                turns.activeTurnIsUnanchored && turns.active ? (
+                structuredActivityUi && agentWorking && turns.active ? (
                   <MobileNativeChatTurnStatus
                     startedAt={turns.active.startedAt}
                     thinking={turns.active.thinking}
                     workedSeconds={turns.active.workedSeconds}
+                    activityText={turns.activeActivityText}
                   />
                 ) : null
               }
