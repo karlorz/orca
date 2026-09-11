@@ -1,5 +1,6 @@
 import {
   isOwnerManagedSkillScope,
+  isOutdatedExternalLink,
   isSkillCopyNeedingAttention,
   skillPlacementParticipatesInGlobalFreshness,
   type SkillFreshnessInstallation
@@ -111,7 +112,11 @@ export function groupSkillFreshness(
       !pinned.has(name) &&
       !entries
         .filter(skillPlacementParticipatesInGlobalFreshness)
-        .some((entry) => entry.status === 'outdated' || isSkillCopyNeedingAttention(entry))
+        .some(
+          (entry) =>
+            !isOutdatedExternalLink(entry) &&
+            (entry.status === 'outdated' || isSkillCopyNeedingAttention(entry))
+        )
     ) {
       continue
     }

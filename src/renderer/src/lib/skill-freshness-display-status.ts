@@ -1,4 +1,5 @@
 import {
+  isOutdatedExternalLink,
   isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
   skillPlacementParticipatesInGlobalFreshness,
@@ -18,12 +19,12 @@ export function getSkillFreshnessDisplayStatus(
   if (inventory?.eligibleUpdateNames.includes(skillName)) {
     return 'update-available'
   }
+  const namedInstallations = (inventory?.installations ?? []).filter(
+    (installation) => installation.name === skillName
+  )
   let hasPlacement = false
   let hasBlockedCopy = false
-  for (const installation of inventory?.installations ?? []) {
-    if (installation.name !== skillName) {
-      continue
-    }
+  for (const installation of namedInstallations) {
     // Why: a project-owned copy is outside the global updater's reach, so it can neither
     // stand in as evidence this skill is installed globally nor make the badge amber over
     // drift Orca has no way to fix. Skipped before `hasPlacement` so a repo-only skill
@@ -35,6 +36,9 @@ export function getSkillFreshnessDisplayStatus(
     // Why: 'newer-known' is recognized official content ahead of this build — the
     // updater's own install or a newer release's bytes. There is nothing to fix and
     // nothing to update to, so amber would send the user chasing a phantom edit.
+    if (isOutdatedExternalLink(installation)) {
+      continue
+    }
     if (
       installation.status !== 'current' &&
       installation.status !== 'newer-known' &&
@@ -78,6 +82,10 @@ export function hasSkillCopyNeedingAttention(
   return (
     (placements.length > 0 &&
       Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
-    placements.some(isSkillCopyNeedingAttention)
+    placements.some(
+      (installation) =>
+        !isOutdatedExternalLink(installation) &&
+        isSkillCopyNeedingAttention(installation)
+    )
   )
 }
