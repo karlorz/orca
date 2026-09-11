@@ -308,6 +308,26 @@ describe('PetSpeakHandler', () => {
     expect(mockTts.speak).not.toHaveBeenCalled()
   })
 
+  it('logs event_id and length when text exceeds PET_SPEAK_MAX_TEXT_GRAPHEMES', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const overlongText = 'A'.repeat(2001)
+
+    await handler.handleEvent({
+      type: 'pet.speak',
+      text: overlongText,
+      event_id: 'ev-overlong'
+    })
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[pet-speak] Dropped event exceeding length limit:'),
+      expect.objectContaining({
+        event_id: 'ev-overlong',
+        textLength: 2001
+      })
+    )
+    consoleSpy.mockRestore()
+  })
+
   describe('prepareEvent seam', () => {
     it('applies prepareEvent immediately before speech and preserves original event payload fields', async () => {
       const mockAdapter: PetSpeechNativeAdapter = {

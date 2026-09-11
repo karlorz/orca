@@ -1,6 +1,7 @@
 export type { PetSpeakPayload, PetSpeakSubscribeResult } from './pet-speak-types'
 import type { PetSpeakPayload } from './pet-speak-types'
 import { normalizePetLanguage } from './pet-language-normalizer'
+import { PET_SPEAK_MAX_TEXT_GRAPHEMES } from '../../../src/shared/pet-speak-limits'
 
 export {
   normalizePetLanguage,
@@ -20,55 +21,85 @@ export function parsePetSpeakRate(raw: unknown): number {
   return Math.min(PET_SPEAK_MAX_RATE, Math.max(PET_SPEAK_MIN_RATE, Math.round(n * 100) / 100))
 }
 
-export function isValidPetSpeakPayload(event: unknown): event is PetSpeakPayload {
+export type PetSpeakValidationDecision =
+  | { ok: true; payload: PetSpeakPayload }
+  | {
+      ok: false
+      reason: 'type' | 'text_empty' | 'length' | 'event_id' | 'lang' | 'voiceName' | 'debug'
+      event_id?: string
+      textLength?: number
+    }
+
+export function inspectPetSpeakPayload(event: unknown): PetSpeakValidationDecision {
   if (!event || typeof event !== 'object') {
-    return false
+    return { ok: false, reason: 'type' }
   }
   const candidate = event as Record<string, unknown>
   if (candidate.type !== 'pet.speak') {
-    return false
+    return { ok: false, reason: 'type' }
   }
+  const eventId =
+    typeof candidate.event_id === 'string' && candidate.event_id.trim()
+      ? candidate.event_id.trim()
+      : undefined
+
   if (typeof candidate.text !== 'string') {
-    return false
+    return { ok: false, reason: 'text_empty', ...(eventId ? { event_id: eventId } : {}) }
   }
   const trimmed = candidate.text.trim()
   const textLength = Array.from(trimmed).length
-  if (textLength === 0 || textLength > 70) {
-    return false
+  if (textLength === 0) {
+    return {
+      ok: false,
+      reason: 'text_empty',
+      ...(eventId ? { event_id: eventId } : {}),
+      textLength: 0
+    }
+  }
+  if (textLength > PET_SPEAK_MAX_TEXT_GRAPHEMES) {
+    return {
+      ok: false,
+      reason: 'length',
+      ...(eventId ? { event_id: eventId } : {}),
+      textLength
+    }
   }
 
   // event_id must be non-empty string <= 128 Unicode characters
-  if (typeof candidate.event_id !== 'string') {
-    return false
+  if (!eventId) {
+    return { ok: false, reason: 'event_id' }
   }
-  const eventId = candidate.event_id.trim()
   const eventIdLength = Array.from(eventId).length
-  if (eventIdLength === 0 || eventIdLength > 128) {
-    return false
+  if (eventIdLength > 128) {
+    return { ok: false, reason: 'event_id', event_id: eventId }
   }
 
   // language validation: canonical or legacy alias
   if (candidate.lang !== undefined && candidate.lang !== null) {
     const normalized = normalizePetLanguage(candidate.lang)
     if (!normalized) {
-      return false
+      return { ok: false, reason: 'lang', event_id: eventId }
     }
   }
 
   // voiceName validation: optional string <= 256 chars
   if (candidate.voiceName !== undefined) {
     if (typeof candidate.voiceName !== 'string') {
-      return false
+      return { ok: false, reason: 'voiceName', event_id: eventId }
     }
     if (Array.from(candidate.voiceName.trim()).length > 256) {
-      return false
+      return { ok: false, reason: 'voiceName', event_id: eventId }
     }
   }
 
   // debug validation: optional boolean
   if (candidate.debug !== undefined && typeof candidate.debug !== 'boolean') {
-    return false
+    return { ok: false, reason: 'debug', event_id: eventId }
   }
 
-  return true
+  return { ok: true, payload: candidate as unknown as PetSpeakPayload }
+}
+
+export function isValidPetSpeakPayload(event: unknown): event is PetSpeakPayload {
+  return inspectPetSpeakPayload(event).ok
 }

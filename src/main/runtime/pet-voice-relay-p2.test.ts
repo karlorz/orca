@@ -93,7 +93,7 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
     relay.destroy()
   })
 
-  it('rejects payload if text is empty, >70 unicode chars, or lang is invalid', async () => {
+  it('rejects payload if text is empty, >PET_SPEAK_MAX_TEXT_GRAPHEMES unicode chars, or lang is invalid', async () => {
     const { captured, connectFn } = captureSubscriberConnectFn()
 
     const relay = new PetVoiceRelay({
@@ -108,8 +108,8 @@ describe('PetVoiceRelay - Task P2 Correlation & Validation & Completion', () => 
 
     // 1. Empty text
     emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: '   ', lang: 'yue' })
-    // 2. >70 unicode characters
-    const longText = '這是一段超過七十個字符的文字。'.repeat(6) // 15*6 = 90 chars
+    // 2. >2000 unicode characters
+    const longText = '這是一段超過字符上限的文字。'.repeat(150) // 14*150 = 2100 chars
     emitCapturedSpeakIntent(captured, { kind: 'speak-intent', text: longText, lang: 'yue' })
     // 3. Unsupported language (e.g., fr, es, de)
     emitCapturedSpeakIntent(captured, {

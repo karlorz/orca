@@ -6,6 +6,7 @@ import {
   PetSpeakHandler,
   isValidPetSpeakPayload
 } from './pet-speak'
+import { resetPetSpeakCrossHostForTests } from './pet-speak-cross-host'
 import { parsePetSpeakRate } from './pet-speak-payload-validation'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
 import type { RpcClient } from '../transport/rpc-client'
@@ -91,6 +92,7 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
   let onComplete: (eventId: string, outcome: string) => Promise<void>
 
   beforeEach(() => {
+    resetPetSpeakCrossHostForTests()
     mockTts = new MockTtsAdapter()
     mockMedia = new MockMediaSessionAdapter()
     completedOutcomes = []
@@ -323,6 +325,61 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
       { event_id: 'ev-2', outcome: 'spoken' },
       { event_id: 'ev-3', outcome: 'spoken' }
     ])
+  })
+
+  it('admits and speaks FIFO successor while previous stopSession teardown is still hanging', async () => {
+    let resolveStopSession: (() => void) | undefined
+    mockMedia.stopSession = vi.fn(async (sessionId: string) => {
+      await new Promise<void>((resolve) => {
+        resolveStopSession = resolve
+      })
+      mockMedia.activeSessions = mockMedia.activeSessions.filter((s) => s !== sessionId)
+    })
+
+    const handler = new PetSpeakHandler({
+      tts: mockTts,
+      mediaSession: mockMedia,
+      onComplete
+    })
+
+    const pendingA = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Event A finishes spoken',
+      lang: 'yue-HK',
+      event_id: 'ev-succ-a'
+    })
+
+    // Wait until A has spoken and completed truthful RPC outcome
+    while (!completedOutcomes.some((c) => c.event_id === 'ev-succ-a' && c.outcome === 'spoken')) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+
+    // At this point stopSession is still hung; pendingA has not resolved
+    const pendingB = handler.handleEvent({
+      type: 'pet.speak',
+      text: 'Event B arrives during hanging teardown',
+      lang: 'yue-HK',
+      event_id: 'ev-succ-b'
+    })
+
+    // B must be spoken and completed while stopSession is still hung
+    const deadline = Date.now() + 500
+    while (
+      !completedOutcomes.some((c) => c.event_id === 'ev-succ-b' && c.outcome === 'spoken') &&
+      Date.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+
+    expect(completedOutcomes).toContainEqual({ event_id: 'ev-succ-b', outcome: 'spoken' })
+    expect(mockTts.spoken.map((item) => item.text)).toEqual([
+      'Event A finishes spoken',
+      'Event B arrives during hanging teardown'
+    ])
+
+    // Release stop and await pending handlers so test does not leak
+    resolveStopSession?.()
+    await Promise.all([pendingA, pendingB])
   })
 
   it('bounds queue capacity to 16 and completes overflow events as cancelled immediately', async () => {
@@ -608,10 +665,21 @@ describe('PetSpeakHandler - Task P2 FIFO, Capacity, Deduplication, Completion RP
     // 3. Empty or whitespace text
     expect(isValidPetSpeakPayload({ type: 'pet.speak', text: '   ', event_id: 'ev-1' })).toBe(false)
 
-    // 4. Overlong text (>70 unicode chars)
-    const longText = '這是一段很長很長的廣東話句子測試超過七十個字符的文字內容。'.repeat(3)
+    // 4. Overlong text (>2000 unicode chars)
+    const longText = '這是一段很長很長的廣東話句子測試超過七十個字符的文字內容。'.repeat(100)
+    expect(Array.from(longText).length).toBe(2900)
     expect(isValidPetSpeakPayload({ type: 'pet.speak', text: longText, event_id: 'ev-2' })).toBe(
       false
+    )
+    // 91-char and 2000-char asks are valid
+    const text91 =
+      "我哋點樣 reconcile '2026-08-10-grok-build-init-pvelxc-3adc3628' 喺 cmux (stale-or-superseded) 呀？"
+    expect(isValidPetSpeakPayload({ type: 'pet.speak', text: text91, event_id: 'ev-91' })).toBe(
+      true
+    )
+    const text2000 = '粵'.repeat(2000)
+    expect(isValidPetSpeakPayload({ type: 'pet.speak', text: text2000, event_id: 'ev-2000' })).toBe(
+      true
     )
 
     // 5. Accepted canonical and legacy languages

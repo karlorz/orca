@@ -10,7 +10,11 @@ import {
   DefaultExpoNotificationMediaSessionAdapter,
   getPetSpeechNativeAdapter
 } from './pet-speak-adapters'
-import { type PetSpeakPayload, isValidPetSpeakPayload } from './pet-speak-payload-validation'
+import {
+  type PetSpeakPayload,
+  inspectPetSpeakPayload,
+  isValidPetSpeakPayload
+} from './pet-speak-payload-validation'
 import type {
   PetSpeakHandlerOptions,
   PetSpeakEventPreparer,
@@ -23,16 +27,15 @@ import {
   releasePetSpeakEvent
 } from './pet-speak-cross-host'
 import {
-  type PetSpeakAdmissionDecision,
   type PetSpeakBoundaryTimestamps,
   type PetSpeakCancelReason,
   compactBoundaryTimestamps,
-  normalizeAdmissionDecision,
   stampBoundary
 } from './pet-speak-observability'
 import {
   type PetSpeakPlayHost,
   type QueuedPetSpeakItem,
+  awaitPetSpeakAdmission,
   playQueuedPetSpeakItem
 } from './pet-speak-play-item'
 
@@ -97,12 +100,20 @@ export class PetSpeakHandler implements PetSpeakPlayHost {
   }
 
   async handleEvent(
-    event: PetSpeakPayload | null | undefined,
+    rawEvent: PetSpeakPayload | null | undefined,
     options?: { socketReceivedAt?: number }
   ): Promise<void> {
-    if (!isValidPetSpeakPayload(event)) {
+    const decision = inspectPetSpeakPayload(rawEvent)
+    if (!decision.ok) {
+      if (decision.reason === 'length') {
+        console.warn('[pet-speak] Dropped event exceeding length limit:', {
+          event_id: decision.event_id,
+          textLength: decision.textLength
+        })
+      }
       return
     }
+    const event = decision.payload
 
     if (event.replayed) {
       console.log('[pet-speak] replayed', event.seq, event.event_id)
@@ -135,7 +146,9 @@ export class PetSpeakHandler implements PetSpeakPlayHost {
 
     if (this.crossHostOwnerId && !claimPetSpeakEvent(eventId, this.crossHostOwnerId)) {
       this.seenEventIds.add(eventId)
-      await this.emitComplete(eventId, 'cancelled', 'queue_replacement')
+      // Skip pet.speak.complete: GrokPet treats the first complete as the mobile
+      // leg, so a queue_replacement nack would cancel the owning host before it
+      // can admit and play.
       return
     }
 
@@ -197,7 +210,15 @@ export class PetSpeakHandler implements PetSpeakPlayHost {
 
       const eventId = item.event.event_id!
       const decision = this.onAccepted
-        ? await this.awaitAdmission(eventId, item)
+        ? await awaitPetSpeakAdmission(
+            eventId,
+            item,
+            this.onAccepted,
+            this.admissionTimeoutMs,
+            (fn) => {
+              this.abortPendingAdmission = fn
+            }
+          )
         : { accepted: true }
       if (!decision.accepted || this.disposed || item.isCancelled) {
         await this.emitComplete(
@@ -237,34 +258,6 @@ export class PetSpeakHandler implements PetSpeakPlayHost {
       outcome === 'cancelled' ? reason : undefined,
       compactBoundaryTimestamps(trace)
     ).catch(() => {})
-  }
-
-  private async awaitAdmission(
-    eventId: string,
-    item: QueuedPetSpeakItem
-  ): Promise<PetSpeakAdmissionDecision> {
-    stampBoundary(item.trace, 'acceptance_send')
-    return await new Promise<PetSpeakAdmissionDecision>((resolve) => {
-      let settled = false
-      const finish = (decision: PetSpeakAdmissionDecision): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timer)
-        if (this.abortPendingAdmission === abort) {
-          this.abortPendingAdmission = null
-        }
-        resolve(decision)
-      }
-      const abort = (reason: PetSpeakCancelReason): void => finish({ accepted: false, reason })
-      const timer = setTimeout(() => abort('receipt_timeout'), this.admissionTimeoutMs)
-      this.abortPendingAdmission = () => abort('background_lifecycle')
-      void this.onAccepted!(eventId, item.trace).then(
-        (accepted) => finish(normalizeAdmissionDecision(accepted)),
-        () => finish({ accepted: false, reason: 'transport_teardown' })
-      )
-    })
   }
 
   notifyCaption(caption: PetSpeakCaption | null): void {

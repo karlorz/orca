@@ -4,8 +4,8 @@ import { PetSpeakHandler } from './pet-speak'
 import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import { loadPetSpeakWatermark, savePetSpeakWatermark } from './pet-speak-watermark'
 import {
+  admissionDecisionFromRpcResponse,
   compactBoundaryTimestamps,
-  isPetSpeakCancelReason,
   normalizeAdmissionDecision,
   stampBoundary,
   type PetSpeakBoundaryTimestamps
@@ -52,16 +52,7 @@ export function subscribeToPetSpeak(
           event_id: eventId,
           ...(compact ? { timestamps: compact } : {})
         })
-        if (
-          !!response &&
-          typeof response === 'object' &&
-          (response as { accepted?: unknown }).accepted === true
-        ) {
-          return { accepted: true }
-        }
-        const reasonValue = (response as { reason?: unknown } | null)?.reason
-        const reason = isPetSpeakCancelReason(reasonValue) ? reasonValue : undefined
-        return { accepted: false, ...(reason ? { reason } : {}) }
+        return admissionDecisionFromRpcResponse(response)
       } catch {
         return { accepted: false, reason: 'transport_teardown' as const }
       }

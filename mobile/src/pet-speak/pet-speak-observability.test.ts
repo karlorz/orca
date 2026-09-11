@@ -8,7 +8,11 @@ import {
 import { subscribeToPetSpeak } from './pet-speak-subscription'
 import type { RpcClient } from '../transport/rpc-client'
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
-import type { PetSpeakBoundaryTimestamps, PetSpeakCancelReason } from './pet-speak-observability'
+import {
+  admissionDecisionFromRpcResponse,
+  type PetSpeakBoundaryTimestamps,
+  type PetSpeakCancelReason
+} from './pet-speak-observability'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
@@ -393,5 +397,54 @@ describe('subscribeToPetSpeak Rec 4 observability', () => {
         })
       })
     )
+  })
+
+  it('admits when pet.speak.accepted returns an RPC envelope with result.accepted', async () => {
+    const client = clientThatEmits('ev-rpc-envelope', {
+      sendRequest: vi.fn().mockImplementation(async (method: string) => {
+        if (method === 'pet.speak.accepted') {
+          return { id: '1', ok: true, result: { accepted: true }, _meta: { runtimeId: 'rt' } }
+        }
+        return { ok: true }
+      })
+    })
+
+    const unsub = subscribeToPetSpeak(client, { tts: mockTts, mediaSession: mockMedia })
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    unsub()
+
+    expect(mockTts.spoken.map((row) => row.text)).toEqual(['Observability event'])
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'pet.speak.complete',
+      expect.objectContaining({ event_id: 'ev-rpc-envelope', outcome: 'spoken' })
+    )
+  })
+})
+
+describe('admissionDecisionFromRpcResponse', () => {
+  it('unwraps RpcSuccess.result.accepted', () => {
+    expect(
+      admissionDecisionFromRpcResponse({
+        id: '1',
+        ok: true,
+        result: { accepted: true },
+        _meta: { runtimeId: 'rt' }
+      })
+    ).toEqual({ accepted: true })
+  })
+
+  it('accepts a bare { accepted: true } payload', () => {
+    expect(admissionDecisionFromRpcResponse({ accepted: true })).toEqual({ accepted: true })
+  })
+
+  it('rejects RpcFailure as transport teardown', () => {
+    expect(
+      admissionDecisionFromRpcResponse({
+        id: '1',
+        ok: false,
+        error: { code: 'x', message: 'no' },
+        _meta: { runtimeId: 'rt' }
+      })
+    ).toEqual({ accepted: false, reason: 'transport_teardown' })
   })
 })

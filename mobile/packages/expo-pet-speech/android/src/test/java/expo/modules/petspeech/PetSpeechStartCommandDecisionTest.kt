@@ -25,12 +25,23 @@ class PetSpeechStartCommandDecisionTest {
     }
 
     @Test
-    fun stopsSelfWhenExtraTextExceeds70CodePoints() {
-        val longText = "長".repeat(71)
+    fun stopsSelfWhenExtraTextExceeds2000CodePoints() {
+        val longText = "長".repeat(2001)
         assertEquals(
             PetSpeechStartCommandDecision.Result.StopSelf,
             PetSpeechStartCommandDecision.decide(longText)
         )
+    }
+
+    @Test
+    fun startsForegroundFor91AndExactly2000CodePoints() {
+        val ask91 = "長".repeat(91)
+        val decision91 = PetSpeechStartCommandDecision.decide(ask91)
+        assertTrue(decision91 is PetSpeechStartCommandDecision.Result.StartForeground)
+
+        val text2000 = "長".repeat(2000)
+        val decision2000 = PetSpeechStartCommandDecision.decide(text2000)
+        assertTrue(decision2000 is PetSpeechStartCommandDecision.Result.StartForeground)
     }
 
     @Test

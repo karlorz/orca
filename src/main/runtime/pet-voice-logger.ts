@@ -32,6 +32,13 @@ export type PetVoiceLogEvent =
       timestamp: number
     }
   | {
+      kind: 'speak-intent-reject'
+      event_id?: string
+      charsCount: number
+      reason: 'length'
+      timestamp: number
+    }
+  | {
       kind: 'presence-change'
       state: AudioSessionState
       activeCount: number
@@ -112,6 +119,14 @@ export class PetVoiceLogger {
   logSpeakIntent(data: { event_id?: string; charsCount: number; rate: number }): void {
     this.sink.push({
       kind: 'speak-intent',
+      ...data,
+      timestamp: Date.now()
+    })
+  }
+
+  logSpeakIntentReject(data: { event_id?: string; charsCount: number; reason: 'length' }): void {
+    this.sink.push({
+      kind: 'speak-intent-reject',
       ...data,
       timestamp: Date.now()
     })

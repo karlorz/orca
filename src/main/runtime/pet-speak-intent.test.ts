@@ -1,5 +1,149 @@
 import { describe, expect, it } from 'vitest'
-import { parseSpeakIntentMessage } from './pet-speak-intent'
+import { parseSpeakIntentDecision, parseSpeakIntentMessage } from './pet-speak-intent'
+import { PET_SPEAK_MAX_TEXT_GRAPHEMES } from '../../shared/pet-speak-limits'
+
+describe('PET_SPEAK_MAX_TEXT_GRAPHEMES', () => {
+  it('is exactly 2000', () => {
+    expect(PET_SPEAK_MAX_TEXT_GRAPHEMES).toBe(2000)
+  })
+})
+
+describe('parseSpeakIntentDecision - text length & validation', () => {
+  it('accepts 91-char ask', () => {
+    const text91 =
+      "我哋點樣 reconcile '2026-08-10-grok-build-init-pvelxc-3adc3628' 喺 cmux (stale-or-superseded) 呀？"
+    expect(Array.from(text91).length).toBe(91)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      text: text91
+    })
+    expect(decision).toEqual({
+      ok: true,
+      charsCount: 91,
+      event: expect.objectContaining({
+        type: 'pet.speak',
+        text: text91
+      })
+    })
+    // Also parseSpeakIntentMessage returns valid result
+    const legacy = parseSpeakIntentMessage({
+      kind: 'speak-intent',
+      text: text91
+    })
+    expect(legacy).not.toBeNull()
+    expect(legacy!.charsCount).toBe(91)
+    expect(legacy!.event.text).toBe(text91)
+  })
+
+  it('accepts 99-char similar ask', () => {
+    const base =
+      "我哋點樣 reconcile '2026-08-10-grok-build-init-pvelxc-3adc3628' 喺 cmux (stale-or-superseded) 呀？"
+    const text99 = `${base}12345678`
+    expect(Array.from(text99).length).toBe(99)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      text: text99
+    })
+    expect(decision.ok).toBe(true)
+    if (decision.ok) {
+      expect(decision.charsCount).toBe(99)
+      expect(decision.event.text).toBe(text99)
+    }
+  })
+
+  it('accepts 70-char regression', () => {
+    const text70 = 'A'.repeat(70)
+    expect(Array.from(text70).length).toBe(70)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      text: text70
+    })
+    expect(decision.ok).toBe(true)
+    if (decision.ok) {
+      expect(decision.charsCount).toBe(70)
+      expect(decision.event.text).toBe(text70)
+    }
+  })
+
+  it('accepts exactly 2000 code points', () => {
+    const text2000 = '粵'.repeat(2000)
+    expect(Array.from(text2000).length).toBe(2000)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      text: text2000
+    })
+    expect(decision.ok).toBe(true)
+    if (decision.ok) {
+      expect(decision.charsCount).toBe(2000)
+      expect(decision.event.text).toBe(text2000)
+    }
+  })
+
+  it('rejects 2001 code points with reason "length"', () => {
+    const text2001 = '粵'.repeat(2001)
+    expect(Array.from(text2001).length).toBe(2001)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      event_id: 'ev-long-1',
+      text: text2001
+    })
+    expect(decision).toEqual({
+      ok: false,
+      reason: 'length',
+      event_id: 'ev-long-1',
+      charsCount: 2001
+    })
+    expect(
+      parseSpeakIntentMessage({
+        kind: 'speak-intent',
+        event_id: 'ev-long-1',
+        text: text2001
+      })
+    ).toBeNull()
+  })
+
+  it('rejects empty with reason "empty"', () => {
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      event_id: 'ev-empty-1',
+      text: '   '
+    })
+    expect(decision).toEqual({
+      ok: false,
+      reason: 'empty',
+      event_id: 'ev-empty-1',
+      charsCount: 0
+    })
+    expect(
+      parseSpeakIntentMessage({
+        kind: 'speak-intent',
+        event_id: 'ev-empty-1',
+        text: '   '
+      })
+    ).toBeNull()
+  })
+
+  it('ZWJ fixture: rejects text whose code-point count is >2000 even if grapheme cluster count might differ', () => {
+    // 👨‍👩‍👧‍👦 is 7 unicode code points (man, ZWJ, woman, ZWJ, girl, ZWJ, boy) but 1 grapheme cluster
+    const zwjFamily = '👨‍👩‍👧‍👦'
+    expect(Array.from(zwjFamily).length).toBe(7)
+    // 286 * 7 = 2002 code points
+    const zwjText = zwjFamily.repeat(286)
+    const codePointCount = Array.from(zwjText).length
+    expect(codePointCount).toBe(2002)
+    const decision = parseSpeakIntentDecision({
+      kind: 'speak-intent',
+      event_id: 'ev-zwj-1',
+      text: zwjText
+    })
+    expect(decision).toEqual({
+      ok: false,
+      reason: 'length',
+      event_id: 'ev-zwj-1',
+      charsCount: 2002
+    })
+  })
+})
 
 describe('parseSpeakIntentMessage - original_text', () => {
   it('parses valid original_text and trims whitespace', () => {

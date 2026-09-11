@@ -1,5 +1,5 @@
 import type { PetVoiceLogger } from './pet-voice-logger'
-import { parseSpeakIntentMessage, type PetSpeakEvent } from './pet-speak-intent'
+import { parseSpeakIntentDecision, type PetSpeakEvent } from './pet-speak-intent'
 import type { PetSpeakBoundaryTimestamps } from './pet-speak-observability'
 
 export function dispatchPetVoiceSpeakIntent(
@@ -11,11 +11,18 @@ export function dispatchPetVoiceSpeakIntent(
   if (audioSessionState !== 'live') {
     return
   }
-  const parsed = parseSpeakIntentMessage(message)
-  if (!parsed) {
+  const decision = parseSpeakIntentDecision(message)
+  if (!decision.ok) {
+    if (decision.reason === 'length') {
+      logger.logSpeakIntentReject({
+        ...(decision.event_id ? { event_id: decision.event_id } : {}),
+        charsCount: decision.charsCount,
+        reason: 'length'
+      })
+    }
     return
   }
-  const { event, charsCount } = parsed
+  const { event, charsCount } = decision
   const eventId = event.event_id ?? ''
   const receiveAt = Date.now()
   logger.logSpeakIntent({

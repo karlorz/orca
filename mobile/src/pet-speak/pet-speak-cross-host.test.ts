@@ -78,6 +78,22 @@ describe('pet-speak cross-host ownership', () => {
     expect(applyOwnedPetSpeakCaption(null, 'host-a')).toBe(true)
     expect(getPetSpeakLiveCaption()).toBeNull()
   })
+
+  it('proves loser event cannot wipe winner caption or paging state', () => {
+    // Winner claims event and posts sentence caption
+    expect(claimPetSpeakEvent('ev-win-1', 'host-winner')).toBe(true)
+    expect(
+      applyOwnedPetSpeakCaption({ eventId: 'ev-win-1', text: '第一句。第二句！' }, 'host-winner')
+    ).toBe(true)
+    expect(getPetSpeakLiveCaption()?.text).toBe('第一句。第二句！')
+
+    // Loser host attempts to claim same event -> rejected
+    expect(claimPetSpeakEvent('ev-win-1', 'host-loser')).toBe(false)
+    // Loser host attempts to clear captions on its own nack/failure -> ignored
+    expect(applyOwnedPetSpeakCaption(null, 'host-loser')).toBe(false)
+    // Winner caption remains completely intact
+    expect(getPetSpeakLiveCaption()?.text).toBe('第一句。第二句！')
+  })
 })
 
 describe('PetSpeakHandler cross-host dedup', () => {
@@ -129,17 +145,10 @@ describe('PetSpeakHandler cross-host dedup', () => {
 
     expect(ttsA.spoken).toEqual(['Only one host should speak'])
     expect(ttsB.spoken).toEqual([])
-    expect(completed).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ owner: 'host-a', eventId: 'ev-dual-1', outcome: 'spoken' }),
-        expect.objectContaining({
-          owner: 'host-b',
-          eventId: 'ev-dual-1',
-          outcome: 'cancelled',
-          reason: 'queue_replacement'
-        })
-      ])
-    )
+    expect(completed).toEqual([
+      expect.objectContaining({ owner: 'host-a', eventId: 'ev-dual-1', outcome: 'spoken' })
+    ])
+    expect(completed.some((row) => row.reason === 'queue_replacement')).toBe(false)
     expect(captions.filter((caption) => caption === null)).toHaveLength(1)
     expect(captions.some((caption) => caption?.text === 'Only one host should speak')).toBe(true)
   })

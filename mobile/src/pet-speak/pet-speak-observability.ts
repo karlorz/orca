@@ -80,3 +80,24 @@ export function normalizeAdmissionDecision(
     ...(result.reason && isPetSpeakCancelReason(result.reason) ? { reason: result.reason } : {})
   }
 }
+
+export function admissionDecisionFromRpcResponse(response: unknown): PetSpeakAdmissionDecision {
+  if (typeof response === 'boolean') {
+    return { accepted: response }
+  }
+  if (!response || typeof response !== 'object') {
+    return { accepted: false }
+  }
+  const obj = response as Record<string, unknown>
+  if (obj.ok === false) {
+    return { accepted: false, reason: 'transport_teardown' }
+  }
+  const payload = obj.ok === true && 'result' in obj ? obj.result : obj
+  if (typeof payload === 'boolean') {
+    return { accepted: payload }
+  }
+  if (payload && typeof payload === 'object') {
+    return normalizeAdmissionDecision(payload as boolean | PetSpeakAdmissionDecision)
+  }
+  return { accepted: false }
+}

@@ -131,7 +131,8 @@ describe('PetSpeakCaptionHud', () => {
     })
     const spoken = tree!.root.findByProps({ testID: 'pet-speak-caption-text' })
     const original = tree!.root.findByProps({ testID: 'pet-speak-caption-original' })
-    expect(spoken.props.children).toBe('你好！我係你嘅桌面寵物。')
+    // The first sentence of "你好！我係你嘅桌面寵物。" is "你好！"
+    expect(spoken.props.children).toBe('你好！')
     expect(original.props.children).toBe('Hello! I am your desktop pet.')
     expect(original.props.style.fontSize).toBe(13)
   })
@@ -172,5 +173,76 @@ describe('PetSpeakCaptionHud', () => {
       await Promise.resolve()
     })
     expect(() => tree!.root.findByProps({ testID: 'pet-speak-caption-original' })).toThrow()
+  })
+
+  it('pill pet-speak-caption-text shows full spoken caption.text even when original_text is >240 / truncated', async () => {
+    const longSpokenText = '呢句係好長嘅說話內容。'.repeat(10)
+    let tree: ReturnType<typeof create>
+    await act(async () => {
+      tree = create(
+        createElement(PetSpeakCaptionHud, {
+          caption: {
+            eventId: 'e1',
+            text: longSpokenText,
+            originalText: undefined
+          }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const spoken = tree!.root.findByProps({ testID: 'pet-speak-caption-text' })
+    expect(spoken).toBeDefined()
+    // Does not switch to original_text, and shows first sentence of spoken text
+    expect(spoken.props.children).toBe('呢句係好長嘅說話內容。')
+  })
+
+  it('shows only the sentence containing the current karaoke range and maps local karaoke offsets', async () => {
+    const sentence1 = '第一句講緊嘢。' // indices: 0:第 1:一 2:句 3:講 4:緊 5:嘢 6:。 (length 7)
+    const sentence2 = '第二句先至係重點！' // indices in fullText: 7:第 8:二 9:句 ...
+    const fullText = `${sentence1}${sentence2}`
+
+    let tree: ReturnType<typeof create>
+    // Sentence 1 active: highlight range [3, 5) -> "講緊"
+    await act(async () => {
+      tree = create(
+        createElement(PetSpeakCaptionHud, {
+          caption: { eventId: 'e1', text: fullText },
+          highlightRange: { start: 3, end: 5 }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    let karaoke = tree!.root.findByProps({ testID: 'pet-speak-caption-karaoke' })
+    expect(karaoke.props.children).toBe('講緊')
+
+    // Highlight at the very last code point of sentence 1 still shows sentence 1
+    await act(async () => {
+      tree.update(
+        createElement(PetSpeakCaptionHud, {
+          caption: { eventId: 'e1', text: fullText },
+          highlightRange: { start: sentence1.length - 1, end: sentence1.length }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    karaoke = tree!.root.findByProps({ testID: 'pet-speak-caption-karaoke' })
+    expect(karaoke.props.children).toBe('。')
+
+    // First highlight past terminator shows sentence 2
+    await act(async () => {
+      tree.update(
+        createElement(PetSpeakCaptionHud, {
+          caption: { eventId: 'e1', text: fullText },
+          highlightRange: { start: sentence1.length, end: sentence1.length + 2 }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    karaoke = tree!.root.findByProps({ testID: 'pet-speak-caption-karaoke' })
+    expect(karaoke.props.children).toBe('第二')
   })
 })

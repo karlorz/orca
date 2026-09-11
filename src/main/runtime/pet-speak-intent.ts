@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { normalizePetLanguage, type CanonicalLanguage } from './pet-language-normalizer'
 import { parsePetSpeakRate } from './pet-speak-rate'
+import { PET_SPEAK_MAX_TEXT_GRAPHEMES } from '../../shared/pet-speak-limits'
 
 export type PetSpeakEvent = {
   type: 'pet.speak'
@@ -13,27 +14,65 @@ export type PetSpeakEvent = {
   debug?: boolean
 }
 
-export function parseSpeakIntentMessage(
-  message: Record<string, unknown>
-): { event: PetSpeakEvent; charsCount: number } | null {
+export type SpeakIntentDecision =
+  | {
+      ok: true
+      event: PetSpeakEvent
+      charsCount: number
+    }
+  | {
+      ok: false
+      reason: 'empty' | 'length' | 'malformed'
+      event_id?: string
+      charsCount: number
+    }
+
+export function parseSpeakIntentDecision(message: Record<string, unknown>): SpeakIntentDecision {
+  const eventIdInMessage =
+    typeof message.event_id === 'string' ? message.event_id.trim() : undefined
   const rawText = typeof message.text === 'string' ? message.text.trim() : ''
   const textChars = Array.from(rawText)
-  if (textChars.length === 0 || textChars.length > 70) {
-    return null
+
+  if (textChars.length === 0) {
+    return {
+      ok: false,
+      reason: 'empty',
+      ...(eventIdInMessage ? { event_id: eventIdInMessage } : {}),
+      charsCount: 0
+    }
+  }
+
+  if (textChars.length > PET_SPEAK_MAX_TEXT_GRAPHEMES) {
+    return {
+      ok: false,
+      reason: 'length',
+      ...(eventIdInMessage ? { event_id: eventIdInMessage } : {}),
+      charsCount: textChars.length
+    }
   }
 
   let normalizedLang: CanonicalLanguage | undefined
   if (message.lang !== undefined && message.lang !== null) {
     normalizedLang = normalizePetLanguage(message.lang)
     if (!normalizedLang) {
-      return null
+      return {
+        ok: false,
+        reason: 'malformed',
+        ...(eventIdInMessage ? { event_id: eventIdInMessage } : {}),
+        charsCount: textChars.length
+      }
     }
   }
 
   let eventId = typeof message.event_id === 'string' ? message.event_id.trim() : ''
   if (eventId) {
     if (Array.from(eventId).length > 128) {
-      return null
+      return {
+        ok: false,
+        reason: 'malformed',
+        ...(eventIdInMessage ? { event_id: eventIdInMessage } : {}),
+        charsCount: textChars.length
+      }
     }
   } else {
     eventId = `relay-${randomUUID()}`
@@ -64,6 +103,7 @@ export function parseSpeakIntentMessage(
   }
 
   return {
+    ok: true,
     charsCount: textChars.length,
     event: {
       type: 'pet.speak',
@@ -75,5 +115,18 @@ export function parseSpeakIntentMessage(
       ...(voiceName ? { voiceName } : {}),
       ...(debug !== undefined ? { debug } : {})
     }
+  }
+}
+
+export function parseSpeakIntentMessage(
+  message: Record<string, unknown>
+): { event: PetSpeakEvent; charsCount: number } | null {
+  const decision = parseSpeakIntentDecision(message)
+  if (!decision.ok) {
+    return null
+  }
+  return {
+    event: decision.event,
+    charsCount: decision.charsCount
   }
 }

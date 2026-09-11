@@ -3,8 +3,6 @@ package expo.modules.petspeech
 import java.util.Locale
 
 object PetSpeechPayloadValidator {
-    private const val MAX_TEXT_CODE_POINTS = 70
-    private const val MAX_EVENT_ID_CODE_POINTS = 128
 
     fun isValid(eventId: String?, text: String?, lang: String?): Boolean {
         if (eventId == null || text == null) {
@@ -17,11 +15,11 @@ object PetSpeechPayloadValidator {
             return false
         }
 
-        if (trimmedEventId.codePointCount(0, trimmedEventId.length) > MAX_EVENT_ID_CODE_POINTS) {
+        if (trimmedEventId.codePointCount(0, trimmedEventId.length) > PetSpeechLimits.MAX_EVENT_ID_CODE_POINTS) {
             return false
         }
 
-        if (trimmedText.codePointCount(0, trimmedText.length) > MAX_TEXT_CODE_POINTS) {
+        if (trimmedText.codePointCount(0, trimmedText.length) > PetSpeechLimits.MAX_TEXT_CODE_POINTS) {
             return false
         }
 

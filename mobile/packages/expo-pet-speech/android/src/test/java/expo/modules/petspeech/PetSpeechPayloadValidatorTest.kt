@@ -35,20 +35,25 @@ class PetSpeechPayloadValidatorTest {
 
     @Test
     fun enforcesUnicodeCodePointBoundOnText() {
-        // Exactly 70 code points
+        assertTrue(PetSpeechLimits.MAX_TEXT_CODE_POINTS == 2000)
+
         val text70 = "廣".repeat(70)
         assertTrue(PetSpeechPayloadValidator.isValid("ev-1", text70, "yue"))
 
-        // 71 code points
-        val text71 = "廣".repeat(71)
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", text71, "yue"))
+        val text91 = "廣".repeat(91)
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-1", text91, "yue"))
 
-        // Surrogate pairs (e.g. emoji 🦭 or CJK Extension B 𠮷): 70 emoji code points = 140 Java chars
-        val emoji70 = "🦭".repeat(70)
-        assertTrue(PetSpeechPayloadValidator.isValid("ev-1", emoji70, "yue"))
+        val text2000 = "廣".repeat(2000)
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-1", text2000, "yue"))
 
-        val emoji71 = "🦭".repeat(71)
-        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", emoji71, "yue"))
+        val text2001 = "廣".repeat(2001)
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", text2001, "yue"))
+
+        val emoji2000 = "🦭".repeat(2000)
+        assertTrue(PetSpeechPayloadValidator.isValid("ev-1", emoji2000, "yue"))
+
+        val emoji2001 = "🦭".repeat(2001)
+        assertFalse(PetSpeechPayloadValidator.isValid("ev-1", emoji2001, "yue"))
     }
 
     @Test

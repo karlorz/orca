@@ -8,8 +8,10 @@ import {
 import type { PetSpeakPayload } from './pet-speak-payload-validation'
 import type { PetSpeakEventPreparer, PetSpeakCaption } from './pet-speak-types'
 import {
+  type PetSpeakAdmissionDecision,
   type PetSpeakBoundaryTimestamps,
   type PetSpeakCancelReason,
+  normalizeAdmissionDecision,
   stampBoundary
 } from './pet-speak-observability'
 
@@ -45,6 +47,38 @@ export function captionForPetSpeak(
 ): PetSpeakCaption {
   const trimmed = originalText?.trim()
   return trimmed ? { eventId, text, originalText: trimmed } : { eventId, text }
+}
+
+export async function awaitPetSpeakAdmission(
+  eventId: string,
+  item: QueuedPetSpeakItem,
+  onAccepted: (
+    eventId: string,
+    trace?: PetSpeakBoundaryTimestamps
+  ) => Promise<boolean | PetSpeakAdmissionDecision>,
+  timeoutMs: number,
+  setAbort: (fn: (() => void) | null) => void
+): Promise<PetSpeakAdmissionDecision> {
+  stampBoundary(item.trace, 'acceptance_send')
+  return await new Promise<PetSpeakAdmissionDecision>((resolve) => {
+    let settled = false
+    const finish = (decision: PetSpeakAdmissionDecision): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      setAbort(null)
+      resolve(decision)
+    }
+    const abort = (reason: PetSpeakCancelReason): void => finish({ accepted: false, reason })
+    const timer = setTimeout(() => abort('receipt_timeout'), timeoutMs)
+    setAbort(() => abort('background_lifecycle'))
+    void onAccepted(eventId, item.trace).then(
+      (accepted) => finish(normalizeAdmissionDecision(accepted)),
+      () => finish({ accepted: false, reason: 'transport_teardown' })
+    )
+  })
 }
 
 export function cancelReasonForPetSpeak(
@@ -188,7 +222,7 @@ export async function playQueuedPetSpeakItem(
   } finally {
     host.notifyCaption(null)
     if (sessionId) {
-      await host.mediaSession.stopSession(sessionId).catch(() => {})
+      void host.mediaSession.stopSession(sessionId).catch(() => {})
     }
     if (host.activeSessionId === sessionId) {
       host.activeSessionId = null

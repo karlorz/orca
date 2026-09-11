@@ -15,6 +15,7 @@ import {
 } from './pet-speech-preferences'
 import type { PetSpeakCaption } from './pet-speak-types'
 import { splitCaptionHighlight, type CaptionHighlightRange } from './pet-speak-caption-highlight'
+import { findActiveSentenceIndex, splitCaptionSentences } from './pet-speak-caption-sentences'
 
 export const CAPTION_OFFSET_STORAGE_KEY = PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET
 export const CAPTION_HUD_FONT_SIZE = 18
@@ -145,7 +146,31 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
   )
 
   const originalText = props.caption.originalText?.trim() ?? ''
-  const spokenSegments = splitCaptionHighlight(props.caption.text, props.highlightRange)
+  const sentences = useMemo(() => splitCaptionSentences(props.caption.text), [props.caption.text])
+  const activeSentenceIndex = useMemo(
+    () => findActiveSentenceIndex(sentences, props.highlightRange),
+    [sentences, props.highlightRange]
+  )
+  const activeSentence = sentences[activeSentenceIndex]
+  const displayedText = activeSentence ? activeSentence.text : props.caption.text
+
+  // Map global highlight range to sentence-local range if active sentence exists
+  const localHighlightRange = useMemo<CaptionHighlightRange | null>(() => {
+    if (!props.highlightRange || !activeSentence) {
+      return props.highlightRange ?? null
+    }
+    const relStart = props.highlightRange.start - activeSentence.start
+    const relEnd = props.highlightRange.end - activeSentence.start
+    if (relEnd <= 0 || relStart >= displayedText.length) {
+      return null
+    }
+    return {
+      start: Math.max(0, relStart),
+      end: Math.min(displayedText.length, relEnd)
+    }
+  }, [props.highlightRange, activeSentence, displayedText])
+
+  const spokenSegments = splitCaptionHighlight(displayedText, localHighlightRange)
 
   return (
     <View style={styles.overlay} pointerEvents="box-none" testID="pet-speak-caption-overlay">
@@ -163,9 +188,13 @@ export function PetSpeakCaptionHud(props: PetSpeakCaptionHudProps): ReactElement
           {...panResponder.panHandlers}
         >
           <View style={styles.textColumn}>
-            <Text style={styles.text} numberOfLines={3} testID="pet-speak-caption-text">
+            <Text
+              style={styles.text}
+              numberOfLines={sentences.length <= 1 ? 3 : 2}
+              testID="pet-speak-caption-text"
+            >
               {spokenSegments.length === 1 && !spokenSegments[0]?.highlighted
-                ? props.caption.text
+                ? displayedText
                 : spokenSegments.map((segment) => (
                     <Text
                       key={`${segment.start}-${segment.highlighted ? 'h' : 'n'}`}

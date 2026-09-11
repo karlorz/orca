@@ -27,7 +27,7 @@ describe('AndroidPetSpeechAdapter', () => {
     const adapter = new AndroidPetSpeechAdapter(
       mockNativeModule as unknown as PetSpeechNativeModule
     )
-    const longText = '長'.repeat(71)
+    const longText = '長'.repeat(2001)
     const payload: PetSpeakPayload = {
       type: 'pet.speak',
       text: longText,
