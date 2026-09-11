@@ -144,6 +144,12 @@ export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstalla
   )
 }
 
+// Why: the updater never writes through an external link, so an outdated copy there
+// is owner-managed drift with no Orca remedy, whether or not a sibling copy exists.
+export function isOutdatedExternalLink(installation: SkillFreshnessInstallation): boolean {
+  return installation.topology === 'external-link' && installation.status === 'outdated'
+}
+
 export type SkillFreshnessScanIssueReason =
   | 'depth-limit'
   | 'entry-limit'

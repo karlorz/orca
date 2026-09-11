@@ -118,6 +118,114 @@ describe('groupSkillFreshness', () => {
     expect(groups).toEqual([])
   })
 
+  it.each(['current', 'newer-known'] as const)(
+    'does not leave Review stuck on an outdated external link when the canonical copy is %s',
+    (canonicalStatus) => {
+      // Why: Orca's updater never writes through a CC-Switch/Claude external link.
+      // When the convergent copy is already current or ahead, that stale link cannot
+      // be repaired and must not hold Review(3) open forever.
+      expect(
+        groupSkillFreshness(
+          [
+            placement('orca-cli', { status: canonicalStatus }),
+            placement('orca-cli', {
+              rootId: 'home-codex',
+              unresolvedPath: '/home/.codex/skills/orca-cli',
+              topology: 'external-link',
+              status: 'outdated'
+            })
+          ],
+          []
+        )
+      ).toEqual([])
+    }
+  )
+
+  it('omits an outdated external link even with no convergent copy', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', {
+          rootId: 'home-claude',
+          unresolvedPath: '/home/.claude/skills/computer-use',
+          topology: 'external-link',
+          status: 'outdated'
+        })
+      ],
+      []
+    )
+    expect(groups).toEqual([])
+  })
+
+  it('still earns cannot-update with unrecognized chip for lone unrecognized external link', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', {
+          rootId: 'home-claude',
+          unresolvedPath: '/home/.claude/skills/computer-use',
+          topology: 'external-link',
+          status: 'unrecognized'
+        })
+      ],
+      []
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations[0]?.chip).toBe('unrecognized')
+  })
+
+  it('still earns cannot-update with inaccessible chip for lone inaccessible external link', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', {
+          rootId: 'home-claude',
+          unresolvedPath: '/home/.claude/skills/computer-use',
+          topology: 'external-link',
+          status: 'inaccessible'
+        })
+      ],
+      []
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations[0]?.chip).toBe('inaccessible')
+  })
+
+  it('includes outdated external link as a location chip when group is earned by sibling', () => {
+    const groups = groupSkillFreshness(
+      [
+        placement('computer-use', {
+          rootId: 'home-claude',
+          unresolvedPath: '/home/.claude/skills/computer-use',
+          topology: 'external-link',
+          status: 'outdated'
+        }),
+        placement('computer-use', {
+          rootId: 'home-codex',
+          unresolvedPath: '/home/.codex/skills/computer-use',
+          topology: 'independent-copy',
+          status: 'unrecognized'
+        })
+      ],
+      []
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.status).toBe('cannot-update')
+    expect(groups[0]?.locations).toEqual([
+      {
+        id: expect.any(String),
+        path: '/home/.claude/skills/computer-use',
+        chip: 'external-link',
+        participatesInGlobalFreshness: true
+      },
+      {
+        id: expect.any(String),
+        path: '/home/.codex/skills/computer-use',
+        chip: 'unrecognized',
+        participatesInGlobalFreshness: true
+      }
+    ])
+  })
+
   it('groups a blocked skill and flags the culprit location, not the main copy', () => {
     const groups = groupSkillFreshness(
       [

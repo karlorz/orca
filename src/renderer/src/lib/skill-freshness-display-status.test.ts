@@ -57,6 +57,18 @@ function pluginCachePlacement(
   }
 }
 
+function externalLinkPlacement(
+  status: SkillFreshnessStatus = 'outdated'
+): SkillFreshnessInstallation {
+  return {
+    ...placement(status, 3),
+    rootId: 'home-codex',
+    unresolvedPath: `/home/.codex/skills/${SKILL_NAME}`,
+    resolvedPath: `/home/.cc-switch/skills/${SKILL_NAME}`,
+    topology: 'external-link'
+  }
+}
+
 function repoPlacement(status: SkillFreshnessStatus = 'unrecognized'): SkillFreshnessInstallation {
   return {
     ...placement(status, 7),
@@ -178,6 +190,25 @@ describe('getSkillFreshnessDisplayStatus', () => {
         SKILL_NAME
       )
     ).toBe('needs-attention')
+  })
+
+  it.each(['current', 'newer-known'] as const)(
+    'does not amber over an outdated external link beside a %s canonical copy',
+    (canonicalStatus) => {
+      const value = inventory([placement(canonicalStatus), externalLinkPlacement()])
+
+      expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('up-to-date')
+      expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
+    }
+  )
+
+  it('reports up to date and no attention for a lone outdated external link', () => {
+    // Why: skip stays after hasPlacement so io-error fail-closed is preserved;
+    // pill says up-to-date over a factually behind link.
+    const value = inventory([externalLinkPlacement('outdated')])
+
+    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('up-to-date')
+    expect(hasSkillCopyNeedingAttention(value, SKILL_NAME)).toBe(false)
   })
 
   it('still reports drift in our own copy when a plugin-managed one sits alongside', () => {
