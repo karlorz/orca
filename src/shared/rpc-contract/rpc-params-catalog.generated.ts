@@ -1154,7 +1154,12 @@ export const RPC_PARAMS_BY_METHOD = {
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
   'orchestration.send',
-  'orchestration.taskUpdate'
+  'orchestration.taskUpdate',
+  'pet.speak.accepted',
+  'pet.speak.complete',
+  'pet.speak.status',
+  'pet.speak.subscribe',
+  'pet.speak.unsubscribe'
 ]
 
 export type RpcMethodName = keyof typeof RPC_PARAMS_BY_METHOD
