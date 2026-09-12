@@ -21,22 +21,6 @@ function readRequired(path) {
   return readFileSync(path, 'utf8')
 }
 
-function collectKeys(value, keys = new Set()) {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectKeys(item, keys)
-    }
-    return keys
-  }
-  if (value && typeof value === 'object') {
-    for (const [key, nested] of Object.entries(value)) {
-      keys.add(key)
-      collectKeys(nested, keys)
-    }
-  }
-  return keys
-}
-
 function serviceEnvironment(service) {
   const env = service.environment
   if (!env) {
@@ -67,6 +51,11 @@ function labelText(service) {
 }
 
 describe('own-mobile-relay Coolify deploy channel', () => {
+  const composeRaw = readRequired(composePath)
+  const compose = parse(composeRaw)
+  const serviceNames = Object.keys(compose.services ?? {})
+  const service = compose.services[serviceNames[0]]
+
   it('keeps the deploy channel off the repo root so the root-entry guard stays green', () => {
     for (const name of [
       'Dockerfile',
@@ -79,16 +68,9 @@ describe('own-mobile-relay Coolify deploy channel', () => {
   })
 
   it('ships docker-compose.coolify.yml with one service, expose 8093, no host ports or profiles', () => {
-    const raw = readRequired(composePath)
-    const compose = parse(raw)
-    const services = compose.services ?? {}
-    const serviceNames = Object.keys(services)
     expect(serviceNames).toHaveLength(1)
-
-    const service = services[serviceNames[0]]
-    const keys = collectKeys(compose)
-    expect(keys.has('ports')).toBe(false)
-    expect(keys.has('profiles')).toBe(false)
+    expect(composeRaw).not.toMatch(/^[\t ]*ports:/m)
+    expect(composeRaw).not.toMatch(/^[\t ]*profiles:/m)
     expect(service.ports).toBeUndefined()
     expect(service.profiles).toBeUndefined()
     expect(compose.profiles).toBeUndefined()
@@ -98,9 +80,6 @@ describe('own-mobile-relay Coolify deploy channel', () => {
   })
 
   it('labels both public hostnames for HTTP and WebSocket and mounts a named SQLite volume', () => {
-    const compose = parse(readRequired(composePath))
-    const serviceNames = Object.keys(compose.services ?? {})
-    const service = compose.services[serviceNames[0]]
     const labels = labelText(service)
     expect(labels).toContain(AUTH_HOST)
     expect(labels).toContain(RELAY_HOST)
@@ -118,8 +97,6 @@ describe('own-mobile-relay Coolify deploy channel', () => {
   })
 
   it('binds 0.0.0.0 in the container and names Coolify env without secrets or operator bootstrap', () => {
-    const compose = parse(readRequired(composePath))
-    const service = compose.services[Object.keys(compose.services)[0]]
     const env = serviceEnvironment(service)
     expect(String(env.OWN_RELAY_LISTEN_HOST)).toBe('0.0.0.0')
     expect(String(env.OWN_RELAY_LISTEN_PORT)).toBe('8093')
@@ -156,14 +133,14 @@ describe('own-mobile-relay Coolify deploy channel', () => {
 
   it('publishes a karlorz-only multi-arch image with linux/amd64 required', () => {
     const raw = readRequired(workflowPath)
-    const workflow = parse(raw)
-    expect(JSON.stringify(workflow)).toContain("github.repository == 'karlorz/orca'")
+    expect(raw).toContain("github.repository == 'karlorz/orca'")
     expect(raw).toContain('linux/amd64')
     expect(raw).toContain('ghcr.io/karlorz/own-mobile-relay')
     expect(raw).toMatch(/docker\.io\/karlorz\/own-mobile-relay|DOCKERHUB/)
     expect(raw).not.toContain('stablyai/orca')
     expect(raw).not.toContain('docker compose up')
     expect(raw).toContain('config/docker/own-mobile-relay/Dockerfile')
+    expect(raw).toContain('cache-from: type=gha')
   })
 
   it('records the fork feature inventory row', () => {

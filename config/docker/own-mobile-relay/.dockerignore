@@ -11,6 +11,10 @@ cloud
 docs
 tests
 native
+resources
+src/renderer
+src/preload
+src/cli
 **/*.test.ts
 **/*.test.tsx
 **/*.test.mjs
