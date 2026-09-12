@@ -1,0 +1,44 @@
+# Coolify: Compose file = this path. Context is the repo root (three levels up).
+# One process, two hostnames. No host ports. No profiles.
+services:
+  own-mobile-relay:
+    image: ghcr.io/karlorz/own-mobile-relay:${OWN_RELAY_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: config/docker/own-mobile-relay/Dockerfile
+    expose:
+      - '8093'
+    environment:
+      OWN_RELAY_LISTEN_HOST: '0.0.0.0'
+      OWN_RELAY_LISTEN_PORT: '8093'
+      OWN_RELAY_ORIGIN: ${OWN_RELAY_ORIGIN:-https://orca-relay.karldigi.dev}
+      OWN_RELAY_AUTH_ORIGIN: ${OWN_RELAY_AUTH_ORIGIN:-https://orca-auth.karldigi.dev}
+      OWN_RELAY_CLIENT_ID: ${OWN_RELAY_CLIENT_ID}
+      OWN_RELAY_STATE_PATH: /var/lib/own-mobile-relay/security-state.db
+    volumes:
+      - own-mobile-relay-state:/var/lib/own-mobile-relay
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8093/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.own-relay-http.rule=Host(`orca-auth.karldigi.dev`) || Host(`orca-relay.karldigi.dev`)
+      - traefik.http.routers.own-relay-http.entrypoints=http
+      - traefik.http.routers.own-relay-https.rule=Host(`orca-auth.karldigi.dev`) || Host(`orca-relay.karldigi.dev`)
+      - traefik.http.routers.own-relay-https.entrypoints=https
+      - traefik.http.routers.own-relay-https.tls=true
+      - traefik.http.services.own-relay.loadbalancer.server.port=8093
+      - traefik.http.services.own-relay.loadbalancer.responseforwarding.flushinterval=100ms
+
+volumes:
+  own-mobile-relay-state:

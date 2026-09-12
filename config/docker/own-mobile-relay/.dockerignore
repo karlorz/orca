@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+mobile
+dist
+dist-electron
+dist-own-mobile-relay
+out
+release
+cloud
+docs
+tests
+native
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+**/*.spec.ts

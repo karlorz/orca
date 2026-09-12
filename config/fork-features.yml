@@ -241,3 +241,13 @@ features:
       - src/main/runtime
       - src/shared/pet-speak-limits.ts
     wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout
+
+  - id: own-mobile-relay-coolify-deploy
+    title: Coolify Docker deploy channel for own-mobile-relay (orca-auth + orca-relay)
+    kind: ci
+    status: in-progress
+    paths:
+      - config/docker/own-mobile-relay
+      - .github/workflows/fork-own-mobile-relay-image.yml
+      - config/scripts/own-mobile-relay-coolify-deploy.test.mjs
+    wiki: projects/orca/work/2026-09-12-own-relay-coolify-cloud01
