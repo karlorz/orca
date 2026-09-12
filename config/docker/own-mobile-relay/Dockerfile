@@ -2,9 +2,9 @@
 # Build context is the repository root.
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-RUN npm install --omit=dev esbuild@0.25.12 ws
+RUN npm install --omit=dev esbuild@0.25.12 ws tweetnacl
 COPY scripts/build-own-mobile-relay.mjs scripts/build-own-mobile-relay.mjs
-COPY src/main/runtime/relay/ src/main/runtime/relay/
+COPY src/main/runtime/ src/main/runtime/
 RUN node scripts/build-own-mobile-relay.mjs
 
 FROM node:22-bookworm-slim

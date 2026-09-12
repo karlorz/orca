@@ -123,6 +123,8 @@ describe('own-mobile-relay Coolify deploy channel', () => {
     const dockerfile = readRequired(dockerfilePath)
     expect(dockerfile).toMatch(/FROM node:22/)
     expect(dockerfile).toContain('scripts/build-own-mobile-relay.mjs')
+    expect(dockerfile).toContain('COPY src/main/runtime/')
+    expect(dockerfile).toMatch(/tweetnacl/)
     expect(dockerfile).toContain('dist-own-mobile-relay/own-mobile-relay.cjs')
     expect(dockerfile).toMatch(/^USER (?!root\b)/m)
     expect(dockerfile).toMatch(/HEALTHCHECK/)
