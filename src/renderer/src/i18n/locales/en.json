@@ -8767,7 +8767,9 @@
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
           "cd9fe37556": "Microphone permission granted",
-          "b5cda3665b": "Mac only"
+          "b5cda3665b": "Mac only",
+          "useMacSpeech": "Use Mac speech",
+          "useMacSpeechDesc": "Use built-in Apple Speech. Language follows System Dictation. Speech Model is locked while this is on."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
