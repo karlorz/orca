@@ -197,7 +197,7 @@ function showStage(stage, path, { cwd }) {
   return git(['show', `${stage}:${path}`], { cwd })
 }
 
-function resolveAllowlistedSyncConflicts({ cwd }) {
+export function resolveAllowlistedSyncConflicts({ cwd, fingerprintCwd } = {}) {
   const unmerged = git(['diff', '--name-only', '--diff-filter=U'], { cwd })
     .split('\n')
     .map((line) => line.trim())
@@ -228,7 +228,9 @@ function resolveAllowlistedSyncConflicts({ cwd }) {
         mergeBuildNativeForPlatform(showStage(':2', path, { cwd }), showStage(':3', path, { cwd }))
       )
     } else if (path === 'mobile/src/terminal/terminal-webview-payload-hash.test.ts') {
-      const fingerprint = computeWebviewPayloadFingerprint({ cwd: root })
+      const fingerprint = computeWebviewPayloadFingerprint({
+        cwd: fingerprintCwd ?? root
+      })
       writeFileSync(
         join(root, path),
         rewriteTerminalWebviewPayloadHashTest(showStage(':2', path, { cwd }), fingerprint)
