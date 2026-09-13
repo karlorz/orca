@@ -118,7 +118,7 @@ describe('terminal WebView bundled engine', () => {
 
     const lockfile = readFileSync(join(mobileRoot, 'pnpm-lock.yaml'), 'utf8')
     expect(lockfile).toContain(`@xterm/addon-webgl@0.20.0-beta.299(patch_hash=${desktopHash})`)
-    expect(lockfile).toContain(`'@xterm/addon-webgl@0.20.0-beta.299':\n    hash: ${desktopHash}\n`)
+    expect(lockfile).toContain(`'@xterm/addon-webgl@0.20.0-beta.299': ${desktopHash}`)
   })
 
   it('bundles the webgl GLSL fallback for an out-of-range texpage', () => {

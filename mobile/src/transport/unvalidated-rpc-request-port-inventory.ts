@@ -94,6 +94,10 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/notifications/push-dismissal-reconciliation.ts', references: 2 },
   { file: 'src/notifications/push-registration.ts', references: 3 },
 
+  // src/pet-speak/ — fork pet voice sink (status, accepted, complete, unsubscribe)
+  { file: 'src/pet-speak/pet-speak-root-bridge.tsx', references: 1 },
+  { file: 'src/pet-speak/pet-speak-subscription.ts', references: 5 },
+
   // src/session/ — session screen: chat, diff review, PR actions, tabs
   { file: 'src/session/ai-vault-resume-launch.ts', references: 3 },
   { file: 'src/session/ai-vault-resume-preparation.ts', references: 2 },
