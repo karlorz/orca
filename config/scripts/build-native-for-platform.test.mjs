@@ -42,6 +42,9 @@ function startBuild(mode, options = {}) {
     import { appendFileSync, existsSync } from 'node:fs'
     import { spawn } from 'node:child_process'
     const name = process.argv.at(-1)
+    // Fork adds sequential build:speech-macos after the 3 parallel helpers.
+    // Do not journal or spawn descendants for it, or upstream's 3-child assertions fail.
+    if (name.includes('speech')) process.exit(0)
     const delay = name.includes('computer') ? 0 : name.includes('keyboard') ? 200 : 400
     const record = (event, extra = {}) => appendFileSync(process.env.NATIVE_BUILD_JOURNAL, JSON.stringify({ name, event, pid: process.pid, ...extra }) + '\\n')
     const finish = (signal) => { record(signal); process.exit(process.env.NATIVE_BUILD_MODE === 'failure-status' ? 9 : 0) }
@@ -174,6 +177,15 @@ async function waitFor(condition, timeoutMs = 5_000) {
     await sleep(50)
   }
 }
+
+it('keeps speech-macos sequential after the three parallel helpers', () => {
+  const source = readFileSync(buildScript, 'utf8')
+  const parallel = source.indexOf("'build:computer-macos'")
+  const speech = source.indexOf("runPnpmScriptSync('build:speech-macos')")
+  expect(parallel).toBeGreaterThan(-1)
+  expect(speech).toBeGreaterThan(source.indexOf('await Promise.all'))
+  expect(speech).toBeGreaterThan(parallel)
+})
 
 describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
   it('starts every independent build before any completes', async () => {
