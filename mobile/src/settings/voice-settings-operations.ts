@@ -5,6 +5,7 @@ export interface VoiceSettingsOperations {
   configure(params: {
     enabled?: boolean
     modelId?: string
+    useMacSpeech?: boolean
     dictationMode?: 'toggle' | 'hold'
   }): Promise<MobileSpeechSetup>
   download(modelId: string): Promise<void>

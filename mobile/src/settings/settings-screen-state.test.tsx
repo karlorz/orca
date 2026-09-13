@@ -153,6 +153,40 @@ describe('shared settings screen state', () => {
     // Without the request-epoch fence the stale read would flip the switch back on.
     expect(switchProps().value).toBe(false)
   })
+  it('remotely toggles desktop Use Mac speech and locks Speech Model', async () => {
+    const loaded = {
+      enabled: true,
+      dictationMode: 'toggle' as const,
+      selectedModelId: 'parakeet',
+      useMacSpeech: false,
+      macSpeechAvailable: true,
+      models: [{ id: 'parakeet', label: 'Parakeet', provider: 'local' as const, status: 'ready' }]
+    }
+    const operations = {
+      load: vi.fn().mockResolvedValue(loaded),
+      configure: vi.fn().mockImplementation(() => new Promise(() => {})),
+      download: vi.fn(),
+      delete: vi.fn()
+    } as VoiceSettingsOperations
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+      )
+    })
+    const macSwitch = () => renderer.root.findByProps({ testID: 'voice-use-mac-speech' }).props
+    const modelPicker = () => renderer.root.findByProps({ testID: 'voice-model-picker' }).props
+    expect(macSwitch().value).toBe(false)
+    expect(macSwitch().disabled).toBe(false)
+    expect(modelPicker().disabled).toBe(false)
+
+    await act(async () => {
+      macSwitch().onValueChange(true)
+    })
+    expect(operations.configure).toHaveBeenCalledWith({ useMacSpeech: true })
+    expect(macSwitch().value).toBe(true)
+    expect(modelPicker().disabled).toBe(true)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Mac speech')
+  })
   it('does not enable notifications after denied OS permission', async () => {
     const denied = {
       granted: false,

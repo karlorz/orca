@@ -30,6 +30,7 @@ export const SPEECH_METHODS = [
       runtime.configureMobileDictation({
         ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
         ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
+        ...(params.useMacSpeech !== undefined ? { useMacSpeech: params.useMacSpeech } : {}),
         ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
       })
   }),

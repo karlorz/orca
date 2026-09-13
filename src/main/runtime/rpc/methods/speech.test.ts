@@ -162,4 +162,24 @@ describe('speech RPC methods', () => {
     expect(runtime.configureMobileDictation).toHaveBeenCalledWith({ enabled: true, modelId: 'm1' })
     expect(response).toMatchObject({ ok: true, result: { enabled: true, selectedModelId: 'm1' } })
   })
+
+  it('forwards useMacSpeech from mobile Voice settings', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      configureMobileDictation: vi.fn().mockResolvedValue({
+        enabled: true,
+        useMacSpeech: true,
+        selectedModelId: 'm1',
+        models: []
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('speech.dictation.setup', { useMacSpeech: true })
+    )
+
+    expect(runtime.configureMobileDictation).toHaveBeenCalledWith({ useMacSpeech: true })
+    expect(response).toMatchObject({ ok: true, result: { useMacSpeech: true } })
+  })
 })

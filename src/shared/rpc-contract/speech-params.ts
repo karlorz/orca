@@ -50,5 +50,6 @@ export const SpeechModelAction = z.object({
 export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
+  useMacSpeech: z.boolean().optional(),
   dictationMode: z.enum(['toggle', 'hold']).optional()
 })
