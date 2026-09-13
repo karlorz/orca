@@ -105,7 +105,22 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
   setPetSpeechEnabled: vi.fn(async () => {}),
   setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
   setPetSpeechRate: vi.fn(async () => {}),
-  setPetSpeechVoiceForLanguage: vi.fn(async () => {})
+  setPetSpeechVoiceForLanguage: vi.fn(async () => {}),
+  setPetSpeechPersistEnabled: vi.fn(async () => {}),
+  setPetSpeechKeepWhenNoHost: vi.fn(async () => {}),
+  setPetSpeechShowServiceStatusRow: vi.fn(async () => {}),
+  setPetSpeechOverlayWhileSpeaking: vi.fn(async () => {})
+}))
+
+vi.mock('../src/pet-speak/pet-speech-persist-checklist', () => ({
+  syncPetSpeechPersistSettings: vi.fn(async () => {}),
+  loadPetSpeechPersistChecklist: vi.fn(async () => ({
+    notificationsGranted: true,
+    ignoringBattery: true,
+    canOpenDeviceGuard: false,
+    canDrawOverlays: false
+  })),
+  openPetSpeechPersistChecklistItem: vi.fn(async () => {})
 }))
 
 vi.mock('../src/pet-speak/pet-speech-service', () => ({

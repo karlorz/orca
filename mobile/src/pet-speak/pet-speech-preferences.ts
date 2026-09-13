@@ -9,6 +9,10 @@ export interface PetSpeechPreferences {
   installUuid: string
   rate: number
   voiceByLanguage: Partial<Record<CanonicalLanguage, string>>
+  persistEnabled: boolean
+  keepWhenNoHost: boolean
+  showServiceStatusRow: boolean
+  overlayWhileSpeaking: boolean
 }
 
 export const PET_SPEECH_STORAGE_KEYS = {
@@ -18,7 +22,11 @@ export const PET_SPEECH_STORAGE_KEYS = {
   RATE: 'orca:petSpeech:rate',
   VOICE_BY_LANGUAGE: 'orca:petSpeech:voiceByLanguage',
   CAPTIONS_ENABLED: 'orca:petSpeech:captionsEnabled',
-  CAPTION_OFFSET: 'orca:petSpeech:captionOffset'
+  CAPTION_OFFSET: 'orca:petSpeech:captionOffset',
+  PERSIST_ENABLED: 'orca:petSpeech:persistEnabled',
+  KEEP_WHEN_NO_HOST: 'orca:petSpeech:keepWhenNoHost',
+  SHOW_SERVICE_STATUS_ROW: 'orca:petSpeech:showServiceStatusRow',
+  OVERLAY_WHILE_SPEAKING: 'orca:petSpeech:overlayWhileSpeaking'
 } as const
 
 export const DEFAULT_PET_SPEECH_RATE = 1
@@ -87,6 +95,10 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     rawVoiceByLanguage,
     rawCaptionsEnabled,
     rawCaptionOffset,
+    rawPersistEnabled,
+    rawKeepWhenNoHost,
+    rawShowServiceStatusRow,
+    rawOverlayWhileSpeaking,
     installUuid
   ] = await Promise.all([
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.ENABLED),
@@ -95,6 +107,10 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.VOICE_BY_LANGUAGE),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTIONS_ENABLED),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.PERSIST_ENABLED),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.KEEP_WHEN_NO_HOST),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.SHOW_SERVICE_STATUS_ROW),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.OVERLAY_WHILE_SPEAKING),
     getOrCreateInstallUuid()
   ])
 
@@ -165,7 +181,11 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     migrationCompleted,
     installUuid,
     rate,
-    voiceByLanguage
+    voiceByLanguage,
+    persistEnabled: rawPersistEnabled === 'true',
+    keepWhenNoHost: rawKeepWhenNoHost === 'true',
+    showServiceStatusRow: rawShowServiceStatusRow !== 'false',
+    overlayWhileSpeaking: rawOverlayWhileSpeaking === 'true'
   }
 }
 
@@ -194,6 +214,31 @@ export async function setPetSpeechRate(rate: number): Promise<void> {
   const boundedRate = Math.min(3, Math.max(0.5, rate))
   await AsyncStorage.setItem(PET_SPEECH_STORAGE_KEYS.RATE, boundedRate.toString())
   notifyPreferencesListeners()
+}
+
+async function persistBoolean(key: string, value: boolean): Promise<void> {
+  await AsyncStorage.setItem(key, value ? 'true' : 'false')
+  notifyPreferencesListeners()
+}
+
+export async function setPetSpeechPersistEnabled(persistEnabled: boolean): Promise<void> {
+  await persistBoolean(PET_SPEECH_STORAGE_KEYS.PERSIST_ENABLED, persistEnabled)
+}
+
+export async function setPetSpeechKeepWhenNoHost(keepWhenNoHost: boolean): Promise<void> {
+  await persistBoolean(PET_SPEECH_STORAGE_KEYS.KEEP_WHEN_NO_HOST, keepWhenNoHost)
+}
+
+export async function setPetSpeechShowServiceStatusRow(
+  showServiceStatusRow: boolean
+): Promise<void> {
+  await persistBoolean(PET_SPEECH_STORAGE_KEYS.SHOW_SERVICE_STATUS_ROW, showServiceStatusRow)
+}
+
+export async function setPetSpeechOverlayWhileSpeaking(
+  overlayWhileSpeaking: boolean
+): Promise<void> {
+  await persistBoolean(PET_SPEECH_STORAGE_KEYS.OVERLAY_WHILE_SPEAKING, overlayWhileSpeaking)
 }
 
 export async function setPetSpeechVoiceForLanguage(

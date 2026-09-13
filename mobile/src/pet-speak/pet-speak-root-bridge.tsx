@@ -27,6 +27,7 @@ import {
   type PetSpeakCaptionRangeEvent
 } from './pet-speak-caption-range'
 import { attachNativeCaptionRangeListener } from './pet-speak-caption-range-native'
+import { syncPetSpeechPersistSettings } from './pet-speech-persist-checklist'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
 import {
@@ -100,9 +101,23 @@ export function usePetSpeakRootBridge(
   const isEnabled = preferences !== null ? preferences.enabled : false
   const isEnabledRef = useRef(isEnabled)
   isEnabledRef.current = isEnabled
+  const persistEnabled = preferences?.persistEnabled === true
+  const keepWhenNoHost = preferences?.keepWhenNoHost === true
+  const persistEnabledRef = useRef(persistEnabled)
+  persistEnabledRef.current = persistEnabled
+  const keepWhenNoHostRef = useRef(keepWhenNoHost)
+  keepWhenNoHostRef.current = keepWhenNoHost
   const captionsEnabled = preferences?.captionsEnabled === true
 
   const isAndroid = options?.isAndroid ?? Platform.OS === 'android'
+
+  useEffect(() => {
+    if (preferences === null || !isAndroid) {
+      return
+    }
+    void syncPetSpeechPersistSettings(preferences)
+  }, [preferences, isAndroid])
+
   const ensureNotificationPermissionsFn =
     options?.ensureNotificationPermissions ?? defaultEnsureNotificationPermissions
 
@@ -204,7 +219,9 @@ export function usePetSpeakRootBridge(
       ensureNotificationPermissions: ensureNotificationPermissionsFn,
       acquireVoiceSession: acquireVoiceSessionFn,
       releaseVoiceSession: releaseVoiceSessionFn,
-      updateVoiceSessionNotification: updateVoiceSessionNotificationFn
+      updateVoiceSessionNotification: updateVoiceSessionNotificationFn,
+      persistEnabled: () => persistEnabledRef.current,
+      keepWhenNoHost: () => keepWhenNoHostRef.current
     }
 
     const recovery = createPetSpeakSubscriptionRecovery({
@@ -323,7 +340,9 @@ export function usePetSpeakRootBridge(
     ensureNotificationPermissionsFn,
     acquireVoiceSessionFn,
     releaseVoiceSessionFn,
-    updateVoiceSessionNotificationFn
+    updateVoiceSessionNotificationFn,
+    persistEnabled,
+    keepWhenNoHost
   ])
 
   // Root unmount cleanup

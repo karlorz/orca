@@ -231,4 +231,41 @@ describe('decidePetVoiceHoldAction', () => {
       }
     })
   })
+
+  it('keeps idle FGS when persist and keep-when-no-host are on', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: 'Pet voice connected'
+    }
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: true,
+      keepWhenNoHost: true
+    })
+    expect(action.type).toBe('none')
+    expect(action.nextState.isSessionHeld).toBe(true)
+  })
+
+  it('still releases after grace when persist is on but keep-when-no-host is off', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: 5000,
+      lastNotificationText: 'Orca Pet — Reconnecting...'
+    }
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 1,
+      now: 5000 + PET_VOICE_RECONNECT_GRACE_MS,
+      persistEnabled: true,
+      keepWhenNoHost: false
+    })
+    expect(action.type).toBe('release')
+  })
 })

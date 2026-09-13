@@ -1,59 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  AppState,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  Switch,
-  Text,
-  View
-} from 'react-native'
+import { AppState, Pressable, ScrollView, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, Play, Captions } from 'lucide-react-native'
+import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { styles } from '../src/pet-speak/pet-speech-settings-styles'
-import {
-  CANONICAL_LANGUAGES,
-  type CanonicalLanguage
-} from '../src/pet-speak/pet-language-normalizer'
+import type { CanonicalLanguage } from '../src/pet-speak/pet-language-normalizer'
 import {
   loadPetSpeechPreferences,
   setPetSpeechEnabled,
   setPetSpeechCaptionsEnabled,
-  setPetSpeechRate,
-  setPetSpeechVoiceForLanguage,
   subscribePetSpeechPreferences,
   type PetSpeechPreferences
 } from '../src/pet-speak/pet-speech-preferences'
 import {
   getPetSpeakCaptionPreview,
-  hidePetSpeakCaptionPreview,
-  showPetSpeakCaptionPreview,
   subscribePetSpeakCaptionPreview
 } from '../src/pet-speak/pet-speak-caption-preview'
-import {
-  getAvailablePetSpeechVoices,
-  executeTestVoiceAsync
-} from '../src/pet-speak/pet-speech-service'
-import {
-  countMatchingPetSpeechVoices,
-  petSpeechVoiceMatchesLanguage,
-  resolvePetSpeechSetupAction,
-  openPetSpeechSetupAction
-} from '../src/pet-speak/pet-speech-setup-action'
+import { getAvailablePetSpeechVoices } from '../src/pet-speak/pet-speech-service'
 import type { PetSpeechVoice } from '../src/pet-speak/pet-speak-native-adapter'
-
-const SPEEDS = [0.8, 1, 1.2, 1.5, 2] as const
-
-const LANGUAGE_LABELS: Record<CanonicalLanguage, string> = {
-  'yue-HK': 'Cantonese (yue-HK)',
-  'zh-CN': 'Mainland Mandarin (zh-CN)',
-  'zh-TW': 'Taiwan Mandarin (zh-TW)',
-  'en-US': 'US English (en-US)'
-}
+import { PetSpeechPersistSettingsPanel } from '../src/pet-speak/pet-speech-persist-settings-panel'
+import { PetSpeechSettingsEnabledControls } from '../src/pet-speak/pet-speech-settings-enabled-controls'
 
 export default function PetSpeechSettingsScreen() {
   const router = useRouter()
@@ -62,8 +29,6 @@ export default function PetSpeechSettingsScreen() {
   const [prefs, setPrefs] = useState<PetSpeechPreferences | null>(null)
   const [voices, setVoices] = useState<PetSpeechVoice[]>([])
   const [selectedLanguageTab, setSelectedLanguageTab] = useState<CanonicalLanguage>('yue-HK')
-  const [testVoiceBusy, setTestVoiceBusy] = useState(false)
-  const [testVoiceOutcome, setTestVoiceOutcome] = useState<string | null>(null)
   const [previewActive, setPreviewActive] = useState<boolean>(
     () => getPetSpeakCaptionPreview() !== null
   )
@@ -129,71 +94,12 @@ export default function PetSpeechSettingsScreen() {
     await setPetSpeechCaptionsEnabled(captionsEnabled)
   }, [])
 
-  const handleSelectSpeed = useCallback(async (speed: number) => {
-    setPrefs((prev) => (prev ? { ...prev, rate: speed } : prev))
-    await setPetSpeechRate(speed)
+  const handlePrefsPatch = useCallback((patch: Partial<PetSpeechPreferences>) => {
+    setPrefs((prev) => (prev ? { ...prev, ...patch } : prev))
   }, [])
-
-  const handleSelectVoice = useCallback(
-    async (lang: CanonicalLanguage, voiceName: string | null) => {
-      setPrefs((prev) => {
-        if (!prev) {
-          return prev
-        }
-        const updated = { ...prev.voiceByLanguage }
-        if (voiceName === null) {
-          delete updated[lang]
-        } else {
-          updated[lang] = voiceName
-        }
-        return { ...prev, voiceByLanguage: updated }
-      })
-      await setPetSpeechVoiceForLanguage(lang, voiceName)
-    },
-    []
-  )
-
-  const handleRunTestVoice = useCallback(async () => {
-    if (testVoiceBusy || !prefs?.enabled) {
-      return
-    }
-    setTestVoiceBusy(true)
-    setTestVoiceOutcome(null)
-    try {
-      const res = await executeTestVoiceAsync(selectedLanguageTab, { availableVoices: voices })
-      setTestVoiceOutcome(res.outcome)
-    } catch {
-      setTestVoiceOutcome('playback-error')
-    } finally {
-      setTestVoiceBusy(false)
-    }
-  }, [testVoiceBusy, prefs?.enabled, selectedLanguageTab, voices])
-
-  const handleToggleCaptionPreview = useCallback(() => {
-    if (previewActive) {
-      hidePetSpeakCaptionPreview()
-    } else {
-      showPetSpeakCaptionPreview()
-    }
-  }, [previewActive])
 
   const isEnabled = prefs?.enabled ?? false
   const captionsEnabled = prefs?.captionsEnabled ?? false
-  const activeRate = prefs?.rate ?? 1
-
-  const matchingVoiceCount = countMatchingPetSpeechVoices(voices, selectedLanguageTab)
-  const setupAction = resolvePetSpeechSetupAction({
-    platform: Platform.OS,
-    matchingVoiceCount,
-    catalogVoiceCount: voices.length
-  })
-
-  // Same-language only: never show zh-TW/zh-HK under zh-CN (or vice versa).
-  const voicesForActiveLang = voices.filter((v) =>
-    petSpeechVoiceMatchesLanguage(v, selectedLanguageTab)
-  )
-
-  const selectedVoiceForLang = prefs?.voiceByLanguage[selectedLanguageTab]
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -246,7 +152,7 @@ export default function PetSpeechSettingsScreen() {
           ) : null}
         </View>
 
-        {!isEnabled ? (
+        {!isEnabled || !prefs ? (
           <View style={[styles.section, styles.sectionTopGap]}>
             <Text style={styles.disabledNotice}>
               Pet Speech is currently disabled. Enable to configure local voices, speed, and test
@@ -255,163 +161,15 @@ export default function PetSpeechSettingsScreen() {
           </View>
         ) : (
           <>
-            <Text style={[styles.groupHeading, styles.inputGroupGap]}>TEST</Text>
-            <View style={[styles.section, styles.sectionTopGap]}>
-              <Pressable
-                style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
-                disabled={testVoiceBusy}
-                onPress={() => void handleRunTestVoice()}
-              >
-                {testVoiceBusy ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
-                ) : (
-                  <Play size={16} color={colors.textPrimary} />
-                )}
-                <Text style={styles.testVoiceLabel}>Test Voice ({selectedLanguageTab})</Text>
-              </Pressable>
-              <Text style={styles.testOutcomeText}>
-                {`Selected voice: ${selectedVoiceForLang ?? 'Device default'}`}
-              </Text>
-              {testVoiceOutcome ? (
-                <Text style={styles.testOutcomeText}>Outcome: {testVoiceOutcome}</Text>
-              ) : null}
-
-              {setupAction.kind !== 'none' ? (
-                <>
-                  <View style={styles.separator} />
-                  <Pressable
-                    style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
-                    onPress={() => {
-                      void openPetSpeechSetupAction(setupAction, Linking).catch(() => {})
-                    }}
-                  >
-                    <Play size={16} color={colors.textPrimary} />
-                    <Text style={styles.testVoiceLabel}>
-                      {setupAction.kind === 'install-engine'
-                        ? 'Install Google speech engine'
-                        : 'Open text-to-speech settings'}
-                    </Text>
-                  </Pressable>
-                  <Text style={styles.setupHelperText}>
-                    Engine and voice data are installed by the system, not Orca. Airplane mode
-                    blocks Google Play. After installing, pick the engine and language in system
-                    text-to-speech settings.
-                  </Text>
-                </>
-              ) : null}
-
-              <View style={styles.separator} />
-
-              <Pressable
-                style={({ pressed }) => [styles.testVoiceRow, pressed && styles.rowPressed]}
-                onPress={handleToggleCaptionPreview}
-              >
-                <Captions size={16} color={colors.textPrimary} />
-                <Text style={styles.testVoiceLabel}>
-                  {previewActive ? 'Hide Live captions preview' : 'Test Live captions'}
-                </Text>
-              </Pressable>
-            </View>
-            <Text style={styles.helperText}>
-              Test Voice speaks and shows captions (spoken line over original English). Test Live
-              captions is a silent preview — drag, then release to save the position across
-              upgrades.
-            </Text>
-
-            <Text style={[styles.groupHeading, styles.inputGroupGap]}>LANGUAGE POLICY</Text>
-            <View style={[styles.section, styles.sectionTopGap]}>
-              <View style={styles.row}>
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>Follow pet language</Text>
-                  <Text style={styles.rowSublabel}>
-                    Language is determined by desktop pet content. Voice and speed are configured
-                    locally below.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEED</Text>
-            <View style={[styles.section, styles.sectionTopGap]}>
-              <View style={styles.speedRow}>
-                {SPEEDS.map((s) => {
-                  const active = Math.abs(activeRate - s) < 0.05
-                  return (
-                    <Pressable
-                      key={s}
-                      onPress={() => void handleSelectSpeed(s)}
-                      style={[styles.speedSegment, active && styles.speedSegmentActive]}
-                    >
-                      <Text
-                        style={[styles.speedSegmentText, active && styles.speedSegmentTextActive]}
-                      >
-                        {s}x
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            </View>
-
-            <Text style={[styles.groupHeading, styles.inputGroupGap]}>VOICES BY LANGUAGE</Text>
-            <View style={styles.languageTabBar}>
-              {CANONICAL_LANGUAGES.map((lang) => {
-                const active = selectedLanguageTab === lang
-                return (
-                  <Pressable
-                    key={lang}
-                    onPress={() => setSelectedLanguageTab(lang)}
-                    style={[styles.languageTab, active && styles.languageTabActive]}
-                  >
-                    <Text style={[styles.languageTabText, active && styles.languageTabTextActive]}>
-                      {lang}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-
-            <View style={[styles.section, styles.sectionTopGap]}>
-              <View style={styles.voiceHeaderRow}>
-                <Text style={styles.voiceSectionTitle}>{LANGUAGE_LABELS[selectedLanguageTab]}</Text>
-              </View>
-
-              <Pressable
-                style={[
-                  styles.voiceOptionRow,
-                  !selectedVoiceForLang && styles.voiceOptionRowSelected
-                ]}
-                onPress={() => void handleSelectVoice(selectedLanguageTab, null)}
-              >
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>Device default</Text>
-                  <Text style={styles.rowSublabel}>System recommended voice for this locale</Text>
-                </View>
-                {!selectedVoiceForLang ? <Text style={styles.checkMark}>✓</Text> : null}
-              </Pressable>
-
-              {voicesForActiveLang.map((voice) => {
-                const isSelected = selectedVoiceForLang === voice.name
-                return (
-                  <View key={voice.name}>
-                    <View style={styles.separator} />
-                    <Pressable
-                      style={[styles.voiceOptionRow, isSelected && styles.voiceOptionRowSelected]}
-                      onPress={() => void handleSelectVoice(selectedLanguageTab, voice.name)}
-                    >
-                      <View style={styles.rowContent}>
-                        <Text style={styles.rowLabel}>{voice.name}</Text>
-                        <Text style={styles.rowSublabel}>
-                          {voice.locale} • {voice.network ? 'Network' : 'Offline'}
-                          {voice.engine ? ` • ${voice.engine}` : ''}
-                        </Text>
-                      </View>
-                      {isSelected ? <Text style={styles.checkMark}>✓</Text> : null}
-                    </Pressable>
-                  </View>
-                )
-              })}
-            </View>
+            <PetSpeechPersistSettingsPanel prefs={prefs} onPrefsPatch={handlePrefsPatch} />
+            <PetSpeechSettingsEnabledControls
+              prefs={prefs}
+              voices={voices}
+              selectedLanguageTab={selectedLanguageTab}
+              onSelectLanguageTab={setSelectedLanguageTab}
+              onPrefsPatch={handlePrefsPatch}
+              previewActive={previewActive}
+            />
           </>
         )}
       </ScrollView>

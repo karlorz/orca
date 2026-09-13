@@ -30,6 +30,21 @@ export interface PetSpeechCaptionRangeEvent {
   end: number
 }
 
+export interface PetSpeechPersistSettings {
+  masterEnabled?: boolean
+  persistEnabled?: boolean
+  keepWhenNoHost?: boolean
+  showServiceStatusRow?: boolean
+  overlayWhileSpeaking?: boolean
+}
+
+export interface PetSpeechPersistChecklist {
+  notificationsGranted: boolean
+  ignoringBattery: boolean
+  canOpenDeviceGuard: boolean
+  canDrawOverlays: boolean
+}
+
 export interface PetSpeechNativeModule {
   getAvailableVoicesAsync(): Promise<PetSpeechVoice[]>
   speakAsync(options: PetSpeechUtteranceOptions): Promise<PetSpeechResult>
@@ -37,6 +52,9 @@ export interface PetSpeechNativeModule {
   acquireVoiceSessionAsync(): Promise<{ held: boolean }>
   releaseVoiceSessionAsync(): Promise<void>
   updateVoiceSessionNotificationAsync?(text: string): Promise<void>
+  updatePersistSettingsAsync?(settings: PetSpeechPersistSettings): Promise<void>
+  getPersistChecklistAsync?(): Promise<PetSpeechPersistChecklist>
+  openPersistChecklistItemAsync?(item: string): Promise<{ opened?: boolean } | void>
   addListener?(
     eventName: 'onCaptionRange',
     listener: (event: PetSpeechCaptionRangeEvent) => void

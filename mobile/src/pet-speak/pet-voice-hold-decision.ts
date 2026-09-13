@@ -35,10 +35,21 @@ export interface DecidePetVoiceHoldParams {
   reconnectingCount: number
   stillTryingCount?: number
   now: number
+  persistEnabled?: boolean
+  keepWhenNoHost?: boolean
 }
 
 export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetVoiceHoldAction {
-  const { state, connectedCount, reconnectingCount, stillTryingCount, now } = params
+  const {
+    state,
+    connectedCount,
+    reconnectingCount,
+    stillTryingCount,
+    now,
+    persistEnabled = false,
+    keepWhenNoHost = false
+  } = params
+  const keepIdleWithoutHost = persistEnabled && keepWhenNoHost
   const activeTryingCount = stillTryingCount ?? reconnectingCount
 
   if (connectedCount > 0) {
@@ -100,7 +111,7 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
     const reconnectingSince = state.reconnectingSince ?? now
     const elapsed = now - reconnectingSince
 
-    if (elapsed >= PET_VOICE_RECONNECT_GRACE_MS) {
+    if (elapsed >= PET_VOICE_RECONNECT_GRACE_MS && !keepIdleWithoutHost) {
       return {
         type: 'release',
         nextState: {
@@ -134,7 +145,7 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
   }
 
   // 0 connected, and (activeTryingCount === 0 or not held)
-  if (state.isSessionHeld) {
+  if (state.isSessionHeld && !keepIdleWithoutHost) {
     return {
       type: 'release',
       nextState: {

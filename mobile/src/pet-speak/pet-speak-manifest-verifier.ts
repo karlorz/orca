@@ -70,6 +70,19 @@ export function validateMergedAndroidManifest(
     missing.push('stopWithTask="false"')
   }
 
+  const forbidden = [
+    'ROLE_CALL_SCREENING',
+    'ROLE_DIALER',
+    'BIND_NOTIFICATION_LISTENER_SERVICE',
+    'BIND_DEVICE_ADMIN',
+    'android.app.admin.DeviceAdminReceiver'
+  ]
+  for (const token of forbidden) {
+    if (manifestXmlContent.includes(token)) {
+      missing.push(`forbidden:${token}`)
+    }
+  }
+
   return {
     isValid: missing.length === 0,
     missingRequirements: missing

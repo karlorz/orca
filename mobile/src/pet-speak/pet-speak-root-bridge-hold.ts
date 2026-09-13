@@ -21,6 +21,8 @@ export type PetVoiceHoldRuntime = {
   acquireVoiceSession: () => Promise<{ held: boolean }>
   releaseVoiceSession: () => Promise<void>
   updateVoiceSessionNotification: (text: string) => Promise<void>
+  persistEnabled: () => boolean
+  keepWhenNoHost: () => boolean
 }
 
 export function idlePetVoiceHoldState(): PetVoiceHoldState {
@@ -71,7 +73,9 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
     connectedCount,
     reconnectingCount: reconnectingHosts.size,
     stillTryingCount: stillTryingHosts.size,
-    now
+    now,
+    persistEnabled: runtime.persistEnabled(),
+    keepWhenNoHost: runtime.keepWhenNoHost()
   })
 
   runtime.holdState.current = action.nextState
