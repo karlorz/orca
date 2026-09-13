@@ -22,22 +22,22 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG
-      .filter((manifest) => manifest.provider !== 'system')
-      .map((manifest) => {
-        const state = stateById.get(manifest.id)
-        const status = state?.status ?? 'not-downloaded'
-        return {
-          id: manifest.id,
-          label: manifest.label,
-          provider: manifest.provider,
-          sizeBytes: manifest.sizeBytes ?? null,
-          recommended: manifest.recommended === true,
-          status,
-          ...(status === 'unavailable' ? { unavailableReason: 'mac-only' as const } : {}),
-          progress: state?.progress ?? null
-        }
-      })
+    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.filter(
+      (manifest) => manifest.provider !== 'system'
+    ).map((manifest) => {
+      const state = stateById.get(manifest.id)
+      const status = state?.status ?? 'not-downloaded'
+      return {
+        id: manifest.id,
+        label: manifest.label,
+        provider: manifest.provider,
+        sizeBytes: manifest.sizeBytes ?? null,
+        recommended: manifest.recommended === true,
+        status,
+        ...(status === 'unavailable' ? { unavailableReason: 'mac-only' as const } : {}),
+        progress: state?.progress ?? null
+      }
+    })
     return {
       enabled: voice.enabled === true,
       useMacSpeech: isMacSpeechSelected(voice),
@@ -96,6 +96,13 @@ export class RuntimeMobileSpeechCatalog {
     if (desiredModelId === MAC_SYSTEM_SPEECH_MODEL_ID) {
       desiredUseMacSpeech = true
       desiredModelId = undefined
+    } else if (
+      desiredUseMacSpeech === undefined &&
+      desiredModelId !== undefined &&
+      desiredModelId !== ''
+    ) {
+      // Why: picking a catalog model is how older mobile RPC turns Mac speech off
+      desiredUseMacSpeech = false
     }
 
     if (desiredUseMacSpeech === true && process.platform !== 'darwin') {

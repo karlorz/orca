@@ -1,10 +1,8 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import type { MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
 type VoiceSpeechModelSectionProps = {
-  setup: MobileSpeechSetup
   enabled: boolean
   macSpeechAvailable: boolean
   useMacSpeech: boolean
@@ -39,6 +37,8 @@ export function VoiceSpeechModelSection({
             </Text>
           </View>
           <Switch
+            testID="voice-use-mac-speech"
+            accessibilityLabel="Use Mac speech"
             value={useMacSpeech}
             onValueChange={onToggleUseMacSpeech}
             disabled={!enabled || !macSpeechAvailable}
@@ -57,6 +57,7 @@ export function VoiceSpeechModelSection({
             pressed && !speechModelLocked && styles.rowPressed
           ]}
           disabled={speechModelLocked}
+          testID="voice-model-picker"
           onPress={onOpenModelDrawer}
         >
           <View style={styles.rowContent}>

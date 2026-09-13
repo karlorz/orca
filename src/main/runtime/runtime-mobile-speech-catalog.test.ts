@@ -118,6 +118,10 @@ describe('RuntimeMobileSpeechCatalog', () => {
       await catalog.configure({ modelId: 'mac-system-speech' })
       expect(voiceSettings.useMacSpeech).toBe(true)
       expect(voiceSettings.sttModel).not.toBe('mac-system-speech')
+
+      await catalog.configure({ modelId: 'parakeet-tdt-0.6b-v3-int8' })
+      expect(voiceSettings.useMacSpeech).toBe(false)
+      expect(voiceSettings.sttModel).toBe('parakeet-tdt-0.6b-v3-int8')
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform })
     }

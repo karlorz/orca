@@ -9,10 +9,12 @@ import {
   isDictationReady,
   isDictationSetupRequiredError,
   isModelInFlight,
+  resolveMobileDictationSetupParams,
   setDictationConfig,
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from './mobile-dictation-setup'
+import { MAC_SYSTEM_SPEECH_MODEL_ID } from '../../../src/shared/voice-dictation-selection'
 
 function ok(result: unknown): RpcSuccess {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
@@ -139,6 +141,42 @@ describe('rpc wrappers', () => {
       method: 'speech.dictation.setup',
       params: { enabled: true, modelId: 'm1' }
     })
+  })
+
+  it('maps useMacSpeech on onto the modelId packaged desktops still accept', async () => {
+    expect(resolveMobileDictationSetupParams({ useMacSpeech: true })).toEqual({
+      useMacSpeech: true,
+      modelId: MAC_SYSTEM_SPEECH_MODEL_ID
+    })
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      useMacSpeech: true,
+      macSpeechAvailable: true,
+      selectedModelId: 'm1',
+      dictationMode: 'toggle',
+      models: []
+    }
+    const client = clientWith([ok(setup)])
+    await expect(setDictationConfig(client, { useMacSpeech: true })).resolves.toEqual(setup)
+    expect(client.calls[0]).toEqual({
+      method: 'speech.dictation.setup',
+      params: { useMacSpeech: true, modelId: MAC_SYSTEM_SPEECH_MODEL_ID }
+    })
+  })
+
+  it('refuses a silent Mac speech off when the desktop drops the flag', async () => {
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      useMacSpeech: true,
+      macSpeechAvailable: true,
+      selectedModelId: 'm1',
+      dictationMode: 'toggle',
+      models: []
+    }
+    const client = clientWith([ok(setup)])
+    await expect(setDictationConfig(client, { useMacSpeech: false })).rejects.toThrow(
+      'cannot turn Mac speech off from the phone'
+    )
   })
 
   it('surfaces RPC failures as errors', async () => {

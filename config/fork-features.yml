@@ -243,6 +243,29 @@ features:
       - src/shared/pet-speak-limits.ts
     wiki: projects/grok-desktop-pet/work/2026-09-09-progress-aware-mobile-speech-timeout
 
+  - id: pet-speech-persist-always-on
+    title: Persist always-on pet speech via held mediaPlayback FGS
+    kind: product
+    status: landed
+    paths:
+      - mobile/packages/expo-pet-speech
+      - mobile/src/pet-speak
+      - mobile/app/pet-speech-settings.tsx
+    wiki: projects/orca/work/2026-09-14-mobile-persist-always-on-pet-speech
+
+  - id: mobile-mac-speech-remote-switch
+    title: Mobile Voice writable Use Mac speech remote of desktop Apple Speech
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/settings
+      - mobile/src/dictation
+      - mobile/src/components/VoiceSpeechModelSection.tsx
+      - src/main/runtime/rpc/methods/speech.ts
+      - src/main/runtime/runtime-mobile-speech-catalog.ts
+      - src/shared/rpc-contract/speech-params.ts
+    wiki: projects/orca/work/2026-09-05-orca-dictation-stt-backends-no-macos-system
+
   - id: own-mobile-relay-coolify-deploy
     title: Coolify Docker deploy channel for own-mobile-relay (orca-auth + orca-relay)
     kind: ci

@@ -3,10 +3,11 @@ import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
-import { ChevronLeft, ChevronRight } from 'lucide-react-native'
+import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { VoiceModelList } from '../components/VoiceModelList'
+import { VoiceSpeechModelSection } from '../components/VoiceSpeechModelSection'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
   isModelInFlight,
@@ -80,13 +81,14 @@ export default function VoiceSettingsScreen({
       requestEpoch.current += 1
       setError(null)
       // Optimistic flip so the control responds instantly; reconcile below.
-      const { enabled, dictationMode } = params
+      const { enabled, dictationMode, useMacSpeech } = params
       setSetup((prev) =>
         prev
           ? {
               ...prev,
               ...(enabled === undefined ? {} : { enabled }),
-              ...(dictationMode === undefined ? {} : { dictationMode })
+              ...(dictationMode === undefined ? {} : { dictationMode }),
+              ...(useMacSpeech === undefined ? {} : { useMacSpeech })
             }
           : prev
       )
@@ -164,8 +166,11 @@ export default function VoiceSettingsScreen({
   )
 
   const enabled = setup?.enabled ?? false
+  const macSpeechAvailable = setup?.macSpeechAvailable ?? false
+  const useMacSpeech = (setup?.useMacSpeech ?? false) && macSpeechAvailable
+  const speechModelLocked = !enabled || useMacSpeech
   const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
-  const selectedModelLabel = selectedModel?.label ?? 'None selected'
+  const selectedModelLabel = useMacSpeech ? 'Mac speech' : (selectedModel?.label ?? 'None selected')
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -251,27 +256,15 @@ export default function VoiceSettingsScreen({
             </View>
           </View>
 
-          <Text style={[styles.groupHeading, styles.inputGroupGap]}>SPEECH MODEL</Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                !enabled && styles.disabled,
-                pressed && styles.rowPressed
-              ]}
-              disabled={!enabled}
-              testID="voice-model-picker"
-              onPress={() => setModelDrawerOpen(true)}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Speech Model</Text>
-                <Text style={styles.rowSublabel} numberOfLines={1}>
-                  {selectedModelLabel}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <VoiceSpeechModelSection
+            enabled={enabled}
+            macSpeechAvailable={macSpeechAvailable}
+            useMacSpeech={useMacSpeech}
+            speechModelLocked={speechModelLocked}
+            selectedModelLabel={selectedModelLabel}
+            onToggleUseMacSpeech={(value) => void configure({ useMacSpeech: value })}
+            onOpenModelDrawer={() => setModelDrawerOpen(true)}
+          />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </ScrollView>

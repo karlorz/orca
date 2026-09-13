@@ -1,4 +1,5 @@
 import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
+import { MAC_SYSTEM_SPEECH_MODEL_ID } from '../../../src/shared/voice-dictation-selection'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcSuccess } from '../transport/types'
@@ -76,6 +77,42 @@ export async function deleteDictationModel(
   return (response as RpcSuccess).result as MobileSpeechSetup
 }
 
+export function resolveMobileDictationSetupParams(params: {
+  enabled?: boolean
+  modelId?: string
+  useMacSpeech?: boolean
+  dictationMode?: 'toggle' | 'hold'
+}): {
+  enabled?: boolean
+  modelId?: string
+  useMacSpeech?: boolean
+  dictationMode?: 'toggle' | 'hold'
+} {
+  // Why: packaged 1.4.200-4 strips useMacSpeech on speech.dictation.setup; modelId still lands.
+  if (params.useMacSpeech === true && params.modelId === undefined) {
+    return { ...params, modelId: MAC_SYSTEM_SPEECH_MODEL_ID }
+  }
+  return params
+}
+
+export function assertMacSpeechWriteApplied(
+  requested: { useMacSpeech?: boolean },
+  next: MobileSpeechSetup
+): void {
+  if (requested.useMacSpeech === undefined) {
+    return
+  }
+  const applied = next.useMacSpeech === true && next.macSpeechAvailable
+  if (requested.useMacSpeech === applied) {
+    return
+  }
+  throw new Error(
+    requested.useMacSpeech
+      ? 'Desktop did not enable Mac speech. Pair a Mac running Orca.'
+      : 'This desktop Orca build cannot turn Mac speech off from the phone. Use desktop Settings → Voice.'
+  )
+}
+
 export async function setDictationConfig(
   client: Pick<RpcClient, 'sendRequest'>,
   params: {
@@ -85,11 +122,14 @@ export async function setDictationConfig(
     dictationMode?: 'toggle' | 'hold'
   }
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.dictation.setup', params)
+  const setupParams = resolveMobileDictationSetupParams(params)
+  const response = await client.sendRequest('speech.dictation.setup', setupParams)
   if (!response.ok) {
     throw new Error(response.error?.message || 'Failed to update dictation settings')
   }
-  return (response as RpcSuccess).result as MobileSpeechSetup
+  const next = (response as RpcSuccess).result as MobileSpeechSetup
+  assertMacSpeechWriteApplied(params, next)
+  return next
 }
 
 // A model is mid-download (or extracting) and the sheet should keep polling.
