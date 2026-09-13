@@ -11,7 +11,8 @@ import {
 } from './pet-speech-preferences'
 import {
   loadPetSpeechPersistChecklist,
-  openPetSpeechPersistChecklistItem
+  openPetSpeechPersistChecklistItem,
+  syncPetSpeechPersistSettings
 } from './pet-speech-persist-checklist'
 import type { PetSpeechPersistChecklist } from '@orca/expo-pet-speech'
 
@@ -48,36 +49,45 @@ export function PetSpeechPersistSettingsPanel({
     }
   }, [])
 
+  const writeAndSync = useCallback(
+    async (patch: Partial<PetSpeechPreferences>, write: () => Promise<void>) => {
+      onPrefsPatch(patch)
+      await write()
+      await syncPetSpeechPersistSettings({ ...prefs, ...patch })
+    },
+    [onPrefsPatch, prefs]
+  )
+
   const handleTogglePersist = useCallback(
     async (persistEnabled: boolean) => {
-      onPrefsPatch({ persistEnabled })
-      await setPetSpeechPersistEnabled(persistEnabled)
+      await writeAndSync({ persistEnabled }, () => setPetSpeechPersistEnabled(persistEnabled))
     },
-    [onPrefsPatch]
+    [writeAndSync]
   )
 
   const handleToggleKeepWhenNoHost = useCallback(
     async (keepWhenNoHost: boolean) => {
-      onPrefsPatch({ keepWhenNoHost })
-      await setPetSpeechKeepWhenNoHost(keepWhenNoHost)
+      await writeAndSync({ keepWhenNoHost }, () => setPetSpeechKeepWhenNoHost(keepWhenNoHost))
     },
-    [onPrefsPatch]
+    [writeAndSync]
   )
 
   const handleToggleServiceRow = useCallback(
     async (showServiceStatusRow: boolean) => {
-      onPrefsPatch({ showServiceStatusRow })
-      await setPetSpeechShowServiceStatusRow(showServiceStatusRow)
+      await writeAndSync({ showServiceStatusRow }, () =>
+        setPetSpeechShowServiceStatusRow(showServiceStatusRow)
+      )
     },
-    [onPrefsPatch]
+    [writeAndSync]
   )
 
   const handleToggleOverlay = useCallback(
     async (overlayWhileSpeaking: boolean) => {
-      onPrefsPatch({ overlayWhileSpeaking })
-      await setPetSpeechOverlayWhileSpeaking(overlayWhileSpeaking)
+      await writeAndSync({ overlayWhileSpeaking }, () =>
+        setPetSpeechOverlayWhileSpeaking(overlayWhileSpeaking)
+      )
     },
-    [onPrefsPatch]
+    [writeAndSync]
   )
 
   return (

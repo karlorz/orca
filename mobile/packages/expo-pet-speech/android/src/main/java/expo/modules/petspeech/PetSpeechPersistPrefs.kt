@@ -54,6 +54,6 @@ object PetSpeechPersistPrefs {
         if (overlayWhileSpeaking != null) {
             editor.putBoolean(KEY_OVERLAY_WHILE_SPEAKING, overlayWhileSpeaking)
         }
-        editor.apply()
+        editor.commit()
     }
 }

@@ -54,7 +54,7 @@ export interface PetSpeechNativeModule {
   updateVoiceSessionNotificationAsync?(text: string): Promise<void>
   updatePersistSettingsAsync?(settings: PetSpeechPersistSettings): Promise<void>
   getPersistChecklistAsync?(): Promise<PetSpeechPersistChecklist>
-  openPersistChecklistItemAsync?(item: string): Promise<void>
+  openPersistChecklistItemAsync?(item: string): Promise<{ opened?: boolean } | void>
   addListener?(
     eventName: 'onCaptionRange',
     listener: (event: PetSpeechCaptionRangeEvent) => void

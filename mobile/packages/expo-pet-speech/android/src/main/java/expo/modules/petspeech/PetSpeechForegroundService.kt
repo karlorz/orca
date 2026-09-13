@@ -14,7 +14,9 @@ import android.media.AudioManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat as MediaNotificationCompat
 import java.io.File
@@ -22,8 +24,8 @@ import java.io.File
 class PetSpeechForegroundService : Service() {
 
     companion object {
-        const val NOTIFICATION_CHANNEL_ID = "orca_pet_speech_playback"
-        const val NOTIFICATION_CHANNEL_NAME = "Orca Pet Speech"
+        const val NOTIFICATION_CHANNEL_ID = PetSpeechPlaybackChannel.ID
+        const val NOTIFICATION_CHANNEL_NAME = PetSpeechPlaybackChannel.NAME
         const val NOTIFICATION_ID = PetSpeechNotificationSetDecision.FGS_NOTIFICATION_ID
         const val EXTRA_TEXT = "extra_pet_speech_text"
         const val EXTRA_OWNER_ID = "extra_pet_speech_owner_id"
@@ -33,8 +35,8 @@ class PetSpeechForegroundService : Service() {
         const val ACTION_PAUSE_PERSIST = "expo.modules.petspeech.ACTION_PAUSE_PERSIST"
         const val ACTION_RESUME_FROM_CHIP = "expo.modules.petspeech.ACTION_RESUME_FROM_CHIP"
         const val ACTION_UPDATE_HELD_NOTIFICATION = "expo.modules.petspeech.ACTION_UPDATE_HELD_NOTIFICATION"
-        private const val PREFS_NAME = "expo.modules.petspeech.prefs"
-        private const val KEY_IS_HELD = "key_is_held"
+        const val PREFS_NAME = "expo.modules.petspeech.prefs"
+        const val KEY_IS_HELD = "key_is_held"
         private const val KEY_HELD_TEXT = "key_held_text"
     }
 
@@ -90,7 +92,7 @@ class PetSpeechForegroundService : Service() {
         mediaSession = MediaSessionCompat(this, "PetSpeechSession").apply {
             isActive = true
         }
-        createNotificationChannel()
+        PetSpeechPlaybackChannel.ensure(this)
         PetSpeechNotificationCoordinator.ensureChannels(this)
         mediaSession?.setCallback(object : MediaSessionCompat.Callback() {
             override fun onPause() {
@@ -202,23 +204,6 @@ class PetSpeechForegroundService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                NOTIFICATION_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Orca Pet Speech playback"
-                setShowBadge(false)
-                setSound(null, null)
-                enableVibration(false)
-            }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            manager?.createNotificationChannel(channel)
-        }
-    }
-
     fun playSpeech(
         ownerId: Long,
         eventId: String,
@@ -313,17 +298,14 @@ class PetSpeechForegroundService : Service() {
     }
 
     private fun applyHeldNotifications() {
-        val showRow = PetSpeechPersistPrefs.read(this).showServiceRow
-        PetSpeechNotificationCoordinator.applyPlan(
-            this,
-            PetSpeechNotificationSetDecision.whileHeld(showRow)
-        )
+        refreshServiceRowFromPrefs(PetSpeechPersistPrefs.read(this).showServiceRow)
     }
 
-    fun refreshServiceRowFromPrefs() {
-        if (isForegroundHeld()) {
-            applyHeldNotifications()
-        }
+    fun refreshServiceRowFromPrefs(showServiceRow: Boolean = PetSpeechPersistPrefs.read(this).showServiceRow) {
+        PetSpeechNotificationCoordinator.applyServiceRow(
+            this,
+            show = isForegroundHeld() && showServiceRow
+        )
     }
 
     private fun clearHeldPrefs(prefs: android.content.SharedPreferences) {
@@ -342,7 +324,31 @@ class PetSpeechForegroundService : Service() {
         }
     }
 
+    private fun publishHoldMediaSession(text: String) {
+        val session = mediaSession ?: return
+        session.setMetadata(
+            MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "Orca Pet")
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, text)
+                .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, "Orca Pet")
+                .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, text)
+                .build()
+        )
+        session.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(PetSpeechMediaHoldDecision.playbackActions())
+                .setState(
+                    PlaybackStateCompat.STATE_PLAYING,
+                    PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
+                    1.0f
+                )
+                .build()
+        )
+        session.isActive = true
+    }
+
     private fun updateNotificationContent(text: String) {
+        publishHoldMediaSession(text)
         val sessionToken = mediaSession?.sessionToken
         val pauseIntent = PendingIntent.getService(
             this,
@@ -350,30 +356,22 @@ class PetSpeechForegroundService : Service() {
             Intent(this, PetSpeechForegroundService::class.java).apply {
                 action = ACTION_PAUSE_PERSIST
             },
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
+            PetSpeechNotificationCoordinator.pendingFlags()
         )
+        val mediaStyle = MediaNotificationCompat.MediaStyle().setShowActionsInCompactView(0)
+        if (sessionToken != null) {
+            mediaStyle.setMediaSession(sessionToken)
+        }
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
+            .setSmallIcon(android.R.drawable.ic_media_pause)
             .setContentTitle("Orca Pet")
             .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(android.R.drawable.ic_media_pause, "Pause", pauseIntent)
-            .apply {
-                if (sessionToken != null) {
-                    setStyle(
-                        MediaNotificationCompat.MediaStyle()
-                            .setMediaSession(sessionToken)
-                            .setShowActionsInCompactView(0)
-                    )
-                }
-            }
+            .setStyle(mediaStyle)
             .build()
 
         if (!isForegroundStarted) {

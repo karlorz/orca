@@ -1,14 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PetSpeechPreferences } from './pet-speech-preferences'
 
-const updatePersistSettingsAsync = vi.fn(async () => {})
-const getPersistChecklistAsync = vi.fn(async () => ({
-  notificationsGranted: true,
-  ignoringBattery: false,
-  canOpenDeviceGuard: true,
-  canDrawOverlays: false
+const {
+  updatePersistSettingsAsync,
+  getPersistChecklistAsync,
+  openPersistChecklistItemAsync,
+  openSettings,
+  ensureNotificationPermissions
+} = vi.hoisted(() => ({
+  updatePersistSettingsAsync: vi.fn(async () => {}),
+  getPersistChecklistAsync: vi.fn(async () => ({
+    notificationsGranted: true,
+    ignoringBattery: false,
+    canOpenDeviceGuard: true,
+    canDrawOverlays: false
+  })),
+  openPersistChecklistItemAsync: vi.fn(async () => ({ opened: true })),
+  openSettings: vi.fn(async () => {}),
+  ensureNotificationPermissions: vi.fn(async () => true)
 }))
-const openPersistChecklistItemAsync = vi.fn(async () => {})
+
+vi.mock('react-native', () => ({
+  Linking: {
+    openSettings
+  }
+}))
+
+vi.mock('../notifications/notification-permissions', () => ({
+  ensureNotificationPermissions
+}))
 
 vi.mock('@orca/expo-pet-speech', () => ({
   getExpoPetSpeechModule: () => ({
@@ -44,6 +64,8 @@ describe('pet-speech persist checklist', () => {
     updatePersistSettingsAsync.mockClear()
     getPersistChecklistAsync.mockClear()
     openPersistChecklistItemAsync.mockClear()
+    openSettings.mockClear()
+    ensureNotificationPermissions.mockClear()
   })
 
   it('maps preferences to native persist settings', () => {
@@ -77,7 +99,20 @@ describe('pet-speech persist checklist', () => {
   })
 
   it('opens a checklist item through native', async () => {
-    await openPetSpeechPersistChecklistItem('device-guard')
+    await expect(openPetSpeechPersistChecklistItem('device-guard')).resolves.toBe(true)
     expect(openPersistChecklistItemAsync).toHaveBeenCalledWith('device-guard')
+    expect(openSettings).not.toHaveBeenCalled()
+  })
+
+  it('asks notification permission then deep-links notifications', async () => {
+    await expect(openPetSpeechPersistChecklistItem('notifications')).resolves.toBe(true)
+    expect(ensureNotificationPermissions).toHaveBeenCalled()
+    expect(openPersistChecklistItemAsync).toHaveBeenCalledWith('notifications')
+  })
+
+  it('falls back to app settings when native cannot open', async () => {
+    openPersistChecklistItemAsync.mockResolvedValueOnce({ opened: false })
+    await expect(openPetSpeechPersistChecklistItem('battery')).resolves.toBe(false)
+    expect(openSettings).toHaveBeenCalled()
   })
 })

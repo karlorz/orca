@@ -56,18 +56,10 @@ object PetSpeechNotificationCoordinator {
         resumeTitle: String = RESUME_TITLE,
         resumeText: String = RESUME_TEXT
     ) {
-        ensureChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
 
-        if (plan.showServiceRow) {
-            manager.notify(
-                PetSpeechNotificationSetDecision.SERVICE_ROW_NOTIFICATION_ID,
-                buildServiceRow(context)
-            )
-        } else {
-            manager.cancel(PetSpeechNotificationSetDecision.SERVICE_ROW_NOTIFICATION_ID)
-        }
+        applyServiceRow(context, plan.showServiceRow)
 
         if (plan.showResumeChip) {
             manager.notify(
@@ -80,6 +72,20 @@ object PetSpeechNotificationCoordinator {
 
         if (!plan.showFgs) {
             manager.cancel(PetSpeechNotificationSetDecision.FGS_NOTIFICATION_ID)
+        }
+    }
+
+    fun applyServiceRow(context: Context, show: Boolean) {
+        ensureChannels(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            ?: return
+        if (show) {
+            manager.notify(
+                PetSpeechNotificationSetDecision.SERVICE_ROW_NOTIFICATION_ID,
+                buildServiceRow(context)
+            )
+        } else {
+            manager.cancel(PetSpeechNotificationSetDecision.SERVICE_ROW_NOTIFICATION_ID)
         }
     }
 
@@ -132,7 +138,7 @@ object PetSpeechNotificationCoordinator {
             .build()
     }
 
-    private fun pendingFlags(): Int {
+    fun pendingFlags(): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {

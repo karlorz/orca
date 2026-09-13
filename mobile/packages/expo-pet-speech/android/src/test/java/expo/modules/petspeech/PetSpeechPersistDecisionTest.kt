@@ -101,6 +101,46 @@ class PetSpeechPersistDecisionTest {
     }
 
     @Test
+    fun checklistNotificationsDeepLinksToAppNotificationSettings() {
+        val targets = PetSpeechChecklistIntentDecision.targets(
+            "notifications",
+            "com.stably.orca.mobile",
+            PetSpeechPlaybackChannel.ID
+        )
+        assertEquals(
+            PetSpeechChecklistIntentDecision.ACTION_APP_NOTIFICATION_SETTINGS,
+            targets[0].action
+        )
+        assertEquals("com.stably.orca.mobile", targets[0].extras[PetSpeechChecklistIntentDecision.EXTRA_APP_PACKAGE])
+        assertEquals(
+            PetSpeechChecklistIntentDecision.ACTION_APPLICATION_DETAILS_SETTINGS,
+            targets[1].action
+        )
+    }
+
+    @Test
+    fun checklistBatteryRequestsIgnoreThenSettings() {
+        val targets = PetSpeechChecklistIntentDecision.targets(
+            "battery",
+            "com.stably.orca.mobile",
+            PetSpeechPlaybackChannel.ID
+        )
+        assertEquals(PetSpeechChecklistIntentDecision.ACTION_REQUEST_IGNORE_BATTERY, targets[0].action)
+        assertTrue(targets[0].usePackageUri)
+    }
+
+    @Test
+    fun mediaHoldPublishesPausePlaybackActions() {
+        assertEquals(
+            PetSpeechMediaHoldDecision.ACTION_PAUSE or
+                PetSpeechMediaHoldDecision.ACTION_PLAY or
+                PetSpeechMediaHoldDecision.ACTION_PLAY_PAUSE or
+                PetSpeechMediaHoldDecision.ACTION_STOP,
+            PetSpeechMediaHoldDecision.playbackActions()
+        )
+    }
+
+    @Test
     fun deviceGuardPortalIsNeverAutoRun() {
         assertEquals(
             "com.motorola.deviceguard.portal.activity.PortalActivity",

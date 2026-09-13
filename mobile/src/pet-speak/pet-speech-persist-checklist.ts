@@ -1,4 +1,6 @@
+import { Linking } from 'react-native'
 import { getExpoPetSpeechModule, type PetSpeechPersistChecklist } from '@orca/expo-pet-speech'
+import { ensureNotificationPermissions } from '../notifications/notification-permissions'
 import type { PetSpeechPreferences } from './pet-speech-preferences'
 
 const EMPTY_CHECKLIST: PetSpeechPersistChecklist = {
@@ -40,10 +42,24 @@ export async function loadPetSpeechPersistChecklist(): Promise<PetSpeechPersistC
 
 export async function openPetSpeechPersistChecklistItem(
   item: 'notifications' | 'battery' | 'device-guard' | 'lock-channel' | 'overlay'
-): Promise<void> {
-  const native = getExpoPetSpeechModule()
-  if (!native?.openPersistChecklistItemAsync) {
-    return
+): Promise<boolean> {
+  if (item === 'notifications') {
+    await ensureNotificationPermissions()
   }
-  await native.openPersistChecklistItemAsync(item)
+  const native = getExpoPetSpeechModule()
+  if (native?.openPersistChecklistItemAsync) {
+    try {
+      const result = await native.openPersistChecklistItemAsync(item)
+      if (result && typeof result === 'object' && result.opened === false) {
+        await Linking.openSettings()
+        return false
+      }
+      return true
+    } catch {
+      await Linking.openSettings()
+      return false
+    }
+  }
+  await Linking.openSettings()
+  return false
 }
