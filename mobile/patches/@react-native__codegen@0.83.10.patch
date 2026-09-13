@@ -1,0 +1,45 @@
+diff --git a/lib/parsers/flow/components/commands.js b/lib/parsers/flow/components/commands.js
+index ce95fd671006f8510478e481b43fd8ce313efaa6..d74a96f898eed722a8a32ca0c3c468afc4250d41 100644
+--- a/lib/parsers/flow/components/commands.js
++++ b/lib/parsers/flow/components/commands.js
+@@ -24,11 +24,12 @@ function buildCommandSchema(property, types, parser) {
+       firstParam.id != null &&
+       firstParam.id.type === 'QualifiedTypeIdentifier' &&
+       firstParam.id.qualification.name === 'React' &&
+-      firstParam.id.id.name === 'ElementRef'
++      (firstParam.id.id.name === 'ElementRef' ||
++        firstParam.id.id.name === 'ComponentRef')
+     )
+   ) {
+     throw new Error(
+-      `The first argument of method ${name} must be of type React.ElementRef<>`,
++      `The first argument of method ${name} must be of type React.ElementRef<> or React.ComponentRef<>`,
+     );
+   }
+   const params = value.params.slice(1).map(param => {
+diff --git a/lib/parsers/typescript/components/commands.js b/lib/parsers/typescript/components/commands.js
+index 8b818566835f88bc66b6c2dce8666f9355e21183..cd518d52d022005e3b1d005908572a50f6b1b18e 100644
+--- a/lib/parsers/typescript/components/commands.js
++++ b/lib/parsers/typescript/components/commands.js
+@@ -26,14 +26,16 @@ function buildCommandSchemaInternal(name, optional, parameters, types, parser) {
+         null || _firstParam$typeAnnot === void 0
+         ? void 0
+         : _firstParam$typeAnnot.name) === 'React' &&
+-      ((_firstParam$typeAnnot2 = firstParam.typeAnnotation.typeName.right) ===
+-        null || _firstParam$typeAnnot2 === void 0
+-        ? void 0
+-        : _firstParam$typeAnnot2.name) === 'ElementRef'
++      ['ElementRef', 'ComponentRef'].includes(
++        ((_firstParam$typeAnnot2 = firstParam.typeAnnotation.typeName.right) ===
++          null || _firstParam$typeAnnot2 === void 0
++          ? void 0
++          : _firstParam$typeAnnot2.name),
++      )
+     )
+   ) {
+     throw new Error(
+-      `The first argument of method ${name} must be of type React.ElementRef<>`,
++      `The first argument of method ${name} must be of type React.ElementRef<> or React.ComponentRef<>`,
+     );
+   }
+   const params = parameters.slice(1).map(param => {

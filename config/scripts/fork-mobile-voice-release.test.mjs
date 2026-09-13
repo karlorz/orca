@@ -428,4 +428,15 @@ describe('fork mobile voice release workflow safety contract', () => {
     )
     expect(upstream.jobs['android-build'].if).toBe("github.repository == 'stablyai/orca'")
   })
+
+  it('patches RN 0.83 codegen so screens 4.27 ComponentRef commands can generate Android schema', () => {
+    const workspace = parse(readFileSync(join(projectDir, 'mobile/pnpm-workspace.yaml'), 'utf8'))
+    const patchPath = workspace.patchedDependencies['@react-native/codegen@0.83.10']
+    expect(patchPath).toBe('patches/@react-native__codegen@0.83.10.patch')
+    const patch = readFileSync(join(projectDir, 'mobile', patchPath), 'utf8')
+    expect(patch).toContain("['ElementRef', 'ComponentRef']")
+    expect(patch).toContain('React.ComponentRef<>')
+    const lockfile = readFileSync(join(projectDir, 'mobile/pnpm-lock.yaml'), 'utf8')
+    expect(lockfile).toMatch(/'@react-native\/codegen@0\.83\.10': [0-9a-f]{64}/)
+  })
 })
