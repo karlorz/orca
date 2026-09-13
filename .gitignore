@@ -29,6 +29,9 @@ out/
 /build/
 release/
 native/**/.build/
+# node-gyp output for the vendored Windows registry addon; generated per host and ABI.
+native/windows-registry/build/
+native/windows-registry/bin/
 
 # pnpm
 .pnpm-store/
@@ -115,6 +118,7 @@ docs/**
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
 !docs/reference/own-mobile-relay-key-expiry.md
+!docs/reference/pnpm-install-policy.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-cmd-shim-resolution.md
 !docs/reference/windows-daemon-host-relocation.md
