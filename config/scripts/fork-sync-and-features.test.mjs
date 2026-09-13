@@ -38,6 +38,12 @@ describe('fork-sync-main workflow', () => {
     const scripts = job.steps.map((step) => JSON.stringify(step)).join('\n')
     expect(scripts).toContain('fork-sync-fork-main.mjs')
     expect(scripts).toContain('--write')
+    const installIdx = job.steps.findIndex((step) =>
+      String(step.uses ?? '').includes('install-node-dependencies')
+    )
+    const mergeIdx = job.steps.findIndex((step) => step.id === 'merge_fork_main')
+    expect(installIdx).toBeGreaterThanOrEqual(0)
+    expect(installIdx).toBeLessThan(mergeIdx)
     expect(scripts).toContain('fork-sync-upstream-tags.mjs')
     expect(scripts).toContain('fork-next-desktop-tag.mjs')
     expect(scripts).toContain('fork-next-mobile-tag.mjs')

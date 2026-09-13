@@ -7,7 +7,13 @@ name: Sync fork main from upstream
 #   2. Merges stablyai/orca `main` into `fork-main` with git merge --no-ff.
 #   3. Mirrors upstream `v*` tags into karlorz/orca without overwriting existing tags.
 #   4. Auto-cuts next fork desktop tag (v<base>-0) if a new upstream desktop base appeared.
-#   5. Auto-resolves mobile/app.json version conflicts (published train + max versionCode).
+#   5. Auto-resolves allowlisted fork-delta conflicts only:
+#        mobile/app.json (published train + max versionCode)
+#        .gitignore (union: keep ours, append missing theirs lines)
+#        config/scripts/build-native-for-platform.mjs (upstream 3-helper
+#          Promise.all, then sequential build:speech-macos)
+#        mobile/src/terminal/terminal-webview-payload-hash.test.ts
+#          (recompute EXPECTED_* from live XTERM_HTML)
 #   6. Auto-cuts mobile-android-v<train>-0 on a new published mobile train (app.json bump first).
 # Other merge conflicts fail closed. Extra mobile -1/-2 stay attended.
 # GitHub cron is UTC-only: 01:17 UTC = 09:17 HKT (UTC+8, no DST), timed after
@@ -64,7 +70,7 @@ jobs:
     needs: sync-main
     if: github.repository == 'karlorz/orca'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     outputs:
       before: ${{ steps.merge_fork_main.outputs.before }}
       after: ${{ steps.merge_fork_main.outputs.after }}
@@ -76,6 +82,10 @@ jobs:
           ref: fork-main
           fetch-depth: 0
           token: ${{ secrets.FORK_SYNC_TOKEN }}
+
+      - name: Install node dependencies
+        # WebView payload-hash auto-resolve imports XTERM_HTML through Vitest.
+        uses: ./.github/actions/install-node-dependencies
 
       - name: Merge stablyai/orca main into fork-main
         id: merge_fork_main
