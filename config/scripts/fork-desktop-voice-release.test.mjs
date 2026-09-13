@@ -48,6 +48,23 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toMatch(/electron-builder[^\n]*--mac[^\n]*--publish never/)
   })
 
+  it('widens mac CPU variants before packaging so beforePack can ship darwin/x64 from arm64', () => {
+    const workflow = readWorkflow(workflowPath)
+    const isWiden = (step) =>
+      typeof step.run === 'string' &&
+      step.run.includes('pnpm install') &&
+      step.run.includes('--cpu=current,x64,arm64')
+    const macSteps = workflow.jobs['build-mac'].steps
+    const installIndex = macSteps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const widenIndex = macSteps.findIndex(isWiden)
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(widenIndex).toBeGreaterThan(installIndex)
+    expect(workflow.jobs['build-linux'].steps.some(isWiden)).toBe(false)
+    expect(workflow.jobs['build-windows'].steps.some(isWiden)).toBe(false)
+  })
+
   it('stages all four archives, latest-mac.yml, blockmaps, and SHA256SUMS in desktop-artifacts', () => {
     const rawYaml = readFileSync(workflowPath, 'utf8')
     expect(rawYaml).toContain('orca-macos-x64.dmg')

@@ -38,14 +38,17 @@ describe('release install targets', () => {
       .map((step) => step.with?.command ?? step.run)
       .filter((command) => typeof command === 'string' && command.includes('pnpm install '))
 
-  it.each(['adhoc-mac-build', 'daily-mac-build', 'hourly-mac-build', 'release-mac-build'])(
-    '%s installs both mac CPU variants for the x64+arm64 package config',
-    (name) => {
-      const installs = installSteps(name)
-      expect(installs.length).toBeGreaterThan(0)
-      expect(installs.some((command) => command.includes(macCpuFlag))).toBe(true)
-    }
-  )
+  it.each([
+    'adhoc-mac-build',
+    'daily-mac-build',
+    'hourly-mac-build',
+    'release-mac-build',
+    'fork-desktop-voice-release'
+  ])('%s installs both mac CPU variants for the x64+arm64 package config', (name) => {
+    const installs = installSteps(name)
+    expect(installs.length).toBeGreaterThan(0)
+    expect(installs.some((command) => command.includes(macCpuFlag))).toBe(true)
+  })
 
   it.each(['release-cut', 'dev-channel-win-build', 'windows-signing-rehearsal'])(
     '%s keeps installs scoped to the runner host',
