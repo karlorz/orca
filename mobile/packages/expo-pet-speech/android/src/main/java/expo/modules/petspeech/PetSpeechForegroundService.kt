@@ -3,6 +3,7 @@ package expo.modules.petspeech
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -23,12 +24,14 @@ class PetSpeechForegroundService : Service() {
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "orca_pet_speech_playback"
         const val NOTIFICATION_CHANNEL_NAME = "Orca Pet Speech"
-        const val NOTIFICATION_ID = 4040
+        const val NOTIFICATION_ID = PetSpeechNotificationSetDecision.FGS_NOTIFICATION_ID
         const val EXTRA_TEXT = "extra_pet_speech_text"
         const val EXTRA_OWNER_ID = "extra_pet_speech_owner_id"
         const val ACTION_STOP_OWNER = "expo.modules.petspeech.ACTION_STOP_OWNER"
         const val ACTION_HOLD_SESSION = "expo.modules.petspeech.ACTION_HOLD_SESSION"
         const val ACTION_RELEASE_SESSION = "expo.modules.petspeech.ACTION_RELEASE_SESSION"
+        const val ACTION_PAUSE_PERSIST = "expo.modules.petspeech.ACTION_PAUSE_PERSIST"
+        const val ACTION_RESUME_FROM_CHIP = "expo.modules.petspeech.ACTION_RESUME_FROM_CHIP"
         const val ACTION_UPDATE_HELD_NOTIFICATION = "expo.modules.petspeech.ACTION_UPDATE_HELD_NOTIFICATION"
         private const val PREFS_NAME = "expo.modules.petspeech.prefs"
         private const val KEY_IS_HELD = "key_is_held"
@@ -88,6 +91,20 @@ class PetSpeechForegroundService : Service() {
             isActive = true
         }
         createNotificationChannel()
+        PetSpeechNotificationCoordinator.ensureChannels(this)
+        mediaSession?.setCallback(object : MediaSessionCompat.Callback() {
+            override fun onPause() {
+                handlePausePersist()
+            }
+
+            override fun onStop() {
+                handlePausePersist()
+            }
+        })
+    }
+
+    fun isForegroundHeld(): Boolean {
+        return isForegroundStarted && replacementDecisionHandler.isSessionHeld
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +116,10 @@ class PetSpeechForegroundService : Service() {
                 val savedText = prefs.getString(KEY_HELD_TEXT, PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
                     ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
                 replacementDecisionHandler.holdSession(savedText)
+                updateNotificationContent(savedText)
+                if (isForegroundStarted) {
+                    applyHeldNotifications()
+                }
                 return PetSpeechStartResultDecision.computeStartResult(isHeld = true)
             }
             stopForegroundPlayback()
@@ -106,14 +127,26 @@ class PetSpeechForegroundService : Service() {
             return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
         }
 
-        if (intent.action == ACTION_HOLD_SESSION) {
+        if (intent.action == ACTION_HOLD_SESSION || intent.action == ACTION_RESUME_FROM_CHIP) {
             val text = intent.getStringExtra(EXTRA_TEXT) ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
-            prefs.edit()
-                .putBoolean(KEY_IS_HELD, true)
-                .putString(KEY_HELD_TEXT, text)
-                .apply()
             replacementDecisionHandler.holdSession(text)
-            return PetSpeechStartResultDecision.computeStartResult(isHeld = true)
+            updateNotificationContent(text)
+            val held = PetSpeechHoldHonestyDecision.shouldMarkHeld(isForegroundStarted)
+            if (held) {
+                prefs.edit()
+                    .putBoolean(KEY_IS_HELD, true)
+                    .putString(KEY_HELD_TEXT, text)
+                    .apply()
+                applyHeldNotifications()
+            } else {
+                prefs.edit()
+                    .putBoolean(KEY_IS_HELD, false)
+                    .remove(KEY_HELD_TEXT)
+                    .apply()
+                replacementDecisionHandler.releaseSession()
+                PetSpeechNotificationCoordinator.cancelAll(this)
+            }
+            return PetSpeechStartResultDecision.computeStartResult(isHeld = held)
         }
 
         if (intent.action == ACTION_UPDATE_HELD_NOTIFICATION) {
@@ -123,16 +156,25 @@ class PetSpeechForegroundService : Service() {
                     .putString(KEY_HELD_TEXT, text)
                     .apply()
                 replacementDecisionHandler.updateHeldNotification(text)
+                applyHeldNotifications()
             }
             return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
         }
 
+        if (intent.action == ACTION_PAUSE_PERSIST) {
+            handlePausePersist()
+            return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
+        }
+
         if (intent.action == ACTION_RELEASE_SESSION) {
-            prefs.edit()
-                .putBoolean(KEY_IS_HELD, false)
-                .remove(KEY_HELD_TEXT)
-                .apply()
+            clearHeldPrefs(prefs)
+            stopActiveSpeech()
             replacementDecisionHandler.releaseSession()
+            PetSpeechSpeakOverlayHelper.hide(this)
+            PetSpeechNotificationCoordinator.applyPlan(
+                this,
+                PetSpeechNotificationSetDecision.afterMasterOff()
+            )
             return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
         }
 
@@ -192,6 +234,7 @@ class PetSpeechForegroundService : Service() {
         teardownAudioPlayerAndFocus()
         this.onPlaybackStarted = onPlaybackStarted
 
+        PetSpeechSpeakOverlayHelper.showIfAllowed(this, text)
         replacementDecisionHandler.beginPlayback(ownerId, eventId, text, onOutcome)
 
         stateMachine = PetSpeechStateMachine { action ->
@@ -223,6 +266,7 @@ class PetSpeechForegroundService : Service() {
                     stateMachine = null
                     safeTeardownAudioPlayer()
                     abandonSpeechAudioFocus()
+                    PetSpeechSpeakOverlayHelper.hide(this@PetSpeechForegroundService)
                     replacementDecisionHandler.completePlayback(ownerId, action.outcome)
                 }
             }
@@ -237,6 +281,7 @@ class PetSpeechForegroundService : Service() {
             stateMachine = null
             onPlaybackStarted = null
             teardownAudioPlayerAndFocus()
+            PetSpeechSpeakOverlayHelper.hide(this)
             replacementDecisionHandler.cancelSpeech(ownerId)
         }
     }
@@ -253,8 +298,64 @@ class PetSpeechForegroundService : Service() {
         abandonSpeechAudioFocus()
     }
 
+    private fun handlePausePersist() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        stopActiveSpeech()
+        clearHeldPrefs(prefs)
+        replacementDecisionHandler.releaseSession()
+        PetSpeechSpeakOverlayHelper.hide(this)
+        stopForegroundPlayback()
+        PetSpeechNotificationCoordinator.applyPlan(
+            this,
+            PetSpeechNotificationSetDecision.afterPause()
+        )
+        stopSelf()
+    }
+
+    private fun applyHeldNotifications() {
+        val showRow = PetSpeechPersistPrefs.read(this).showServiceRow
+        PetSpeechNotificationCoordinator.applyPlan(
+            this,
+            PetSpeechNotificationSetDecision.whileHeld(showRow)
+        )
+    }
+
+    fun refreshServiceRowFromPrefs() {
+        if (isForegroundHeld()) {
+            applyHeldNotifications()
+        }
+    }
+
+    private fun clearHeldPrefs(prefs: android.content.SharedPreferences) {
+        prefs.edit()
+            .putBoolean(KEY_IS_HELD, false)
+            .remove(KEY_HELD_TEXT)
+            .apply()
+    }
+
+    private fun stopActiveSpeech() {
+        val ownerId = replacementDecisionHandler.activeOwnerId
+        if (ownerId != null) {
+            cancelSpeech(ownerId)
+        } else {
+            teardownAudioPlayerAndFocus()
+        }
+    }
+
     private fun updateNotificationContent(text: String) {
         val sessionToken = mediaSession?.sessionToken
+        val pauseIntent = PendingIntent.getService(
+            this,
+            10,
+            Intent(this, PetSpeechForegroundService::class.java).apply {
+                action = ACTION_PAUSE_PERSIST
+            },
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+        )
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
             .setContentTitle("Orca Pet")
@@ -262,9 +363,15 @@ class PetSpeechForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(android.R.drawable.ic_media_pause, "Pause", pauseIntent)
             .apply {
                 if (sessionToken != null) {
-                    setStyle(MediaNotificationCompat.MediaStyle().setMediaSession(sessionToken))
+                    setStyle(
+                        MediaNotificationCompat.MediaStyle()
+                            .setMediaSession(sessionToken)
+                            .setShowActionsInCompactView(0)
+                    )
                 }
             }
             .build()
@@ -407,6 +514,7 @@ class PetSpeechForegroundService : Service() {
         if (currentOwnerId != null) {
             cancelSpeech(currentOwnerId)
         }
+        PetSpeechSpeakOverlayHelper.hide(this)
         stopForegroundPlayback()
         safeTeardownAudioPlayer()
         mediaSession?.release()

@@ -43,6 +43,10 @@ vi.mock('@react-native-async-storage/async-storage', () => {
   }
 })
 
+vi.mock('./pet-speech-persist-checklist', () => ({
+  syncPetSpeechPersistSettings: vi.fn(async () => {})
+}))
+
 vi.mock('./pet-speech-preferences', () => ({
   PET_SPEECH_STORAGE_KEYS: {
     ENABLED: 'orca:petSpeech:enabled',

@@ -80,13 +80,32 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
     rate: 1,
     captionsEnabled: false,
     captionOffset: { x: 0, y: 0 },
-    voiceByLanguage: {}
+    voiceByLanguage: {},
+    persistEnabled: false,
+    keepWhenNoHost: false,
+    showServiceStatusRow: true,
+    overlayWhileSpeaking: false
   })),
   subscribePetSpeechPreferences: vi.fn((_cb: unknown) => () => {}),
   setPetSpeechEnabled: vi.fn(async () => {}),
   setPetSpeechCaptionsEnabled: vi.fn(async () => {}),
   setPetSpeechRate: vi.fn(async () => {}),
-  setPetSpeechVoiceForLanguage: vi.fn(async () => {})
+  setPetSpeechVoiceForLanguage: vi.fn(async () => {}),
+  setPetSpeechPersistEnabled: vi.fn(async () => {}),
+  setPetSpeechKeepWhenNoHost: vi.fn(async () => {}),
+  setPetSpeechShowServiceStatusRow: vi.fn(async () => {}),
+  setPetSpeechOverlayWhileSpeaking: vi.fn(async () => {})
+}))
+
+vi.mock('../src/pet-speak/pet-speech-persist-checklist', () => ({
+  syncPetSpeechPersistSettings: vi.fn(async () => {}),
+  loadPetSpeechPersistChecklist: vi.fn(async () => ({
+    notificationsGranted: true,
+    ignoringBattery: true,
+    canOpenDeviceGuard: false,
+    canDrawOverlays: false
+  })),
+  openPetSpeechPersistChecklistItem: vi.fn(async () => {})
 }))
 
 vi.mock('../src/pet-speak/pet-speech-service', () => ({
@@ -181,6 +200,9 @@ describe('Pet Speech and Plugins Routes', () => {
     expect(labels).toContain('Pet Speech')
     expect(labels).toContain('Enable Pet Speech')
     expect(labels).toContain('Live captions')
+    expect(labels).toContain('PERSIST')
+    expect(labels).toContain('Keep after reboot')
+    expect(labels).toContain('Show service status row')
     expect(labels).toContain('TEST')
     expect(labels).toContain('Test Voice (yue-HK)')
     expect(labels).toContain('Test Live captions')
@@ -196,7 +218,11 @@ describe('Pet Speech and Plugins Routes', () => {
       rate: 1,
       captionsEnabled: false,
       captionOffset: { x: 0, y: 0 },
-      voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' }
+      voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' },
+      persistEnabled: false,
+      keepWhenNoHost: false,
+      showServiceStatusRow: true,
+      overlayWhileSpeaking: false
     })
 
     let root: { root: { findAllByType: (type: string) => Array<{ props: { children: unknown } }> } }

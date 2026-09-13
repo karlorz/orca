@@ -130,4 +130,24 @@ describe('validateMergedAndroidManifest', () => {
     expect(result.isValid).toBe(false)
     expect(result.missingRequirements).toContain('foregroundServiceType="mediaPlayback"')
   })
+
+  it('fails when telephony persist privileges appear', () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.stably.orca.mobile">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <application>
+        <service
+            android:name="expo.modules.petspeech.PetSpeechForegroundService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <service android:name=".Listener" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
+    </application>
+</manifest>`
+    const result = validateMergedAndroidManifest(xml)
+    expect(result.isValid).toBe(false)
+    expect(result.missingRequirements).toContain('forbidden:BIND_NOTIFICATION_LISTENER_SERVICE')
+  })
 })

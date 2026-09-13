@@ -30,6 +30,12 @@ describe('expo-pet-speech module source manifest and autolinking configuration',
     expect(content).toContain('android:foregroundServiceType="mediaPlayback"')
     expect(content).toContain('android:exported="false"')
     expect(content).toContain('android:stopWithTask="false"')
+    expect(content).toContain('android.permission.POST_NOTIFICATIONS')
+    expect(content).toContain('android.permission.RECEIVE_BOOT_COMPLETED')
+    expect(content).toContain('.PetSpeechBootReceiver')
+    expect(content).not.toContain('ROLE_CALL_SCREENING')
+    expect(content).not.toContain('BIND_NOTIFICATION_LISTENER_SERVICE')
+    expect(content).not.toContain('BIND_DEVICE_ADMIN')
   })
 
   it('declares queries block with TTS_SERVICE intent action in package source', () => {

@@ -76,6 +76,10 @@ vi.mock('./pet-speak-subscription', () => ({
   subscribeToPetSpeak: subscribeToPetSpeakMock
 }))
 
+vi.mock('./pet-speech-persist-checklist', () => ({
+  syncPetSpeechPersistSettings: vi.fn(async () => {})
+}))
+
 import { RpcClientProvider } from '../transport/client-context'
 import { PetSpeakRootBridge } from './pet-speak-root-bridge'
 import { subscribeToPetSpeak } from './pet-speak-subscription'
@@ -157,7 +161,11 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
       rate: 1,
       captionsEnabled: false,
       captionOffset: { x: 0, y: 0 },
-      voiceByLanguage: {}
+      voiceByLanguage: {},
+      persistEnabled: false,
+      keepWhenNoHost: false,
+      showServiceStatusRow: true,
+      overlayWhileSpeaking: false
     }
     acquireVoiceSessionMock = vi.fn(async () => ({ held: true }))
     releaseVoiceSessionMock = vi.fn(async () => {})

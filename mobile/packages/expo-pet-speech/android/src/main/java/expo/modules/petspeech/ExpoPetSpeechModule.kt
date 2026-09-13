@@ -1,14 +1,18 @@
 package expo.modules.petspeech
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import expo.modules.kotlin.Promise
@@ -371,14 +375,9 @@ class ExpoPetSpeechModule : Module() {
                 } else {
                     context.startService(startIntent)
                 }
-                PetSpeechBatteryExemptionPromptHelper.promptBatteryExemptionOnce(context)
-                promise.resolve(mapOf("held" to true))
+                queryHeldAfterStart(context, promise)
             } catch (e: Exception) {
-                if (PetSpeechForegroundStart.isForegroundServiceStartNotAllowed(e)) {
-                    promise.resolve(mapOf("held" to false))
-                } else {
-                    promise.resolve(mapOf("held" to false))
-                }
+                promise.resolve(mapOf("held" to false))
             }
         }
 
@@ -391,6 +390,64 @@ class ExpoPetSpeechModule : Module() {
                     }
                     context.startService(stopIntent)
                 } catch (_: Exception) {}
+            }
+            promise.resolve(null)
+        }
+
+        AsyncFunction("updatePersistSettingsAsync") { options: Map<String, Any?>, promise: Promise ->
+            val context = appContext.reactContext
+            if (context == null) {
+                promise.resolve(null)
+                return@AsyncFunction
+            }
+            PetSpeechPersistPrefs.write(
+                context,
+                masterEnabled = options["masterEnabled"] as? Boolean,
+                persistEnabled = options["persistEnabled"] as? Boolean,
+                keepWhenNoHost = options["keepWhenNoHost"] as? Boolean,
+                showServiceRow = options["showServiceStatusRow"] as? Boolean,
+                overlayWhileSpeaking = options["overlayWhileSpeaking"] as? Boolean
+            )
+            refreshServiceRow(context)
+            val overlayOn = options["overlayWhileSpeaking"] as? Boolean
+            if (overlayOn == true &&
+                PetSpeechOverlayPermissionDecision.shouldRequest(true) &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !Settings.canDrawOverlays(context)
+            ) {
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {}
+            }
+            promise.resolve(null)
+        }
+
+        AsyncFunction("getPersistChecklistAsync") { promise: Promise ->
+            val context = appContext.reactContext
+            if (context == null) {
+                promise.resolve(
+                    mapOf(
+                        "notificationsGranted" to false,
+                        "ignoringBattery" to false,
+                        "canOpenDeviceGuard" to false,
+                        "canDrawOverlays" to false
+                    )
+                )
+                return@AsyncFunction
+            }
+            promise.resolve(readPersistChecklist(context))
+        }
+
+        AsyncFunction("openPersistChecklistItemAsync") { item: String, promise: Promise ->
+            val context = appContext.reactContext
+            if (context != null) {
+                openPersistChecklistItem(context, item)
             }
             promise.resolve(null)
         }
@@ -417,6 +474,151 @@ class ExpoPetSpeechModule : Module() {
                 clearCaptionKaraoke()
                 resourceOwnerRegistry.stopAll()
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun queryHeldAfterStart(context: Context, promise: Promise) {
+        val bindIntent = Intent(context, PetSpeechForegroundService::class.java)
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                val held = try {
+                    val binder = service as? PetSpeechForegroundService.LocalBinder
+                    binder?.getService()?.isForegroundHeld() ?: false
+                } catch (_: Exception) {
+                    false
+                }
+                try {
+                    context.unbindService(this)
+                } catch (_: Exception) {}
+                promise.resolve(mapOf("held" to held))
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {}
+        }
+        val bound = try {
+            context.bindService(bindIntent, connection, Context.BIND_AUTO_CREATE)
+        } catch (_: Exception) {
+            false
+        }
+        if (!bound) {
+            promise.resolve(mapOf("held" to false))
+        }
+    }
+
+    private fun refreshServiceRow(context: Context) {
+        val bindIntent = Intent(context, PetSpeechForegroundService::class.java)
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                try {
+                    val binder = service as? PetSpeechForegroundService.LocalBinder
+                    binder?.getService()?.refreshServiceRowFromPrefs()
+                } catch (_: Exception) {}
+                try {
+                    context.unbindService(this)
+                } catch (_: Exception) {}
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {}
+        }
+        try {
+            if (!context.bindService(bindIntent, connection, 0)) {
+                val showRow = PetSpeechPersistPrefs.read(context).showServiceRow
+                val heldPrefs = context.getSharedPreferences(
+                    "expo.modules.petspeech.prefs",
+                    Context.MODE_PRIVATE
+                ).getBoolean("key_is_held", false)
+                if (heldPrefs) {
+                    PetSpeechNotificationCoordinator.applyPlan(
+                        context,
+                        PetSpeechNotificationSetDecision.whileHeld(showRow)
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun readPersistChecklist(context: Context): Map<String, Boolean> {
+        val notificationsGranted = if (Build.VERSION.SDK_INT >= 33) {
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val ignoringBattery = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+        } else {
+            true
+        }
+        val canOpenDeviceGuard = try {
+            context.packageManager.getPackageInfo(
+                PetSpeechOemAutostartDecision.MOTOROLA_DEVICE_GUARD_PACKAGE,
+                0
+            )
+            true
+        } catch (_: Exception) {
+            false
+        }
+        val canDrawOverlays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(context)
+        } else {
+            true
+        }
+        return mapOf(
+            "notificationsGranted" to notificationsGranted,
+            "ignoringBattery" to ignoringBattery,
+            "canOpenDeviceGuard" to canOpenDeviceGuard,
+            "canDrawOverlays" to canDrawOverlays
+        )
+    }
+
+    private fun openPersistChecklistItem(context: Context, item: String) {
+        try {
+            val intent = when (item) {
+                "notifications" -> {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    }
+                }
+                "battery" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                    } else {
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                    }
+                }
+                "device-guard" -> {
+                    Intent().apply {
+                        component = ComponentName(
+                            PetSpeechOemAutostartDecision.MOTOROLA_DEVICE_GUARD_PACKAGE,
+                            PetSpeechOemAutostartDecision.MOTOROLA_PORTAL_ACTIVITY
+                        )
+                    }
+                }
+                "lock-channel" -> {
+                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        putExtra(
+                            Settings.EXTRA_CHANNEL_ID,
+                            PetSpeechForegroundService.NOTIFICATION_CHANNEL_ID
+                        )
+                    }
+                }
+                "overlay" -> {
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                }
+                else -> return
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (_: Exception) {
         }
     }
 
