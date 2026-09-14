@@ -3,17 +3,13 @@ import { DirectReturnProbe } from './mobile-direct-return-probe'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
+import { liveRelayLeaseExpiry, persistRelayHost } from './mobile-endpoint-supervisor-support'
 import {
-  liveRelayLeaseExpiry,
-  persistRelayHost,
-  suspendRelayIfStillConnected
-} from './mobile-endpoint-supervisor-support'
-import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
+  recoverMobileRelay,
+  rotateMobileRelayCredentialIfNeeded,
+  type SupervisorRecoveryContext
+} from './mobile-endpoint-supervisor-recovery'
 import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
-import {
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
@@ -26,11 +22,7 @@ import {
   getHostConnectionRetainRuntime,
   subscribeHostConnectionRetainRuntime
 } from '../pet-speak/host-connection-retain'
-import {
-  logRelayConnected,
-  logRelayCredentialUnavailable,
-  logRelayDialFailure
-} from './mobile-relay-diagnostic-log'
+import { logRelayConnected, logRelayDialFailure } from './mobile-relay-diagnostic-log'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
@@ -231,142 +223,52 @@ export class MobileEndpointSupervisor {
     )
   }
 
+  private recovery(): SupervisorRecoveryContext {
+    return {
+      isActive: () => this.isActive(),
+      host: () => this.host,
+      setHost: (host) => {
+        this.host = host
+      },
+      bundle: () => this.bundle,
+      setBundle: (bundle) => {
+        this.bundle = bundle
+      },
+      operationInFlight: () => this.operationInFlight,
+      setOperationInFlight: (value) => {
+        this.operationInFlight = value
+      },
+      pendingReplace: () => this.pendingReplace,
+      setPendingReplace: (value) => {
+        this.pendingReplace = value
+      },
+      relayRotationPending: () => this.relayRotationPending,
+      stopped: () => this.stopped,
+      credentialRotationInFlight: () => this.credentialRotationInFlight,
+      setCredentialRotationInFlight: (value) => {
+        this.credentialRotationInFlight = value
+      },
+      logical: this.logical,
+      relayReconnect: this.relayReconnect,
+      dependencies: this.dependencies,
+      logRelay: this.logRelay,
+      sessionEstablisher: this.sessionEstablisher,
+      leaseRotation: this.leaseRotation,
+      recoverRelay: (forceReplacement, ownsRecovery) =>
+        this.recoverRelay(forceReplacement, ownsRecovery)
+    }
+  }
+
   // forceReplacement: dial past the "direct still looks live" guard — a lease
   // rotation, a network-change replacement, or the happy-eyeballs grace race.
   // ownsRecovery: this dial is the connection's only hope, so a failure books the
   // shared cooldown and any session left stale-'connected' by a half-open socket
   // comes down; lease rotation clears it because armRetry owns its own retry.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
-    if (!this.isActive() || !this.host.relay) {
-      return
-    }
-    if (this.operationInFlight) {
-      // Why: a 12s direct probe can own the mutex when a network handoff lands;
-      // afterProbe replays the queued replacement so the signal is never lost.
-      this.pendingReplace ||= forceReplacement && ownsRecovery
-      return
-    }
-    if (this.pendingReplace) {
-      this.pendingReplace = false
-      forceReplacement = true
-      ownsRecovery = true
-    }
-    // Why: connecting/handshaking is live direct progress; an unforced relay dial
-    // would race it before the grace timer has given direct its head start.
-    if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
-      return
-    }
-    // Why: revival and lease timers can overlap resume failures; one shared cooldown
-    // prevents PEER_DROPPED/LIMIT_EXCEEDED reconnect churn.
-    if (this.relayReconnect.shouldDefer()) {
-      if (ownsRecovery) {
-        // Why: never tear down a session no dial has disproven — the intent stays
-        // queued so the armed retry runs forced once the cooldown lapses.
-        this.pendingReplace = true
-      }
-      this.logRelay('recovery deferred by cooldown or gate')
-      return
-    }
-    this.operationInFlight = true
-    let retryAfterOperation = false
-    try {
-      const selection = await selectDialableRelayCredentials({
-        bundle: this.bundle,
-        controller: this.relayReconnect,
-        readBundle: () => this.dependencies.readBundle(this.host.id),
-        onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
-      })
-      this.bundle = selection.bundle
-      if (selection.credentials.length === 0) {
-        this.logical.setRecoveryPath(null)
-        // Why: "expired" vs "missing" separates a sleep-past-expiry phone
-        // (needs re-pair or LAN) from a Keychain failure in field reports.
-        logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
-        this.relayReconnect.armCredentialReprobe()
-        if (ownsRecovery) {
-          // Why: no dial happened — keep the session and the intent; the reprobe
-          // runs forced and replaces make-before-break once a credential exists.
-          this.pendingReplace = true
-        }
-        return
-      }
-      const recoveryNeeded =
-        forceReplacement || this.relayReconnect.needsRecovery(this.logical.getState())
-      if (!this.isActive() || !recoveryNeeded) {
-        return
-      }
-      this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
-      const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
-      if (dialed.outcome === 'established') {
-        // Why: a fresh socket satisfies any replacement intent queued mid-dial.
-        this.pendingReplace = false
-        retryAfterOperation = this.logical.getState() !== 'connected'
-        return
-      }
-      if (dialed.outcome === 'aborted') {
-        this.logical.setRecoveryPath(null)
-        // Why: direct won the race or the supervisor went inactive — not a
-        // failure; booking backoff would delay the next genuine recovery.
-        return
-      }
-      // Why: cleanup may happen while a relay dial is awaiting the network;
-      // record its outcome without recreating a foreground retry timer.
-      const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
-      this.relayReconnect.registerFailure(dialed.error, scheduleRetry)
-      recoveryPresentation.clearIfCredentialBlocked(this.logical, this.relayReconnect)
-      if (ownsRecovery) {
-        suspendRelayIfStillConnected(this.relayReconnect, this.logical)
-      }
-    } finally {
-      this.operationInFlight = false
-      if (forceReplacement && this.relayRotationPending && this.isActive()) {
-        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
-      }
-      // Why: the active relay can drop while migration follow-up still owns the mutex.
-      if (retryAfterOperation && this.isActive()) {
-        void this.recoverRelay()
-      }
-    }
+    return recoverMobileRelay(this.recovery(), forceReplacement, ownsRecovery)
   }
 
   private async rotateCredentialIfNeeded(force = false): Promise<void> {
-    if (
-      this.stopped ||
-      this.credentialRotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      (!force && !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now()))
-    ) {
-      return
-    }
-    this.credentialRotationInFlight = true
-    let credentialRefreshed = false
-    try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
-      credentialRefreshed = true
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
-    } catch {
-      // Why: pending material remains durable; the next authenticated direct
-      // opportunity must reconcile it before creating another install key.
-    } finally {
-      if (credentialRefreshed) {
-        this.relayReconnect.completeCredentialRefresh()
-      }
-      this.credentialRotationInFlight = false
-      if (
-        credentialRefreshed &&
-        this.isActive() &&
-        this.relayReconnect.needsRecovery(this.logical.getState())
-      ) {
-        void this.recoverRelay()
-      }
-    }
+    return rotateMobileRelayCredentialIfNeeded(this.recovery(), force)
   }
 }

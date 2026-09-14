@@ -29,8 +29,8 @@ import {
 import { attachNativeCaptionRangeListener } from './pet-speak-caption-range-native'
 import { setHostConnectionRetainRuntime } from './host-connection-retain'
 import { syncPetSpeechPersistSettings } from './pet-speech-persist-checklist'
-import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
+import { wirePetSpeakHostClients } from './pet-speak-root-bridge-subscriptions'
 import {
   clearPetVoiceGraceTimer,
   evaluatePetVoiceHold,
@@ -38,10 +38,7 @@ import {
   type PetSpeakSubscriptionEntry,
   type PetVoiceHoldRuntime
 } from './pet-speak-root-bridge-hold'
-import {
-  createPetSpeakSubscriptionRecovery,
-  PET_SPEAK_RETRY_DELAYS_MS
-} from './pet-speak-subscription-recovery'
+import { PET_SPEAK_RETRY_DELAYS_MS } from './pet-speak-subscription-recovery'
 
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
@@ -209,138 +206,30 @@ export function usePetSpeakRootBridge(
   const retainPrefsReadyRef = useRef(false)
 
   useEffect(() => {
-    const currentSubs = subscriptionsRef.current
-    const hostStates = hostStatesRef.current
-    const speechStates = speechStatesRef.current
-    const retryTimers = retryTimersRef.current
-    const retryAttempts = retryAttemptsRef.current
-    const holdRuntime: PetVoiceHoldRuntime = {
+    return wirePetSpeakHostClients({
       isAndroid,
-      isDisposed: () => isDisposedRef.current || !isEnabledRef.current,
+      isEnabled,
+      isDisposed: () => isDisposedRef.current,
+      isEnabledNow: () => isEnabledRef.current,
       holdState: holdStateRef,
       graceTimer: graceTimerRef,
-      currentSubs,
-      hostStates,
-      speechStates,
+      currentSubs: subscriptionsRef.current,
+      hostStates: hostStatesRef.current,
+      speechStates: speechStatesRef.current,
+      retryTimers: retryTimersRef.current,
+      retryAttempts: retryAttemptsRef.current,
+      holdRuntimeRef,
       ensureNotificationPermissions: ensureNotificationPermissionsFn,
       acquireVoiceSession: acquireVoiceSessionFn,
       releaseVoiceSession: releaseVoiceSessionFn,
       updateVoiceSessionNotification: updateVoiceSessionNotificationFn,
       persistEnabled: () => persistEnabledRef.current,
       keepWhenNoHost: () => keepWhenNoHostRef.current,
-      keepHostConnection: () => keepHostConnectionRef.current
-    }
-    holdRuntimeRef.current = holdRuntime
-
-    const recovery = createPetSpeakSubscriptionRecovery({
-      currentSubs,
-      speechStates,
-      retryTimers,
-      retryAttempts,
+      keepHostConnection: () => keepHostConnectionRef.current,
       handlerOptions: effectiveHandlerOptions,
-      isDisposed: () => isDisposedRef.current,
-      isEnabled: () => isEnabledRef.current,
-      evaluateHold: () => evaluatePetVoiceHold(holdRuntime)
+      clients,
+      preferences
     })
-
-    if (!isEnabled) {
-      setHostConnectionRetainRuntime(false)
-      clearPetVoiceGraceTimer(graceTimerRef)
-      recovery.cancelAllRetries()
-      for (const sub of currentSubs.values()) {
-        sub.unsub()
-      }
-      currentSubs.clear()
-      speechStates.clear()
-      const wasHeld = holdStateRef.current.isSessionHeld
-      holdStateRef.current = idlePetVoiceHoldState()
-      if (wasHeld) {
-        void releaseVoiceSessionFn()
-      }
-      for (const entry of clients) {
-        if (entry.client.getState() === 'connected') {
-          void buildPetSpeechDeviceStatus({ preferences: preferences ?? undefined })
-            .then((status) => {
-              if (entry.client.getState() === 'connected') {
-                entry.client.sendRequest('pet.speak.status', status).catch(() => {})
-              }
-            })
-            .catch(() => {})
-        }
-      }
-      return
-    }
-
-    const cleanups = clients.map((entry) => {
-      const wireUp = (state: ConnectionState) => {
-        const previous = hostStates.get(entry.hostId)
-        hostStates.set(entry.hostId, state)
-        let subscriptionChanged = false
-        if (state === 'connected' && isEnabled) {
-          if (
-            !currentSubs.has(entry.hostId) ||
-            currentSubs.get(entry.hostId)?.client !== entry.client
-          ) {
-            currentSubs.get(entry.hostId)?.unsub()
-            currentSubs.delete(entry.hostId)
-            recovery.startSubscription(entry)
-            subscriptionChanged = true
-          }
-        } else {
-          const sub = currentSubs.get(entry.hostId)
-          if (sub && sub.client === entry.client) {
-            sub.unsub()
-            currentSubs.delete(entry.hostId)
-            subscriptionChanged = true
-          }
-          recovery.cancelRetry(entry.hostId)
-          speechStates.set(
-            entry.hostId,
-            state === 'reconnecting' || state === 'connecting' || state === 'handshaking'
-              ? 'reconnecting'
-              : 'disabled'
-          )
-        }
-        if (previous !== state || subscriptionChanged) {
-          evaluatePetVoiceHold(holdRuntime)
-        }
-      }
-
-      wireUp(entry.client.getState())
-      return entry.client.onStateChange(wireUp)
-    })
-
-    // Also sweep removed hosts
-    const activeHostIds = new Set(clients.map((c) => c.hostId))
-    let removedAny = false
-    for (const [hostId, sub] of Array.from(currentSubs.entries())) {
-      if (!activeHostIds.has(hostId)) {
-        sub.unsub()
-        currentSubs.delete(hostId)
-        recovery.cancelRetry(hostId)
-        retryAttempts.delete(hostId)
-        speechStates.delete(hostId)
-        removedAny = true
-      }
-    }
-    for (const hostId of Array.from(hostStates.keys())) {
-      if (!activeHostIds.has(hostId)) {
-        hostStates.delete(hostId)
-        recovery.cancelRetry(hostId)
-        retryAttempts.delete(hostId)
-        speechStates.delete(hostId)
-        removedAny = true
-      }
-    }
-    if (removedAny) {
-      evaluatePetVoiceHold(holdRuntime)
-    }
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup()
-      }
-    }
   }, [
     clients,
     isEnabled,
@@ -352,7 +241,8 @@ export function usePetSpeakRootBridge(
     updateVoiceSessionNotificationFn,
     persistEnabled,
     keepWhenNoHost,
-    keepHostConnection
+    keepHostConnection,
+    preferences
   ])
 
   useEffect(() => {
