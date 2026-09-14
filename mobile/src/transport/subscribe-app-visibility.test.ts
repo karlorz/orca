@@ -1,21 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { addPublicListener, addNativeListener, nativeAddListener, nativeRemoveListeners, turboAppState } =
-  vi.hoisted(() => {
-    const nativeAddListener = vi.fn()
-    const nativeRemoveListeners = vi.fn()
-    return {
-      addPublicListener: vi.fn(),
-      addNativeListener: vi.fn(),
-      nativeAddListener,
-      nativeRemoveListeners,
-      turboAppState: {
-        addListener: nativeAddListener,
-        removeListeners: nativeRemoveListeners,
-        getCurrentAppState: vi.fn()
-      }
+const {
+  addPublicListener,
+  addNativeListener,
+  nativeAddListener,
+  nativeRemoveListeners,
+  turboAppState
+} = vi.hoisted(() => {
+  const nativeAddListener = vi.fn()
+  const nativeRemoveListeners = vi.fn()
+  return {
+    addPublicListener: vi.fn(),
+    addNativeListener: vi.fn(),
+    nativeAddListener,
+    nativeRemoveListeners,
+    turboAppState: {
+      addListener: nativeAddListener,
+      removeListeners: nativeRemoveListeners,
+      getCurrentAppState: vi.fn()
     }
-  })
+  }
+})
 
 vi.mock('react-native', () => ({
   AppState: {

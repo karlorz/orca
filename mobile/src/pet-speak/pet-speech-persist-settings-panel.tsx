@@ -122,8 +122,8 @@ export function PetSpeechPersistSettingsPanel({
           <View style={styles.rowContent}>
             <Text style={styles.rowLabel}>Keep host connection</Text>
             <Text style={styles.rowSublabel}>
-              Off by default. Uses more battery than persist-only. Keeps the desktop voice
-              link while locked.
+              Off by default. Uses more battery than persist-only. Keeps the desktop voice link
+              while locked.
             </Text>
           </View>
           <Switch
