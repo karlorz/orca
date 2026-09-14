@@ -482,6 +482,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect(logical.getState()).toBe('disconnected')
 
+    supervisor.setForeground(true)
     supervisor.nudge('app-resume')
     await vi.advanceTimersByTimeAsync(0)
 

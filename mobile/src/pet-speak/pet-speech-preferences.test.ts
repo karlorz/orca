@@ -11,6 +11,7 @@ import {
   setPetSpeechKeepWhenNoHost,
   setPetSpeechShowServiceStatusRow,
   setPetSpeechOverlayWhileSpeaking,
+  setPetSpeechKeepHostConnection,
   subscribePetSpeechPreferences,
   isParticipatingInstall,
   getOrCreateInstallUuid,
@@ -51,6 +52,7 @@ describe('PetSpeechPreferences - Storage and Migration', () => {
     expect(prefs.voiceByLanguage).toEqual({})
     expect(prefs.persistEnabled).toBe(false)
     expect(prefs.keepWhenNoHost).toBe(false)
+    expect(prefs.keepHostConnection).toBe(false)
     expect(prefs.showServiceStatusRow).toBe(true)
     expect(prefs.overlayWhileSpeaking).toBe(false)
     expect(prefs.installUuid).toBeDefined()
@@ -170,11 +172,14 @@ describe('PetSpeechPreferences - Storage and Migration', () => {
     await setPetSpeechKeepWhenNoHost(true)
     await setPetSpeechShowServiceStatusRow(false)
     await setPetSpeechOverlayWhileSpeaking(true)
+    await setPetSpeechKeepHostConnection(true)
     const prefs = await loadPetSpeechPreferences()
     expect(prefs.persistEnabled).toBe(true)
     expect(prefs.keepWhenNoHost).toBe(true)
     expect(prefs.showServiceStatusRow).toBe(false)
     expect(prefs.overlayWhileSpeaking).toBe(true)
+    expect(prefs.keepHostConnection).toBe(true)
+    expect(await AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.KEEP_HOST_CONNECTION)).toBe('true')
   })
 
   it('fresh install default captionOffset is { x: 0, y: 0 }', async () => {

@@ -27,6 +27,7 @@ import {
   type PetSpeakCaptionRangeEvent
 } from './pet-speak-caption-range'
 import { attachNativeCaptionRangeListener } from './pet-speak-caption-range-native'
+import { setHostConnectionRetainRuntime } from './host-connection-retain'
 import { syncPetSpeechPersistSettings } from './pet-speech-persist-checklist'
 import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
 import { preparePetSpeakEvent } from './pet-speech-service'
@@ -103,10 +104,13 @@ export function usePetSpeakRootBridge(
   isEnabledRef.current = isEnabled
   const persistEnabled = preferences?.persistEnabled === true
   const keepWhenNoHost = preferences?.keepWhenNoHost === true
+  const keepHostConnection = preferences?.keepHostConnection === true
   const persistEnabledRef = useRef(persistEnabled)
   persistEnabledRef.current = persistEnabled
   const keepWhenNoHostRef = useRef(keepWhenNoHost)
   keepWhenNoHostRef.current = keepWhenNoHost
+  const keepHostConnectionRef = useRef(keepHostConnection)
+  keepHostConnectionRef.current = keepHostConnection
   const captionsEnabled = preferences?.captionsEnabled === true
 
   const isAndroid = options?.isAndroid ?? Platform.OS === 'android'
@@ -201,6 +205,8 @@ export function usePetSpeakRootBridge(
   const speechStatesRef = useRef<PetVoiceHoldRuntime['speechStates']>(new Map())
   const retryTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const retryAttemptsRef = useRef<Map<string, number>>(new Map())
+  const holdRuntimeRef = useRef<PetVoiceHoldRuntime | null>(null)
+  const retainPrefsReadyRef = useRef(false)
 
   useEffect(() => {
     const currentSubs = subscriptionsRef.current
@@ -221,8 +227,10 @@ export function usePetSpeakRootBridge(
       releaseVoiceSession: releaseVoiceSessionFn,
       updateVoiceSessionNotification: updateVoiceSessionNotificationFn,
       persistEnabled: () => persistEnabledRef.current,
-      keepWhenNoHost: () => keepWhenNoHostRef.current
+      keepWhenNoHost: () => keepWhenNoHostRef.current,
+      keepHostConnection: () => keepHostConnectionRef.current
     }
+    holdRuntimeRef.current = holdRuntime
 
     const recovery = createPetSpeakSubscriptionRecovery({
       currentSubs,
@@ -236,6 +244,7 @@ export function usePetSpeakRootBridge(
     })
 
     if (!isEnabled) {
+      setHostConnectionRetainRuntime(false)
       clearPetVoiceGraceTimer(graceTimerRef)
       recovery.cancelAllRetries()
       for (const sub of currentSubs.values()) {
@@ -342,8 +351,20 @@ export function usePetSpeakRootBridge(
     releaseVoiceSessionFn,
     updateVoiceSessionNotificationFn,
     persistEnabled,
-    keepWhenNoHost
+    keepWhenNoHost,
+    keepHostConnection
   ])
+
+  useEffect(() => {
+    if (holdRuntimeRef.current === null) {
+      return
+    }
+    if (!retainPrefsReadyRef.current) {
+      retainPrefsReadyRef.current = true
+      return
+    }
+    evaluatePetVoiceHold(holdRuntimeRef.current)
+  }, [keepHostConnection, persistEnabled, keepWhenNoHost, isEnabled])
 
   // Root unmount cleanup
   useEffect(() => {
@@ -360,6 +381,7 @@ export function usePetSpeakRootBridge(
       subscriptionsRef.current.clear()
       hostStatesRef.current.clear()
       speechStatesRef.current.clear()
+      setHostConnectionRetainRuntime(false)
       if (holdStateRef.current.isSessionHeld) {
         holdStateRef.current = idlePetVoiceHoldState()
         void releaseVoiceSessionFn()

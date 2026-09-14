@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  resetHostConnectionRetainRuntimeForTests,
+  setHostConnectionRetainRuntime
+} from '../pet-speak/host-connection-retain'
+import {
   dependencies,
   FakeLogicalClient,
   FakeRelaySession,
@@ -18,7 +22,10 @@ describe('mobile Relay background lifecycle', () => {
     vi.setSystemTime(new Date('2026-07-13T12:00:00Z'))
   })
 
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    resetHostConnectionRetainRuntimeForTests()
+    vi.useRealTimers()
+  })
 
   it('retains a relay session across a quick background and foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
@@ -158,6 +165,52 @@ describe('mobile Relay background lifecycle', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     await vi.waitFor(() => expect(openRelay).toHaveBeenCalledTimes(2))
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
+  it('skips the 30s relay suspend when keep-host retain is on', async () => {
+    setHostConnectionRetainRuntime(true)
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies()
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    expect(logical.getState()).toBe('connected')
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    supervisor.stop()
+  })
+
+  it('still suspends a relay after 30s when a background focus nudge arrives and retain is off', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies()
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    supervisor.nudge('focus')
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('disconnected')
+    supervisor.stop()
+  })
+
+  it('recovers a dropped relay in the background when keep-host retain is on', async () => {
+    setHostConnectionRetainRuntime(true)
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies()
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    logical.publishState('disconnected')
+
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalled())
     expect(logical.getState()).toBe('connected')
     supervisor.stop()
   })

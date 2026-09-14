@@ -1,9 +1,10 @@
-import { AppState, Platform } from 'react-native'
+import { Platform } from 'react-native'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
+import { subscribeAppVisibility } from './subscribe-app-visibility'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Why: the stable facade owns app-visible RPC/subscription state while the
@@ -17,13 +18,12 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
-  endpointLifecycle.setForeground(AppState.currentState === 'active')
-  const appStateSubscription = AppState.addEventListener('change', (state) => {
-    endpointLifecycle.setForeground(state === 'active')
+  const stopAppVisibility = subscribeAppVisibility((active) => {
+    endpointLifecycle.setForeground(active)
   })
   const closeLogical = logical.close
   logical.close = () => {
-    appStateSubscription.remove()
+    stopAppVisibility()
     endpointLifecycle.stop()
     closeLogical()
   }

@@ -57,6 +57,7 @@ type DirectGrace = Clearable & { arm(): void }
 export class MobileRelayBackgroundGrace {
   private foregroundState = true
   private retainedRelaySuspended = false
+  private retainHostConnection = false
   private readonly timer: MobileRelayBackgroundGraceTimer
 
   constructor(
@@ -72,6 +73,25 @@ export class MobileRelayBackgroundGrace {
 
   isForeground(): boolean {
     return this.foregroundState
+  }
+
+  isRetainingHostConnection(): boolean {
+    return this.retainHostConnection
+  }
+
+  setRetainHostConnection(retain: boolean): void {
+    const wasRetaining = this.retainHostConnection
+    this.retainHostConnection = retain
+    if (this.foregroundState) {
+      return
+    }
+    if (retain && !wasRetaining) {
+      this.timer.clear()
+      return
+    }
+    if (!retain && wasRetaining) {
+      this.background()
+    }
   }
 
   setForeground(foreground: boolean): void {
@@ -110,6 +130,9 @@ export class MobileRelayBackgroundGrace {
     this.directProbe.clear()
     this.directGrace.clear()
     this.logical.setRecoveryPath(null)
+    if (this.retainHostConnection) {
+      return
+    }
     if (retainsRelay) {
       this.timer.arm()
       return

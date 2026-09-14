@@ -3,6 +3,7 @@ import { AppState, Platform, Pressable, Switch, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './pet-speech-settings-styles'
 import {
+  setPetSpeechKeepHostConnection,
   setPetSpeechKeepWhenNoHost,
   setPetSpeechOverlayWhileSpeaking,
   setPetSpeechPersistEnabled,
@@ -65,6 +66,15 @@ export function PetSpeechPersistSettingsPanel({
     [writeAndSync]
   )
 
+  const handleToggleKeepHostConnection = useCallback(
+    async (keepHostConnection: boolean) => {
+      await writeAndSync({ keepHostConnection }, () =>
+        setPetSpeechKeepHostConnection(keepHostConnection)
+      )
+    },
+    [writeAndSync]
+  )
+
   const handleToggleKeepWhenNoHost = useCallback(
     async (keepWhenNoHost: boolean) => {
       await writeAndSync({ keepWhenNoHost }, () => setPetSpeechKeepWhenNoHost(keepWhenNoHost))
@@ -104,6 +114,22 @@ export function PetSpeechPersistSettingsPanel({
           <Switch
             value={prefs.persistEnabled}
             onValueChange={(v) => void handleTogglePersist(v)}
+            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+            thumbColor={colors.textPrimary}
+          />
+        </View>
+        <View style={styles.row}>
+          <View style={styles.rowContent}>
+            <Text style={styles.rowLabel}>Keep host connection</Text>
+            <Text style={styles.rowSublabel}>
+              Off by default. Uses more battery than persist-only. Keeps the desktop voice
+              link while locked.
+            </Text>
+          </View>
+          <Switch
+            value={prefs.keepHostConnection}
+            onValueChange={(v) => void handleToggleKeepHostConnection(v)}
+            disabled={!prefs.persistEnabled}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}
           />

@@ -11,6 +11,7 @@ export class MobileEndpointNudgeRouter {
       controller: RelayReconnectController
       isStopped: () => boolean
       isForeground: () => boolean
+      shouldRetainHostConnection?: () => boolean
       setForeground: (foreground: boolean) => void
       replaceRelay: () => void
       scheduleDirectProbe: () => void
@@ -23,12 +24,13 @@ export class MobileEndpointNudgeRouter {
       return
     }
     if (!args.isForeground()) {
-      // Why: a background network flap must not re-open a billed relay splice;
-      // focus/app-resume imply the app is visible even if AppState lags.
-      if (reason === 'network-change') {
+      // Why: persist FGS / expo-router focus can nudge after Home while the
+      // activity is already paused. Faking foreground here cancelled the 30s
+      // relay grace on A35. AppState is the only visibility signal.
+      // Keep-host retain may revive without pretending the UI is foreground.
+      if (!args.shouldRetainHostConnection?.()) {
         return
       }
-      args.setForeground(true)
     }
     const verdict = args.controller.handleActiveNudge(args.logical, reason)
     if (verdict === 'replace') {

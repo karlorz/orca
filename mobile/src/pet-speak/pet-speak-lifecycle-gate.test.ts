@@ -164,6 +164,7 @@ describe('PetSpeakRootBridge Enabled Lifecycle Gate', () => {
       voiceByLanguage: {},
       persistEnabled: false,
       keepWhenNoHost: false,
+      keepHostConnection: false,
       showServiceStatusRow: true,
       overlayWhileSpeaking: false
     }

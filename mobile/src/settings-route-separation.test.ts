@@ -108,6 +108,7 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
   setPetSpeechVoiceForLanguage: vi.fn(async () => {}),
   setPetSpeechPersistEnabled: vi.fn(async () => {}),
   setPetSpeechKeepWhenNoHost: vi.fn(async () => {}),
+  setPetSpeechKeepHostConnection: vi.fn(async () => {}),
   setPetSpeechShowServiceStatusRow: vi.fn(async () => {}),
   setPetSpeechOverlayWhileSpeaking: vi.fn(async () => {})
 }))
