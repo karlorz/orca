@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import {
+  MAC_SYSTEM_SPEECH_MODEL_ID,
+  effectiveSttModel
+} from '../../shared/voice-dictation-selection'
+import {
+  listedMacAppleSpeechCatalogModel,
+  phoneMicUsesListedMacAppleSpeech,
+  sharedDictationCatalogListsMacAppleSpeech
+} from '../../shared/dictation-shared-catalog'
 import { getCatalogModel, SPEECH_MODEL_CATALOG } from './model-catalog'
 
 describe('SPEECH_MODEL_CATALOG', () => {
@@ -58,5 +67,19 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.streaming).toBe(true)
     expect(model?.downloadFiles).toBeUndefined()
     expect(model?.sizeBytes).toBeUndefined()
+  })
+
+  it('lists Mac Apple Speech as the phone-mic dictation catalog model', () => {
+    expect(sharedDictationCatalogListsMacAppleSpeech(SPEECH_MODEL_CATALOG)).toBe(true)
+    const listed = listedMacAppleSpeechCatalogModel(SPEECH_MODEL_CATALOG)
+    expect(listed?.id).toBe(MAC_SYSTEM_SPEECH_MODEL_ID)
+    expect(listed?.description).toMatch(/Apple Speech/)
+    expect(getCatalogModel(MAC_SYSTEM_SPEECH_MODEL_ID)?.id).toBe(MAC_SYSTEM_SPEECH_MODEL_ID)
+    expect(effectiveSttModel({ useMacSpeech: true, sttModel: 'whisper-base' })).toBe(
+      MAC_SYSTEM_SPEECH_MODEL_ID
+    )
+    expect(phoneMicUsesListedMacAppleSpeech(SPEECH_MODEL_CATALOG, { useMacSpeech: true })).toBe(
+      true
+    )
   })
 })
