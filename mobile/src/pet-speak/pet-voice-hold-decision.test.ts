@@ -251,6 +251,25 @@ describe('decidePetVoiceHoldAction', () => {
     expect(action.nextState.isSessionHeld).toBe(true)
   })
 
+  it('releases when keep-when-no-host is on but persist is off', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: 'Pet voice connected'
+    }
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: false,
+      keepWhenNoHost: true
+    })
+    expect(action.type).toBe('release')
+    expect(action.nextState.isSessionHeld).toBe(false)
+  })
+
   it('still releases after grace when persist is on but keep-when-no-host is off', () => {
     const state: PetVoiceHoldState = {
       isSessionHeld: true,
