@@ -253,6 +253,15 @@ features:
       - mobile/app/pet-speech-settings.tsx
     wiki: projects/orca/work/2026-09-14-mobile-persist-always-on-pet-speech
 
+  - id: mobile-keep-host-connection
+    title: Keep host voice link only when Keep host is on
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/pet-speak
+      - mobile/src/transport
+    wiki: projects/orca/work/2026-09-14-mobile-always-on-voice-connection
+
   - id: mobile-mac-speech-remote-switch
     title: Mobile Voice writable Use Mac speech remote of desktop Apple Speech
     kind: product
