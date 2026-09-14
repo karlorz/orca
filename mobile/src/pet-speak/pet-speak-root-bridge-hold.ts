@@ -27,7 +27,9 @@ export type PetVoiceHoldRuntime = {
   updateVoiceSessionNotification: (text: string) => Promise<void>
   persistEnabled: () => boolean
   keepWhenNoHost: () => boolean
+  overlayWhileSpeaking: () => boolean
   keepHostConnection: () => boolean
+  petSpeechEnabled: () => boolean
 }
 
 export function idlePetVoiceHoldState(): PetVoiceHoldState {
@@ -94,7 +96,9 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
     stillTryingCount: stillTryingHosts.size,
     now,
     persistEnabled: runtime.persistEnabled(),
-    keepWhenNoHost: runtime.keepWhenNoHost()
+    keepWhenNoHost: runtime.keepWhenNoHost(),
+    overlayWhileSpeaking: runtime.overlayWhileSpeaking(),
+    afterKeepHoldPause: !runtime.holdState.current.isSessionHeld
   })
 
   runtime.holdState.current = action.nextState
@@ -102,7 +106,7 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
     shouldRetainHostConnection({
       persistHeld: runtime.persistEnabled() && action.nextState.isSessionHeld,
       keepHostConnection: runtime.keepHostConnection(),
-      petSpeechEnabled: true
+      petSpeechEnabled: runtime.petSpeechEnabled()
     })
   )
 
