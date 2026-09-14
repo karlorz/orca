@@ -1,6 +1,10 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
+  setHostConnectionRetainRuntime,
+  shouldRetainHostConnection
+} from './host-connection-retain'
+import {
   decidePetVoiceHoldAction,
   PET_VOICE_RECONNECT_GRACE_MS,
   type PetVoiceHoldState
@@ -23,6 +27,7 @@ export type PetVoiceHoldRuntime = {
   updateVoiceSessionNotification: (text: string) => Promise<void>
   persistEnabled: () => boolean
   keepWhenNoHost: () => boolean
+  keepHostConnection: () => boolean
 }
 
 export function idlePetVoiceHoldState(): PetVoiceHoldState {
@@ -41,8 +46,22 @@ export function clearPetVoiceGraceTimer(graceTimer: PetVoiceHoldRuntime['graceTi
   }
 }
 
+export function onHostClientStateForHold(
+  runtime: PetVoiceHoldRuntime,
+  _input: {
+    previousState?: string
+    nextState: string
+    subscriptionChanged: boolean
+  }
+): void {
+  // Always republish. A keep-host toggle remounts the wiring effect while the
+  // host stays connected; skipping evaluate would leave retain stuck on.
+  evaluatePetVoiceHold(runtime)
+}
+
 export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number = Date.now()): void {
   if (!runtime.isAndroid || runtime.isDisposed()) {
+    setHostConnectionRetainRuntime(false)
     return
   }
 
@@ -79,6 +98,13 @@ export function evaluatePetVoiceHold(runtime: PetVoiceHoldRuntime, now: number =
   })
 
   runtime.holdState.current = action.nextState
+  setHostConnectionRetainRuntime(
+    shouldRetainHostConnection({
+      persistHeld: runtime.persistEnabled() && action.nextState.isSessionHeld,
+      keepHostConnection: runtime.keepHostConnection(),
+      petSpeechEnabled: true
+    })
+  )
 
   const reconnectingSince = action.nextState.reconnectingSince
   if (reconnectingSince === null) {

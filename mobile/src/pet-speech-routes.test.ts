@@ -83,6 +83,7 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
     voiceByLanguage: {},
     persistEnabled: false,
     keepWhenNoHost: false,
+    keepHostConnection: false,
     showServiceStatusRow: true,
     overlayWhileSpeaking: false
   })),
@@ -93,6 +94,7 @@ vi.mock('../src/pet-speak/pet-speech-preferences', () => ({
   setPetSpeechVoiceForLanguage: vi.fn(async () => {}),
   setPetSpeechPersistEnabled: vi.fn(async () => {}),
   setPetSpeechKeepWhenNoHost: vi.fn(async () => {}),
+  setPetSpeechKeepHostConnection: vi.fn(async () => {}),
   setPetSpeechShowServiceStatusRow: vi.fn(async () => {}),
   setPetSpeechOverlayWhileSpeaking: vi.fn(async () => {})
 }))
@@ -202,6 +204,7 @@ describe('Pet Speech and Plugins Routes', () => {
     expect(labels).toContain('Live captions')
     expect(labels).toContain('PERSIST')
     expect(labels).toContain('Keep after reboot')
+    expect(labels).toContain('Keep host connection')
     expect(labels).toContain('Show service status row')
     expect(labels).toContain('TEST')
     expect(labels).toContain('Test Voice (yue-HK)')
@@ -221,6 +224,7 @@ describe('Pet Speech and Plugins Routes', () => {
       voiceByLanguage: { 'yue-HK': 'yue-hk-x-yuc-local' },
       persistEnabled: false,
       keepWhenNoHost: false,
+      keepHostConnection: false,
       showServiceStatusRow: true,
       overlayWhileSpeaking: false
     })

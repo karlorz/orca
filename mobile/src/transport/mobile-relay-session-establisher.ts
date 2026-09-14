@@ -33,6 +33,7 @@ export class MobileRelaySessionEstablisher {
       writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
       isActive: () => boolean
       isForeground: () => boolean
+      isRetainingHostConnection?: () => boolean
       relay: () => HostProfile['relay']
       resolveRelay: MobileEndpointSupervisorDependencies['resolveRelay']
       persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
@@ -127,7 +128,7 @@ export class MobileRelaySessionEstablisher {
       return { ok: false, error: session.getFailure() ?? toError(error) }
     }
     args.controller.setActiveSession(session)
-    if (!args.isForeground()) {
+    if (!args.isForeground() && !args.isRetainingHostConnection?.()) {
       args.controller.suspendActiveRelay(args.logical)
     }
     args.recordMigration()

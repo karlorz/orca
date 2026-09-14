@@ -55,6 +55,7 @@ const prefs: PetSpeechPreferences = {
   voiceByLanguage: {},
   persistEnabled: true,
   keepWhenNoHost: false,
+  keepHostConnection: false,
   showServiceStatusRow: true,
   overlayWhileSpeaking: false
 }

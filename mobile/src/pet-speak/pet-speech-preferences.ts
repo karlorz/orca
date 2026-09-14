@@ -11,6 +11,7 @@ export interface PetSpeechPreferences {
   voiceByLanguage: Partial<Record<CanonicalLanguage, string>>
   persistEnabled: boolean
   keepWhenNoHost: boolean
+  keepHostConnection: boolean
   showServiceStatusRow: boolean
   overlayWhileSpeaking: boolean
 }
@@ -25,6 +26,7 @@ export const PET_SPEECH_STORAGE_KEYS = {
   CAPTION_OFFSET: 'orca:petSpeech:captionOffset',
   PERSIST_ENABLED: 'orca:petSpeech:persistEnabled',
   KEEP_WHEN_NO_HOST: 'orca:petSpeech:keepWhenNoHost',
+  KEEP_HOST_CONNECTION: 'orca:petSpeech:keepHostConnection',
   SHOW_SERVICE_STATUS_ROW: 'orca:petSpeech:showServiceStatusRow',
   OVERLAY_WHILE_SPEAKING: 'orca:petSpeech:overlayWhileSpeaking'
 } as const
@@ -97,6 +99,7 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     rawCaptionOffset,
     rawPersistEnabled,
     rawKeepWhenNoHost,
+    rawKeepHostConnection,
     rawShowServiceStatusRow,
     rawOverlayWhileSpeaking,
     installUuid
@@ -109,6 +112,7 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.CAPTION_OFFSET),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.PERSIST_ENABLED),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.KEEP_WHEN_NO_HOST),
+    AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.KEEP_HOST_CONNECTION),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.SHOW_SERVICE_STATUS_ROW),
     AsyncStorage.getItem(PET_SPEECH_STORAGE_KEYS.OVERLAY_WHILE_SPEAKING),
     getOrCreateInstallUuid()
@@ -184,6 +188,7 @@ export async function loadPetSpeechPreferences(): Promise<PetSpeechPreferences> 
     voiceByLanguage,
     persistEnabled: rawPersistEnabled === 'true',
     keepWhenNoHost: rawKeepWhenNoHost === 'true',
+    keepHostConnection: rawKeepHostConnection === 'true',
     showServiceStatusRow: rawShowServiceStatusRow !== 'false',
     overlayWhileSpeaking: rawOverlayWhileSpeaking === 'true'
   }
@@ -227,6 +232,10 @@ export async function setPetSpeechPersistEnabled(persistEnabled: boolean): Promi
 
 export async function setPetSpeechKeepWhenNoHost(keepWhenNoHost: boolean): Promise<void> {
   await persistBoolean(PET_SPEECH_STORAGE_KEYS.KEEP_WHEN_NO_HOST, keepWhenNoHost)
+}
+
+export async function setPetSpeechKeepHostConnection(keepHostConnection: boolean): Promise<void> {
+  await persistBoolean(PET_SPEECH_STORAGE_KEYS.KEEP_HOST_CONNECTION, keepHostConnection)
 }
 
 export async function setPetSpeechShowServiceStatusRow(
