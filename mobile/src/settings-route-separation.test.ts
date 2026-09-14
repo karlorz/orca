@@ -121,7 +121,9 @@ vi.mock('../src/pet-speak/pet-speech-persist-checklist', () => ({
     canOpenDeviceGuard: false,
     canDrawOverlays: false
   })),
-  openPetSpeechPersistChecklistItem: vi.fn(async () => {})
+  openPetSpeechPersistChecklistItem: vi.fn(async () => {}),
+  persistDependentSwitchEnabled: (persistEnabled: boolean) => persistEnabled,
+  applyOverlayWhileSpeakingToggle: vi.fn(async () => true)
 }))
 
 vi.mock('../src/pet-speak/pet-speech-service', () => ({

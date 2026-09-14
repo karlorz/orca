@@ -107,7 +107,9 @@ vi.mock('../src/pet-speak/pet-speech-persist-checklist', () => ({
     canOpenDeviceGuard: false,
     canDrawOverlays: false
   })),
-  openPetSpeechPersistChecklistItem: vi.fn(async () => {})
+  openPetSpeechPersistChecklistItem: vi.fn(async () => {}),
+  persistDependentSwitchEnabled: (persistEnabled: boolean) => persistEnabled,
+  applyOverlayWhileSpeakingToggle: vi.fn(async () => true)
 }))
 
 vi.mock('../src/pet-speak/pet-speech-service', () => ({
@@ -165,6 +167,26 @@ async function renderPetSpeechSettings() {
   return root!
 }
 
+function switchDisabledForLabel(
+  root: {
+    findAllByType: (type: string) => Array<{
+      props: { children: unknown; disabled?: boolean }
+      parent?: {
+        parent?: { findAllByType: (type: string) => Array<{ props: { disabled?: boolean } }> }
+      }
+    }>
+  },
+  labelText: string
+): boolean | undefined {
+  const label = root.findAllByType('Text').find((node) => {
+    const children = node.props.children
+    const text = Array.isArray(children) ? children.join('') : children
+    return text === labelText
+  })
+  const sw = label?.parent?.parent?.findAllByType('Switch')[0]
+  return sw?.props.disabled
+}
+
 describe('Pet Speech and Plugins Routes', () => {
   beforeEach(() => {
     pushedRoutes.length = 0
@@ -210,6 +232,15 @@ describe('Pet Speech and Plugins Routes', () => {
     expect(labels).toContain('Test Voice (yue-HK)')
     expect(labels).toContain('Test Live captions')
     expect(labels).toContain('Selected voice: Device default')
+  })
+
+  it('disables persist-dependent switches when persist is off', async () => {
+    const root = await renderPetSpeechSettings()
+    expect(switchDisabledForLabel(root.root, 'Keep after reboot')).toBeFalsy()
+    expect(switchDisabledForLabel(root.root, 'Keep host connection')).toBe(true)
+    expect(switchDisabledForLabel(root.root, 'Keep when no host')).toBe(true)
+    expect(switchDisabledForLabel(root.root, 'Show service status row')).toBeFalsy()
+    expect(switchDisabledForLabel(root.root, 'Overlay while speaking')).toBeFalsy()
   })
 
   it('PetSpeechSettingsScreen shows explicit selected voice name when configured', async () => {
