@@ -100,17 +100,8 @@ export function lifecycleSchedules(
   )
 }
 
-function lastCompleteIndex(steps: readonly ScenarioStep[]): number {
-  for (let index = steps.length - 1; index >= 0; index--) {
-    if ('complete' in steps[index]!) {
-      return index
-    }
-  }
-  return -1
-}
-
 export function interruptionSchedules(base: RecordingScenario): RecordingScenario[] {
-  const completion = lastCompleteIndex(base.steps)
+  const completion = base.steps.findLastIndex((step) => 'complete' in step)
   if (completion === -1) {
     throw new Error('Interruption schedule needs an in-flight request')
   }

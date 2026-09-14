@@ -19,7 +19,7 @@ function isProductionSource(filename: string): boolean {
 
 function walk(dir: string, acc: string[]): void {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules') {
+    if (name === 'node_modules' || name === 'test-support') {
       continue
     }
     const path = join(dir, name)
