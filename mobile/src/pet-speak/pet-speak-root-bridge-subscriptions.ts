@@ -1,6 +1,9 @@
 import type { ConnectionState } from '../transport/types'
 import { setHostConnectionRetainRuntime } from './host-connection-retain'
-import { buildPetSpeechDeviceStatus } from './pet-speech-device-status'
+import {
+  buildPetSpeechDeviceStatus,
+  type PetSpeechDeviceStatusPayload
+} from './pet-speech-device-status'
 import type { PetSpeechPreferences } from './pet-speech-preferences'
 import type { PetSpeakHandlerOptions } from './pet-speak-types'
 import {
@@ -38,6 +41,7 @@ export function wirePetSpeakHostClients(input: {
   handlerOptions: PetSpeakHandlerOptions
   clients: PetSpeakHostClient[]
   preferences: PetSpeechPreferences | null
+  reportStatus: (client: PetSpeakHostClient['client'], status: PetSpeechDeviceStatusPayload) => void
 }): (() => void) | undefined {
   const holdRuntime: PetVoiceHoldRuntime = {
     isAndroid: input.isAndroid,
@@ -87,7 +91,7 @@ export function wirePetSpeakHostClients(input: {
         void buildPetSpeechDeviceStatus({ preferences: input.preferences ?? undefined })
           .then((status) => {
             if (entry.client.getState() === 'connected') {
-              entry.client.sendRequest('pet.speak.status', status).catch(() => {})
+              input.reportStatus(entry.client, status)
             }
           })
           .catch(() => {})

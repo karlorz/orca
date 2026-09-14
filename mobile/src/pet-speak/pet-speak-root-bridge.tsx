@@ -30,6 +30,8 @@ import { attachNativeCaptionRangeListener } from './pet-speak-caption-range-nati
 import { setHostConnectionRetainRuntime } from './host-connection-retain'
 import { syncPetSpeechPersistSettings } from './pet-speech-persist-checklist'
 import { preparePetSpeakEvent } from './pet-speech-service'
+import type { RpcClient } from '../transport/rpc-client'
+import type { PetSpeechDeviceStatusPayload } from './pet-speech-device-status'
 import { wirePetSpeakHostClients } from './pet-speak-root-bridge-subscriptions'
 import {
   clearPetVoiceGraceTimer,
@@ -43,6 +45,10 @@ import { PET_SPEAK_RETRY_DELAYS_MS } from './pet-speak-subscription-recovery'
 export { PET_VOICE_RECONNECT_GRACE_MS } from './pet-voice-hold-decision'
 
 export { PET_SPEAK_RETRY_DELAYS_MS }
+
+function reportPetSpeakStatus(client: RpcClient, status: PetSpeechDeviceStatusPayload): void {
+  client.sendRequest('pet.speak.status', status).catch(() => {})
+}
 
 export interface PetSpeakBridgeOptions {
   loadCatalog?: () => Promise<HostCatalogEntry[]>
@@ -228,7 +234,8 @@ export function usePetSpeakRootBridge(
       keepHostConnection: () => keepHostConnectionRef.current,
       handlerOptions: effectiveHandlerOptions,
       clients,
-      preferences
+      preferences,
+      reportStatus: reportPetSpeakStatus
     })
   }, [
     clients,
