@@ -113,8 +113,6 @@ export function usePetSpeakRootBridge(
   persistEnabledRef.current = persistEnabled
   const keepWhenNoHostRef = useRef(keepWhenNoHost)
   keepWhenNoHostRef.current = keepWhenNoHost
-  const overlayWhileSpeakingRef = useRef(overlayWhileSpeaking)
-  overlayWhileSpeakingRef.current = overlayWhileSpeaking
   const keepHostConnectionRef = useRef(keepHostConnection)
   keepHostConnectionRef.current = keepHostConnection
   const captionsEnabled = preferences?.captionsEnabled === true
@@ -234,7 +232,7 @@ export function usePetSpeakRootBridge(
       updateVoiceSessionNotification: updateVoiceSessionNotificationFn,
       persistEnabled: () => persistEnabledRef.current,
       keepWhenNoHost: () => keepWhenNoHostRef.current,
-      overlayWhileSpeaking: () => overlayWhileSpeakingRef.current,
+      overlayWhileSpeaking: () => overlayWhileSpeaking,
       keepHostConnection: () => keepHostConnectionRef.current,
       handlerOptions: effectiveHandlerOptions,
       clients,
