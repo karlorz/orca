@@ -98,4 +98,93 @@ describe('evaluatePetVoiceHold retain publish', () => {
     )
     expect(getHostConnectionRetainRuntime()).toBe(true)
   })
+
+  it('persist-on keepWhenNoHost after Pause-after-keepHold does not re-acquire or release', () => {
+    const acquireVoiceSession = vi.fn(async () => ({ held: true }))
+    const releaseVoiceSession = vi.fn(async () => {})
+    evaluatePetVoiceHold(
+      runtime({
+        holdState: {
+          current: {
+            isSessionHeld: false,
+            isAcquiring: false,
+            reconnectingSince: null,
+            lastNotificationText: null
+          }
+        },
+        speechStates: new Map(),
+        persistEnabled: () => true,
+        keepWhenNoHost: () => true,
+        acquireVoiceSession,
+        releaseVoiceSession
+      })
+    )
+    expect(acquireVoiceSession).not.toHaveBeenCalled()
+    expect(releaseVoiceSession).not.toHaveBeenCalled()
+    expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
+
+  it('persist-on keepWhenNoHost after Pause-after-keepHold still holds session when keep-host is off', () => {
+    const releaseVoiceSession = vi.fn(async () => {})
+    evaluatePetVoiceHold(
+      runtime({
+        speechStates: new Map(),
+        persistEnabled: () => true,
+        keepWhenNoHost: () => true,
+        keepHostConnection: () => false,
+        releaseVoiceSession
+      })
+    )
+    expect(releaseVoiceSession).not.toHaveBeenCalled()
+    expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
+
+  it('persist-on overlay write-off after Pause-after-keepHold still releases held session', () => {
+    const releaseVoiceSession = vi.fn(async () => {})
+    evaluatePetVoiceHold(
+      runtime({
+        speechStates: new Map(),
+        persistEnabled: () => false,
+        overlayWhileSpeaking: () => true,
+        releaseVoiceSession
+      })
+    )
+    expect(releaseVoiceSession).toHaveBeenCalled()
+    expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
+
+  it('persist-off overlay after Pause-after-keepHold never acquires', () => {
+    const acquireVoiceSession = vi.fn(async () => ({ held: true }))
+    evaluatePetVoiceHold(
+      runtime({
+        holdState: {
+          current: {
+            isSessionHeld: false,
+            isAcquiring: false,
+            reconnectingSince: null,
+            lastNotificationText: null
+          }
+        },
+        persistEnabled: () => false,
+        overlayWhileSpeaking: () => true,
+        acquireVoiceSession
+      })
+    )
+    expect(acquireVoiceSession).not.toHaveBeenCalled()
+    expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
+
+  it('persist-off keepWhenNoHost after Pause-after-keepHold still releases held session', () => {
+    const releaseVoiceSession = vi.fn(async () => {})
+    evaluatePetVoiceHold(
+      runtime({
+        speechStates: new Map(),
+        persistEnabled: () => false,
+        keepWhenNoHost: () => true,
+        releaseVoiceSession
+      })
+    )
+    expect(releaseVoiceSession).toHaveBeenCalled()
+    expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
 })

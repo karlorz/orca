@@ -9,23 +9,23 @@ class PetSpeechBootReceiver : BroadcastReceiver() {
         if (context == null) {
             return
         }
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED &&
-            intent?.action != Intent.ACTION_LOCKED_BOOT_COMPLETED
-        ) {
+        if (!PetSpeechBootResumeDecision.isBootAction(intent?.action)) {
             return
         }
         val prefs = PetSpeechPersistPrefs.read(context)
         val decision = PetSpeechBootResumeDecision.decide(
             persistEnabled = prefs.persistEnabled,
-            masterEnabled = prefs.masterEnabled
+            masterEnabled = prefs.masterEnabled,
+            keepWhenNoHost = prefs.keepWhenNoHost,
+            overlayWhileSpeaking = prefs.overlayWhileSpeaking
         )
-        if (decision.startForeground) {
-            return
-        }
         if (decision.postResumeNotification) {
             PetSpeechNotificationCoordinator.applyPlan(
                 context,
-                PetSpeechNotificationSetDecision.afterPause(),
+                PetSpeechBootResumeDecision.notificationPlan(
+                    persistEnabled = prefs.persistEnabled,
+                    masterEnabled = prefs.masterEnabled
+                ),
                 resumeTitle = PetSpeechNotificationCoordinator.BOOT_RESUME_TITLE,
                 resumeText = PetSpeechNotificationCoordinator.BOOT_RESUME_TEXT
             )

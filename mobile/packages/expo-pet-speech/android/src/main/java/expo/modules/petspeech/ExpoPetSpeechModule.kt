@@ -385,7 +385,11 @@ class ExpoPetSpeechModule : Module() {
             if (context != null) {
                 try {
                     val stopIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
-                        action = PetSpeechForegroundService.ACTION_RELEASE_SESSION
+                        action = PetSpeechReleaseAftermathDecision.ACTION_RELEASE_SESSION
+                        putExtra(
+                            PetSpeechForegroundService.EXTRA_RELEASE_REASON,
+                            PetSpeechReleaseAftermathDecision.Reason.JS_RELEASE.name
+                        )
                     }
                     context.startService(stopIntent)
                 } catch (_: Exception) {}
@@ -399,17 +403,43 @@ class ExpoPetSpeechModule : Module() {
                 promise.resolve(null)
                 return@AsyncFunction
             }
+            val masterEnabled = options["masterEnabled"] as? Boolean
+            val persistEnabled = options["persistEnabled"] as? Boolean
             PetSpeechPersistPrefs.write(
                 context,
-                masterEnabled = options["masterEnabled"] as? Boolean,
-                persistEnabled = options["persistEnabled"] as? Boolean,
+                masterEnabled = masterEnabled,
+                persistEnabled = persistEnabled,
                 keepWhenNoHost = options["keepWhenNoHost"] as? Boolean,
                 showServiceRow = options["showServiceStatusRow"] as? Boolean,
                 overlayWhileSpeaking = options["overlayWhileSpeaking"] as? Boolean
             )
+            val writeRelease = PetSpeechPersistSettingsWriteDecision.releaseReason(
+                persistEnabled = persistEnabled,
+                masterEnabled = masterEnabled
+            )
+            if (writeRelease != null &&
+                !PetSpeechPersistSettingsWriteDecision.shouldStartTts(writeRelease) &&
+                !PetSpeechPersistSettingsWriteDecision.shouldReacquireHold(writeRelease)
+            ) {
+                val contract = PetSpeechReleaseAftermathDecision.contract(writeRelease)
+                try {
+                    context.startService(
+                        Intent(context, PetSpeechForegroundService::class.java).apply {
+                            action = contract.serviceAction
+                            putExtra(
+                                PetSpeechForegroundService.EXTRA_RELEASE_REASON,
+                                writeRelease.name
+                            )
+                        }
+                    )
+                } catch (_: Exception) {}
+            }
             val showRow = options["showServiceStatusRow"] as? Boolean
                 ?: PetSpeechPersistPrefs.read(context).showServiceRow
-            refreshServiceRow(context, showRow)
+            refreshServiceRow(
+                context,
+                showRow && PetSpeechPersistSettingsWriteDecision.mayShowServiceRowAfterWrite(writeRelease)
+            )
             val overlayOn = options["overlayWhileSpeaking"] as? Boolean
             if (overlayOn == true &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&

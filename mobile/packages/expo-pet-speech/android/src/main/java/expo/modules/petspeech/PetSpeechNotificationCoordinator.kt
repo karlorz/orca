@@ -98,7 +98,11 @@ object PetSpeechNotificationCoordinator {
             context,
             11,
             Intent(context, PetSpeechForegroundService::class.java).apply {
-                action = PetSpeechForegroundService.ACTION_PAUSE_PERSIST
+                action = PetSpeechForegroundService.ACTION_RELEASE_SESSION
+                putExtra(
+                    PetSpeechForegroundService.EXTRA_RELEASE_REASON,
+                    PetSpeechReleaseAftermathDecision.Reason.PAUSE.name
+                )
             },
             pendingFlags()
         )
@@ -124,7 +128,14 @@ object PetSpeechNotificationCoordinator {
             context,
             12,
             Intent(context, PetSpeechForegroundService::class.java).apply {
-                action = PetSpeechForegroundService.ACTION_RESUME_FROM_CHIP
+                val hold = PetSpeechHoldCommandDecision.decide(
+                    PetSpeechHoldCommandDecision.Source.RESUME_CHIP
+                )
+                action = hold.serviceAction ?: PetSpeechHoldCommandDecision.ACTION_HOLD_SESSION
+                putExtra(
+                    PetSpeechHoldCommandDecision.EXTRA_HOLD_SOURCE,
+                    PetSpeechHoldCommandDecision.Source.RESUME_CHIP.name
+                )
             },
             pendingFlags()
         )

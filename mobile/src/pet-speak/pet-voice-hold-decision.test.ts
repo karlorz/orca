@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   decidePetVoiceHoldAction,
+  persistOnKeepWhenNoHostDoesNotReacquireAfterKeepHoldPause,
+  persistOnKeepWhenNoHostHoldsAfterKeepHoldPause,
+  persistOnKeepWhenNoHostReleasesAfterKeepHoldPause,
   PET_VOICE_RECONNECT_GRACE_MS,
   type PetVoiceHoldState
 } from './pet-voice-hold-decision'
@@ -286,5 +289,119 @@ describe('decidePetVoiceHoldAction', () => {
       keepWhenNoHost: false
     })
     expect(action.type).toBe('release')
+  })
+
+  it('persist-on keepWhenNoHost after Pause-after-keepHold still holds when already held', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: 'Pet voice connected'
+    }
+    expect(persistOnKeepWhenNoHostHoldsAfterKeepHoldPause(true, true, true, true)).toBe(true)
+    expect(persistOnKeepWhenNoHostReleasesAfterKeepHoldPause(true, true, true, true)).toBe(false)
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: true,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(action.type).toBe('none')
+    expect(action.nextState.isSessionHeld).toBe(true)
+    const pastGrace = decidePetVoiceHoldAction({
+      state: {
+        ...state,
+        reconnectingSince: 5000,
+        lastNotificationText: 'Orca Pet — Reconnecting...'
+      },
+      connectedCount: 0,
+      reconnectingCount: 1,
+      now: 5000 + PET_VOICE_RECONNECT_GRACE_MS,
+      persistEnabled: true,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(pastGrace.type).toBe('none')
+    expect(pastGrace.nextState.isSessionHeld).toBe(true)
+  })
+
+  it('persist-off keepWhenNoHost after Pause-after-keepHold still releases', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: true,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: 'Pet voice connected'
+    }
+    expect(persistOnKeepWhenNoHostReleasesAfterKeepHoldPause(false, true, true, true)).toBe(true)
+    const persistOff = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: false,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(persistOff.type).toBe('release')
+    expect(persistOff.nextState.isSessionHeld).toBe(false)
+    const keepHostOff = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: true,
+      keepWhenNoHost: false,
+      afterKeepHoldPause: true
+    })
+    expect(keepHostOff.type).toBe('release')
+    expect(keepHostOff.nextState.isSessionHeld).toBe(false)
+  })
+
+  it('persist-on keepWhenNoHost after Pause-after-keepHold does not re-acquire from idle', () => {
+    const state: PetVoiceHoldState = {
+      isSessionHeld: false,
+      isAcquiring: false,
+      reconnectingSince: null,
+      lastNotificationText: null
+    }
+    expect(persistOnKeepWhenNoHostDoesNotReacquireAfterKeepHoldPause(true, true, true, false)).toBe(
+      true
+    )
+    expect(persistOnKeepWhenNoHostHoldsAfterKeepHoldPause(true, true, true, false)).toBe(false)
+    const action = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      now: 5000,
+      persistEnabled: true,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(action.type).toBe('none')
+    expect(action.nextState.isSessionHeld).toBe(false)
+    const hostReturns = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 1,
+      reconnectingCount: 0,
+      now: 6000,
+      persistEnabled: true,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(hostReturns.type).toBe('acquire')
+    const stillTrying = decidePetVoiceHoldAction({
+      state,
+      connectedCount: 0,
+      reconnectingCount: 0,
+      stillTryingCount: 1,
+      now: 7000,
+      persistEnabled: true,
+      keepWhenNoHost: true,
+      afterKeepHoldPause: true
+    })
+    expect(stillTrying.type).toBe('acquire')
   })
 })
