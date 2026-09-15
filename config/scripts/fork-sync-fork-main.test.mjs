@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,6 +19,9 @@ import {
 import { resolveForkMobileAppJson } from './fork-next-mobile-tag.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const hasMobileExpoTsconfig = existsSync(
+  join(projectDir, 'mobile/node_modules/expo/tsconfig.base.json')
+)
 const tempRepos = []
 
 const IGNORE_PATH = '.gitignore'
@@ -226,11 +229,14 @@ const EXPECTED_LENGTH = 12
     expect(rewritten).toContain('const EXPECTED_LENGTH = 99')
   })
 
-  it('computes the live WebView payload fingerprint through Vitest', () => {
-    const fingerprint = computeWebviewPayloadFingerprint({ cwd: projectDir })
-    expect(fingerprint.sha256).toMatch(/^[0-9a-f]{64}$/)
-    expect(fingerprint.length).toBeGreaterThan(1000)
-  })
+  it.skipIf(!hasMobileExpoTsconfig)(
+    'computes the live WebView payload fingerprint through Vitest',
+    () => {
+      const fingerprint = computeWebviewPayloadFingerprint({ cwd: projectDir })
+      expect(fingerprint.sha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(fingerprint.length).toBeGreaterThan(1000)
+    }
+  )
 
   it('keeps fork versionCode and published-train marketing version across app.json sync', () => {
     const ours = {
@@ -275,30 +281,33 @@ const EXPECTED_LENGTH = 12
     expect(resolved.expo.android.versionCode).toBe(29)
   })
 
-  it('auto-resolves the 2026-09-13 three-file git merge conflict set', () => {
-    const root = initConflictRepo()
-    const unmerged = git(root, ['diff', '--name-only', '--diff-filter=U'])
-      .split('\n')
-      .filter(Boolean)
-    expect(unmerged.sort()).toEqual([IGNORE_PATH, NATIVE_PATH, HASH_PATH].sort())
+  it.skipIf(!hasMobileExpoTsconfig)(
+    'auto-resolves the 2026-09-13 three-file git merge conflict set',
+    () => {
+      const root = initConflictRepo()
+      const unmerged = git(root, ['diff', '--name-only', '--diff-filter=U'])
+        .split('\n')
+        .filter(Boolean)
+      expect(unmerged.sort()).toEqual([IGNORE_PATH, NATIVE_PATH, HASH_PATH].sort())
 
-    resolveAllowlistedSyncConflicts({ cwd: root, fingerprintCwd: projectDir })
+      resolveAllowlistedSyncConflicts({ cwd: root, fingerprintCwd: projectDir })
 
-    expect(git(root, ['diff', '--name-only', '--diff-filter=U'])).toBe('')
-    expect(readFileSync(join(root, IGNORE_PATH), 'utf8')).toBe(
-      'node_modules/\n.fork-local\nwindows-registry/\n'
-    )
-    const native = readFileSync(join(root, NATIVE_PATH), 'utf8')
-    expect(native).toContain(
-      "['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos']"
-    )
-    expect(native).toContain("runPnpmScriptSync('build:speech-macos')")
-    const fingerprint = computeWebviewPayloadFingerprint({ cwd: projectDir })
-    const hashTest = readFileSync(join(root, HASH_PATH), 'utf8')
-    expect(hashTest).toContain(`const EXPECTED_SHA256 = '${fingerprint.sha256}'`)
-    expect(hashTest).toContain(`const EXPECTED_LENGTH = ${fingerprint.length}`)
-    expect(git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('fork-main')
-  })
+      expect(git(root, ['diff', '--name-only', '--diff-filter=U'])).toBe('')
+      expect(readFileSync(join(root, IGNORE_PATH), 'utf8')).toBe(
+        'node_modules/\n.fork-local\nwindows-registry/\n'
+      )
+      const native = readFileSync(join(root, NATIVE_PATH), 'utf8')
+      expect(native).toContain(
+        "['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos']"
+      )
+      expect(native).toContain("runPnpmScriptSync('build:speech-macos')")
+      const fingerprint = computeWebviewPayloadFingerprint({ cwd: projectDir })
+      const hashTest = readFileSync(join(root, HASH_PATH), 'utf8')
+      expect(hashTest).toContain(`const EXPECTED_SHA256 = '${fingerprint.sha256}'`)
+      expect(hashTest).toContain(`const EXPECTED_LENGTH = ${fingerprint.length}`)
+      expect(git(root, ['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('fork-main')
+    }
+  )
 
   it('still fail-closes when a fourth path is also unmerged', () => {
     const root = initConflictRepo({

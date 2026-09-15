@@ -8,8 +8,8 @@ const { spawnMock } = vi.hoisted(() => {
   }
 })
 
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock
+vi.mock('../../shared/child-process/run-process', () => ({
+  spawnProcess: spawnMock
 }))
 
 class FakeChildProcess extends EventEmitter {
@@ -54,7 +54,11 @@ describe('AppleSpeechSession', () => {
 
     await session.start()
 
-    expect(spawnMock).toHaveBeenCalledWith('/custom/path/orca-speech', [], expect.any(Object))
+    expect(spawnMock).toHaveBeenCalledWith({
+      program: '/custom/path/orca-speech',
+      args: [],
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
     expect(stdinData).toContain('{"sampleRate":16000}\n')
 
     // Simulate helper replying with ready event

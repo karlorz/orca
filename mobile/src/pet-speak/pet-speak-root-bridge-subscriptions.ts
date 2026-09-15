@@ -37,6 +37,7 @@ export function wirePetSpeakHostClients(input: {
   updateVoiceSessionNotification: PetVoiceHoldRuntime['updateVoiceSessionNotification']
   persistEnabled: () => boolean
   keepWhenNoHost: () => boolean
+  overlayWhileSpeaking: () => boolean
   keepHostConnection: () => boolean
   handlerOptions: PetSpeakHandlerOptions
   clients: PetSpeakHostClient[]
@@ -57,7 +58,9 @@ export function wirePetSpeakHostClients(input: {
     updateVoiceSessionNotification: input.updateVoiceSessionNotification,
     persistEnabled: input.persistEnabled,
     keepWhenNoHost: input.keepWhenNoHost,
-    keepHostConnection: input.keepHostConnection
+    overlayWhileSpeaking: input.overlayWhileSpeaking,
+    keepHostConnection: input.keepHostConnection,
+    petSpeechEnabled: () => input.isEnabledNow()
   }
   input.holdRuntimeRef.current = holdRuntime
 

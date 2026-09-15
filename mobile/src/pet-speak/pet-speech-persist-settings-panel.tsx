@@ -11,8 +11,10 @@ import {
   type PetSpeechPreferences
 } from './pet-speech-preferences'
 import {
+  applyOverlayWhileSpeakingToggle,
   loadPetSpeechPersistChecklist,
   openPetSpeechPersistChecklistItem,
+  persistDependentSwitchEnabled,
   syncPetSpeechPersistSettings
 } from './pet-speech-persist-checklist'
 import type { PetSpeechPersistChecklist } from '@orca/expo-pet-speech'
@@ -68,18 +70,24 @@ export function PetSpeechPersistSettingsPanel({
 
   const handleToggleKeepHostConnection = useCallback(
     async (keepHostConnection: boolean) => {
+      if (!persistDependentSwitchEnabled(prefs.persistEnabled)) {
+        return
+      }
       await writeAndSync({ keepHostConnection }, () =>
         setPetSpeechKeepHostConnection(keepHostConnection)
       )
     },
-    [writeAndSync]
+    [prefs.persistEnabled, writeAndSync]
   )
 
   const handleToggleKeepWhenNoHost = useCallback(
     async (keepWhenNoHost: boolean) => {
+      if (!persistDependentSwitchEnabled(prefs.persistEnabled)) {
+        return
+      }
       await writeAndSync({ keepWhenNoHost }, () => setPetSpeechKeepWhenNoHost(keepWhenNoHost))
     },
-    [writeAndSync]
+    [prefs.persistEnabled, writeAndSync]
   )
 
   const handleToggleServiceRow = useCallback(
@@ -93,12 +101,16 @@ export function PetSpeechPersistSettingsPanel({
 
   const handleToggleOverlay = useCallback(
     async (overlayWhileSpeaking: boolean) => {
+      const wasOn = prefs.overlayWhileSpeaking
       await writeAndSync({ overlayWhileSpeaking }, () =>
         setPetSpeechOverlayWhileSpeaking(overlayWhileSpeaking)
       )
+      await applyOverlayWhileSpeakingToggle(overlayWhileSpeaking, wasOn)
     },
-    [writeAndSync]
+    [prefs.overlayWhileSpeaking, writeAndSync]
   )
+
+  const dependentsEnabled = persistDependentSwitchEnabled(prefs.persistEnabled)
 
   return (
     <>
@@ -127,9 +139,9 @@ export function PetSpeechPersistSettingsPanel({
             </Text>
           </View>
           <Switch
-            value={prefs.keepHostConnection}
+            value={prefs.keepHostConnection && dependentsEnabled}
             onValueChange={(v) => void handleToggleKeepHostConnection(v)}
-            disabled={!prefs.persistEnabled}
+            disabled={!dependentsEnabled}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}
           />
@@ -142,8 +154,9 @@ export function PetSpeechPersistSettingsPanel({
             </Text>
           </View>
           <Switch
-            value={prefs.keepWhenNoHost}
+            value={prefs.keepWhenNoHost && dependentsEnabled}
             onValueChange={(v) => void handleToggleKeepWhenNoHost(v)}
+            disabled={!dependentsEnabled}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}
           />

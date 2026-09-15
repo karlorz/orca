@@ -1,3 +1,5 @@
+import { persistOffOverlayAfterKeepHoldPauseNeverHoldsSession } from './pet-speech-overlay-hold-decision'
+
 export const PET_VOICE_RECONNECT_GRACE_MS = 5 * 60 * 1000
 export const PET_VOICE_CONNECTED_TEXT = 'Pet voice connected'
 export const PET_VOICE_RECONNECTING_TEXT = 'Orca Pet — Reconnecting...'
@@ -37,6 +39,44 @@ export interface DecidePetVoiceHoldParams {
   now: number
   persistEnabled?: boolean
   keepWhenNoHost?: boolean
+  overlayWhileSpeaking?: boolean
+  afterKeepHoldPause?: boolean
+}
+
+export function persistOnKeepWhenNoHostHoldsAfterKeepHoldPause(
+  persistEnabled: boolean,
+  keepWhenNoHost: boolean,
+  afterKeepHoldPause: boolean,
+  sessionHeld: boolean
+): boolean {
+  return afterKeepHoldPause && persistEnabled && keepWhenNoHost && sessionHeld
+}
+
+export function persistOnKeepWhenNoHostReleasesAfterKeepHoldPause(
+  persistEnabled: boolean,
+  keepWhenNoHost: boolean,
+  afterKeepHoldPause: boolean,
+  sessionHeld: boolean
+): boolean {
+  return afterKeepHoldPause && sessionHeld && !(persistEnabled && keepWhenNoHost)
+}
+
+export function persistOnKeepWhenNoHostDoesNotReacquireAfterKeepHoldPause(
+  persistEnabled: boolean,
+  keepWhenNoHost: boolean,
+  afterKeepHoldPause: boolean,
+  sessionHeld: boolean
+): boolean {
+  return afterKeepHoldPause && persistEnabled && keepWhenNoHost && !sessionHeld
+}
+
+export function persistOnOverlayJsReleaseEvaluateDoesNotReacquire(
+  persistEnabled: boolean,
+  overlayWhileSpeaking: boolean,
+  afterKeepHoldPause: boolean,
+  sessionHeld: boolean
+): boolean {
+  return persistEnabled && overlayWhileSpeaking && afterKeepHoldPause && !sessionHeld
 }
 
 export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetVoiceHoldAction {
@@ -47,13 +87,38 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
     stillTryingCount,
     now,
     persistEnabled = false,
-    keepWhenNoHost = false
+    keepWhenNoHost = false,
+    overlayWhileSpeaking = false,
+    afterKeepHoldPause = false
   } = params
+  const overlayBlocksHold = persistOffOverlayAfterKeepHoldPauseNeverHoldsSession(
+    persistEnabled,
+    overlayWhileSpeaking,
+    afterKeepHoldPause
+  )
   const keepIdleWithoutHost = persistEnabled && keepWhenNoHost
+  const holdAfterPause = persistOnKeepWhenNoHostHoldsAfterKeepHoldPause(
+    persistEnabled,
+    keepWhenNoHost,
+    afterKeepHoldPause,
+    state.isSessionHeld
+  )
+  const releaseAfterPause = persistOnKeepWhenNoHostReleasesAfterKeepHoldPause(
+    persistEnabled,
+    keepWhenNoHost,
+    afterKeepHoldPause,
+    state.isSessionHeld
+  )
+  const noReacquireAfterPause = persistOnKeepWhenNoHostDoesNotReacquireAfterKeepHoldPause(
+    persistEnabled,
+    keepWhenNoHost,
+    afterKeepHoldPause,
+    state.isSessionHeld
+  )
   const activeTryingCount = stillTryingCount ?? reconnectingCount
 
   if (connectedCount > 0) {
-    if (!state.isSessionHeld && !state.isAcquiring) {
+    if (!state.isSessionHeld && !state.isAcquiring && !overlayBlocksHold) {
       return {
         type: 'acquire',
         notificationText: PET_VOICE_CONNECTED_TEXT,
@@ -95,7 +160,7 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
   }
 
   // connectedCount === 0
-  if (activeTryingCount > 0 && !state.isSessionHeld && !state.isAcquiring) {
+  if (activeTryingCount > 0 && !state.isSessionHeld && !state.isAcquiring && !overlayBlocksHold) {
     return {
       type: 'acquire',
       notificationText: PET_VOICE_RECONNECTING_TEXT,
@@ -111,7 +176,7 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
     const reconnectingSince = state.reconnectingSince ?? now
     const elapsed = now - reconnectingSince
 
-    if (elapsed >= PET_VOICE_RECONNECT_GRACE_MS && !keepIdleWithoutHost) {
+    if (elapsed >= PET_VOICE_RECONNECT_GRACE_MS && !keepIdleWithoutHost && !holdAfterPause) {
       return {
         type: 'release',
         nextState: {
@@ -145,7 +210,7 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
   }
 
   // 0 connected, and (activeTryingCount === 0 or not held)
-  if (state.isSessionHeld && !keepIdleWithoutHost) {
+  if ((state.isSessionHeld && !keepIdleWithoutHost) || releaseAfterPause) {
     return {
       type: 'release',
       nextState: {
@@ -154,6 +219,13 @@ export function decidePetVoiceHoldAction(params: DecidePetVoiceHoldParams): PetV
         reconnectingSince: null,
         lastNotificationText: null
       }
+    }
+  }
+
+  if (holdAfterPause || noReacquireAfterPause) {
+    return {
+      type: 'none',
+      nextState: state
     }
   }
 

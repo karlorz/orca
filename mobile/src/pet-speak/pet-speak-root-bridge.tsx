@@ -107,6 +107,7 @@ export function usePetSpeakRootBridge(
   isEnabledRef.current = isEnabled
   const persistEnabled = preferences?.persistEnabled === true
   const keepWhenNoHost = preferences?.keepWhenNoHost === true
+  const overlayWhileSpeaking = preferences?.overlayWhileSpeaking === true
   const keepHostConnection = preferences?.keepHostConnection === true
   const persistEnabledRef = useRef(persistEnabled)
   persistEnabledRef.current = persistEnabled
@@ -231,6 +232,7 @@ export function usePetSpeakRootBridge(
       updateVoiceSessionNotification: updateVoiceSessionNotificationFn,
       persistEnabled: () => persistEnabledRef.current,
       keepWhenNoHost: () => keepWhenNoHostRef.current,
+      overlayWhileSpeaking: () => overlayWhileSpeaking,
       keepHostConnection: () => keepHostConnectionRef.current,
       handlerOptions: effectiveHandlerOptions,
       clients,
@@ -248,6 +250,7 @@ export function usePetSpeakRootBridge(
     updateVoiceSessionNotificationFn,
     persistEnabled,
     keepWhenNoHost,
+    overlayWhileSpeaking,
     keepHostConnection,
     preferences
   ])
@@ -261,7 +264,7 @@ export function usePetSpeakRootBridge(
       return
     }
     evaluatePetVoiceHold(holdRuntimeRef.current)
-  }, [keepHostConnection, persistEnabled, keepWhenNoHost, isEnabled])
+  }, [keepHostConnection, persistEnabled, keepWhenNoHost, overlayWhileSpeaking, isEnabled])
 
   // Root unmount cleanup
   useEffect(() => {

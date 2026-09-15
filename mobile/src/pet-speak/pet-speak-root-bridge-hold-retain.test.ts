@@ -5,7 +5,6 @@ import {
 } from './host-connection-retain'
 import {
   evaluatePetVoiceHold,
-  idlePetVoiceHoldState,
   onHostClientStateForHold,
   type PetVoiceHoldRuntime
 } from './pet-speak-root-bridge-hold'
@@ -33,7 +32,9 @@ function runtime(overrides: Partial<PetVoiceHoldRuntime> = {}): PetVoiceHoldRunt
     updateVoiceSessionNotification: vi.fn(async () => {}),
     persistEnabled: () => true,
     keepWhenNoHost: () => false,
+    overlayWhileSpeaking: () => false,
     keepHostConnection: () => true,
+    petSpeechEnabled: () => true,
     ...overrides
   }
 }
@@ -80,10 +81,21 @@ describe('evaluatePetVoiceHold retain publish', () => {
   it('clears retain when the master is off', () => {
     evaluatePetVoiceHold(
       runtime({
-        isDisposed: () => true,
-        holdState: { current: idlePetVoiceHoldState() }
+        petSpeechEnabled: () => false
       })
     )
     expect(getHostConnectionRetainRuntime()).toBe(false)
+  })
+
+  it('persist-on keepWhenNoHost still holds retain when session stayed held', () => {
+    evaluatePetVoiceHold(
+      runtime({
+        speechStates: new Map(),
+        persistEnabled: () => true,
+        keepWhenNoHost: () => true,
+        keepHostConnection: () => true
+      })
+    )
+    expect(getHostConnectionRetainRuntime()).toBe(true)
   })
 })
