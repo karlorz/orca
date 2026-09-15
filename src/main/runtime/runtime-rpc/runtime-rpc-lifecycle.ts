@@ -242,7 +242,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.abortWebSocketDispatches(socket.ws)
         // Why: connection-owned streams and status rows must clear before device-wide disconnect handling.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-        this.runtime.getPetSpeechDeviceRegistry().cleanupConnection(socket.connectionId)
+        this.runtime.getPetSpeechDeviceRegistry?.()?.cleanupConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
         if (!hasOtherConnections) {

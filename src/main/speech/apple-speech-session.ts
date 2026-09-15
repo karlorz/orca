@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
 import { resampleToRate } from './stt-audio-resample'
 import type { SttEventSink } from './stt-service'
 
@@ -39,7 +39,7 @@ export type AppleSpeechSessionOptions = {
 export const DEFAULT_STOP_FLUSH_TIMEOUT_MS = 2500
 
 export class AppleSpeechSession {
-  private child: ChildProcess | null = null
+  private child: ChildProcessHandle | null = null
   private stdoutBuffer = ''
   private stopped = false
   private closed = false
@@ -59,7 +59,9 @@ export class AppleSpeechSession {
       throw new Error(`Apple speech helper executable not found: ${HELPER_EXECUTABLE}`)
     }
 
-    const child = spawn(helperPath, [], {
+    const child = spawnProcess({
+      program: helperPath,
+      args: [],
       stdio: ['pipe', 'pipe', 'pipe']
     })
     this.child = child
@@ -147,7 +149,7 @@ export class AppleSpeechSession {
     this.sink({ type: 'stopped' })
   }
 
-  private waitForStopFlush(child: ChildProcess, timeoutMs: number): Promise<void> {
+  private waitForStopFlush(child: ChildProcessHandle, timeoutMs: number): Promise<void> {
     return new Promise((resolve) => {
       let settled = false
       const finish = (): void => {

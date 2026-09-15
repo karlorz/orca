@@ -2,6 +2,11 @@ import type { RelayControlOrigin } from './relay-control-origin'
 import type { RelayAssignment } from './relay-http-client'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
 
+// Why: a short or malformed control lease makes relayRenewalDelayMs return 0.
+// Rotation must not spin reconnects on the same tick; the retry floor matches
+// the busy/error rebind delay.
+const RELAY_CONTROL_ROTATION_MIN_DELAY_MS = 5_000
+
 type RotationOptions = {
   current: () => RelayControlOrigin | null
   available: () => boolean
@@ -31,7 +36,10 @@ export class RelayControlRotation {
       (this.options.now ?? Date.now)(),
       this.options.random ?? Math.random
     )
-    this.timer = setTimeout(() => void this.rebind(origin), delay)
+    this.timer = setTimeout(
+      () => void this.rebind(origin),
+      Math.max(RELAY_CONTROL_ROTATION_MIN_DELAY_MS, delay)
+    )
   }
   private async rebind(origin: RelayControlOrigin): Promise<void> {
     this.timer = null

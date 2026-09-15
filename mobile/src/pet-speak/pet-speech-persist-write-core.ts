@@ -51,9 +51,9 @@ export function hidingServiceStatusRowDoesNotDropFgs(): boolean {
     shown.showServiceRow &&
     hidden.showResumeChip === false &&
     shown.showResumeChip === false &&
-    FGS_NOTIFICATION_ID !== SERVICE_ROW_NOTIFICATION_ID &&
-    SERVICE_ROW_NOTIFICATION_ID !== RESUME_CHIP_NOTIFICATION_ID &&
-    FGS_NOTIFICATION_ID !== RESUME_CHIP_NOTIFICATION_ID
+    Number(FGS_NOTIFICATION_ID) !== Number(SERVICE_ROW_NOTIFICATION_ID) &&
+    Number(SERVICE_ROW_NOTIFICATION_ID) !== Number(RESUME_CHIP_NOTIFICATION_ID) &&
+    Number(FGS_NOTIFICATION_ID) !== Number(RESUME_CHIP_NOTIFICATION_ID)
   )
 }
 
@@ -66,7 +66,7 @@ export function whileHeldFgsIsMediaStyleNotServiceRow(keepHold: boolean): boolea
   return (
     plan.showFgs &&
     plan.showResumeChip === false &&
-    FGS_NOTIFICATION_ID !== SERVICE_ROW_NOTIFICATION_ID
+    Number(FGS_NOTIFICATION_ID) !== Number(SERVICE_ROW_NOTIFICATION_ID)
   )
 }
 
@@ -86,15 +86,15 @@ export function persistOnSessionHeldFgsIsMediaStyleId4040NeverServiceRow4041(
     hiddenRow.showFgs &&
     FGS_NOTIFICATION_ID === 4040 &&
     SERVICE_ROW_NOTIFICATION_ID === 4041 &&
-    FGS_NOTIFICATION_ID !== SERVICE_ROW_NOTIFICATION_ID
+    Number(FGS_NOTIFICATION_ID) !== Number(SERVICE_ROW_NOTIFICATION_ID)
   )
 }
 
 export function resumeChipNotifyIdNeverStartsForeground(): boolean {
   return (
     RESUME_CHIP_NOTIFICATION_ID === 4042 &&
-    RESUME_CHIP_NOTIFICATION_ID !== FGS_NOTIFICATION_ID &&
-    RESUME_CHIP_NOTIFICATION_ID !== SERVICE_ROW_NOTIFICATION_ID &&
+    Number(RESUME_CHIP_NOTIFICATION_ID) !== Number(FGS_NOTIFICATION_ID) &&
+    Number(RESUME_CHIP_NOTIFICATION_ID) !== Number(SERVICE_ROW_NOTIFICATION_ID) &&
     persistNotificationAfterPause().showFgs === false &&
     persistNotificationAfterPause().showServiceRow === false &&
     persistNotificationAfterPause().showResumeChip

@@ -47,6 +47,6 @@ export function persistOnSessionHeldVisibilityRetainKeepsMediaStyleFgs(
     overlayNeverStartsForegroundFromRetain() === false &&
     FGS_MEDIA_STYLE_NOTIFICATION_ID === 4040 &&
     SERVICE_ROW_NOTIFICATION_ID === 4041 &&
-    FGS_MEDIA_STYLE_NOTIFICATION_ID !== SERVICE_ROW_NOTIFICATION_ID
+    Number(FGS_MEDIA_STYLE_NOTIFICATION_ID) !== Number(SERVICE_ROW_NOTIFICATION_ID)
   )
 }
