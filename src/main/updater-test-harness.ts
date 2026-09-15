@@ -147,6 +147,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     const loadedGeneration = currentGeneration
     return new Proxy(autoUpdaterMock, {
       get(target, property) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: raw string|symbol pass-through; the receiver stays the target on purpose.
         const value = Reflect.get(target, property)
         if (loadedGeneration === currentGeneration || typeof value !== 'function') {
           return value
@@ -156,7 +157,7 @@ export function createUpdaterMocks(): UpdaterMocks {
       set(target, property, value) {
         return loadedGeneration === currentGeneration ? Reflect.set(target, property, value) : true
       }
-    }) as AutoUpdaterMock
+    })
   }
 
   const reset = () => {
