@@ -36,10 +36,7 @@ import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-even
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatWorkspaceFileDrop } from './use-native-chat-workspace-file-drop'
 
-export type {
-  NativeChatComposerHandle,
-  NativeChatComposerProps
-} from './native-chat-composer-types'
+export type { NativeChatComposerHandle, NativeChatComposerProps }
 
 // Why: a plain ESC byte is what the agent TUIs read as the interrupt key over a
 // PTY (matching how xterm forwards Escape). The richer interrupt-intent
