@@ -284,3 +284,18 @@ features:
       - .github/workflows/fork-own-mobile-relay-image.yml
       - config/scripts/own-mobile-relay-coolify-deploy.test.mjs
     wiki: projects/orca/work/2026-09-12-own-relay-coolify-cloud01
+
+  - id: official-relay-combined-self-host
+    title: Own-auth mints ES256 relay-token JWTs with durable JWKS; official combined relay self-hosts with ORCA_RELAY_KEY_EXPIRY_DISABLED harvest
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/relay/own-mobile-relay-jwt-issuer.ts
+      - src/main/runtime/relay/own-mobile-relay-request-routes.ts
+      - src/main/runtime/relay/own-mobile-relay-http.ts
+      - src/main/runtime/relay/own-mobile-relay-main.ts
+      - config/docker/own-mobile-relay/Dockerfile
+      - cloud/apps/relay/src/config.ts
+      - cloud/apps/relay/src/credential-store.ts
+      - cloud/apps/relay/src/relay-server.ts
+    wiki: projects/orca/work/2026-09-16-official-relay-harvest-combined

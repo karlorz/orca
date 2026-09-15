@@ -4,6 +4,11 @@ import { bearerToken, readJsonBody, sendJson } from './own-mobile-relay-http-uti
 import type { OwnMobileRelayRouter } from './own-mobile-relay-splice-handler'
 import { handleResolvePost } from './own-mobile-relay-resolve-handler'
 import type { OwnMobileRelayAuthStore } from './own-mobile-relay-auth'
+import {
+  mintRelayTokenJwt,
+  relayTokenJwks,
+  type RelayTokenSigningKey
+} from './own-mobile-relay-jwt-issuer'
 import type {
   OwnMobileRelaySecurityState,
   SecurityStateAccessSession
@@ -37,6 +42,7 @@ export type OwnMobileRelayRequestContext = {
   advertisedOriginCallback: () => string
   authOriginCallback?: () => string
   router: OwnMobileRelayRouter
+  relayTokenSigningKey: RelayTokenSigningKey
   throttle?: AuthThrottle
   passwordPolicy?: PasswordPolicy
   auditLog?: OwnMobileRelayAuditLog
@@ -73,6 +79,10 @@ export function createOwnMobileRelayRequestHandler(
     }
     if (request.method === 'GET' && url.pathname === '/health') {
       sendJson(response, 200, { ok: true })
+      return
+    }
+    if (request.method === 'GET' && url.pathname === '/.well-known/jwks.json') {
+      sendJson(response, 200, relayTokenJwks(context.relayTokenSigningKey))
       return
     }
     if (url.pathname === '/v1/desktop/auth/password') {
@@ -183,7 +193,17 @@ export function createOwnMobileRelayRequestHandler(
         sendJson(response, 400, { error: 'invalid_request' })
         return
       }
-      const rawRelayToken = randomBytes(32).toString('base64url')
+      // The grant store keeps the JWT by hash so the legacy splice validation
+      // keeps working while official combined relays verify it against JWKS.
+      const rawRelayToken = await mintRelayTokenJwt({
+        key: context.relayTokenSigningKey,
+        issuer: context.authOriginCallback?.() ?? context.advertisedOriginCallback(),
+        subject: session.identity.userId,
+        cloudProfileId: session.identity.cloudProfileId,
+        organizationId: session.identity.organizationId,
+        relayHostId: record.relayHostId,
+        expiresAtMs: Date.now() + RELAY_TOKEN_TTL_MS
+      })
       const issuedGrant = await context.securityState.issueRelayGrant({
         rawRelayToken,
         parentSessionId: session.sessionId,

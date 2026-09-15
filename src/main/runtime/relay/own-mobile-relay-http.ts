@@ -19,6 +19,10 @@ import { createOwnMobileRelayCleanupScheduler } from './own-mobile-relay-cleanup
 import { createAuthThrottle, type AuthThrottle } from './own-mobile-relay-auth-throttle'
 import { createOwnMobileRelayAuditMemory } from './own-mobile-relay-audit-memory'
 import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
+import {
+  createRelayTokenSigningKey,
+  type RelayTokenSigningKey
+} from './own-mobile-relay-jwt-issuer'
 
 export type OwnMobileRelayListenOptions = {
   operator?: OwnMobileRelayOperatorConfig
@@ -32,6 +36,7 @@ export type OwnMobileRelayListenOptions = {
   passwordPolicy?: PasswordPolicy
   throttle?: AuthThrottle
   auditLog?: OwnMobileRelayAuditLog
+  relayTokenSigningKey?: RelayTokenSigningKey
 }
 
 export type OwnMobileRelayServer = {
@@ -82,6 +87,9 @@ export async function listenOwnMobileRelay(
     advertisedOriginCallback: () => advertisedOrigin,
     authOriginCallback: () => options.authOrigin ?? options.origin,
     router,
+    // Ephemeral per-process key when the caller did not load a durable one;
+    // only own-mobile-relay-main.ts wires the persisted key.
+    relayTokenSigningKey: options.relayTokenSigningKey ?? (await createRelayTokenSigningKey()),
     throttle,
     passwordPolicy,
     auditLog,

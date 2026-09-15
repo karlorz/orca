@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { dirname, join } from 'node:path'
 import {
   openOwnMobileRelaySecurityStateSqlite,
   createOwnMobileRelayAuditSqlite
@@ -8,6 +9,7 @@ import { CURRENT_PASSWORD_POLICY, type PasswordPolicy } from './own-mobile-relay
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import { runAccountCli } from './own-mobile-relay-account-cli'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
+import { loadOrCreateRelayTokenSigningKey } from './own-mobile-relay-jwt-issuer'
 
 export type OwnRelayServeConfig = {
   statePath: string
@@ -164,6 +166,11 @@ export async function startOwnRelayServer(options: {
   let server
   try {
     const auditLog = createOwnMobileRelayAuditSqlite(securityState)
+    // Lives beside the state database so the same Coolify volume keeps the
+    // ES256 key (and therefore every minted JWT) valid across restarts.
+    const relayTokenSigningKey = await loadOrCreateRelayTokenSigningKey(
+      join(dirname(config.statePath), 'own-relay-jwt-signing-key.json')
+    )
     server = await listenOwnMobileRelay({
       securityState,
       auditLog,
@@ -174,7 +181,8 @@ export async function startOwnRelayServer(options: {
       listenPort: config.listenPort,
       silenceLimitMs: options.silenceLimitMs,
       passwordPolicy,
-      throttle: options.throttle
+      throttle: options.throttle,
+      relayTokenSigningKey
     })
   } catch (err) {
     try {

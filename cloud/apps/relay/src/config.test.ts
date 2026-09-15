@@ -25,6 +25,17 @@ function cellEnvironment(capacity: number): NodeJS.ProcessEnv {
 }
 
 describe('GCE relay capacity configuration', () => {
+  it('parses the fork key-expiry toggle with an enforced-by-default posture', () => {
+    const env = cellEnvironment(4_000)
+    expect(loadRelayConfig(env).keyExpiryDisabled).toBe(false)
+    env.ORCA_RELAY_KEY_EXPIRY_DISABLED = 'true'
+    expect(loadRelayConfig(env).keyExpiryDisabled).toBe(true)
+    env.ORCA_RELAY_KEY_EXPIRY_DISABLED = 'false'
+    expect(loadRelayConfig(env).keyExpiryDisabled).toBe(false)
+    env.ORCA_RELAY_KEY_EXPIRY_DISABLED = 'yes'
+    expect(() => loadRelayConfig(env)).toThrow()
+  })
+
   it('defaults optional region correction off and bounds the cohort', () => {
     const env = cellEnvironment(4_000)
     expect(loadRelayConfig(env).regionCorrectionCohortPercent).toBe(0)

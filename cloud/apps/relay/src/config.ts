@@ -113,7 +113,14 @@ const EnvSchema = z.object({
     .max(300)
     .default(5),
   DATABASE_URL: z.string().optional(),
-  ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
+  ORCA_RELAY_DATA_DIR: z.string().default('./data/relay'),
+  // Fork harvest (karlorz/orca): trusted-machine admission keeps a current
+  // resume credential valid past its wall-clock TTL. Defaults to upstream
+  // behavior (expiry enforced).
+  ORCA_RELAY_KEY_EXPIRY_DISABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true')
 })
 
 const RelayCellConfigSchema = z
@@ -202,6 +209,7 @@ export type RelayConfig = {
   publicStickyRetryAfterSeconds?: number
   databaseUrl?: string
   dataDir: string
+  keyExpiryDisabled?: boolean
 }
 
 function canonicalOrigin(value: string, name: string): string {
@@ -349,6 +357,7 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     publicStickyWaitMs: parsed.ORCA_RELAY_PUBLIC_STICKY_WAIT_MS,
     publicStickyRetryAfterSeconds: parsed.ORCA_RELAY_PUBLIC_STICKY_RETRY_AFTER_SECONDS,
     databaseUrl: parsed.DATABASE_URL,
-    dataDir: parsed.ORCA_RELAY_DATA_DIR
+    dataDir: parsed.ORCA_RELAY_DATA_DIR,
+    keyExpiryDisabled: parsed.ORCA_RELAY_KEY_EXPIRY_DISABLED
   }
 }

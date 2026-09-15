@@ -70,10 +70,18 @@ function string(row: SqlRow, field: string): string {
 }
 
 export class RelayCredentialStore {
+  // keyExpiryDisabled is the fork-harvested trusted-machine admission: it
+  // bypasses only the *current* resume credential wall-clock. Invite TTL,
+  // grace TTL, revocation, and version retirement still apply.
   constructor(
     private readonly database: RelayDatabase,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly options: { keyExpiryDisabled?: boolean } = {}
   ) {}
+
+  private currentCredentialValid(currentExpiresAt: number, now: number): boolean {
+    return this.options.keyExpiryDisabled === true || currentExpiresAt > now
+  }
 
   async createInvite(identity: RelayIdentity, relayDeviceId: string): Promise<{
     inviteToken: string
@@ -190,7 +198,7 @@ export class RelayCredentialStore {
       const graceExpiresAt = optionalNumber(device, 'grace_expires_at')
       let acceptedAs: 'current' | 'grace'
       let acceptedCredentialVersion: number
-      if (equalHash(currentHash, tokenHash) && currentExpiresAt > now) {
+      if (equalHash(currentHash, tokenHash) && this.currentCredentialValid(currentExpiresAt, now)) {
         acceptedAs = 'current'
         acceptedCredentialVersion = number(device, 'current_version')
       } else if (
@@ -450,9 +458,10 @@ export class RelayCredentialStore {
       const device = devices[0]
       if (!device) throw new RelayStoreError('credential_not_found')
       const acceptedVersion = number(basis, 'accepted_credential_version')
-      const decision = decideResumeCommit(
+      const currentVersion = number(device, 'current_version')
+      let decision = decideResumeCommit(
         {
-          currentVersion: number(device, 'current_version'),
+          currentVersion,
           currentHash: string(device, 'current_hash'),
           currentExpiresAt: number(device, 'current_expires_at'),
           graceVersion: optionalNumber(device, 'grace_version'),
@@ -463,6 +472,15 @@ export class RelayCredentialStore {
         acceptedVersion,
         now
       )
+      if (
+        decision === 'reject-expired' &&
+        acceptedVersion === currentVersion &&
+        this.options.keyExpiryDisabled === true
+      ) {
+        // Trusted-machine admission: only the current version re-arms; grace
+        // TTL, revocation, and retirement rejections stand.
+        decision = 'renew-current'
+      }
       if (decision.startsWith('reject-')) throw new RelayStoreError(decision)
       const renewed = decision === 'renew-current'
       const resumeExpiresAt = renewed
@@ -558,7 +576,7 @@ export class RelayCredentialStore {
     const now = this.now()
     const currentValid =
       equalHash(string(device, 'current_hash'), tokenHash) &&
-      number(device, 'current_expires_at') > now
+      this.currentCredentialValid(number(device, 'current_expires_at'), now)
     const graceHash = device.grace_hash
     const graceValid =
       typeof graceHash === 'string' &&

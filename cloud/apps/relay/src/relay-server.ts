@@ -107,7 +107,9 @@ export function createRelayServer(
     maxPayload: 1024 * 1024
   })
   const verifyRelayToken = createRelayTokenVerifier(config)
-  const store = new RelayCredentialStore(observedDatabase, options.now)
+  const store = new RelayCredentialStore(observedDatabase, options.now, {
+    keyExpiryDisabled: config.keyExpiryDisabled
+  })
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
     regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,

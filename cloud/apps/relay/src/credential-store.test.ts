@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract'
+import { generateKeyPair, SignJWT } from 'jose'
 import {
   hashCredential,
   RelayCredentialStore,
   type CredentialReservation,
   type RelayIdentity
 } from './credential-store.js'
+import type { RelayConfig } from './config.js'
+import { createRelayTokenVerifier } from './relay-token-verifier.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
 
 const identity: RelayIdentity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
@@ -297,5 +303,324 @@ describe('relay credential store', () => {
       })
     ).rejects.toMatchObject({ code: 'confirmation_not_active' })
     await database.close()
+  })
+})
+
+describe('key expiry disabled (fork trusted-machine admission)', () => {
+  async function installDirect(
+    store: RelayCredentialStore,
+    input: { relayDeviceId: string; reqId: string; resumeToken: string }
+  ) {
+    await store.recordDirectAuthorization({
+      ...identity,
+      relayDeviceId: input.relayDeviceId,
+      directAuthId: `direct-${input.reqId}`,
+      owningControlGeneration: 1,
+      deadline: 100_000_000
+    })
+    return await store.installCredential({
+      ...identity,
+      relayDeviceId: input.relayDeviceId,
+      reqId: input.reqId,
+      newResumeTokenHash: hashCredential(input.resumeToken),
+      owningControlGeneration: 1,
+      authorization: { mode: 'authenticated-direct', directAuthId: `direct-${input.reqId}` }
+    })
+  }
+
+  async function resumeBasis(
+    store: RelayCredentialStore,
+    token: string,
+    basisConnId: string,
+    deadline = 100_000_000
+  ): Promise<CredentialReservation> {
+    const reservation = await store.reserveCredential(identity.relayHostId, token)
+    if (!reservation) throw new Error('resume did not reserve')
+    await store.recordConnectionBasis({
+      ...reservation,
+      basisConnId,
+      owningControlGeneration: 1,
+      deadline
+    })
+    return reservation
+  }
+
+  it('bypasses current resume wall-clock expiry across reserve, resolve, and confirm', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled: true })
+    const installed = await installDirect(store, {
+      relayDeviceId,
+      reqId: 'ked-install',
+      resumeToken: 'ked-resume-token'
+    })
+    now = installed.resumeExpiresAt + 1
+
+    const reservation = await store.reserveCredential(identity.relayHostId, 'ked-resume-token')
+    expect(reservation).toMatchObject({
+      credentialKind: 'resume',
+      acceptedAs: 'current',
+      acceptedCredentialVersion: 1
+    })
+    await expect(store.resolveResume(identity.relayHostId, 'ked-resume-token')).resolves.toEqual({
+      userId: identity.userId,
+      relayDeviceId
+    })
+
+    await store.recordConnectionBasis({
+      ...reservation!,
+      basisConnId: 'ked-basis',
+      owningControlGeneration: 1,
+      deadline: now + 10_000
+    })
+    const confirmed = await store.confirmResume({
+      ...identity,
+      reqId: 'ked-confirm',
+      basisConnId: 'ked-basis',
+      owningControlGeneration: 1
+    })
+    expect(confirmed).toMatchObject({
+      renewed: true,
+      acceptedAs: 'current',
+      resumeExpiresAt: now + RELAY_PROTOCOL_LIMITS.resumeTtlMs
+    })
+    await database.close()
+  })
+
+  it('keeps upstream expiry enforcement when the env is off', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now)
+    const installed = await installDirect(store, {
+      relayDeviceId,
+      reqId: 'off-install',
+      resumeToken: 'off-resume-token'
+    })
+    await resumeBasis(store, 'off-resume-token', 'off-basis', installed.resumeExpiresAt + 100_000)
+
+    now = installed.resumeExpiresAt + 1
+    await expect(store.reserveCredential(identity.relayHostId, 'off-resume-token')).resolves.toBeNull()
+    await expect(store.resolveResume(identity.relayHostId, 'off-resume-token')).resolves.toBeNull()
+    await expect(
+      store.confirmResume({
+        ...identity,
+        reqId: 'off-confirm',
+        basisConnId: 'off-basis',
+        owningControlGeneration: 1
+      })
+    ).rejects.toMatchObject({ code: 'reject-expired' })
+    await database.close()
+  })
+
+  it('still enforces invite expiry and sweeps it in cleanup', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled: true })
+    const invite = await store.createInvite(identity, relayDeviceId)
+    now = invite.expiresAt + 1
+    await expect(
+      store.reserveCredential(identity.relayHostId, invite.inviteToken)
+    ).resolves.toBeNull()
+    await store.cleanup()
+    const invites = await database.query(
+      `SELECT state FROM relay_invites WHERE token_hash = ?`,
+      [hashCredential(invite.inviteToken)]
+    )
+    expect(invites[0]?.state).toBe('expired')
+    await database.close()
+  })
+
+  it('still enforces grace expiry on reserve and confirm', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled: true })
+    await installDirect(store, {
+      relayDeviceId,
+      reqId: 'grace-install-1',
+      resumeToken: 'grace-resume-token-1'
+    })
+    await resumeBasis(store, 'grace-resume-token-1', 'grace-basis')
+    now = 200
+    await installDirect(store, {
+      relayDeviceId,
+      reqId: 'grace-install-2',
+      resumeToken: 'grace-resume-token-2'
+    })
+
+    now = 200 + 24 * 60 * 60 * 1000 + 1
+    await expect(
+      store.reserveCredential(identity.relayHostId, 'grace-resume-token-1')
+    ).resolves.toBeNull()
+    await expect(
+      store.confirmResume({
+        ...identity,
+        reqId: 'grace-confirm',
+        basisConnId: 'grace-basis',
+        owningControlGeneration: 1
+      })
+    ).rejects.toMatchObject({ code: 'reject-expired' })
+    await database.close()
+  })
+
+  it('still rejects revoked and retired credentials', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled: true })
+    await installDirect(store, {
+      relayDeviceId,
+      reqId: 'rev-install',
+      resumeToken: 'rev-resume-token'
+    })
+    await resumeBasis(store, 'rev-resume-token', 'rev-basis')
+    await store.revoke(identity, relayDeviceId)
+    await expect(
+      store.reserveCredential(identity.relayHostId, 'rev-resume-token')
+    ).resolves.toBeNull()
+    await expect(
+      store.confirmResume({
+        ...identity,
+        reqId: 'rev-confirm',
+        basisConnId: 'rev-basis',
+        owningControlGeneration: 1
+      })
+    ).rejects.toMatchObject({ code: 'reject-revoked' })
+
+    const retiredDevice = 'device-retired'
+    now = 1_000
+    await installDirect(store, {
+      relayDeviceId: retiredDevice,
+      reqId: 'ret-install-1',
+      resumeToken: 'ret-resume-token-1'
+    })
+    await resumeBasis(store, 'ret-resume-token-1', 'ret-basis')
+    now = 2_000
+    await installDirect(store, {
+      relayDeviceId: retiredDevice,
+      reqId: 'ret-install-2',
+      resumeToken: 'ret-resume-token-2'
+    })
+    now = 3_000
+    await installDirect(store, {
+      relayDeviceId: retiredDevice,
+      reqId: 'ret-install-3',
+      resumeToken: 'ret-resume-token-3'
+    })
+    now = 4_000
+    await expect(
+      store.reserveCredential(identity.relayHostId, 'ret-resume-token-1')
+    ).resolves.toBeNull()
+    await expect(
+      store.confirmResume({
+        ...identity,
+        reqId: 'ret-confirm',
+        basisConnId: 'ret-basis',
+        owningControlGeneration: 1
+      })
+    ).rejects.toMatchObject({ code: 'reject-retired' })
+    await database.close()
+  })
+
+  it('cleanup never sweeps a current device the env keeps admissible', async () => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled: true })
+    const installed = await installDirect(store, {
+      relayDeviceId,
+      reqId: 'cleanup-install',
+      resumeToken: 'cleanup-resume-token'
+    })
+    const invite = await store.createInvite(identity, 'cleanup-invite-device')
+
+    now = installed.resumeExpiresAt + 1
+    await store.cleanup()
+
+    const devices = await database.query(`SELECT * FROM relay_devices`)
+    expect(devices).toHaveLength(1)
+    const invites = await database.query(
+      `SELECT state FROM relay_invites WHERE token_hash = ?`,
+      [hashCredential(invite.inviteToken)]
+    )
+    expect(invites[0]?.state).toBe('expired')
+    await expect(
+      store.reserveCredential(identity.relayHostId, 'cleanup-resume-token')
+    ).resolves.toMatchObject({ acceptedAs: 'current' })
+    await expect(
+      store.resolveResume(identity.relayHostId, 'cleanup-resume-token')
+    ).resolves.toEqual({ userId: identity.userId, relayDeviceId })
+    await database.close()
+  })
+})
+
+describe('relay token verifier expiry enforcement', () => {
+  function verifierConfig(jwksUrl: string): RelayConfig {
+    return {
+      port: 0,
+      publicUrl: 'https://relay.example.test',
+      cellUrl: 'https://relay.example.test',
+      authIssuer: 'https://auth.example.test',
+      authAudience: 'orca-relay',
+      jwksUrl,
+      assignmentSigningKey: new TextEncoder().encode('assignment-key-with-at-least-32-bytes'),
+      role: 'combined',
+      cellId: 'combined',
+      cells: [],
+      adminAudience: 'https://admin.example.test',
+      deployServiceAccount: 'deploy@example.test',
+      runtimeServiceAccount: 'deploy@example.test',
+      adminJwksUrl: 'https://admin.example.test/jwks',
+      databasePoolMax: 10,
+      publicAssignmentsEnabled: true,
+      publicAssignmentConcurrency: 2,
+      publicAssignmentQueueMax: 128,
+      publicAssignmentWaitMs: 4_000,
+      publicResolveConcurrency: 1,
+      publicResolveWaitMs: 5_000,
+      publicAssignmentRetryAfterSeconds: 5,
+      dataDir: './data/relay'
+    }
+  }
+
+  it('never bypasses JWT exp: an expired token fails verification against a live JWKS', async () => {
+    const keys = await generateKeyPair('ES256', { extractable: true })
+    const { exportJWK } = await import('jose')
+    const publicJwk = await exportJWK(keys.publicKey)
+    const jwksServer: Server = createServer((_request, response) => {
+      response.setHeader('content-type', 'application/json')
+      response.end(JSON.stringify({ keys: [{ ...publicJwk, kid: 'ked-key', alg: 'ES256' }] }))
+    })
+    await new Promise<void>((resolveListen) => jwksServer.listen(0, '127.0.0.1', resolveListen))
+    const address = jwksServer.address() as AddressInfo
+    try {
+      const verify = createRelayTokenVerifier(
+        verifierConfig(`http://127.0.0.1:${address.port}/jwks`)
+      )
+      const claims = {
+        prof: 'profile-1',
+        org: 'org-1',
+        purpose: 'host-control',
+        relayHostId: 'abcdefghijklmnop'
+      }
+      const fresh = await new SignJWT(claims)
+        .setProtectedHeader({ alg: 'ES256', kid: 'ked-key' })
+        .setIssuer('https://auth.example.test')
+        .setAudience('orca-relay')
+        .setSubject('user-1')
+        .setIssuedAt()
+        .setExpirationTime(Math.floor(Date.now() / 1000) + 300)
+        .sign(keys.privateKey)
+      await expect(verify(fresh)).resolves.toMatchObject({ sub: 'user-1' })
+
+      const expired = await new SignJWT(claims)
+        .setProtectedHeader({ alg: 'ES256', kid: 'ked-key' })
+        .setIssuer('https://auth.example.test')
+        .setAudience('orca-relay')
+        .setSubject('user-1')
+        .setIssuedAt(Math.floor(Date.now() / 1000) - 600)
+        .setExpirationTime(Math.floor(Date.now() / 1000) - 300)
+        .sign(keys.privateKey)
+      await expect(verify(expired)).resolves.toBeNull()
+    } finally {
+      await new Promise<void>((resolveClose) => jwksServer.close(() => resolveClose()))
+    }
   })
 })
