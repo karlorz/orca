@@ -128,6 +128,10 @@ class ExpoPetSpeechModule : Module() {
                 promise.resolve(mapOf("outcome" to "playback-error"))
                 return@AsyncFunction
             }
+            if (PetSpeechPauseLatchDecision.refusesSpeak(PetSpeechPersistPrefs.read(context).pauseLatched)) {
+                promise.resolve(mapOf("outcome" to "cancelled"))
+                return@AsyncFunction
+            }
 
             val tempFile = File(context.cacheDir, "pet_speech_${UUID.randomUUID()}.wav")
             val tempFilePath = tempFile.absolutePath

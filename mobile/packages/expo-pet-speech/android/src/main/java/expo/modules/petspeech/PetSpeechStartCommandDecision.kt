@@ -6,7 +6,10 @@ object PetSpeechStartCommandDecision {
         object StopSelf : Result()
     }
 
-    fun decide(extraText: String?): Result {
+    fun decide(extraText: String?, pauseLatched: Boolean = false): Result {
+        if (pauseLatched) {
+            return Result.StopSelf
+        }
         if (extraText == null) {
             return Result.StopSelf
         }

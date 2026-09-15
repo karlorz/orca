@@ -182,6 +182,12 @@ class PetSpeechForegroundService : Service() {
                 intent.action,
                 intent.getStringExtra(PetSpeechHoldCommandDecision.EXTRA_HOLD_SOURCE)
             )
+            if (!PetSpeechPauseLatchDecision.allowsHold(persist.pauseLatched, source)) {
+                return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
+            }
+            if (PetSpeechPauseLatchDecision.shouldClearOnHold(source)) {
+                PetSpeechPersistPrefs.write(this, pauseLatched = false)
+            }
             val hold = PetSpeechHoldCommandDecision.decide(
                 source,
                 persistEnabled = persist.persistEnabled,
@@ -276,7 +282,12 @@ class PetSpeechForegroundService : Service() {
         val ownerId = intent.getLongExtra(EXTRA_OWNER_ID, -1L)
         val extraText = intent.getStringExtra(EXTRA_TEXT)
 
-        when (val decision = PetSpeechStartCommandDecision.decide(extraText)) {
+        when (
+            val decision = PetSpeechStartCommandDecision.decide(
+                extraText,
+                PetSpeechPersistPrefs.read(this).pauseLatched
+            )
+        ) {
             is PetSpeechStartCommandDecision.Result.StopSelf -> {
                 stopForegroundPlayback()
                 stopSelf()
@@ -370,6 +381,11 @@ class PetSpeechForegroundService : Service() {
 
     private fun handleReleaseSession(reason: PetSpeechReleaseAftermathDecision.Reason) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (PetSpeechPauseLatchDecision.shouldLatch(reason)) {
+            PetSpeechPersistPrefs.write(this, pauseLatched = true)
+        } else if (PetSpeechPauseLatchDecision.shouldClearOnRelease(reason)) {
+            PetSpeechPersistPrefs.write(this, pauseLatched = false)
+        }
         stopActiveSpeech()
         clearHeldPrefs(prefs)
         replacementDecisionHandler.releaseSession()

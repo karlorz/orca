@@ -57,4 +57,12 @@ class PetSpeechStartCommandDecisionTest {
         assertTrue(decision is PetSpeechStartCommandDecision.Result.StartForeground)
         assertEquals("早晨", (decision as PetSpeechStartCommandDecision.Result.StartForeground).trimmedText)
     }
+
+    @Test
+    fun stopsSelfWhenPauseLatchedEvenWithValidText() {
+        assertEquals(
+            PetSpeechStartCommandDecision.Result.StopSelf,
+            PetSpeechStartCommandDecision.decide("你好呀", pauseLatched = true)
+        )
+    }
 }

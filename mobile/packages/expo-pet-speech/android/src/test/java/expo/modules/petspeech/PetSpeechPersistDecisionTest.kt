@@ -8,6 +8,52 @@ import org.junit.Test
 class PetSpeechPersistDecisionTest {
 
     @Test
+    fun pauseLatchRefusesSpeakUntilResumeChip() {
+        assertTrue(
+            PetSpeechPauseLatchDecision.shouldLatch(PetSpeechReleaseAftermathDecision.Reason.PAUSE)
+        )
+        assertTrue(PetSpeechPauseLatchDecision.refusesSpeak(true))
+        assertFalse(PetSpeechPauseLatchDecision.refusesSpeak(false))
+        assertFalse(
+            PetSpeechPauseLatchDecision.allowsHold(
+                true,
+                PetSpeechHoldCommandDecision.Source.JS_HOLD
+            )
+        )
+        assertTrue(
+            PetSpeechPauseLatchDecision.allowsHold(
+                true,
+                PetSpeechHoldCommandDecision.Source.RESUME_CHIP
+            )
+        )
+        assertTrue(
+            PetSpeechPauseLatchDecision.shouldClearOnHold(
+                PetSpeechHoldCommandDecision.Source.RESUME_CHIP
+            )
+        )
+        assertTrue(
+            PetSpeechPauseLatchDecision.shouldClearOnHold(
+                PetSpeechHoldCommandDecision.Source.MEDIA_PLAY_AFTER_PAUSE
+            )
+        )
+        assertTrue(
+            PetSpeechPauseLatchDecision.shouldClearOnRelease(
+                PetSpeechReleaseAftermathDecision.Reason.MASTER_OFF
+            )
+        )
+        assertTrue(
+            PetSpeechPauseLatchDecision.shouldClearOnRelease(
+                PetSpeechReleaseAftermathDecision.Reason.JS_RELEASE
+            )
+        )
+        assertFalse(
+            PetSpeechPauseLatchDecision.shouldClearOnRelease(
+                PetSpeechReleaseAftermathDecision.Reason.PAUSE
+            )
+        )
+    }
+
+    @Test
     fun holdHonestyMarksHeldOnlyAfterStartForegroundSucceeds() {
         assertTrue(PetSpeechHoldHonestyDecision.shouldMarkHeld(true))
         assertFalse(PetSpeechHoldHonestyDecision.shouldMarkHeld(false))

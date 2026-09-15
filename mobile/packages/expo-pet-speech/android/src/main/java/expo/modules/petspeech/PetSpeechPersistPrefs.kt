@@ -9,13 +9,15 @@ object PetSpeechPersistPrefs {
     const val KEY_KEEP_WHEN_NO_HOST = "key_keep_when_no_host"
     const val KEY_SHOW_SERVICE_ROW = "key_show_service_row"
     const val KEY_OVERLAY_WHILE_SPEAKING = "key_overlay_while_speaking"
+    const val KEY_PAUSE_LATCHED = "key_pause_latched"
 
     data class Snapshot(
         val masterEnabled: Boolean,
         val persistEnabled: Boolean,
         val keepWhenNoHost: Boolean,
         val showServiceRow: Boolean,
-        val overlayWhileSpeaking: Boolean
+        val overlayWhileSpeaking: Boolean,
+        val pauseLatched: Boolean
     )
 
     fun read(context: Context): Snapshot {
@@ -25,7 +27,8 @@ object PetSpeechPersistPrefs {
             persistEnabled = prefs.getBoolean(KEY_PERSIST_ENABLED, false),
             keepWhenNoHost = prefs.getBoolean(KEY_KEEP_WHEN_NO_HOST, false),
             showServiceRow = prefs.getBoolean(KEY_SHOW_SERVICE_ROW, true),
-            overlayWhileSpeaking = prefs.getBoolean(KEY_OVERLAY_WHILE_SPEAKING, false)
+            overlayWhileSpeaking = prefs.getBoolean(KEY_OVERLAY_WHILE_SPEAKING, false),
+            pauseLatched = prefs.getBoolean(KEY_PAUSE_LATCHED, false)
         )
     }
 
@@ -35,7 +38,8 @@ object PetSpeechPersistPrefs {
         persistEnabled: Boolean? = null,
         keepWhenNoHost: Boolean? = null,
         showServiceRow: Boolean? = null,
-        overlayWhileSpeaking: Boolean? = null
+        overlayWhileSpeaking: Boolean? = null,
+        pauseLatched: Boolean? = null
     ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val editor = prefs.edit()
@@ -53,6 +57,9 @@ object PetSpeechPersistPrefs {
         }
         if (overlayWhileSpeaking != null) {
             editor.putBoolean(KEY_OVERLAY_WHILE_SPEAKING, overlayWhileSpeaking)
+        }
+        if (pauseLatched != null) {
+            editor.putBoolean(KEY_PAUSE_LATCHED, pauseLatched)
         }
         editor.commit()
     }
