@@ -165,7 +165,7 @@ describe('resume-chip notify id 4042 never starts FGS', () => {
   })
 })
 
-describe('persist-off overlay after Pause-after-keepHold', () => {
+describe('persist-off overlay after Pause-after-keepHold never holds session', () => {
   it('never fires ACTION_HOLD_SESSION for chip, play, or JS hold', () => {
     expect(persistOffOverlayAfterKeepHoldPauseNeverHoldsSession(false, true, true)).toBe(true)
     expect(

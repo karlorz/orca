@@ -1,9 +1,8 @@
-import { appendFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { buildSync } from 'esbuild'
+import { tmpdir } from 'node:os'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 import { loadUpstreamReleases, selectLatestTrains } from './fork-upstream-trains.mjs'
 import { parseUpstreamMobileBase, resolveForkMobileAppJson } from './fork-next-mobile-tag.mjs'
 import {
@@ -162,35 +161,36 @@ export function rewriteTerminalWebviewPayloadHashTest(source, { sha256, length }
 }
 
 export function computeWebviewPayloadFingerprint({ cwd }) {
-  const entry = join(cwd, 'mobile/src/terminal/terminal-webview-html.ts')
-  const result = buildSync({
-    absWorkingDir: cwd,
-    entryPoints: [entry],
-    bundle: true,
-    write: false,
-    format: 'cjs',
-    platform: 'node',
-    logLevel: 'silent',
-    tsconfigRaw: '{"compilerOptions":{"module":"commonjs","target":"es2022"}}'
-  })
-  const outfile = result.outputFiles?.[0]
-  if (!outfile) {
-    throw new Error('fork-sync: WebView fingerprint bundle wrote nothing')
-  }
-  const module = { exports: {} }
-  new Function('module', 'exports', 'require', outfile.text)(
-    module,
-    module.exports,
-    createRequire(entry)
+  const out = join(tmpdir(), `orca-webview-fp-${process.pid}.json`)
+  const { command, prefixArgs, shell } = resolvePnpmCliInvocation()
+  const result = spawnSync(
+    command,
+    [
+      ...prefixArgs,
+      'exec',
+      'vitest',
+      'run',
+      '--config',
+      'config/vitest.config.ts',
+      'config/scripts/write-webview-payload-fingerprint.test.ts'
+    ],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, WEBVIEW_FINGERPRINT_OUT: out },
+      shell,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
   )
-  const html = module.exports.XTERM_HTML
-  if (typeof html !== 'string' || html.length < 1000) {
-    throw new Error('fork-sync: WebView fingerprint bundle omitted XTERM_HTML')
+  if (result.status !== 0) {
+    throw new Error(
+      `fork-sync: cannot hash WebView payload: ${(result.stderr || result.stdout || '').trim()}`
+    )
   }
-  return {
-    length: html.length,
-    sha256: createHash('sha256').update(html, 'utf8').digest('hex')
+  if (!existsSync(out)) {
+    throw new Error('fork-sync: WebView fingerprint writer skipped or wrote nothing')
   }
+  return JSON.parse(readFileSync(out, 'utf8'))
 }
 
 function showStage(stage, path, { cwd }) {

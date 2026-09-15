@@ -56,7 +56,7 @@ export function DictationController() {
   // not once per press, while the selected mic stays gone.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
-  const liveInserterRef = useRef<DictationLiveInserter>(createDictationLiveInserter(null))
+  const liveInserterRef = useRef<DictationLiveInserter>(undefined!)
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -94,7 +94,7 @@ export function DictationController() {
       // transcript delivery is renderer IPC. Wait for this session's stopped
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-      const liveTarget = liveInserterRef.current.hasTarget
+      const liveTarget = liveInserterRef.current?.hasTarget
       if (!liveTarget) {
         const stopAction = resolveDictationStopTranscript({
           sessionErrored: erroredSessionIdsRef.current.delete(sessionId),
@@ -354,7 +354,7 @@ export function DictationController() {
         return
       }
       lastPartialTranscriptRef.current = data.text
-      if (liveInserterRef.current.hasTarget) {
+      if (liveInserterRef.current?.hasTarget) {
         liveInserterRef.current.applyPartial(data.text)
         setPartialTranscript('')
         return
@@ -366,7 +366,7 @@ export function DictationController() {
       if (data.sessionId !== activeSessionIdRef.current || !data.text) {
         return
       }
-      if (liveInserterRef.current.hasTarget) {
+      if (liveInserterRef.current?.hasTarget) {
         liveInserterRef.current.freezeSegment(data.text)
         finalTranscriptReceivedRef.current = true
         lastPartialTranscriptRef.current = ''

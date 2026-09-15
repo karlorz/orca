@@ -353,43 +353,61 @@ describe('SttService', () => {
   })
 
   it('routes feedAudio to AppleSpeechSession when system speech is active', async () => {
-    const service = new SttService({
-      getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'ready' }),
-      getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
-    } as never)
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const service = new SttService({
+        getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'ready' }),
+        getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+      } as never)
 
-    const sink = vi.fn()
-    await service.startDictation('mac-system-speech', sink, undefined, 'desktop')
+      const sink = vi.fn()
+      await service.startDictation('mac-system-speech', sink, undefined, 'desktop')
 
-    const sessions = getAppleSpeechSessions()
-    expect(sessions.length).toBe(1)
-    expect(sessions[0].started).toBe(true)
-    expect(service.isActive()).toBe(true)
-    expect(service.getActiveModelId()).toBe('mac-system-speech')
+      const sessions = getAppleSpeechSessions()
+      expect(sessions.length).toBe(1)
+      expect(sessions[0].started).toBe(true)
+      expect(service.isActive()).toBe(true)
+      expect(service.getActiveModelId()).toBe('mac-system-speech')
 
-    const pcm = new Float32Array([0.1, 0.2, 0.3])
-    service.feedAudio(pcm, 16000, 'desktop')
-    expect(sessions[0].feedCalls).toEqual([{ samples: pcm, sampleRate: 16000 }])
+      const pcm = new Float32Array([0.1, 0.2, 0.3])
+      service.feedAudio(pcm, 16000, 'desktop')
+      expect(sessions[0].feedCalls).toEqual([{ samples: pcm, sampleRate: 16000 }])
 
-    await service.stopDictation('desktop')
-    expect(sessions[0].stopped).toBe(true)
-    expect(service.isActive()).toBe(false)
-    expect(getCreatedWorkerCount()).toBe(0)
+      await service.stopDictation('desktop')
+      expect(sessions[0].stopped).toBe(true)
+      expect(service.isActive()).toBe(false)
+      expect(getCreatedWorkerCount()).toBe(0)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('rejects system speech start when modelState is not ready', async () => {
-    const service = new SttService({
-      getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'unavailable' }),
-      getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
-    } as never)
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const service = new SttService({
+        getModelState: vi
+          .fn()
+          .mockResolvedValue({ id: 'mac-system-speech', status: 'unavailable' }),
+        getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+      } as never)
 
-    const sink = vi.fn()
-    await expect(
-      service.startDictation('mac-system-speech', sink, undefined, 'desktop')
-    ).rejects.toThrow('Model not ready: unavailable')
+      const sink = vi.fn()
+      await expect(
+        service.startDictation('mac-system-speech', sink, undefined, 'desktop')
+      ).rejects.toThrow('Model not ready: unavailable')
 
-    expect(getAppleSpeechSessions().length).toBe(0)
-    expect(getCreatedWorkerCount()).toBe(0)
+      expect(getAppleSpeechSessions().length).toBe(0)
+      expect(getCreatedWorkerCount()).toBe(0)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('rejects deletion prep when a target warm worker cannot be torn down during another start', async () => {
