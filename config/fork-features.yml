@@ -213,7 +213,7 @@ features:
   - id: fork-sync-own-relay-followup
     title: Fork-sync files wiki follow-ups when own-mobile-relay protocol/client paths change
     kind: ci
-    status: in-progress
+    status: landed
     paths:
       - config/fork-own-relay-protocol-paths.yml
       - config/scripts/fork-own-relay-protocol-paths.mjs
@@ -278,7 +278,7 @@ features:
   - id: own-mobile-relay-coolify-deploy
     title: Coolify Docker deploy channel for own-mobile-relay (orca-auth + orca-relay)
     kind: ci
-    status: in-progress
+    status: landed
     paths:
       - config/docker/own-mobile-relay
       - .github/workflows/fork-own-mobile-relay-image.yml
