@@ -35,7 +35,10 @@ const {
   }
 })
 
-const platform = vi.hoisted(() => ({ OS: 'android' as 'android' | 'ios', Version: 34 }))
+const platform = vi.hoisted((): { OS: 'android' | 'ios'; Version: number } => ({
+  OS: 'android',
+  Version: 34
+}))
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',

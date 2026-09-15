@@ -359,6 +359,7 @@ describe('SttService', () => {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'mac-system-speech', status: 'ready' }),
         getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplies only the model-manager methods this case uses.
       } as never)
 
       const sink = vi.fn()
@@ -394,6 +395,7 @@ describe('SttService', () => {
           .fn()
           .mockResolvedValue({ id: 'mac-system-speech', status: 'unavailable' }),
         getModelDir: vi.fn().mockReturnValue('/tmp/mac-system-speech')
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double supplies only the model-manager methods this case uses.
       } as never)
 
       const sink = vi.fn()

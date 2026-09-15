@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const platform = vi.hoisted(() => ({ OS: 'android' as string, Version: 32 as number }))
+const platform = vi.hoisted((): { OS: string; Version: number } => ({
+  OS: 'android',
+  Version: 32
+}))
 const notifications = vi.hoisted(() => ({
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn()
