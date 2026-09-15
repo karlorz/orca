@@ -76,6 +76,7 @@ export function MobileNativeChatView({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   question,
   onAnswerQuestion,
   permission,
@@ -268,6 +269,7 @@ export function MobileNativeChatView({
         onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk}
         onCancelAsk={onCancelAsk}
+        onCancelPrompt={onCancelPrompt}
         permission={permission}
         onRespondPermission={onRespondPermission}
         question={question}

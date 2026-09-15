@@ -85,6 +85,8 @@ export type MobileNativeChatViewProps = {
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  /** Cancel a structured approval/question with exact item identity when supported. */
+  onCancelPrompt?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
