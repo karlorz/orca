@@ -10,7 +10,8 @@ import WebSocket from 'ws'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { reconcileCellAdmissionAtStartup } from './cell-admission-startup.js'
 import { loadRelayConfig } from './config.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { hashCredential } from './credential-store.js'
+import { openInMemoryRelayDatabase, openRelayDatabase, type RelayDatabase } from './database.js'
 import { createRelayServer } from './relay-server.js'
 
 async function unusedPort(): Promise<number> {
@@ -165,5 +166,96 @@ describe('combined relay boot with dummy admin identity', () => {
       controlSocket.once('error', () => resolveStatus(0))
     })
     expect(controlStatus).toBe(401)
+  })
+})
+
+describe('combined relay key-expiry toggle wiring', () => {
+  const cleanup: Array<() => Promise<void> | void> = []
+  afterEach(async () => {
+    while (cleanup.length > 0) await cleanup.pop()?.()
+  })
+
+  const identity = { userId: 'user-ked', relayHostId: 'abcdefghijklmnop' }
+  const relayDeviceId = 'device-ked'
+  const resumeToken = 'ked-wiring-resume-token'
+
+  // Drives the shipped path env -> loadRelayConfig -> createRelayServer -> store,
+  // which is the only seam that turns ORCA_RELAY_KEY_EXPIRY_DISABLED into store
+  // behavior (relay-server.ts passes config.keyExpiryDisabled through).
+  async function bootStore(
+    extraEnv: NodeJS.ProcessEnv,
+    clock: { now: number }
+  ): Promise<ReturnType<typeof createRelayServer>['store']> {
+    const dataDir = mkdtempSync(join(tmpdir(), 'orca-relay-ked-wiring-'))
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }))
+    const config = loadRelayConfig({
+      ...combinedEnv({
+        port: await unusedPort(),
+        jwksUrl: 'http://127.0.0.1/jwks',
+        adminJwksUrl: 'http://127.0.0.1/admin-jwks',
+        dataDir
+      }),
+      ...extraEnv
+    })
+    const database = await openInMemoryRelayDatabase()
+    cleanup.push(() => database.close())
+    return createRelayServer(config, database, { now: () => clock.now }).store
+  }
+
+  async function installExpiredCurrent(
+    store: Awaited<ReturnType<typeof bootStore>>,
+    clock: { now: number }
+  ): Promise<void> {
+    clock.now = 100
+    await store.recordDirectAuthorization({
+      ...identity,
+      relayDeviceId,
+      directAuthId: 'direct-ked-wiring',
+      owningControlGeneration: 1,
+      deadline: 100
+    })
+    const installed = await store.installCredential({
+      ...identity,
+      relayDeviceId,
+      reqId: 'ked-wiring-install',
+      newResumeTokenHash: hashCredential(resumeToken),
+      owningControlGeneration: 1,
+      authorization: { mode: 'authenticated-direct', directAuthId: 'direct-ked-wiring' }
+    })
+    const reservation = await store.reserveCredential(identity.relayHostId, resumeToken)
+    expect(reservation).not.toBeNull()
+    await store.recordConnectionBasis({
+      ...reservation!,
+      basisConnId: 'ked-wiring-basis',
+      owningControlGeneration: 1,
+      deadline: installed.resumeExpiresAt + 100_000
+    })
+    clock.now = installed.resumeExpiresAt + 1
+  }
+
+  it('renews a wall-clock-expired current credential only when the env opts in', async () => {
+    const onClock = { now: 0 }
+    const onStore = await bootStore({ ORCA_RELAY_KEY_EXPIRY_DISABLED: 'true' }, onClock)
+    await installExpiredCurrent(onStore, onClock)
+    await expect(
+      onStore.confirmResume({
+        ...identity,
+        reqId: 'ked-wiring-confirm-on',
+        basisConnId: 'ked-wiring-basis',
+        owningControlGeneration: 1
+      })
+    ).resolves.toMatchObject({ renewed: true, acceptedAs: 'current' })
+
+    const offClock = { now: 0 }
+    const offStore = await bootStore({}, offClock)
+    await installExpiredCurrent(offStore, offClock)
+    await expect(
+      offStore.confirmResume({
+        ...identity,
+        reqId: 'ked-wiring-confirm-off',
+        basisConnId: 'ked-wiring-basis',
+        owningControlGeneration: 1
+      })
+    ).rejects.toMatchObject({ code: 'reject-expired' })
   })
 })
