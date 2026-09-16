@@ -1,10 +1,33 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createOwnMobileRelaySecurityStateMemory } from './own-mobile-relay-security-state-memory'
+import { openOwnMobileRelaySecurityStateSqlite } from './own-mobile-relay-security-state-sqlite'
 import { bootstrapOperatorAccount } from './own-mobile-relay-account'
 import { TEST_FAST_PASSWORD_POLICY } from './own-mobile-relay-password'
 import type { OwnMobileRelayOperatorConfig } from './own-mobile-relay-types'
 
 describe('own-mobile-relay-account bootstrap', () => {
+  const tempDirs: string[] = []
+
+  function createTempDbPath(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-acc-test-'))
+    tempDirs.push(dir)
+    return join(dir, 'relay.db')
+  }
+
+  afterEach(() => {
+    for (const dir of tempDirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // ignore
+      }
+    }
+    tempDirs.length = 0
+  })
+
   const operator: OwnMobileRelayOperatorConfig = {
     email: 'admin@example.com',
     password: 'super-secret-password-123',
@@ -36,6 +59,32 @@ describe('own-mobile-relay-account bootstrap', () => {
       })
       expect(second.accountId).toBe(initial.accountId)
       expect(second.email).toBe(operator.email)
+    } finally {
+      await state.close()
+    }
+  })
+
+  it('bootstraps first admin even when invited users already exist', async () => {
+    const state = openOwnMobileRelaySecurityStateSqlite({
+      dbPath: createTempDbPath(),
+      testMode: true
+    })
+    try {
+      // Create an invited user before any admin exists
+      const invited = await state.inviteAccount({
+        email: 'invited-first@example.com',
+        userId: 'usr_inv_first',
+        profileId: 'prf_inv_first',
+        organizationId: 'org_admin_1'
+      })
+      expect(invited.role).toBe('user')
+      expect(invited.status).toBe('invited')
+
+      // bootstrapOperatorAccount should proceed and create the admin
+      const admin = await bootstrapOperatorAccount(state, operator, TEST_FAST_PASSWORD_POLICY)
+      expect(admin.role).toBe('admin')
+      expect(admin.email).toBe(operator.email)
+      expect(admin.accountId).not.toBe(invited.accountId)
     } finally {
       await state.close()
     }

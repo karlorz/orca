@@ -97,6 +97,7 @@ export function executeLookupAccessSessionByTokenSqlite(
       WHERE s.access_token_hash = ?
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
+        AND a.status = 'active'
         AND s.auth_epoch = a.auth_epoch
     `)
     .get(hash, now) as SqliteSessionRow | undefined
@@ -144,9 +145,15 @@ export function executeReplaceAccessSessionSqlite(
     }
 
     const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
-      .get(oldSession.account_id) as { account_id: string; auth_epoch: number } | undefined
-    if (!acc || Number(oldSession.auth_epoch) !== Number(acc.auth_epoch)) {
+      .prepare('SELECT account_id, auth_epoch, status FROM operator_account WHERE account_id = ?')
+      .get(oldSession.account_id) as
+      | { account_id: string; auth_epoch: number; status?: string }
+      | undefined
+    if (
+      !acc ||
+      acc.status !== 'active' ||
+      Number(oldSession.auth_epoch) !== Number(acc.auth_epoch)
+    ) {
       db.exec('ROLLBACK;')
       return null
     }

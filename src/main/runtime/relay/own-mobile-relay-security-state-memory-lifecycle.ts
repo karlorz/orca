@@ -10,16 +10,43 @@ export function cleanupExpiredMemory(
   assertOpen(ctx)
   const now = options?.now ?? Date.now()
   const maxBatch = options?.maxBatchSize ?? 1000
-  const keepSessionIds = new Set<string>()
-  if (ctx.account) {
-    for (const record of ctx.refreshTokensByHash.values()) {
-      if (
-        record.revokedAt === undefined &&
-        (record.expiresAt === null || record.expiresAt > now) &&
-        record.authEpoch === ctx.account.authEpoch
-      ) {
-        keepSessionIds.add(record.sessionId)
+
+  // Revoke/remove stale or expired in-memory refresh tokens
+  for (const [hash, record] of Array.from(ctx.refreshTokensByHash.entries())) {
+    const acc = record.accountId ? ctx.accountsById.get(record.accountId) : ctx.account
+    const sess = ctx.sessionsById.get(record.sessionId)
+    const isStale =
+      record.revokedAt !== undefined ||
+      (record.expiresAt !== null && record.expiresAt <= now) ||
+      !acc ||
+      acc.status !== 'active' ||
+      record.authEpoch !== acc.authEpoch ||
+      !sess ||
+      sess.authEpoch !== acc.authEpoch
+
+    if (isStale) {
+      ctx.refreshTokensByHash.delete(hash)
+      const set = ctx.refreshHashesBySessionId.get(record.sessionId)
+      if (set) {
+        set.delete(hash)
+        if (set.size === 0) {
+          ctx.refreshHashesBySessionId.delete(record.sessionId)
+        }
       }
+    }
+  }
+
+  const keepSessionIds = new Set<string>()
+  for (const record of ctx.refreshTokensByHash.values()) {
+    const acc = record.accountId ? ctx.accountsById.get(record.accountId) : ctx.account
+    if (
+      record.revokedAt === undefined &&
+      (record.expiresAt === null || record.expiresAt > now) &&
+      acc &&
+      acc.status === 'active' &&
+      record.authEpoch === acc.authEpoch
+    ) {
+      keepSessionIds.add(record.sessionId)
     }
   }
   return cleanupExpiredRecords(
@@ -45,5 +72,7 @@ export function closeMemoryStore(ctx: MemoryStoreContext): void {
   ctx.devicesByKey.clear()
   ctx.operatorSessionsById.clear()
   ctx.operatorSessionsByTokenHash.clear()
+  ctx.refreshTokensByHash.clear()
+  ctx.refreshHashesBySessionId.clear()
   ctx.account = null
 }

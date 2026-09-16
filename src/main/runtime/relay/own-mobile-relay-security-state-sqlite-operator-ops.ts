@@ -36,6 +36,7 @@ export function executeListAccessSessionsSqlite(
       JOIN operator_account a ON a.account_id = s.account_id
       WHERE s.revoked_at IS NULL
         AND s.expires_at > ?
+        AND a.status = 'active'
         AND s.auth_epoch = a.auth_epoch
     `)
     .all(now) as SqliteSessionRow[]
@@ -71,6 +72,7 @@ export function executeListRelayGrantsSqlite(
       LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.revoked_at IS NULL
         AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
+        AND a.status = 'active'
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?

@@ -12,7 +12,7 @@ import { randomBytes } from 'node:crypto'
 
 export function isRefreshTokenValid(
   record: InternalRefreshTokenRecord,
-  accountAuthEpoch: number,
+  account: { authEpoch: number; status?: string } | null,
   now: number
 ): boolean {
   if (record.revokedAt !== undefined) {
@@ -21,7 +21,7 @@ export function isRefreshTokenValid(
   if (record.expiresAt !== null && record.expiresAt <= now) {
     return false
   }
-  if (record.authEpoch !== accountAuthEpoch) {
+  if (!account || account.status !== 'active' || record.authEpoch !== account.authEpoch) {
     return false
   }
   return true
@@ -73,12 +73,17 @@ export function lookupRefreshTokenMemory(
   }
   const tokenHash = sha256Base64Url(rawRefreshToken)
   const record = ctx.refreshTokensByHash.get(tokenHash)
-  if (!record || !isRefreshTokenValid(record, ctx.account.authEpoch, now)) {
+  if (!record || !isRefreshTokenValid(record, ctx.account, now)) {
     return null
   }
   const session = ctx.sessionsById.get(record.sessionId)
   // Session must exist, not be revoked, and match auth epoch (access wall-clock expiry ignored for refresh)
-  if (!session || session.revokedAt !== undefined || session.authEpoch !== ctx.account.authEpoch) {
+  if (
+    !session ||
+    session.revokedAt !== undefined ||
+    ctx.account.status !== 'active' ||
+    session.authEpoch !== ctx.account.authEpoch
+  ) {
     return null
   }
   return {
@@ -100,7 +105,7 @@ export function rotateRefreshTokenMemory(
 
   const oldTokenHash = sha256Base64Url(input.oldRawRefreshToken)
   const oldRefreshRecord = ctx.refreshTokensByHash.get(oldTokenHash)
-  if (!oldRefreshRecord || !isRefreshTokenValid(oldRefreshRecord, ctx.account.authEpoch, now)) {
+  if (!oldRefreshRecord || !isRefreshTokenValid(oldRefreshRecord, ctx.account, now)) {
     return null
   }
 
@@ -109,6 +114,7 @@ export function rotateRefreshTokenMemory(
   if (
     !oldSession ||
     oldSession.revokedAt !== undefined ||
+    ctx.account.status !== 'active' ||
     oldSession.authEpoch !== ctx.account.authEpoch
   ) {
     return null

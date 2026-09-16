@@ -130,6 +130,7 @@ export function executeValidateRelayGrantByTokenSqlite(
       WHERE g.relay_token_hash = ?
         AND g.revoked_at IS NULL
         AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
+        AND a.status = 'active'
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
@@ -161,6 +162,7 @@ export function executeValidateRelayGrantByIdSqlite(
         ${hostFilter}
         AND g.revoked_at IS NULL
         AND (COALESCE(h.key_expiry_disabled, 1) = 1 OR g.expires_at > ?)
+        AND a.status = 'active'
         AND g.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.expires_at > ?

@@ -19,8 +19,24 @@ import {
 
 export function createMemoryAccountFacet(ctx: MemoryStoreContext) {
   return {
-    async getAccount(): Promise<SecurityStateAccountIdentity | null> {
+    async getAccount(selector?: {
+      email?: string
+      accountId?: string
+    }): Promise<SecurityStateAccountIdentity | null> {
       assertOpen(ctx)
+      if (selector?.accountId) {
+        const found = ctx.accountsById.get(selector.accountId)
+        return found ? toPublicAccount(found) : null
+      }
+      if (selector?.email) {
+        const lower = selector.email.toLowerCase()
+        for (const a of ctx.accountsById.values()) {
+          if (a.email.toLowerCase() === lower) {
+            return toPublicAccount(a)
+          }
+        }
+        return null
+      }
       return ctx.account ? toPublicAccount(ctx.account) : null
     },
 

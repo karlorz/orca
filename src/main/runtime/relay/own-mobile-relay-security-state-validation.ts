@@ -16,7 +16,7 @@ export function isSessionValid(
   if (session.revokedAt !== undefined || session.expiresAt <= now) {
     return false
   }
-  if (!account || session.authEpoch !== account.authEpoch) {
+  if (!account || account.status !== 'active' || session.authEpoch !== account.authEpoch) {
     return false
   }
   return true
@@ -46,7 +46,7 @@ export function isGrantValid(
   if (!keyExpiryDisabled && grant.expiresAt <= now) {
     return false
   }
-  if (!account || grant.authEpoch !== account.authEpoch) {
+  if (!account || account.status !== 'active' || grant.authEpoch !== account.authEpoch) {
     return false
   }
   if (!parent || !isSessionValid(parent, account, now)) {

@@ -168,8 +168,19 @@ export async function runAccountCli(options: AccountCliOptions): Promise<Account
     return { exitCode: 1, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }
   }
 
-  if (restArgs.length > 0) {
-    err(`[own-mobile-relay] Unexpected option or argument: ${restArgs.join(' ')}\n`)
+  let emailFilter: string | undefined
+  for (let i = 0; i < restArgs.length; i++) {
+    if (restArgs[i] === '--email') {
+      if (i + 1 < restArgs.length) {
+        emailFilter = restArgs[i + 1]
+        i++ // consume value
+        continue
+      } else {
+        err('[own-mobile-relay] Missing value for --email option\n')
+        return { exitCode: 1, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }
+      }
+    }
+    err(`[own-mobile-relay] Unexpected option or argument: ${restArgs.slice(i).join(' ')}\n`)
     return { exitCode: 1, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }
   }
 
@@ -200,8 +211,12 @@ export async function runAccountCli(options: AccountCliOptions): Promise<Account
   }
 
   try {
-    const account = await securityState.getAccount()
-    const passwordRec = await securityState.getAccountPasswordRecord()
+    const account = emailFilter
+      ? await securityState.getAccount({ email: emailFilter })
+      : await securityState.getAccount()
+    const passwordRec = account
+      ? await securityState.getAccountPasswordRecord(account.accountId)
+      : null
     if (!account || !passwordRec) {
       err('[own-mobile-relay] No operator account found in database. Bootstrap account first.\n')
       return { exitCode: 1, stdout: stdoutChunks.join(''), stderr: stderrChunks.join('') }

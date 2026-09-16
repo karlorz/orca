@@ -80,6 +80,7 @@ export function executeLookupRefreshTokenSqlite(
       WHERE r.token_hash = ?
         AND r.revoked_at IS NULL
         AND (r.expires_at IS NULL OR r.expires_at > ?)
+        AND a.status = 'active'
         AND r.auth_epoch = a.auth_epoch
         AND s.revoked_at IS NULL
         AND s.auth_epoch = a.auth_epoch
@@ -128,9 +129,15 @@ export function executeRotateRefreshTokenSqlite(
     }
 
     const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
-      .get(oldRefresh.account_id) as { account_id: string; auth_epoch: number } | undefined
-    if (!acc || Number(oldRefresh.auth_epoch) !== Number(acc.auth_epoch)) {
+      .prepare('SELECT account_id, auth_epoch, status FROM operator_account WHERE account_id = ?')
+      .get(oldRefresh.account_id) as
+      | { account_id: string; auth_epoch: number; status?: string }
+      | undefined
+    if (
+      !acc ||
+      acc.status !== 'active' ||
+      Number(oldRefresh.auth_epoch) !== Number(acc.auth_epoch)
+    ) {
       db.exec('ROLLBACK;')
       return null
     }

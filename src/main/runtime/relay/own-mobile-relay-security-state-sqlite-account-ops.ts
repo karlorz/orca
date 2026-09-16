@@ -44,14 +44,36 @@ export function mapAccountRow(row: SqliteAccountRow): SecurityStateAccountIdenti
   }
 }
 
-export function executeGetAccountSqlite(db: DatabaseSync): SecurityStateAccountIdentity | null {
-  const row = db
-    .prepare(
-      `SELECT account_id, email, user_id, profile_id, organization_id,
-              role, status, verifier_version, auth_epoch, created_at, updated_at
-       FROM operator_account LIMIT 1`
-    )
-    .get() as SqliteAccountRow | undefined
+export function executeGetAccountSqlite(
+  db: DatabaseSync,
+  selector?: { email?: string; accountId?: string }
+): SecurityStateAccountIdentity | null {
+  let row: SqliteAccountRow | undefined
+  if (selector?.accountId) {
+    row = db
+      .prepare(
+        `SELECT account_id, email, user_id, profile_id, organization_id,
+                role, status, verifier_version, auth_epoch, created_at, updated_at
+         FROM operator_account WHERE account_id = ? LIMIT 1`
+      )
+      .get(selector.accountId) as SqliteAccountRow | undefined
+  } else if (selector?.email) {
+    row = db
+      .prepare(
+        `SELECT account_id, email, user_id, profile_id, organization_id,
+                role, status, verifier_version, auth_epoch, created_at, updated_at
+         FROM operator_account WHERE lower(email) = lower(?) LIMIT 1`
+      )
+      .get(selector.email) as SqliteAccountRow | undefined
+  } else {
+    row = db
+      .prepare(
+        `SELECT account_id, email, user_id, profile_id, organization_id,
+                role, status, verifier_version, auth_epoch, created_at, updated_at
+         FROM operator_account LIMIT 1`
+      )
+      .get() as SqliteAccountRow | undefined
+  }
   return row ? mapAccountRow(row) : null
 }
 
@@ -62,7 +84,9 @@ export function executeBootstrapAccountSqlite(
 ): SecurityStateAccountIdentity {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const existing = db.prepare('SELECT account_id FROM operator_account LIMIT 1').get()
+    const existing = db
+      .prepare("SELECT account_id FROM operator_account WHERE role = 'admin' LIMIT 1")
+      .get()
     if (existing) {
       throw new Error('account_already_initialized')
     }

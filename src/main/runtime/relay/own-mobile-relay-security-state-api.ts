@@ -26,7 +26,11 @@ import type {
 } from './own-mobile-relay-security-state'
 
 export type OwnMobileRelaySecurityState = {
-  getAccount(): Promise<SecurityStateAccountIdentity | null>
+  getAccount(selector?: {
+    email?: string
+    accountId?: string
+  }): Promise<SecurityStateAccountIdentity | null>
+  hasAdminAccount?(): Promise<boolean>
   bootstrapAccount(
     input: SecurityStateAccountBootstrapInput,
     now?: number

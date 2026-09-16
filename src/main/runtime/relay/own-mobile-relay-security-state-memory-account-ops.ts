@@ -17,8 +17,10 @@ export function bootstrapAccountMemory(
   now: number
 ): SecurityStateAccountIdentity {
   assertOpen(ctx)
-  if (ctx.account) {
-    throw new Error('account_already_initialized')
+  for (const a of ctx.accountsById.values()) {
+    if (a.role === 'admin') {
+      throw new Error('account_already_initialized')
+    }
   }
   const emailNorm = input.email.toLowerCase()
   for (const acc of ctx.accountsById.values()) {

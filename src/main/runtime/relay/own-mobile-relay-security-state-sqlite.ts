@@ -146,9 +146,9 @@ export function openOwnMobileRelaySecurityStateSqlite(
 
   return {
     _sqliteCtx: ctx,
-    getAccount: async () => {
+    getAccount: async (selector?: { email?: string; accountId?: string }) => {
       assertOpen()
-      return executeGetAccountSqlite(ctx.db)
+      return executeGetAccountSqlite(ctx.db, selector)
     },
     bootstrapAccount: async (input, now = Date.now()) => {
       assertOpen()

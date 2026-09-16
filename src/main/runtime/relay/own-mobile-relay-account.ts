@@ -16,7 +16,7 @@ export async function bootstrapOperatorAccount(
   now = Date.now()
 ): Promise<SecurityStateAccountIdentity> {
   const existing = await securityState.getAccount()
-  if (existing) {
+  if (existing && existing.role === 'admin') {
     return existing
   }
 

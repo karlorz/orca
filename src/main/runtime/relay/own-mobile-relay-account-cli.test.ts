@@ -382,6 +382,90 @@ describe('own-mobile-relay-account-cli RED tests', () => {
     expect(fakeStdin.listenerCount('error')).toBe(0)
   })
 
+  it('supports --email to select account for change-password and reset-password', async () => {
+    const dbPath = createTempDbPath()
+    const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const rec1 = await derivePasswordRecord('admin-pw-12345678', TEST_FAST_PASSWORD_POLICY)
+    const admin = await state.bootstrapAccount({
+      email: 'admin@example.com',
+      userId: 'user-admin',
+      profileId: 'prof-admin',
+      organizationId: '',
+      passwordRecord: rec1
+    })
+
+    const invited = await state.inviteAccount({
+      email: 'user2@example.com',
+      userId: 'user-2',
+      profileId: 'prof-2',
+      organizationId: ''
+    })
+    const rec2 = await derivePasswordRecord('user2-pw-12345678', TEST_FAST_PASSWORD_POLICY)
+    await state.activateInvitedAccount(invited.accountId, rec2)
+    await state.close()
+
+    const mockPrompt: AccountCliPromptInterface = {
+      isTTY: () => true,
+      promptSecret: vi.fn(async (label: string) => {
+        if (label.toLowerCase().includes('current')) {
+          return 'user2-pw-12345678'
+        }
+        return 'new-user2-password-1234'
+      })
+    }
+
+    const res = await runAccountCli({
+      args: ['change-password', '--email', 'user2@example.com'],
+      env: { OWN_RELAY_STATE_PATH: dbPath },
+      prompt: mockPrompt,
+      passwordPolicy: TEST_FAST_PASSWORD_POLICY
+    })
+
+    expect(res.exitCode).toBe(0)
+    expect(res.stdout).toContain('Password changed successfully')
+
+    // Verify user2's password changed, but admin's was untouched
+    const verifyState = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const user2Pw = await verifyState.getAccountPasswordRecord(invited.accountId)
+    const adminPw = await verifyState.getAccountPasswordRecord(admin.accountId)
+
+    const checkUser2 = await verifyPasswordRecord(
+      'new-user2-password-1234',
+      user2Pw!.passwordRecord,
+      TEST_FAST_PASSWORD_POLICY
+    )
+    expect(checkUser2.valid).toBe(true)
+
+    const checkAdmin = await verifyPasswordRecord(
+      'admin-pw-12345678',
+      adminPw!.passwordRecord,
+      TEST_FAST_PASSWORD_POLICY
+    )
+    expect(checkAdmin.valid).toBe(true)
+    await verifyState.close()
+  })
+
+  it('rejects --email when account does not exist', async () => {
+    const dbPath = createTempDbPath()
+    const state = await seedOperatorAccount(dbPath)
+    await state.close()
+
+    const mockPrompt: AccountCliPromptInterface = {
+      isTTY: () => true,
+      promptSecret: vi.fn()
+    }
+
+    const res = await runAccountCli({
+      args: ['reset-password', '--email', 'nonexistent@example.com'],
+      env: { OWN_RELAY_STATE_PATH: dbPath },
+      prompt: mockPrompt,
+      passwordPolicy: TEST_FAST_PASSWORD_POLICY
+    })
+
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain('No operator account found')
+  })
+
   it('RED Finding 3: promptSecretFromStreams handles EOF / end event without newline', async () => {
     const { promptSecretFromStreams } = await import('./own-mobile-relay-account-cli')
     const { EventEmitter } = await import('node:events')
