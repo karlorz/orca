@@ -215,5 +215,85 @@ export function registerAccountScopedStoreTests(
       })
       expect(replaceDisabled).toEqual({ ok: false, error: 'not_active' })
     })
+
+    it('disabling an invited user returns ok, leaves row invited, epoch unchanged, and credentials null', async () => {
+      await state.bootstrapAccount({
+        email: 'admin@example.com',
+        userId: 'usr_admin',
+        profileId: 'prf_admin',
+        organizationId: 'org_main',
+        passwordRecord: adminPasswordRecord
+      })
+
+      const invited = await state.inviteAccount({
+        email: 'invited-to-disable@example.com',
+        userId: 'usr_disable_invited',
+        profileId: 'prf_disable_invited',
+        organizationId: 'org_main'
+      })
+
+      const disableRes = await state.disableAccount(invited.accountId)
+      expect(disableRes).toBe('ok')
+
+      // Credentials remain null
+      const pwRec = await state.getAccountPasswordRecord(invited.accountId)
+      expect(pwRec).toBeNull()
+
+      // Account can still be activated since it remains invited with epoch 1
+      const activateRes = await state.activateInvitedAccount(invited.accountId, userPasswordRecord)
+      expect(activateRes).toBe('ok')
+
+      const activePwRec = await state.getAccountPasswordRecord(invited.accountId)
+      expect(activePwRec?.authEpoch).toBe(1)
+    })
+
+    it('disabling an already-disabled user is idempotent, returns ok, and does not bump auth_epoch', async () => {
+      await state.bootstrapAccount({
+        email: 'admin@example.com',
+        userId: 'usr_admin',
+        profileId: 'prf_admin',
+        organizationId: 'org_main',
+        passwordRecord: adminPasswordRecord
+      })
+
+      const invited = await state.inviteAccount({
+        email: 'user-to-double-disable@example.com',
+        userId: 'usr_double_disable',
+        profileId: 'prf_double_disable',
+        organizationId: 'org_main'
+      })
+
+      await state.activateInvitedAccount(invited.accountId, userPasswordRecord)
+
+      const firstDisable = await state.disableAccount(invited.accountId)
+      expect(firstDisable).toBe('ok')
+
+      const disabledPwRec1 = await state.getAccountPasswordRecord(invited.accountId)
+      expect(disabledPwRec1?.authEpoch).toBe(2)
+
+      const secondDisable = await state.disableAccount(invited.accountId)
+      expect(secondDisable).toBe('ok')
+
+      const disabledPwRec2 = await state.getAccountPasswordRecord(invited.accountId)
+      expect(disabledPwRec2?.authEpoch).toBe(2) // unchanged!
+    })
+
+    it('disabling an already-disabled sole admin returns ok without last_admin error', async () => {
+      const admin = await state.bootstrapAccount({
+        email: 'admin-sole@example.com',
+        userId: 'usr_admin_sole',
+        profileId: 'prf_admin_sole',
+        organizationId: 'org_main',
+        passwordRecord: adminPasswordRecord
+      })
+
+      // Try disabling active sole admin -> last_admin
+      const firstDisable = await state.disableAccount(admin.accountId)
+      expect(firstDisable).toBe('last_admin')
+
+      const adminCheck = await state.getAccount()
+      expect(adminCheck?.status).toBe('active')
+      expect(adminCheck?.authEpoch).toBe(1)
+    })
   })
 }

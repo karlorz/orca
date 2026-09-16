@@ -177,7 +177,7 @@ export function disableAccountMemory(
 ): 'ok' | 'last_admin' {
   assertOpen(ctx)
   const acc = ctx.accountsById.get(accountId)
-  if (!acc) {
+  if (!acc || acc.status !== 'active') {
     return 'ok'
   }
   if (acc.role === 'admin') {

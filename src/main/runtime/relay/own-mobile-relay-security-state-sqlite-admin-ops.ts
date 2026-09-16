@@ -114,7 +114,7 @@ export function executeDisableAccountSqlite(
       .get(accountId) as
       | Pick<SqliteAccountRow, 'account_id' | 'role' | 'status' | 'auth_epoch'>
       | undefined
-    if (!target) {
+    if (!target || target.status !== 'active') {
       db.exec('COMMIT;')
       return 'ok'
     }
