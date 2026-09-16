@@ -91,6 +91,13 @@ features:
       - mobile/app/account-usage-settings.tsx
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
+  - id: fork-live-status
+    title: Tiny read-only Coolify operator status app for own-auth and official-relay
+    kind: product
+    status: landed
+    paths:
+      - fork-live-status
+    wiki: projects/orca/work/2026-09-16-official-relay-ops-console-study
   - id: fork-sync-main-mirror
     title: Daily GitHub Action mirrors main, merges upstream main into fork-main, auto-resolves allowlisted fork-delta conflicts, auto-cuts desktop and mobile -0 tags
     kind: ci

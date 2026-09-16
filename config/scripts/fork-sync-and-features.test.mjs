@@ -144,4 +144,14 @@ describe('fork-features registry', () => {
       'projects/grok-desktop-pet/work/2026-08-29-mobile-owned-pet-speech-settings'
     )
   })
+
+  it('records fork-live-status outside cloud/', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'fork-live-status')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('product')
+    expect(entry.status).toBe('landed')
+    expect(entry.paths).toEqual(['fork-live-status'])
+    expect(entry.wiki).toBe('projects/orca/work/2026-09-16-official-relay-ops-console-study')
+  })
 })
