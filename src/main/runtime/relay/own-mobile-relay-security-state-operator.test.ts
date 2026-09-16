@@ -368,6 +368,86 @@ describe('OwnMobileRelaySecurityState Slice 2: List APIs and Operator Sessions',
         // Session must be invalid after epoch bump
         expect(await state.lookupOperatorSession(rawToken, t0 + 2000)).toBeNull()
       })
+
+      it('Task 4: operator session lookup fails after disableAccount or replacePasswordVerifier', async () => {
+        const admin1 = await state.bootstrapAccount({
+          email: 'op-admin-1@example.com',
+          userId: 'usr_op_adm_1',
+          profileId: 'prf_op_adm_1',
+          organizationId: 'org_op_1',
+          passwordRecord
+        })
+
+        const t0 = 60_000_000
+        const rawToken1 = 'operator-token-disable-test'
+        await state.issueOperatorSession({ rawToken: rawToken1, ttlMs: 3600_000 }, t0)
+        expect(await state.lookupOperatorSession(rawToken1, t0 + 100)).not.toBeNull()
+
+        // Add second admin so we can disable the first
+        const admin2 = await state.inviteAccount({
+          email: 'op-admin-2@example.com',
+          userId: 'usr_op_adm_2',
+          profileId: 'prf_op_adm_2',
+          organizationId: 'org_op_1'
+        })
+        const admin2Pw = await derivePasswordRecord('admin2-pwd-pass', TEST_FAST_PASSWORD_POLICY)
+        await state.activateInvitedAccount(admin2.accountId, admin2Pw)
+
+        // Set role to admin on admin2
+        if (state._sqliteCtx) {
+          const rawDb = (
+            state._sqliteCtx as {
+              db: { prepare: (s: string) => { run: (...args: unknown[]) => void } }
+            }
+          ).db
+          rawDb
+            .prepare("UPDATE operator_account SET role = 'admin' WHERE account_id = ?")
+            .run(admin2.accountId)
+        } else if (state._memoryCtx) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: promoting invited user to admin for multi-admin test
+          const memCtx = state._memoryCtx as { accountsById: Map<string, { role: string }> }
+          const memAdmin2 = memCtx.accountsById.get(admin2.accountId)
+          if (memAdmin2) {
+            memAdmin2.role = 'admin'
+          }
+        }
+
+        // Disable admin1
+        const disableRes = await state.disableAccount(admin1.accountId, t0 + 500)
+        expect(disableRes).toBe('ok')
+
+        // Session 1 must fail lookup after disable
+        expect(await state.lookupOperatorSession(rawToken1, t0 + 1000)).toBeNull()
+
+        // Test role+status+epoch enforcement: session for non-admin or non-active returns null even if epoch matches
+        const rawToken2 = 'operator-token-role-status-test'
+        await state.issueOperatorSession(
+          { rawToken: rawToken2, ttlMs: 3600_000, accountId: admin2.accountId },
+          t0
+        )
+        expect(await state.lookupOperatorSession(rawToken2, t0 + 100)).not.toBeNull()
+
+        // Change admin2 status or role without bumping epoch
+        if (state._sqliteCtx) {
+          const rawDb = (
+            state._sqliteCtx as {
+              db: { prepare: (s: string) => { run: (...args: unknown[]) => void } }
+            }
+          ).db
+          rawDb
+            .prepare("UPDATE operator_account SET role = 'user' WHERE account_id = ?")
+            .run(admin2.accountId)
+        } else if (state._memoryCtx) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mutating role for role check test
+          const memCtx = state._memoryCtx as { accountsById: Map<string, { role: string }> }
+          const acc = memCtx.accountsById.get(admin2.accountId)
+          if (acc) {
+            acc.role = 'user'
+          }
+        }
+        // Must return null because role is no longer admin!
+        expect(await state.lookupOperatorSession(rawToken2, t0 + 1100)).toBeNull()
+      })
     })
   }
 

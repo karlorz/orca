@@ -45,12 +45,28 @@ export async function loginOperatorAccount(
     }
   }
 
-  const [account, passwordRec] = await Promise.all([
-    context.securityState.getAccount(),
-    context.securityState.getAccountPasswordRecord()
-  ])
   const policy = context.passwordPolicy ?? CURRENT_PASSWORD_POLICY
-  if (!account || !passwordRec || !password || email !== account.email) {
+  if (!email || !password) {
+    context.throttle?.recordFailure(email, remoteIp)
+    await emitAudit(context.auditLog, 'operator.login.failed', {
+      actor,
+      reason: 'invalid_credentials'
+    })
+    return { ok: false, status: 401 }
+  }
+
+  const account = await context.securityState.getAccount({ email })
+  if (!account || account.role !== 'admin' || account.status !== 'active') {
+    context.throttle?.recordFailure(email, remoteIp)
+    await emitAudit(context.auditLog, 'operator.login.failed', {
+      actor,
+      reason: 'invalid_credentials'
+    })
+    return { ok: false, status: 401 }
+  }
+
+  const passwordRec = await context.securityState.getAccountPasswordRecord(account.accountId)
+  if (!passwordRec) {
     context.throttle?.recordFailure(email, remoteIp)
     await emitAudit(context.auditLog, 'operator.login.failed', {
       actor,
@@ -86,7 +102,8 @@ export async function loginOperatorAccount(
   const rawToken = randomBytes(32).toString('base64url')
   const session = await context.securityState.issueOperatorSession({
     rawToken,
-    ttlMs: OPERATOR_SESSION_TTL_MS
+    ttlMs: OPERATOR_SESSION_TTL_MS,
+    accountId: account.accountId
   })
   await emitAudit(context.auditLog, 'operator.login.success', {
     actor: email,

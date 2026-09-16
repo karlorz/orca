@@ -324,4 +324,140 @@ describe('OwnMobileRelay /admin HTML', () => {
       await server.close()
     }
   })
+
+  it('Task 4: issued operator cookie becomes invalid after password reset (epoch bump) or account disable', async () => {
+    const { openOwnMobileRelaySecurityStateSqlite } =
+      await import('./own-mobile-relay-security-state-sqlite')
+    const { derivePasswordRecord, TEST_FAST_PASSWORD_POLICY } =
+      await import('./own-mobile-relay-password')
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+
+    const tempDir = await mkdtemp(join(tmpdir(), 'orca-adm-task4-'))
+    const dbPath = join(tempDir, 'security.db')
+    const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+
+    const adminPw = await derivePasswordRecord('admin-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+    const adminAccount = await state.bootstrapAccount({
+      email: 'admin-cookie@example.com',
+      userId: 'usr_adm_c',
+      profileId: 'prf_adm_c',
+      organizationId: 'org_main',
+      passwordRecord: adminPw
+    })
+
+    // Add a second admin in sqlite
+    const admin2 = await state.inviteAccount({
+      email: 'admin-backup@example.com',
+      userId: 'usr_adm_b',
+      profileId: 'prf_adm_b',
+      organizationId: 'org_main'
+    })
+    const admin2Pw = await derivePasswordRecord('backup-admin-pwd', TEST_FAST_PASSWORD_POLICY)
+    await state.activateInvitedAccount(admin2.accountId, admin2Pw)
+    // Promote admin2 to admin role
+    const rawDb = (
+      state._sqliteCtx as {
+        db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }
+      }
+    ).db
+    rawDb
+      .prepare("UPDATE operator_account SET role = 'admin' WHERE account_id = ?")
+      .run(admin2.accountId)
+
+    const server = await listenOwnMobileRelay({
+      securityState: state,
+      origin: 'http://127.0.0.1',
+      passwordPolicy: TEST_FAST_PASSWORD_POLICY
+    })
+
+    try {
+      // 1. Log in to get cookie
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({
+          email: 'admin-cookie@example.com',
+          password: 'admin-pwd-12345'
+        }).toString()
+      })
+      expect(login.status).toBe(303)
+      const cookie = cookieFromSetCookie(login.headers['set-cookie'])
+
+      // Access /admin with cookie -> 200
+      const pageBefore = await httpRequest({
+        port: server.boundPort,
+        path: '/admin',
+        headers: { cookie }
+      })
+      expect(pageBefore.status).toBe(200)
+
+      // 2. Reset password via replacePasswordVerifier (bumps auth_epoch)
+      const newAdminPw = await derivePasswordRecord(
+        'admin-pwd-reset-999',
+        TEST_FAST_PASSWORD_POLICY
+      )
+      const replaceRes = await state.replacePasswordVerifier(adminAccount.accountId, {
+        expectedVerifierVersion: 1,
+        newPasswordRecord: newAdminPw
+      })
+      expect(replaceRes.ok).toBe(true)
+
+      // Old cookie must now be rejected and redirect to /admin/login
+      const pageAfterEpochBump = await httpRequest({
+        port: server.boundPort,
+        path: '/admin',
+        headers: { cookie }
+      })
+      expect(pageAfterEpochBump.status).toBe(302)
+      expect(pageAfterEpochBump.headers.location).toBe('/admin/login')
+
+      // 3. Log in again with new password to obtain fresh cookie
+      const login2 = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({
+          email: 'admin-cookie@example.com',
+          password: 'admin-pwd-reset-999'
+        }).toString()
+      })
+      expect(login2.status).toBe(303)
+      const cookie2 = cookieFromSetCookie(login2.headers['set-cookie'])
+
+      const pageBeforeDisable = await httpRequest({
+        port: server.boundPort,
+        path: '/admin',
+        headers: { cookie: cookie2 }
+      })
+      expect(pageBeforeDisable.status).toBe(200)
+
+      // Disable first admin account
+      const disableRes = await state.disableAccount(adminAccount.accountId)
+      expect(disableRes).toBe('ok')
+
+      // Cookie for disabled admin must now be rejected and redirect to /admin/login
+      const pageAfterDisable = await httpRequest({
+        port: server.boundPort,
+        path: '/admin',
+        headers: { cookie: cookie2 }
+      })
+      expect(pageAfterDisable.status).toBe(302)
+      expect(pageAfterDisable.headers.location).toBe('/admin/login')
+    } finally {
+      await server.close()
+      await state.close()
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    }
+  })
 })

@@ -161,4 +161,5 @@ export type OwnMobileRelaySecurityState = {
   }): Promise<SecurityStateCleanupResult>
   close(): Promise<void>
   readonly _sqliteCtx?: unknown
+  readonly _memoryCtx?: unknown
 }

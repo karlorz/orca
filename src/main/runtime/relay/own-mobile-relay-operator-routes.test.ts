@@ -468,4 +468,97 @@ describe('OwnMobileRelay Operator Routes Slice 3 (/v1/operator/*)', () => {
       await server.close()
     }
   })
+
+  it('Task 4: operator login permits admin and rejects active non-admin (401)', async () => {
+    const { createOwnMobileRelaySecurityStateMemory } =
+      await import('./own-mobile-relay-security-state-memory')
+    const { derivePasswordRecord, TEST_FAST_PASSWORD_POLICY } =
+      await import('./own-mobile-relay-password')
+    const state = createOwnMobileRelaySecurityStateMemory()
+
+    const adminPw = await derivePasswordRecord('admin-secret-pwd-123', TEST_FAST_PASSWORD_POLICY)
+    await state.bootstrapAccount({
+      email: 'admin@example.com',
+      userId: 'usr_admin',
+      profileId: 'prf_admin',
+      organizationId: 'org_main',
+      passwordRecord: adminPw
+    })
+
+    const nonAdminUser = await state.inviteAccount({
+      email: 'regular-user@example.com',
+      userId: 'usr_regular',
+      profileId: 'prf_regular',
+      organizationId: 'org_main'
+    })
+    const regularPw = await derivePasswordRecord('regular-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+    await state.activateInvitedAccount(nonAdminUser.accountId, regularPw)
+
+    const server = await listenOwnMobileRelay({
+      securityState: state,
+      origin: 'http://127.0.0.1',
+      passwordPolicy: TEST_FAST_PASSWORD_POLICY
+    })
+
+    try {
+      // 1. Non-admin active user attempts operator login -> 401
+      const nonAdminRes = await fetch(`${server.origin}/v1/operator/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'regular-user@example.com',
+          password: 'regular-pwd-12345'
+        })
+      })
+      expect(nonAdminRes.status).toBe(401)
+      expect(await nonAdminRes.json()).toEqual({ error: 'unauthorized' })
+
+      // 2. Admin user logs in -> 200 with token
+      const adminRes = await fetch(`${server.origin}/v1/operator/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'admin@example.com',
+          password: 'admin-secret-pwd-123'
+        })
+      })
+      expect(adminRes.status).toBe(200)
+      const adminBody = (await adminRes.json()) as { token: string; expiresAt: number }
+      expect(typeof adminBody.token).toBe('string')
+      expect(adminBody.token.length).toBeGreaterThan(16)
+
+      // 3. Second admin login (fails on current code because getAccount() only returns first row!)
+      const admin2 = await state.inviteAccount({
+        email: 'admin2@example.com',
+        userId: 'usr_admin2',
+        profileId: 'prf_admin2',
+        organizationId: 'org_main'
+      })
+      const admin2Pw = await derivePasswordRecord(
+        'admin2-secret-pwd-456',
+        TEST_FAST_PASSWORD_POLICY
+      )
+      await state.activateInvitedAccount(admin2.accountId, admin2Pw)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: promote invited user to admin role in test
+      const memCtx = (
+        state as unknown as { _memoryCtx?: { accountsById: Map<string, { role: string }> } }
+      )._memoryCtx
+      const rawAdmin2 = memCtx?.accountsById.get(admin2.accountId)
+      if (rawAdmin2) {
+        rawAdmin2.role = 'admin'
+      }
+
+      const admin2Res = await fetch(`${server.origin}/v1/operator/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'admin2@example.com',
+          password: 'admin2-secret-pwd-456'
+        })
+      })
+      expect(admin2Res.status).toBe(200)
+    } finally {
+      await server.close()
+    }
+  })
 })

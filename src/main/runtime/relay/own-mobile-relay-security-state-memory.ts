@@ -91,6 +91,7 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
   }
 
   return {
+    _memoryCtx: ctx,
     ...createMemoryAccountFacet(ctx),
 
     async issueAccessSession(

@@ -244,6 +244,7 @@ export type SecurityStateOperatorSession = {
 export type SecurityStateIssueOperatorSessionInput = {
   readonly rawToken: string
   readonly ttlMs: number
+  readonly accountId?: string
 }
 
 export type SecurityStateIssuedOperatorSession = {

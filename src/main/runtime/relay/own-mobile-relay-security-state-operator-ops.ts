@@ -84,7 +84,12 @@ export function issueOperatorSessionMemory(
   now: number
 ): SecurityStateIssuedOperatorSession {
   assertOpen(ctx)
-  if (!ctx.account) {
+  const targetAcc = input.accountId
+    ? (ctx.accountsById.get(input.accountId) ?? null)
+    : (Array.from(ctx.accountsById.values()).find(
+        (a) => a.role === 'admin' && a.status === 'active'
+      ) ?? ctx.account)
+  if (!targetAcc) {
     throw new Error('account_not_initialized')
   }
   const sessionId = randomBytes(16).toString('base64url')
@@ -92,9 +97,9 @@ export function issueOperatorSessionMemory(
   const expiresAt = now + input.ttlMs
   const session: InternalOperatorSessionRecord = {
     sessionId,
-    accountId: ctx.account.accountId,
+    accountId: targetAcc.accountId,
     tokenHash,
-    authEpoch: ctx.account.authEpoch,
+    authEpoch: targetAcc.authEpoch,
     expiresAt,
     createdAt: now
   }
@@ -120,12 +125,17 @@ export function lookupOperatorSessionMemory(
     return null
   }
   const session = ctx.operatorSessionsById.get(sessionId)
+  if (!session || session.revokedAt !== undefined || session.expiresAt <= now) {
+    return null
+  }
+  const acc = session.accountId
+    ? (ctx.accountsById.get(session.accountId) ?? ctx.account)
+    : ctx.account
   if (
-    !session ||
-    session.revokedAt !== undefined ||
-    session.expiresAt <= now ||
-    !ctx.account ||
-    session.authEpoch !== ctx.account.authEpoch
+    !acc ||
+    acc.role !== 'admin' ||
+    acc.status !== 'active' ||
+    session.authEpoch !== acc.authEpoch
   ) {
     return null
   }

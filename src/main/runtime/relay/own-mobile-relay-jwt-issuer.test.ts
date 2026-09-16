@@ -145,6 +145,40 @@ describe('own-auth relay token JWT (official relay interop)', () => {
     }
   })
 
+  it('forces JWT prof to account profileId when localProfileId differs from account profileId', async () => {
+    const { key: _key, server } = await startJwtRelay()
+    try {
+      const localProfileIdOverride = 'local-different-prof-override'
+      const sessionToken = await loginAndObtainSessionToken(
+        server.origin,
+        TEST_OPERATOR,
+        'orca-desktop',
+        localProfileIdOverride
+      )
+      const hostPublicKey = nacl.box.keyPair().publicKey
+      const relayHostId = deriveRelayHostId(hostPublicKey)
+      const response = await fetch(`${server.origin}/v1/desktop/auth/relay-token`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${sessionToken}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          relayHostId,
+          hostPublicKeyB64: Buffer.from(hostPublicKey).toString('base64')
+        })
+      })
+      expect(response.status).toBe(200)
+      const { relayToken } = (await response.json()) as { relayToken: string }
+
+      const decoded = decodeJwt(relayToken)
+      expect(decoded.prof).toBe(TEST_OPERATOR.profileId)
+      expect(decoded.prof).not.toBe(localProfileIdOverride)
+    } finally {
+      await server.close()
+    }
+  })
+
   it('keeps the legacy own-relay assign path working on the JWT string', async () => {
     const { server } = await startJwtRelay()
     try {

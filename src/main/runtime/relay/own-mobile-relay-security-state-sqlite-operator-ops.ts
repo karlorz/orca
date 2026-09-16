@@ -129,9 +129,20 @@ export function executeIssueOperatorSessionSqlite(
 ): SecurityStateIssuedOperatorSession {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get() as
-      | { account_id: string; auth_epoch: number }
-      | undefined
+    const acc = (
+      input.accountId !== undefined
+        ? db
+            .prepare(
+              "SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ? AND role = 'admin' AND status = 'active'"
+            )
+            .get(input.accountId)
+        : (db
+            .prepare(
+              "SELECT account_id, auth_epoch FROM operator_account WHERE role = 'admin' AND status = 'active' LIMIT 1"
+            )
+            .get() ??
+          db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get())
+    ) as { account_id: string; auth_epoch: number } | undefined
     if (!acc) {
       throw new Error('account_not_initialized')
     }
@@ -175,6 +186,8 @@ export function executeLookupOperatorSessionSqlite(
       WHERE s.token_hash = ?
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
+        AND a.role = 'admin'
+        AND a.status = 'active'
         AND s.auth_epoch = a.auth_epoch
     `)
     .get(hash, now) as SqliteOperatorSessionRow | undefined

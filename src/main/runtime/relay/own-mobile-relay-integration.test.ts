@@ -502,7 +502,7 @@ describe('Task 4 10 Integration Cases', () => {
     }
   })
 
-  it('Case 8: Grant identity continues to bind desktop cloudProfileId (70c38a64bc invariant)', async () => {
+  it('Case 8: Grant identity binds account profileId and localProfileId does not override', async () => {
     const { createOwnMobileRelaySecurityStateMemory } =
       await import('./own-mobile-relay-security-state-memory')
     const state = createOwnMobileRelaySecurityStateMemory()
@@ -560,7 +560,8 @@ describe('Task 4 10 Integration Cases', () => {
 
       const grant = await state.validateRelayGrantByToken(relayToken)
       expect(grant).not.toBeNull()
-      expect(grant!.identity.profileId).toBe(localProfileId)
+      expect(grant!.identity.profileId).toBe(defaultOperator.profileId)
+      expect(grant!.identity.profileId).not.toBe(localProfileId)
     } finally {
       await server.close()
     }

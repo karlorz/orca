@@ -83,10 +83,18 @@ export async function handleAuthorizePost(
     }
   }
 
-  const account = await securityState.getAccount()
-  const passwordRec = await securityState.getAccountPasswordRecord()
+  const account = email ? await securityState.getAccount({ email }) : null
+  if (!account || account.status !== 'active') {
+    if (throttle) {
+      throttle.recordFailure(email, remoteIp)
+    }
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
 
-  if (!account || !passwordRec || email !== account.email) {
+  const passwordRec = await securityState.getAccountPasswordRecord(account.accountId)
+  if (!passwordRec) {
     if (throttle) {
       throttle.recordFailure(email, remoteIp)
     }
@@ -210,7 +218,7 @@ export async function handleSessionPost(
   const refreshToken = randomBytes(32).toString('base64url')
   const now = Date.now()
 
-  const cloudProfileId = authCode.localProfileId || authCode.identity.profileId
+  const cloudProfileId = authCode.identity.profileId
 
   let issuedSession
   try {

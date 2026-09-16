@@ -559,4 +559,175 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
       }
     })
   })
+
+  describe('Task 4: PKCE multi-user authorization and cloudProfileId invariant', () => {
+    it('authorizes second active user; rejects invited (401) and disabled (401)', async () => {
+      const { createOwnMobileRelaySecurityStateMemory } =
+        await import('./own-mobile-relay-security-state-memory')
+      const { derivePasswordRecord, TEST_FAST_PASSWORD_POLICY } =
+        await import('./own-mobile-relay-password')
+      const state = createOwnMobileRelaySecurityStateMemory()
+
+      const adminPw = await derivePasswordRecord('admin-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+      await state.bootstrapAccount({
+        email: 'admin@example.com',
+        userId: 'usr_admin',
+        profileId: 'prf_admin',
+        organizationId: 'org_main',
+        passwordRecord: adminPw
+      })
+
+      const user2 = await state.inviteAccount({
+        email: 'user2@example.com',
+        userId: 'usr_user2',
+        profileId: 'prf_user2',
+        organizationId: 'org_main'
+      })
+
+      const user3 = await state.inviteAccount({
+        email: 'user3@example.com',
+        userId: 'usr_user3',
+        profileId: 'prf_user3',
+        organizationId: 'org_main'
+      })
+      const user3Pw = await derivePasswordRecord('user3-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+      await state.activateInvitedAccount(user3.accountId, user3Pw)
+      await state.disableAccount(user3.accountId)
+
+      const server = await listenOwnMobileRelay({
+        securityState: state,
+        clientId: defaultClientId,
+        origin: 'http://127.0.0.1',
+        passwordPolicy: TEST_FAST_PASSWORD_POLICY
+      })
+
+      try {
+        const verifier = 'test-code-verifier-task4-12345678901234567890'
+        const challenge = Buffer.from(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+        ).toString('base64url')
+        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code`
+
+        // 1. Invited user -> 401
+        const invitedRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: 'user2@example.com',
+            password: 'any-password-here'
+          }).toString(),
+          redirect: 'manual'
+        })
+        expect(invitedRes.status).toBe(401)
+
+        // 2. Disabled user -> 401
+        const disabledRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: 'user3@example.com',
+            password: 'user3-pwd-12345'
+          }).toString(),
+          redirect: 'manual'
+        })
+        expect(disabledRes.status).toBe(401)
+
+        // 3. Activate user 2 -> succeeds
+        const user2Pw = await derivePasswordRecord('user2-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+        await state.activateInvitedAccount(user2.accountId, user2Pw)
+
+        const activeRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: 'user2@example.com',
+            password: 'user2-pwd-12345'
+          }).toString(),
+          redirect: 'manual'
+        })
+        expect(activeRes.status).toBe(302)
+        const location = new URL(activeRes.headers.get('location')!)
+        const code = location.searchParams.get('code')!
+        expect(code).toBeTruthy()
+
+        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            redirectUri: 'http://127.0.0.1:4000/auth/callback'
+          })
+        })
+        expect(sessionRes.status).toBe(200)
+        const session = (await sessionRes.json()) as {
+          accessToken: string
+          cloud: { userId: string; email: string; cloudProfileId: string }
+        }
+        expect(session.cloud.userId).toBe('usr_user2')
+        expect(session.cloud.email).toBe('user2@example.com')
+        expect(session.cloud.cloudProfileId).toBe('prf_user2')
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('forces cloudProfileId and JWT prof to account profileId even when localProfileId differs', async () => {
+      const server = await listenOwnMobileRelay({
+        operator: defaultOperator,
+        clientId: defaultClientId,
+        origin: 'http://127.0.0.1'
+      })
+      try {
+        const verifier = 'test-code-verifier-localprof-12345678901234567890'
+        const challenge = Buffer.from(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+        ).toString('base64url')
+
+        const localProfileIdOverride = 'local-custom-override-id'
+        const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&local_profile_id=${localProfileIdOverride}`
+
+        const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: defaultOperator.email,
+            password: defaultOperator.password
+          }).toString(),
+          redirect: 'manual'
+        })
+        expect(loginRes.status).toBe(302)
+        const code = new URL(loginRes.headers.get('location')!).searchParams.get('code')!
+
+        const sessionRes = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            redirectUri: 'http://127.0.0.1:4000/auth/callback',
+            localProfileId: localProfileIdOverride
+          })
+        })
+        expect(sessionRes.status).toBe(200)
+        const session = (await sessionRes.json()) as {
+          accessToken: string
+          cloud: { cloudProfileId: string }
+        }
+        // Force cloudProfileId to account profileId; localProfileId must NOT override
+        expect(session.cloud.cloudProfileId).toBe(defaultOperator.profileId)
+        expect(session.cloud.cloudProfileId).not.toBe(localProfileIdOverride)
+
+        // Verify profile endpoint also reflects account profileId
+        const profileRes = await fetch(`${server.origin}/v1/desktop/auth/profile`, {
+          headers: { authorization: `Bearer ${session.accessToken}` }
+        })
+        expect(profileRes.status).toBe(200)
+        const profile = (await profileRes.json()) as { cloudProfileId: string }
+        expect(profile.cloudProfileId).toBe(defaultOperator.profileId)
+      } finally {
+        await server.close()
+      }
+    })
+  })
 })
