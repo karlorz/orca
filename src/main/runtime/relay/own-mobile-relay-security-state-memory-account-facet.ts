@@ -22,6 +22,7 @@ export function createMemoryAccountFacet(ctx: MemoryStoreContext) {
     async getAccount(selector?: {
       email?: string
       accountId?: string
+      role?: 'admin' | 'user'
     }): Promise<SecurityStateAccountIdentity | null> {
       assertOpen(ctx)
       if (selector?.accountId) {
@@ -37,7 +38,25 @@ export function createMemoryAccountFacet(ctx: MemoryStoreContext) {
         }
         return null
       }
+      if (selector?.role) {
+        for (const a of ctx.accountsById.values()) {
+          if (a.role === selector.role) {
+            return toPublicAccount(a)
+          }
+        }
+        return null
+      }
       return ctx.account ? toPublicAccount(ctx.account) : null
+    },
+
+    async hasAdminAccount(): Promise<boolean> {
+      assertOpen(ctx)
+      for (const a of ctx.accountsById.values()) {
+        if (a.role === 'admin') {
+          return true
+        }
+      }
+      return false
     },
 
     async bootstrapAccount(

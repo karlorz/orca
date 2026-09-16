@@ -2,7 +2,10 @@ import { randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type { PasswordRecord } from './own-mobile-relay-password'
 import type { SecurityStateAccountIdentity } from './own-mobile-relay-security-state'
-import type { SqliteAccountRow } from './own-mobile-relay-security-state-sqlite-account-ops'
+import {
+  mapAccountRow,
+  type SqliteAccountRow
+} from './own-mobile-relay-security-state-sqlite-account-ops'
 
 export function executeInviteAccountSqlite(
   db: DatabaseSync,
@@ -98,6 +101,34 @@ export function executeActivateInvitedAccountSqlite(
     db.exec('ROLLBACK;')
     throw err
   }
+}
+
+export function executeGetAdminAccountSqlite(
+  db: DatabaseSync,
+  email?: string
+): SecurityStateAccountIdentity | null {
+  const row = (
+    email
+      ? db
+          .prepare(
+            `SELECT account_id, email, user_id, profile_id, organization_id,
+                    role, status, verifier_version, auth_epoch, created_at, updated_at
+             FROM operator_account WHERE role = 'admin' AND lower(email) = lower(?) LIMIT 1`
+          )
+          .get(email)
+      : db
+          .prepare(
+            `SELECT account_id, email, user_id, profile_id, organization_id,
+                    role, status, verifier_version, auth_epoch, created_at, updated_at
+             FROM operator_account WHERE role = 'admin' LIMIT 1`
+          )
+          .get()
+  ) as SqliteAccountRow | undefined
+  return row ? mapAccountRow(row) : null
+}
+
+export function executeHasAdminAccountSqlite(db: DatabaseSync): boolean {
+  return Boolean(db.prepare("SELECT 1 FROM operator_account WHERE role = 'admin' LIMIT 1").get())
 }
 
 export function executeDisableAccountSqlite(

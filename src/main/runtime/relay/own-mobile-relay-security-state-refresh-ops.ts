@@ -47,8 +47,8 @@ export function issueRefreshTokenMemory(
   const record: InternalRefreshTokenRecord = {
     tokenHash,
     sessionId: input.sessionId,
-    accountId: ctx.account.accountId,
-    authEpoch: ctx.account.authEpoch,
+    accountId: session.accountId,
+    authEpoch: session.authEpoch,
     expiresAt,
     createdAt: now
   }
@@ -68,12 +68,15 @@ export function lookupRefreshTokenMemory(
   now: number
 ): SecurityStateLookupRefreshTokenResult | null {
   assertOpen(ctx)
-  if (!ctx.account) {
-    return null
-  }
   const tokenHash = sha256Base64Url(rawRefreshToken)
   const record = ctx.refreshTokensByHash.get(tokenHash)
-  if (!record || !isRefreshTokenValid(record, ctx.account, now)) {
+  if (!record) {
+    return null
+  }
+  const account = record.accountId
+    ? (ctx.accountsById.get(record.accountId) ?? ctx.account)
+    : ctx.account
+  if (!account || !isRefreshTokenValid(record, account, now)) {
     return null
   }
   const session = ctx.sessionsById.get(record.sessionId)
@@ -81,8 +84,8 @@ export function lookupRefreshTokenMemory(
   if (
     !session ||
     session.revokedAt !== undefined ||
-    ctx.account.status !== 'active' ||
-    session.authEpoch !== ctx.account.authEpoch
+    account.status !== 'active' ||
+    session.authEpoch !== account.authEpoch
   ) {
     return null
   }
@@ -99,13 +102,16 @@ export function rotateRefreshTokenMemory(
   now: number
 ): SecurityStateIssuedAccessSession | null {
   assertOpen(ctx)
-  if (!ctx.account) {
+  const oldTokenHash = sha256Base64Url(input.oldRawRefreshToken)
+  const oldRefreshRecord = ctx.refreshTokensByHash.get(oldTokenHash)
+  if (!oldRefreshRecord) {
     return null
   }
 
-  const oldTokenHash = sha256Base64Url(input.oldRawRefreshToken)
-  const oldRefreshRecord = ctx.refreshTokensByHash.get(oldTokenHash)
-  if (!oldRefreshRecord || !isRefreshTokenValid(oldRefreshRecord, ctx.account, now)) {
+  const account = oldRefreshRecord.accountId
+    ? (ctx.accountsById.get(oldRefreshRecord.accountId) ?? ctx.account)
+    : ctx.account
+  if (!account || !isRefreshTokenValid(oldRefreshRecord, account, now)) {
     return null
   }
 
@@ -114,8 +120,8 @@ export function rotateRefreshTokenMemory(
   if (
     !oldSession ||
     oldSession.revokedAt !== undefined ||
-    ctx.account.status !== 'active' ||
-    oldSession.authEpoch !== ctx.account.authEpoch
+    account.status !== 'active' ||
+    oldSession.authEpoch !== account.authEpoch
   ) {
     return null
   }
@@ -134,8 +140,8 @@ export function rotateRefreshTokenMemory(
   const newExpiresAt = now + input.accessTtlMs
   const newSession = {
     sessionId: newSessionId,
-    accountId: ctx.account.accountId,
-    authEpoch: ctx.account.authEpoch,
+    accountId: account.accountId,
+    authEpoch: account.authEpoch,
     accessTokenHash: newAccessTokenHash,
     expiresAt: newExpiresAt,
     createdAt: now,
@@ -157,8 +163,8 @@ export function rotateRefreshTokenMemory(
   const newRefreshRecord: InternalRefreshTokenRecord = {
     tokenHash: newTokenHash,
     sessionId: newSessionId,
-    accountId: ctx.account.accountId,
-    authEpoch: ctx.account.authEpoch,
+    accountId: account.accountId,
+    authEpoch: account.authEpoch,
     expiresAt: newRefreshExpiresAt,
     createdAt: now
   }

@@ -100,7 +100,137 @@ export function registerRefreshEpochAndCleanupTests(
       await state.activateInvitedAccount(invited.accountId, userPw)
 
       const t0 = 2_000_000
-      await state.disableAccount(invited.accountId, t0)
+      const session = await state.issueAccessSession(
+        {
+          rawAccessToken: 'access-dis-test-1',
+          identity: {
+            userId: invited.userId,
+            profileId: invited.profileId,
+            organizationId: invited.organizationId,
+            email: invited.email,
+            cloudProfileId: 'c_prf_urd_1'
+          },
+          ttlMs: 3600_000,
+          expectedAccountId: invited.accountId,
+          expectedAuthEpoch: invited.authEpoch
+        },
+        t0
+      )
+
+      await state.issueRefreshToken(
+        {
+          sessionId: session.sessionId,
+          rawRefreshToken: 'refresh-dis-test-1',
+          ttlMs: null
+        },
+        t0
+      )
+
+      expect(await state.lookupRefreshToken('refresh-dis-test-1', t0 + 1000)).not.toBeNull()
+
+      await state.disableAccount(invited.accountId, t0 + 2000)
+
+      expect(await state.lookupRefreshToken('refresh-dis-test-1', t0 + 3000)).toBeNull()
+
+      const rotateResult = await state.rotateRefreshToken(
+        {
+          oldRawRefreshToken: 'refresh-dis-test-1',
+          newRawRefreshToken: 'refresh-dis-test-2',
+          newRawAccessToken: 'access-dis-test-2',
+          accessTtlMs: 3600_000,
+          refreshTtlMs: null
+        },
+        t0 + 3000
+      )
+      expect(rotateResult).toBeNull()
+    })
+
+    it('multi-account: refresh token for non-admin user still looks up after admin epoch bump, and fails after user disable or epoch bump', async () => {
+      const admin = await state.bootstrapAccount({
+        email: 'admin-multi-refresh@example.com',
+        userId: 'usr_amr_1',
+        profileId: 'prf_amr_1',
+        organizationId: 'org_amr_1',
+        passwordRecord
+      })
+
+      const invited = await state.inviteAccount({
+        email: 'user-multi-refresh@example.com',
+        userId: 'usr_umr_1',
+        profileId: 'prf_umr_1',
+        organizationId: 'org_amr_1'
+      })
+
+      const userPw = await derivePasswordRecord('user-pw-multi-12345678', TEST_FAST_PASSWORD_POLICY)
+      await state.activateInvitedAccount(invited.accountId, userPw)
+
+      const t0 = 3_000_000
+      const userSession = await state.issueAccessSession(
+        {
+          rawAccessToken: 'access-user-multi-1',
+          identity: {
+            userId: invited.userId,
+            profileId: invited.profileId,
+            organizationId: invited.organizationId,
+            email: invited.email,
+            cloudProfileId: 'c_prf_umr_1'
+          },
+          ttlMs: 3600_000,
+          expectedAccountId: invited.accountId,
+          expectedAuthEpoch: invited.authEpoch
+        },
+        t0
+      )
+
+      await state.issueRefreshToken(
+        {
+          sessionId: userSession.sessionId,
+          rawRefreshToken: 'refresh-user-multi-1',
+          ttlMs: null
+        },
+        t0
+      )
+
+      expect(await state.lookupRefreshToken('refresh-user-multi-1', t0 + 1000)).not.toBeNull()
+
+      // Bump admin epoch by replacing admin password
+      const newAdminPw = await derivePasswordRecord(
+        'new-admin-pw-multi-1234',
+        TEST_FAST_PASSWORD_POLICY
+      )
+      await state.replacePasswordVerifier(admin.accountId, {
+        expectedVerifierVersion: admin.verifierVersion,
+        newPasswordRecord: newAdminPw
+      })
+
+      // Non-admin user's refresh token must still look up successfully!
+      const afterAdminBump = await state.lookupRefreshToken('refresh-user-multi-1', t0 + 2000)
+      expect(afterAdminBump).not.toBeNull()
+      expect(afterAdminBump?.sessionId).toBe(userSession.sessionId)
+
+      // Bump non-admin user's epoch by replacing their password
+      const newUserPw = await derivePasswordRecord(
+        'new-user-pw-multi-1234',
+        TEST_FAST_PASSWORD_POLICY
+      )
+      await state.replacePasswordVerifier(invited.accountId, {
+        expectedVerifierVersion: invited.verifierVersion,
+        newPasswordRecord: newUserPw
+      })
+
+      // Now user's refresh token must fail lookup and rotation
+      expect(await state.lookupRefreshToken('refresh-user-multi-1', t0 + 3000)).toBeNull()
+      const rotateAfterEpochBump = await state.rotateRefreshToken(
+        {
+          oldRawRefreshToken: 'refresh-user-multi-1',
+          newRawRefreshToken: 'refresh-user-multi-2',
+          newRawAccessToken: 'access-user-multi-2',
+          accessTtlMs: 3600_000,
+          refreshTtlMs: null
+        },
+        t0 + 3000
+      )
+      expect(rotateAfterEpochBump).toBeNull()
     })
 
     it('cleans up session with stale epoch even when live refresh row points to it, deleting both session and refresh row', async () => {

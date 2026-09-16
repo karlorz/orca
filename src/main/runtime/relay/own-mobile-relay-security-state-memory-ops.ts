@@ -62,12 +62,19 @@ export function issueAccessSessionMemory(
   now: number
 ): SecurityStateIssuedAccessSession {
   assertOpen(ctx)
-  if (!ctx.account) {
+  if (!ctx.account && ctx.accountsById.size === 0) {
     throw new Error('account_not_initialized')
   }
+  const acc =
+    input.expectedAccountId !== undefined
+      ? (ctx.accountsById.get(input.expectedAccountId) ?? null)
+      : ctx.account
+  if (!acc) {
+    throw new Error('account_epoch_mismatch')
+  }
   if (
-    (input.expectedAccountId !== undefined && ctx.account.accountId !== input.expectedAccountId) ||
-    (input.expectedAuthEpoch !== undefined && ctx.account.authEpoch !== input.expectedAuthEpoch)
+    (input.expectedAccountId !== undefined && acc.accountId !== input.expectedAccountId) ||
+    (input.expectedAuthEpoch !== undefined && acc.authEpoch !== input.expectedAuthEpoch)
   ) {
     throw new Error('account_epoch_mismatch')
   }
@@ -76,8 +83,8 @@ export function issueAccessSessionMemory(
   const expiresAt = now + input.ttlMs
   const session: InternalSessionRecord = {
     sessionId,
-    accountId: ctx.account.accountId,
-    authEpoch: ctx.account.authEpoch,
+    accountId: acc.accountId,
+    authEpoch: acc.authEpoch,
     accessTokenHash,
     expiresAt,
     createdAt: now,

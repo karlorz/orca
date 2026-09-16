@@ -30,11 +30,19 @@ export function executeIssueAccessSessionSqlite(
 ): SecurityStateIssuedAccessSession {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get() as
-      | { account_id: string; auth_epoch: number }
-      | undefined
-    if (!acc) {
+    const hasAnyAccount = db.prepare('SELECT 1 FROM operator_account LIMIT 1').get()
+    if (!hasAnyAccount) {
       throw new Error('account_not_initialized')
+    }
+    const acc = (
+      input.expectedAccountId !== undefined
+        ? db
+            .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
+            .get(input.expectedAccountId)
+        : db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get()
+    ) as { account_id: string; auth_epoch: number } | undefined
+    if (!acc) {
+      throw new Error('account_epoch_mismatch')
     }
     if (
       (input.expectedAccountId !== undefined && acc.account_id !== input.expectedAccountId) ||

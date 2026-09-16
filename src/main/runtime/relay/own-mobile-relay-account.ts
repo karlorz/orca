@@ -15,9 +15,20 @@ export async function bootstrapOperatorAccount(
   policy: PasswordPolicy = CURRENT_PASSWORD_POLICY,
   now = Date.now()
 ): Promise<SecurityStateAccountIdentity> {
-  const existing = await securityState.getAccount()
-  if (existing && existing.role === 'admin') {
-    return existing
+  const hasAdmin = securityState.hasAdminAccount ? await securityState.hasAdminAccount() : false
+  if (hasAdmin) {
+    const adminByEmail = await securityState.getAccount({ email: operator.email })
+    if (adminByEmail && adminByEmail.role === 'admin') {
+      return adminByEmail
+    }
+    const adminAccount = await securityState.getAccount({ role: 'admin' })
+    if (adminAccount && adminAccount.role === 'admin') {
+      return adminAccount
+    }
+    const anyAccount = await securityState.getAccount()
+    if (anyAccount && anyAccount.role === 'admin') {
+      return anyAccount
+    }
   }
 
   const passwordRecord = await derivePasswordRecord(operator.password, policy)

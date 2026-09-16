@@ -85,6 +85,46 @@ describe('own-mobile-relay-account bootstrap', () => {
       expect(admin.role).toBe('admin')
       expect(admin.email).toBe(operator.email)
       expect(admin.accountId).not.toBe(invited.accountId)
+
+      // bootstrapOperatorAccount again returns same admin without throw
+      const adminAgain = await bootstrapOperatorAccount(
+        state,
+        {
+          ...operator,
+          email: 'some-other-input@example.com'
+        },
+        TEST_FAST_PASSWORD_POLICY
+      )
+      expect(adminAgain.accountId).toBe(admin.accountId)
+      expect(adminAgain.role).toBe('admin')
+      expect(adminAgain.email).toBe(operator.email)
+    } finally {
+      await state.close()
+    }
+  })
+
+  it('bootstraps admin when invited users exist and subsequent bootstrap returns same admin in memory adapter', async () => {
+    const state = createOwnMobileRelaySecurityStateMemory()
+    try {
+      const invited = await state.inviteAccount({
+        email: 'invited-memory-first@example.com',
+        userId: 'usr_inv_mem_first',
+        profileId: 'prf_inv_mem_first',
+        organizationId: 'org_admin_1'
+      })
+      expect(invited.role).toBe('user')
+
+      const admin = await bootstrapOperatorAccount(state, operator, TEST_FAST_PASSWORD_POLICY)
+      expect(admin.role).toBe('admin')
+      expect(admin.accountId).not.toBe(invited.accountId)
+
+      const adminAgain = await bootstrapOperatorAccount(
+        state,
+        { ...operator, email: 'other-mem@example.com' },
+        TEST_FAST_PASSWORD_POLICY
+      )
+      expect(adminAgain.accountId).toBe(admin.accountId)
+      expect(adminAgain.role).toBe('admin')
     } finally {
       await state.close()
     }

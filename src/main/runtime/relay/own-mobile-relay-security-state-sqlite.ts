@@ -22,7 +22,9 @@ import {
 import {
   executeInviteAccountSqlite,
   executeActivateInvitedAccountSqlite,
-  executeDisableAccountSqlite
+  executeDisableAccountSqlite,
+  executeHasAdminAccountSqlite,
+  executeGetAdminAccountSqlite
 } from './own-mobile-relay-security-state-sqlite-admin-ops'
 import {
   executeIssueAccessSessionSqlite,
@@ -146,15 +148,21 @@ export function openOwnMobileRelaySecurityStateSqlite(
 
   return {
     _sqliteCtx: ctx,
-    getAccount: async (selector?: { email?: string; accountId?: string }) => {
+    getAccount: async (selector) => {
       assertOpen()
-      return executeGetAccountSqlite(ctx.db, selector)
+      return selector?.role === 'admin'
+        ? executeGetAdminAccountSqlite(ctx.db, selector?.email)
+        : executeGetAccountSqlite(ctx.db, selector)
+    },
+    hasAdminAccount: async () => {
+      assertOpen()
+      return executeHasAdminAccountSqlite(ctx.db)
     },
     bootstrapAccount: async (input, now = Date.now()) => {
       assertOpen()
       return executeBootstrapAccountSqlite(ctx.db, input, now)
     },
-    getAccountPasswordRecord: async (accountId?: string) => {
+    getAccountPasswordRecord: async (accountId) => {
       assertOpen()
       return executeGetAccountPasswordRecordSqlite(ctx.db, accountId)
     },
@@ -300,11 +308,10 @@ export function openOwnMobileRelaySecurityStateSqlite(
       )
     },
     close: async () => {
-      if (ctx.isClosed) {
-        return
+      if (!ctx.isClosed) {
+        ctx.isClosed = true
+        ctx.db.close()
       }
-      ctx.isClosed = true
-      ctx.db.close()
     }
   }
 }

@@ -29,6 +29,7 @@ export type OwnMobileRelaySecurityState = {
   getAccount(selector?: {
     email?: string
     accountId?: string
+    role?: 'admin' | 'user'
   }): Promise<SecurityStateAccountIdentity | null>
   hasAdminAccount?(): Promise<boolean>
   bootstrapAccount(
