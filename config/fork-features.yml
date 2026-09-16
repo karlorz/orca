@@ -307,3 +307,13 @@ features:
       - cloud/apps/relay/src/relay-server.ts
       - .github/workflows/fork-official-relay-image.yml
     wiki: projects/orca/work/2026-09-16-official-relay-harvest-combined
+
+  - id: official-push-gateway-self-host
+    title: Harvest official apps/push to Coolify orca-push.karldigi.dev
+    kind: product
+    status: in-progress
+    paths:
+      - .github/workflows/fork-official-push-image.yml
+      - src/main/runtime/push/push-gateway-origin.ts
+      - src/main/orca-profiles/fork-own-relay-defaults.ts
+    wiki: projects/orca/work/2026-09-16-official-push-gateway-self-host

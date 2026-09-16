@@ -42,6 +42,9 @@ package-lock.json
 .env.local
 .env.*.local
 
+# Brainstorming visual companion (local mockups)
+.superpowers/
+
 # IDE
 .vscode/
 .idea/
