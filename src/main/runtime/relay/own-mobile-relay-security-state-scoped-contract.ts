@@ -278,6 +278,43 @@ export function registerAccountScopedStoreTests(
       expect(disabledPwRec2?.authEpoch).toBe(2) // unchanged!
     })
 
+    it('listAccounts returns all accounts ordered by createdAt asc', async () => {
+      const admin = await state.bootstrapAccount({
+        email: 'admin-list@example.com',
+        userId: 'usr_admin_list',
+        profileId: 'prf_admin_list',
+        organizationId: 'org_main',
+        passwordRecord: adminPasswordRecord
+      })
+
+      const user1 = await state.inviteAccount({
+        email: 'user1@example.com',
+        userId: 'usr_user1',
+        profileId: 'prf_user1',
+        organizationId: 'org_main'
+      })
+
+      const user2 = await state.inviteAccount({
+        email: 'user2@example.com',
+        userId: 'usr_user2',
+        profileId: 'prf_user2',
+        organizationId: 'org_main'
+      })
+
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- contract test
+      const accounts = await state.listAccounts!()
+      expect(accounts.length).toBe(3)
+      expect(accounts[0].accountId).toBe(admin.accountId)
+      expect(accounts[0].role).toBe('admin')
+      expect(accounts[0].status).toBe('active')
+      expect(accounts[1].accountId).toBe(user1.accountId)
+      expect(accounts[1].role).toBe('user')
+      expect(accounts[1].status).toBe('invited')
+      expect(accounts[2].accountId).toBe(user2.accountId)
+      expect(accounts[2].role).toBe('user')
+      expect(accounts[2].status).toBe('invited')
+    })
+
     it('disabling an already-disabled sole admin returns ok without last_admin error', async () => {
       const admin = await state.bootstrapAccount({
         email: 'admin-sole@example.com',

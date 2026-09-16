@@ -9,7 +9,10 @@ export const ALLOWLISTED_AUDIT_FIELD_KEYS = new Set([
   'reason',
   'actor',
   'hostControlLive',
-  'count'
+  'count',
+  'accountId',
+  'email',
+  'actorAccountId'
 ] as const)
 
 export type AllowlistedAuditFieldKey =
@@ -22,6 +25,9 @@ export type AllowlistedAuditFieldKey =
   | 'actor'
   | 'hostControlLive'
   | 'count'
+  | 'accountId'
+  | 'email'
+  | 'actorAccountId'
 
 export const DISALLOWED_AUDIT_KEY_PATTERN =
   /token|password|cookie|secret|bearer|authorization|resume|ciphertext/i

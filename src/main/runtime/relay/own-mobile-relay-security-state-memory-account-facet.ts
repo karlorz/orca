@@ -14,7 +14,8 @@ import {
   activateInvitedAccountMemory,
   replacePasswordVerifierMemory,
   upgradePasswordVerifierMemory,
-  disableAccountMemory
+  disableAccountMemory,
+  listAccountsMemory
 } from './own-mobile-relay-security-state-memory-account-ops'
 
 export function createMemoryAccountFacet(ctx: MemoryStoreContext) {
@@ -118,6 +119,10 @@ export function createMemoryAccountFacet(ctx: MemoryStoreContext) {
 
     async disableAccount(accountId: string, now = Date.now()): Promise<'ok' | 'last_admin'> {
       return disableAccountMemory(ctx, accountId, now)
+    },
+
+    async listAccounts(): Promise<SecurityStateAccountIdentity[]> {
+      return listAccountsMemory(ctx)
     }
   }
 }

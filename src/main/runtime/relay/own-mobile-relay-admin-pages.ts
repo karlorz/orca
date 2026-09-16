@@ -2,7 +2,7 @@ import { PASSWORD_PAGE_HEADERS } from './own-mobile-relay-password-page'
 
 export const ADMIN_PAGE_HEADERS = { ...PASSWORD_PAGE_HEADERS }
 
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -27,7 +27,7 @@ function keyExpiryForms(opts: {
 <form method="post" action="${opts.revokeAction}" style="display:inline"><button type="submit">Revoke</button></form>`
 }
 
-function layout(title: string, body: string): string {
+export function layout(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>body{font-family:sans-serif;margin:24px;color:#0f172a}table{border-collapse:collapse}td,th{border:1px solid #cbd5e1;padding:6px 8px;font-size:13px}a{color:#1d4ed8}nav{margin-bottom:16px}pre{background:#f1f5f9;padding:12px;border:1px solid #cbd5e1;border-radius:4px;overflow-x:auto}</style>
@@ -65,7 +65,8 @@ export function renderAdminOverview(input: {
 <li>grants: ${input.grants}</li>
 <li>devices: ${input.devices}</li>
 <li>events: ${input.events}</li>
-</ul>`
+</ul>
+<p><a href="/admin/users">Manage users</a></p>`
   )
 }
 
@@ -85,7 +86,12 @@ export function renderAdminEvents(
 }
 
 export function renderAdminPairing(input: {
-  devices: { relayHostId: string; relayDeviceId: string; revoked?: boolean | null; keyExpiryDisabled?: boolean }[]
+  devices: {
+    relayHostId: string
+    relayDeviceId: string
+    revoked?: boolean | null
+    keyExpiryDisabled?: boolean
+  }[]
   grants: { grantId: string; relayHostId: string; keyExpiryDisabled?: boolean }[]
 }): string {
   const devices = input.devices
@@ -93,11 +99,13 @@ export function renderAdminPairing(input: {
       const host = encodeURIComponent(device.relayHostId)
       const id = encodeURIComponent(device.relayDeviceId)
       const expiryDisabled = device.keyExpiryDisabled ?? true
-      return `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}${keyExpiryBadge(expiryDisabled)}</td><td>${device.revoked ? 'revoked' : 'active'}</td><td>${keyExpiryForms({
-        expiryDisabled,
-        toggleAction: `/admin/pairing/devices/${host}/${id}/key-expiry`,
-        revokeAction: `/admin/pairing/devices/${host}/${id}/revoke`
-      })}</td></tr>`
+      return `<tr><td>${escapeHtml(device.relayHostId)}</td><td>${escapeHtml(device.relayDeviceId)}${keyExpiryBadge(expiryDisabled)}</td><td>${device.revoked ? 'revoked' : 'active'}</td><td>${keyExpiryForms(
+        {
+          expiryDisabled,
+          toggleAction: `/admin/pairing/devices/${host}/${id}/key-expiry`,
+          revokeAction: `/admin/pairing/devices/${host}/${id}/revoke`
+        }
+      )}</td></tr>`
     })
     .join('')
   const grants = input.grants
@@ -105,11 +113,13 @@ export function renderAdminPairing(input: {
       const host = encodeURIComponent(grant.relayHostId)
       const grantId = encodeURIComponent(grant.grantId)
       const expiryDisabled = grant.keyExpiryDisabled ?? true
-      return `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}${keyExpiryBadge(expiryDisabled)}</td><td>${keyExpiryForms({
-        expiryDisabled,
-        toggleAction: `/admin/pairing/hosts/${host}/key-expiry`,
-        revokeAction: `/admin/pairing/grants/${grantId}/revoke`
-      })}</td></tr>`
+      return `<tr><td>${escapeHtml(grant.grantId)}</td><td>${escapeHtml(grant.relayHostId)}${keyExpiryBadge(expiryDisabled)}</td><td>${keyExpiryForms(
+        {
+          expiryDisabled,
+          toggleAction: `/admin/pairing/hosts/${host}/key-expiry`,
+          revokeAction: `/admin/pairing/grants/${grantId}/revoke`
+        }
+      )}</td></tr>`
     })
     .join('')
   return layout(

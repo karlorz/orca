@@ -12,20 +12,7 @@ import {
   verifySqlitePathSecurity,
   verifySqliteQuickCheck
 } from './own-mobile-relay-security-state-sqlite-schema'
-import {
-  executeBootstrapAccountSqlite,
-  executeGetAccountSqlite,
-  executeGetAccountPasswordRecordSqlite,
-  executeReplacePasswordVerifierSqlite,
-  executeUpgradePasswordVerifierSqlite
-} from './own-mobile-relay-security-state-sqlite-account-ops'
-import {
-  executeInviteAccountSqlite,
-  executeActivateInvitedAccountSqlite,
-  executeDisableAccountSqlite,
-  executeHasAdminAccountSqlite,
-  executeGetAdminAccountSqlite
-} from './own-mobile-relay-security-state-sqlite-admin-ops'
+import { createSqliteAccountFacet } from './own-mobile-relay-security-state-sqlite-account-facet'
 import {
   executeIssueAccessSessionSqlite,
   executeLookupAccessSessionByTokenSqlite,
@@ -148,44 +135,7 @@ export function openOwnMobileRelaySecurityStateSqlite(
 
   return {
     _sqliteCtx: ctx,
-    getAccount: async (selector) => {
-      assertOpen()
-      return selector?.role === 'admin'
-        ? executeGetAdminAccountSqlite(ctx.db, selector?.email)
-        : executeGetAccountSqlite(ctx.db, selector)
-    },
-    hasAdminAccount: async () => {
-      assertOpen()
-      return executeHasAdminAccountSqlite(ctx.db)
-    },
-    bootstrapAccount: async (input, now = Date.now()) => {
-      assertOpen()
-      return executeBootstrapAccountSqlite(ctx.db, input, now)
-    },
-    getAccountPasswordRecord: async (accountId) => {
-      assertOpen()
-      return executeGetAccountPasswordRecordSqlite(ctx.db, accountId)
-    },
-    inviteAccount: async (input, now = Date.now()) => {
-      assertOpen()
-      return executeInviteAccountSqlite(ctx.db, input, now)
-    },
-    activateInvitedAccount: async (accountId, record, now = Date.now()) => {
-      assertOpen()
-      return executeActivateInvitedAccountSqlite(ctx.db, accountId, record, now)
-    },
-    replacePasswordVerifier: async (accountId, input, now = Date.now()) => {
-      assertOpen()
-      return executeReplacePasswordVerifierSqlite(ctx.db, accountId, input, now)
-    },
-    upgradePasswordVerifier: async (accountId, input, now = Date.now()) => {
-      assertOpen()
-      return executeUpgradePasswordVerifierSqlite(ctx.db, accountId, input, now)
-    },
-    disableAccount: async (accountId, now = Date.now()) => {
-      assertOpen()
-      return executeDisableAccountSqlite(ctx.db, accountId, now)
-    },
+    ...createSqliteAccountFacet({ db: ctx.db, assertOpen }),
     issueAccessSession: async (input, now = Date.now()) => {
       assertOpen()
       return executeIssueAccessSessionSqlite(ctx.db, input, now)

@@ -73,6 +73,7 @@ export type OwnMobileRelaySecurityState = {
     | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' }
   >
   disableAccount(accountId: string, now?: number): Promise<'ok' | 'last_admin'>
+  listAccounts?(): Promise<SecurityStateAccountIdentity[]>
 
   issueAccessSession(
     input: SecurityStateIssueAccessSessionInput,

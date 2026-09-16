@@ -201,3 +201,10 @@ export function disableAccountMemory(
   }
   return 'ok'
 }
+
+export function listAccountsMemory(ctx: MemoryStoreContext): SecurityStateAccountIdentity[] {
+  assertOpen(ctx)
+  const list = Array.from(ctx.accountsById.values())
+  list.sort((a, b) => a.createdAt - b.createdAt)
+  return list.map(toPublicAccount)
+}

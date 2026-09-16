@@ -13,6 +13,8 @@ import {
   renderAdminOverview,
   renderAdminPairing
 } from './own-mobile-relay-admin-pages'
+import { isAdminCsrfAllowed } from './own-mobile-relay-admin-csrf'
+import { handleAdminUsersGet, handleAdminUsersPost } from './own-mobile-relay-admin-users-actions'
 import { buildOperatorIncidentBundle } from './own-mobile-relay-operator-bundle'
 import {
   loadOperatorConsoleState,
@@ -68,48 +70,6 @@ function setOperatorCookie(token: string): string {
 
 function clearOperatorCookie(): string {
   return `${OPERATOR_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/admin; Max-Age=0`
-}
-
-function firstHeaderValue(value: string | string[] | undefined): string | undefined {
-  const raw = Array.isArray(value) ? value[0] : value
-  if (typeof raw !== 'string') {
-    return undefined
-  }
-  const trimmed = raw.trim()
-  return trimmed || undefined
-}
-
-function canonicalizeOrigin(value: string): string {
-  return value.trim().replace(/\/+$/, '')
-}
-
-function originHeader(request: IncomingMessage): string | undefined {
-  const origin = firstHeaderValue(request.headers.origin)
-  if (!origin || origin === 'null') {
-    return undefined
-  }
-  return canonicalizeOrigin(origin)
-}
-
-function isAdminCsrfAllowed(request: IncomingMessage, authOrigin: string): boolean {
-  const allowed = canonicalizeOrigin(authOrigin)
-  const origin = originHeader(request)
-  if (origin) {
-    return origin === allowed
-  }
-  const fetchSite = firstHeaderValue(request.headers['sec-fetch-site'])
-  if (fetchSite === 'same-origin') {
-    return true
-  }
-  const referer = firstHeaderValue(request.headers.referer)
-  if (!referer) {
-    return false
-  }
-  try {
-    return canonicalizeOrigin(new URL(referer).origin) === allowed
-  } catch {
-    return false
-  }
 }
 
 export async function handleAdminRequest(
@@ -199,6 +159,27 @@ export async function handleAdminRequest(
         devices: state.devices.length,
         events: state.events.length
       })
+    )
+    return
+  }
+
+  if (request.method === 'GET' && pathname === '/admin/users') {
+    await handleAdminUsersGet(request, response, context, session)
+    return
+  }
+
+  if (request.method === 'POST' && pathname.startsWith('/admin/users')) {
+    if (!isAdminCsrfAllowed(request, authOrigin)) {
+      sendHtml(response, 403, '<!DOCTYPE html><html><body>Forbidden</body></html>')
+      return
+    }
+    await handleAdminUsersPost(
+      request,
+      response,
+      pathname,
+      context,
+      session,
+      context.passwordPolicy
     )
     return
   }

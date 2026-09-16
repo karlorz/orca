@@ -176,3 +176,15 @@ export function executeDisableAccountSqlite(
     throw err
   }
 }
+
+export function executeListAccountsSqlite(db: DatabaseSync): SecurityStateAccountIdentity[] {
+  const rows = db
+    .prepare(
+      `SELECT account_id, email, user_id, profile_id, organization_id,
+              role, status, verifier_version, auth_epoch, created_at, updated_at
+       FROM operator_account
+       ORDER BY created_at ASC`
+    )
+    .all() as SqliteAccountRow[]
+  return rows.map(mapAccountRow)
+}
