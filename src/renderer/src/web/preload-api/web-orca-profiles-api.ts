@@ -48,6 +48,10 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()
       }),
+      openPasswordPage: async () => ({
+        ok: false as const,
+        error: 'unsupported'
+      }),
       refreshAuth: async () => ({
         status: 'unconfigured',
         auth: await webOrcaProfileAuthStatus()

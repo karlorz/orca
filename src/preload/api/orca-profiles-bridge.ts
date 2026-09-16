@@ -16,6 +16,7 @@ export const orcaProfilesApi = {
   transferProject: (args) => ipcRenderer.invoke('orcaProfiles:transferProject', args),
   findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
   connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
+  openPasswordPage: () => ipcRenderer.invoke('orcaProfiles:openPasswordPage'),
   refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
   signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
   selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),

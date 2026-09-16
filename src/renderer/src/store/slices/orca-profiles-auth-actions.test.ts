@@ -63,6 +63,7 @@ const orcaProfilesApi = {
   createLocal: vi.fn(),
   createCloudLinked: vi.fn(),
   connectCurrent: vi.fn(),
+  openPasswordPage: vi.fn(),
   refreshAuth: vi.fn(),
   signOutCurrent: vi.fn(),
   selectOrg: vi.fn(),
@@ -215,5 +216,13 @@ describe('orca profile auth actions slice', () => {
     expect(orcaProfilesApi.selectOrg).toHaveBeenCalledWith({ orgId: 'org-1' })
     expect(store.getState().orcaProfileAuthStatus).toEqual(selectedAuthStatus)
     expect(store.getState().orcaProfileAuthStatus?.organizations).toEqual(connectedOrganizations)
+  })
+
+  it('invokes window.api.orcaProfiles.openPasswordPage', async () => {
+    orcaProfilesApi.openPasswordPage.mockResolvedValue({ ok: true })
+    const store = createTestStore()
+
+    await expect(store.getState().openPasswordPage()).resolves.toEqual({ ok: true })
+    expect(orcaProfilesApi.openPasswordPage).toHaveBeenCalledOnce()
   })
 })

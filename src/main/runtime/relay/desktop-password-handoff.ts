@@ -57,7 +57,11 @@ export async function openDesktopPasswordPage(
     return { ok: false, error: 'window_unavailable' }
   }
 
-  const fetchImpl = deps.fetch ?? ((url: string, init?: RequestInit) => net.fetch(url, init))
+  const fetchImpl =
+    deps.fetch ??
+    (typeof targetWindow.webContents?.session?.fetch === 'function'
+      ? (url: string, init?: RequestInit) => targetWindow.webContents.session.fetch(url, init)
+      : (url: string, init?: RequestInit) => net.fetch(url, init))
 
   const baseUrl = authConfigResult.config.apiBaseUrl.replace(/\/$/, '')
   const cookieEndpoint = `${baseUrl}/v1/desktop/auth/password/cookie`

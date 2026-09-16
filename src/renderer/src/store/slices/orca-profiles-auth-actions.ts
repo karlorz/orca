@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileResult,
+  OpenDesktopPasswordPageResult,
   RefreshCurrentOrcaProfileAuthResult,
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
@@ -16,6 +17,7 @@ export type OrcaProfilesAuthActions = {
     name?: string
   }) => Promise<CreateCloudLinkedOrcaProfileResult | null>
   connectCurrentOrcaProfile: () => Promise<ConnectCurrentOrcaProfileResult | null>
+  openPasswordPage: () => Promise<OpenDesktopPasswordPageResult | null>
   refreshCurrentOrcaProfileAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult | null>
   signOutCurrentOrcaProfile: () => Promise<SignOutCurrentOrcaProfileResult | null>
   selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
@@ -110,6 +112,34 @@ export const createOrcaProfilesAuthActions: StateCreator<
       set({ orcaProfileConnecting: false })
       toast.error(
         translate('auto.store.slices.orca.profiles.33290e88ed', 'Failed to connect profile'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
+      return null
+    }
+  },
+
+  openPasswordPage: async () => {
+    try {
+      const result = await window.api.orcaProfiles.openPasswordPage()
+      if (!result.ok) {
+        toast.error(
+          translate(
+            'auto.store.slices.orca.profiles.failedOpenPassword',
+            'Failed to open password page'
+          ),
+          { description: result.error }
+        )
+      }
+      return result
+    } catch (err) {
+      console.error('Failed to open password page:', err)
+      toast.error(
+        translate(
+          'auto.store.slices.orca.profiles.failedOpenPassword',
+          'Failed to open password page'
+        ),
         {
           description: err instanceof Error ? err.message : String(err)
         }

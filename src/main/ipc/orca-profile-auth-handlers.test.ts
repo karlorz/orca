@@ -7,7 +7,9 @@ const {
   getCurrentOrcaProfileAuthStatusMock,
   refreshCurrentOrcaProfileAuthMock,
   selectCurrentOrcaProfileOrgMock,
-  signOutCurrentOrcaProfileMock
+  signOutCurrentOrcaProfileMock,
+  openDesktopPasswordPageMock,
+  browserWindowFromWebContentsMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   createCloudLinkedOrcaProfileMock: vi.fn(),
@@ -15,13 +17,18 @@ const {
   getCurrentOrcaProfileAuthStatusMock: vi.fn(),
   refreshCurrentOrcaProfileAuthMock: vi.fn(),
   selectCurrentOrcaProfileOrgMock: vi.fn(),
-  signOutCurrentOrcaProfileMock: vi.fn()
+  signOutCurrentOrcaProfileMock: vi.fn(),
+  openDesktopPasswordPageMock: vi.fn(),
+  browserWindowFromWebContentsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     exit: vi.fn(),
     relaunch: vi.fn()
+  },
+  BrowserWindow: {
+    fromWebContents: browserWindowFromWebContentsMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -54,6 +61,10 @@ vi.mock('../orca-profiles/profile-cloud-service', () => ({
   signOutCurrentOrcaProfile: signOutCurrentOrcaProfileMock
 }))
 
+vi.mock('../runtime/relay/desktop-password-handoff', () => ({
+  openDesktopPasswordPage: openDesktopPasswordPageMock
+}))
+
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
@@ -69,6 +80,8 @@ describe('registerOrcaProfileHandlers auth channels', () => {
     refreshCurrentOrcaProfileAuthMock.mockReset()
     selectCurrentOrcaProfileOrgMock.mockReset()
     signOutCurrentOrcaProfileMock.mockReset()
+    openDesktopPasswordPageMock.mockReset()
+    browserWindowFromWebContentsMock.mockReset()
   })
 
   it('returns auth status for the current profile', async () => {
@@ -170,5 +183,32 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       orgId: 'org-1',
       name: 'Acme'
     })
+  })
+
+  it('delegates orcaProfiles:openPasswordPage to openDesktopPasswordPage with sender window', async () => {
+    const fakeWindow = { id: 42 }
+    const fakeSender = { id: 101 }
+    browserWindowFromWebContentsMock.mockReturnValue(fakeWindow)
+    openDesktopPasswordPageMock.mockImplementation(
+      async (deps: { getWindow?: () => unknown; userDataPath: string }) => {
+        expect(deps.userDataPath).toBe('/tmp/orca-user-data')
+        expect(deps.getWindow?.()).toBe(fakeWindow)
+        return { ok: true }
+      }
+    )
+
+    registerOrcaProfileHandlers({
+      flush: vi.fn(),
+      freezeWrites: vi.fn(),
+      getSettings: () => ({})
+    } as never)
+
+    const handler = handlers.get('orcaProfiles:openPasswordPage')
+    expect(handler).toBeDefined()
+    const result = await handler?.({ sender: fakeSender } as never)
+
+    expect(result).toEqual({ ok: true })
+    expect(browserWindowFromWebContentsMock).toHaveBeenCalledWith(fakeSender)
+    expect(openDesktopPasswordPageMock).toHaveBeenCalledOnce()
   })
 })

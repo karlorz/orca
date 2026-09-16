@@ -6,6 +6,7 @@ import type {
   CreateLocalOrcaProfileResult,
   FindOrcaProfileProjectsByPathArgs,
   FindOrcaProfileProjectsByPathResult,
+  OpenDesktopPasswordPageResult,
   OrcaProfileAuthStatus,
   OrcaProfileListResult,
   OrcaProfileOrgInviteRevokeArgs,
@@ -42,6 +43,7 @@ export type OrcaProfileApi = {
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
+  openPasswordPage: () => Promise<OpenDesktopPasswordPageResult>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>

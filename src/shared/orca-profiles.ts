@@ -151,6 +151,8 @@ export type TransferOrcaProfileProjectResult =
       duplicateRepoId: string
     }
 
+export type OpenDesktopPasswordPageResult = { ok: true } | { ok: false; error: string }
+
 export type ConnectCurrentOrcaProfileResult =
   | {
       status: 'connected'

@@ -144,4 +144,80 @@ describe('desktop-password-handoff', () => {
       'https://orca-auth.example.com/v1/desktop/auth/password'
     )
   })
+
+  it('prefers targetWindow.webContents.session.fetch when fetch dependency is not explicitly passed', async () => {
+    mocks.ensureActiveOrcaProfile.mockReturnValue({
+      profile: {
+        id: 'prof-1',
+        cloud: {
+          cloudProfileId: 'cprof-1',
+          userId: 'user-1',
+          email: 'user@example.com',
+          linkedAt: Date.now()
+        }
+      }
+    })
+
+    mocks.readFreshOrcaCloudSession.mockResolvedValue({
+      status: 'found',
+      session: {
+        accessToken: 'valid-token-session-fetch',
+        refreshToken: 'refresh-session-fetch',
+        expiresAt: Date.now() + 3600_000,
+        capabilities: { flags: { 'relay.use': true }, refreshedAt: Date.now() }
+      }
+    })
+
+    const sessionFetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://orca-auth.example.com/v1/desktop/auth/password/cookie')
+      expect((init?.headers as Record<string, string>)?.authorization).toBe(
+        'Bearer valid-token-session-fetch'
+      )
+      return {
+        ok: true,
+        status: 204
+      } as unknown as Response
+    })
+
+    const loadURLMock = vi.fn(async (_url: string) => {})
+    const fakeWindow = {
+      isDestroyed: () => false,
+      loadURL: loadURLMock,
+      webContents: {
+        session: {
+          fetch: sessionFetchMock
+        }
+      }
+    }
+
+    const authConfig = {
+      configured: true as const,
+      config: {
+        apiBaseUrl: 'https://orca-auth.example.com',
+        authorizeEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/authorize',
+        sessionEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/session',
+        refreshEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/refresh',
+        capabilitiesEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/capabilities',
+        profileEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/profile',
+        orgEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/org',
+        logoutEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/logout',
+        relayTokenEndpoint: 'https://orca-auth.example.com/v1/desktop/auth/relay-token',
+        relayDirectorUrl: 'https://relay.example.com',
+        clientId: 'orca-desktop',
+        scope: 'openid'
+      }
+    }
+
+    const res = await openDesktopPasswordPage({
+      getWindow: () => fakeWindow as never,
+      userDataPath: '/tmp/test-user-data',
+      authConfig
+    })
+
+    expect(res).toEqual({ ok: true })
+    expect(sessionFetchMock).toHaveBeenCalledOnce()
+    expect(loadURLMock).toHaveBeenCalledWith(
+      'https://orca-auth.example.com/v1/desktop/auth/password'
+    )
+  })
 })

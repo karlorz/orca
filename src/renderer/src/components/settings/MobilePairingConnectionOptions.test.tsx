@@ -14,6 +14,7 @@ type MobileRelayStoreState = {
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
   orcaProfileConnecting: boolean
   connectCurrentOrcaProfile: () => Promise<null>
+  openPasswordPage?: () => Promise<{ ok: boolean; error?: string } | null>
   fetchOrcaProfileAuthStatus: () => Promise<OrcaProfileAuthStatus | null>
 }
 
@@ -285,6 +286,49 @@ describe('MobilePairingConnectionOptions', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in again for Relay' }))
     expect(onChange).toHaveBeenCalledWith('automatic')
     expect(connect).toHaveBeenCalledOnce()
+  })
+
+  it('shows Change relay password button when signed in and Relay is selected', async () => {
+    const openPasswordPage = vi.fn().mockResolvedValue({ ok: true })
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      },
+      openPasswordPage
+    }
+    const user = userEvent.setup()
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+
+    const panel = screen.getByTestId('relay-signed-in-panel')
+    expect(panel).toBeVisible()
+    expect(screen.getByText('Signed in to Orca Relay.')).toBeVisible()
+
+    const button = screen.getByRole('button', { name: 'Change relay password' })
+    expect(button).toBeVisible()
+
+    await user.click(button)
+    expect(openPasswordPage).toHaveBeenCalledOnce()
+  })
+
+  it('hides Change relay password button when LAN is selected even if signed in', () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      },
+      openPasswordPage: vi.fn()
+    }
+    render(<MobilePairingConnectionOptions value="local-only" onChange={vi.fn()} />)
+
+    expect(screen.queryByTestId('relay-signed-in-panel')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Change relay password' })).toBeNull()
   })
 
   it('keeps LAN available while Relay is retrying', async () => {

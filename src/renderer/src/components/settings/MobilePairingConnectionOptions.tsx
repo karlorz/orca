@@ -68,6 +68,8 @@ export function MobilePairingConnectionOptions({
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
+  const openPasswordPage = useAppStore((state) => state.openPasswordPage)
+  const [openingPassword, setOpeningPassword] = useState(false)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
   const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
   const signedIn = authStatus?.state === 'connected'
@@ -250,6 +252,44 @@ export function MobilePairingConnectionOptions({
                     'auto.components.settings.MobilePairingConnectionOptions.signIn',
                     'Sign in for Relay'
                   )}
+            </Button>
+          </div>
+        ) : signedIn && value === 'automatic' ? (
+          <div
+            onKeyDown={(event) => {
+              if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.stopPropagation()
+              }
+            }}
+            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-accent/40 py-2.5 pl-10 pr-3"
+            data-testid="relay-signed-in-panel"
+          >
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.MobilePairingConnectionOptions.relaySignedIn',
+                'Signed in to Orca Relay.'
+              )}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={openingPassword}
+              onClick={async () => {
+                setOpeningPassword(true)
+                try {
+                  await openPasswordPage?.()
+                } finally {
+                  setOpeningPassword(false)
+                }
+              }}
+            >
+              {openingPassword ? <Loader2 className="animate-spin" /> : null}
+              {translate(
+                'auto.components.settings.MobilePairingConnectionOptions.changeRelayPassword',
+                'Change relay password'
+              )}
             </Button>
           </div>
         ) : null}
