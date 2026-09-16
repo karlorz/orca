@@ -1,0 +1,64 @@
+name: Fork official relay image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fork-main]
+    paths:
+      - cloud/apps/relay/**
+      - cloud/packages/relay-contract/**
+      - cloud/packages/postgres-schema/**
+      - cloud/package.json
+      - cloud/pnpm-lock.yaml
+      - cloud/pnpm-workspace.yaml
+      - cloud/tsconfig.base.json
+      - .github/workflows/fork-official-relay-image.yml
+  pull_request:
+    branches: [fork-main]
+    paths:
+      - cloud/apps/relay/**
+      - cloud/packages/relay-contract/**
+      - cloud/packages/postgres-schema/**
+      - .github/workflows/fork-official-relay-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: fork-official-relay-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: cloud
+          file: cloud/apps/relay/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/karlorz/orca-relay-official:${{ github.sha }}
+            ghcr.io/karlorz/orca-relay-official:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

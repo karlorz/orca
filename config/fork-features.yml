@@ -298,4 +298,5 @@ features:
       - cloud/apps/relay/src/config.ts
       - cloud/apps/relay/src/credential-store.ts
       - cloud/apps/relay/src/relay-server.ts
+      - .github/workflows/fork-official-relay-image.yml
     wiki: projects/orca/work/2026-09-16-official-relay-harvest-combined
