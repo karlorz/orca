@@ -49,8 +49,8 @@ export function renderPasswordChangePage(feedback?: PasswordPageFeedback): strin
     p.subtitle { font-size: 14px; color: #64748b; margin-bottom: 20px; }
     .field { margin-bottom: 16px; }
     label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
-    input[type="email"], input[type="password"] { width: 100%; height: 38px; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; transition: border-color 0.15s; }
-    input[type="email"]:focus, input[type="password"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+    input[type="password"] { width: 100%; height: 38px; padding: 8px 12px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; transition: border-color 0.15s; }
+    input[type="password"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
     button[type="submit"] { width: 100%; height: 40px; background: #0f172a; color: #ffffff; font-size: 14px; font-weight: 500; border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
     button[type="submit"]:hover { background: #1e293b; }
     .help-text { font-size: 12px; color: #64748b; margin-top: 4px; }
@@ -62,10 +62,6 @@ export function renderPasswordChangePage(feedback?: PasswordPageFeedback): strin
     <p class="subtitle">Update account password and invalidate active desktop sessions.</p>
     ${feedbackHtml}
     <form method="POST" action="/v1/desktop/auth/password" autocomplete="off">
-      <div class="field">
-        <label for="email">Account Email</label>
-        <input type="email" id="email" name="email" required autocomplete="email" />
-      </div>
       <div class="field">
         <label for="currentPassword">Current Password</label>
         <input type="password" id="currentPassword" name="currentPassword" required autocomplete="current-password" />

@@ -213,7 +213,7 @@ export async function runAccountCli(options: AccountCliOptions): Promise<Account
   try {
     const account = emailFilter
       ? await securityState.getAccount({ email: emailFilter })
-      : await securityState.getAccount()
+      : await securityState.getAccount({ role: 'admin' })
     const passwordRec = account
       ? await securityState.getAccountPasswordRecord(account.accountId)
       : null

@@ -121,10 +121,12 @@ export async function startOwnRelayServer(options: {
   })
 
   try {
-    const existingAccount = await securityState.getAccount()
+    const hasAdmin = securityState.hasAdminAccount
+      ? await securityState.hasAdminAccount()
+      : Boolean(await securityState.getAccount({ role: 'admin' }))
 
     // 2. Validate bootstrap rules
-    if (existingAccount) {
+    if (hasAdmin) {
       if (config.operator) {
         throw new Error('bootstrap_already_complete: operator account already exists in database')
       }

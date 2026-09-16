@@ -214,7 +214,33 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
           await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
         ).toString('base64url')
 
-        // 1. Authorize to obtain an authorization code
+        // 1. Authorize and exchange to obtain an active session for the operator
+        const query0 = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s0&nonce=n0`
+        const login0 = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query0}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            email: defaultOperator.email,
+            password: defaultOperator.password
+          }).toString(),
+          redirect: 'manual'
+        })
+        const code0 = new URL(login0.headers.get('location')!).searchParams.get('code')!
+        const sess0Res = await fetch(`${server.origin}/v1/desktop/auth/session`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code: code0,
+            codeVerifier: verifier,
+            nonce: 'n0',
+            redirectUri: 'http://127.0.0.1:4000/auth/callback',
+            state: 's0',
+            localProfileId: 'local-default'
+          })
+        })
+        const { accessToken: sessionToken } = (await sess0Res.json()) as { accessToken: string }
+
+        // 1b. Now authorize another code to be rendered stale
         const query = `client_id=${defaultClientId}&redirect_uri=http://127.0.0.1:4000/auth/callback&code_challenge_method=S256&code_challenge=${challenge}&response_type=code&state=s1&nonce=n1`
         const loginRes = await fetch(`${server.origin}/v1/desktop/auth/authorize?${query}`, {
           method: 'POST',
@@ -231,14 +257,21 @@ describe('own mobile relay auth (PKCE own-auth)', () => {
 
         // 2. Change password, advancing authEpoch
         const newPassword = 'new-secure-password-4567'
+        const cookieRes = await fetch(`${server.origin}/v1/desktop/auth/password/cookie`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${sessionToken}` }
+        })
+        expect(cookieRes.status).toBe(204)
+        const pwdCookie = cookieRes.headers.get('set-cookie')!.split(';')[0]
+
         const changeRes = await fetch(`${server.origin}/v1/desktop/auth/password`, {
           method: 'POST',
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
-            origin: server.origin
+            origin: server.origin,
+            cookie: pwdCookie
           },
           body: new URLSearchParams({
-            email: defaultOperator.email,
             currentPassword: defaultOperator.password,
             newPassword,
             confirmPassword: newPassword

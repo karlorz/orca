@@ -22,7 +22,8 @@ import {
   handleRefreshPost,
   handleSessionPost,
   handlePasswordGet,
-  handlePasswordPost
+  handlePasswordPost,
+  handlePasswordCookiePost
 } from './own-mobile-relay-auth'
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import type { PasswordPolicy } from './own-mobile-relay-password'
@@ -85,9 +86,15 @@ export function createOwnMobileRelayRequestHandler(
       sendJson(response, 200, relayTokenJwks(context.relayTokenSigningKey))
       return
     }
+    if (url.pathname === '/v1/desktop/auth/password/cookie') {
+      if (request.method === 'POST') {
+        await handlePasswordCookiePost(request, context.securityState, response)
+        return
+      }
+    }
     if (url.pathname === '/v1/desktop/auth/password') {
       if (request.method === 'GET') {
-        handlePasswordGet(response)
+        await handlePasswordGet(request, context.securityState, response)
         return
       }
       if (request.method === 'POST') {

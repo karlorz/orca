@@ -2,17 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { renderPasswordChangePage, PASSWORD_PAGE_HEADERS } from './own-mobile-relay-password-page'
 
 describe('own-mobile-relay-password-page', () => {
-  it('renders a self-contained HTML page with email, currentPassword, newPassword, confirmPassword inputs', () => {
+  it('renders a self-contained HTML page with currentPassword, newPassword, confirmPassword inputs without email', () => {
     const html = renderPasswordChangePage()
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('action="/v1/desktop/auth/password"')
     expect(html).toContain('method="POST"')
-    expect(html).toContain('name="email"')
+    expect(html).not.toContain('name="email"')
     expect(html).toContain('name="currentPassword"')
     expect(html).toContain('name="newPassword"')
     expect(html).toContain('name="confirmPassword"')
     expect(html).toContain('type="password"')
-    expect(html).toContain('type="email"')
+    expect(html).not.toContain('type="email"')
 
     // Must not depend on any external scripts, external stylesheets, or Node globals
     expect(html).not.toContain('<script src="http')

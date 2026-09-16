@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { OwnMobileRelaySecurityState } from './own-mobile-relay-security-state'
+import type {
+  OwnMobileRelaySecurityState,
+  SecurityStateAccessSession
+} from './own-mobile-relay-security-state'
 import {
   verifyPasswordRecord,
   derivePasswordRecord,
@@ -11,14 +14,76 @@ import {
 } from './own-mobile-relay-password'
 import { PASSWORD_PAGE_HEADERS, renderPasswordChangePage } from './own-mobile-relay-password-page'
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
-import { readUrlEncodedBodySafely, ReadBodyError } from './own-mobile-relay-http-utils'
+import { bearerToken, readUrlEncodedBodySafely, ReadBodyError } from './own-mobile-relay-http-utils'
 
-export function handlePasswordGet(response: ServerResponse): void {
-  const html = renderPasswordChangePage()
-  response.writeHead(200, {
-    ...PASSWORD_PAGE_HEADERS,
-    'content-length': Buffer.byteLength(html)
+export const PASSWORD_COOKIE_NAME = 'own_relay_password'
+export const PASSWORD_COOKIE_PATH = '/v1/desktop/auth/password'
+const PASSWORD_COOKIE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+export function setPasswordCookie(token: string): string {
+  return `${PASSWORD_COOKIE_NAME}=${token}; HttpOnly; SameSite=Lax; Path=${PASSWORD_COOKIE_PATH}; Max-Age=${Math.floor(PASSWORD_COOKIE_TTL_MS / 1000)}`
+}
+
+function passwordCookieValue(header: string | string[] | undefined): string | null {
+  const raw = Array.isArray(header) ? header.join('; ') : header
+  if (!raw) {
+    return null
+  }
+  for (const part of raw.split(';')) {
+    const [name, ...rest] = part.trim().split('=')
+    if (name === PASSWORD_COOKIE_NAME) {
+      return rest.join('=').trim() || null
+    }
+  }
+  return null
+}
+
+export async function lookupPasswordSession(
+  request: IncomingMessage,
+  securityState: OwnMobileRelaySecurityState
+): Promise<SecurityStateAccessSession | null> {
+  const token =
+    bearerToken(request.headers.authorization) || passwordCookieValue(request.headers.cookie)
+  return token ? securityState.lookupAccessSessionByToken(token) : null
+}
+
+export async function handlePasswordCookiePost(
+  request: IncomingMessage,
+  securityState: OwnMobileRelaySecurityState,
+  response: ServerResponse
+): Promise<void> {
+  const bearer = bearerToken(request.headers.authorization)
+  if (!bearer) {
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
+  const session = await securityState.lookupAccessSessionByToken(bearer)
+  if (!session) {
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
+  response.writeHead(204, {
+    'set-cookie': setPasswordCookie(bearer),
+    'cache-control': 'no-store'
   })
+  response.end()
+}
+
+export async function handlePasswordGet(
+  request: IncomingMessage,
+  securityState: OwnMobileRelaySecurityState,
+  response: ServerResponse
+): Promise<void> {
+  const session = await lookupPasswordSession(request, securityState)
+  if (!session) {
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
+  const html = renderPasswordChangePage()
+  response.writeHead(200, { ...PASSWORD_PAGE_HEADERS, 'content-length': Buffer.byteLength(html) })
   response.end(html)
 }
 
@@ -43,10 +108,7 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
     return undefined
   }
   const trimmed = raw.trim()
-  if (!trimmed || trimmed.toLowerCase() === 'null') {
-    return undefined
-  }
-  return trimmed.replace(/\/$/, '')
+  return !trimmed || trimmed.toLowerCase() === 'null' ? undefined : trimmed.replace(/\/$/, '')
 }
 
 function originFromUrl(url: string | undefined): string | undefined {
@@ -92,10 +154,7 @@ function isAllowedPasswordOrigin(
   if (refererOrigin && allowedOrigins.includes(refererOrigin)) {
     return true
   }
-  if (!origin && hostMatchesAllowed(hostHeader, allowedOrigins)) {
-    return true
-  }
-  return false
+  return !origin && hostMatchesAllowed(hostHeader, allowedOrigins)
 }
 
 export async function handlePasswordPost(
@@ -107,6 +166,13 @@ export async function handlePasswordPost(
   passwordPolicy: PasswordPolicy = CURRENT_PASSWORD_POLICY,
   advertisedOrigin?: string
 ): Promise<void> {
+  const session = await lookupPasswordSession(request, securityState)
+  if (!session) {
+    response.writeHead(401, { 'content-type': 'text/plain' })
+    response.end('Unauthorized')
+    return
+  }
+
   const allowedOrigins = [configuredOrigin, advertisedOrigin].filter((value): value is string =>
     Boolean(value)
   )
@@ -144,7 +210,7 @@ export async function handlePasswordPost(
     return
   }
 
-  const email = body.get('email') ?? ''
+  const email = session.identity.email
   const currentPassword = body.get('currentPassword') ?? ''
   const newPassword = body.get('newPassword') ?? ''
   const confirmPassword = body.get('confirmPassword') ?? ''
@@ -182,13 +248,11 @@ export async function handlePasswordPost(
     return
   }
 
-  const account = await securityState.getAccount()
-  const passwordRec = await securityState.getAccountPasswordRecord()
+  const account = await securityState.getAccount({ accountId: session.accountId })
+  const passwordRec = await securityState.getAccountPasswordRecord(session.accountId)
 
-  if (!account || !passwordRec || email !== account.email) {
-    if (throttle) {
-      throttle.recordFailure(email, remoteIp)
-    }
+  if (!account || !passwordRec || account.status !== 'active') {
+    throttle?.recordFailure(email, remoteIp)
     sendPasswordPageResponse(response, 401, {
       status: 'error',
       message: 'Authentication failed. Please verify your current credentials.'
@@ -202,9 +266,7 @@ export async function handlePasswordPost(
     passwordPolicy
   )
   if (!verifyResult.valid) {
-    if (throttle) {
-      throttle.recordFailure(email, remoteIp)
-    }
+    throttle?.recordFailure(email, remoteIp)
     sendPasswordPageResponse(response, 401, {
       status: 'error',
       message: 'Authentication failed. Please verify your current credentials.'
@@ -229,9 +291,7 @@ export async function handlePasswordPost(
   })
 
   if (!replaceResult.ok) {
-    if (throttle) {
-      throttle.recordFailure(email, remoteIp)
-    }
+    throttle?.recordFailure(email, remoteIp)
     sendPasswordPageResponse(response, 401, {
       status: 'error',
       message: 'Authentication failed. Please verify your current credentials.'
@@ -239,9 +299,7 @@ export async function handlePasswordPost(
     return
   }
 
-  if (throttle) {
-    throttle.recordSuccess(email, remoteIp)
-  }
+  throttle?.recordSuccess(email, remoteIp)
 
   sendPasswordPageResponse(response, 200, {
     status: 'success',

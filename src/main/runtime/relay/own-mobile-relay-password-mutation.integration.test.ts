@@ -197,9 +197,19 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
       })
       expect(installed.currentVersion).toBe(1)
 
-      // 5. Change password via Browser form workflow (Finding 3)
-      // 5a. GET rendered HTML form page, verify action, fields, and security headers
-      const getPageRes = await fetch(`${origin}/v1/desktop/auth/password`)
+      // 5. Change password via session-bound browser form workflow (Task 5)
+      // 5a. Bootstrap password cookie from desktop session
+      const cookieRes = await fetch(`${origin}/v1/desktop/auth/password/cookie`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${oldAccessToken}` }
+      })
+      expect(cookieRes.status).toBe(204)
+      const pwdCookie = cookieRes.headers.get('set-cookie')!.split(';')[0]
+
+      // 5b. GET rendered HTML form page with cookie, verify action, fields, and security headers
+      const getPageRes = await fetch(`${origin}/v1/desktop/auth/password`, {
+        headers: { cookie: pwdCookie }
+      })
       expect(getPageRes.status).toBe(200)
       expect(getPageRes.headers.get('content-type')).toContain('text/html')
       expect(getPageRes.headers.get('cache-control')).toBe('no-store, no-cache, must-revalidate')
@@ -208,7 +218,7 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
 
       const pageHtml = await getPageRes.text()
       expect(pageHtml).toContain('action="/v1/desktop/auth/password"')
-      expect(pageHtml).toContain('name="email"')
+      expect(pageHtml).not.toContain('name="email"')
       expect(pageHtml).toContain('name="currentPassword"')
       expect(pageHtml).toContain('name="newPassword"')
       expect(pageHtml).toContain('name="confirmPassword"')
@@ -217,15 +227,15 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
       const actionMatch = pageHtml.match(/action="([^"]+)"/)
       const formAction = actionMatch ? actionMatch[1] : '/v1/desktop/auth/password'
 
-      // 5b. Submit the form with exact origin and valid inputs
+      // 5c. Submit the form with exact origin, cookie, and valid inputs
       const pwdRes = await fetch(`${origin}${formAction}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          origin: 'http://127.0.0.1'
+          origin: 'http://127.0.0.1',
+          cookie: pwdCookie
         },
         body: new URLSearchParams({
-          email: operatorEmail,
           currentPassword: initialPassword,
           newPassword,
           confirmPassword: newPassword

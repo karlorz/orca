@@ -25,10 +25,6 @@ export async function bootstrapOperatorAccount(
     if (adminAccount && adminAccount.role === 'admin') {
       return adminAccount
     }
-    const anyAccount = await securityState.getAccount()
-    if (anyAccount && anyAccount.role === 'admin') {
-      return anyAccount
-    }
   }
 
   const passwordRecord = await derivePasswordRecord(operator.password, policy)

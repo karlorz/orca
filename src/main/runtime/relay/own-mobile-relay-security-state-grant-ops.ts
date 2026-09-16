@@ -23,7 +23,10 @@ export function lookupAccessSessionByTokenMemory(
     return null
   }
   const session = ctx.sessionsById.get(sessionId)
-  if (!session || !isSessionValid(session, ctx.account, now)) {
+  const targetAcc = session?.accountId
+    ? (ctx.accountsById.get(session.accountId) ?? ctx.account)
+    : ctx.account
+  if (!session || !isSessionValid(session, targetAcc, now)) {
     return null
   }
   return toPublicAccessSession(session)
