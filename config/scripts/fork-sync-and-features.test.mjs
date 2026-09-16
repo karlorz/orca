@@ -155,12 +155,12 @@ describe('fork-features registry', () => {
     expect(entry.wiki).toBe('projects/orca/work/2026-09-16-official-relay-ops-console-study')
   })
 
-  it('records official-push-gateway-self-host in-progress product feature', () => {
+  it('records official-push-gateway-self-host landed product feature', () => {
     const registry = loadForkFeatures(featuresPath)
     const entry = registry.features.find((f) => f.id === 'official-push-gateway-self-host')
     expect(entry).toBeDefined()
     expect(entry.kind).toBe('product')
-    expect(entry.status).toBe('in-progress')
+    expect(entry.status).toBe('landed')
     expect(entry.paths).toEqual([
       '.github/workflows/fork-official-push-image.yml',
       'src/main/runtime/push/push-gateway-origin.ts',
