@@ -11,6 +11,7 @@ export type ForkOwnRelayDefaults = {
   enabled: boolean
   apiBaseUrl: string
   relayDirectorUrl: string
+  pushGatewayUrl: string
   clientId: string
 }
 
@@ -18,5 +19,6 @@ export const FORK_OWN_MOBILE_RELAY: ForkOwnRelayDefaults = {
   enabled: true,
   apiBaseUrl: 'https://orca-auth.karldigi.dev',
   relayDirectorUrl: 'https://orca-relay.karldigi.dev',
+  pushGatewayUrl: 'https://orca-push.karldigi.dev',
   clientId: 'orca-desktop'
 }

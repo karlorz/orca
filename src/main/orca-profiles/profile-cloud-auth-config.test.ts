@@ -50,6 +50,7 @@ describe('Orca cloud auth config', () => {
       enabled: true,
       apiBaseUrl: 'https://orca-auth.karldigi.dev',
       relayDirectorUrl: 'https://orca-relay.karldigi.dev',
+      pushGatewayUrl: 'https://orca-push.karldigi.dev',
       clientId: 'orca-desktop'
     })
 
@@ -78,6 +79,7 @@ describe('Orca cloud auth config', () => {
         enabled: false,
         apiBaseUrl: '',
         relayDirectorUrl: '',
+        pushGatewayUrl: '',
         clientId: 'orca-desktop'
       })
     ).toEqual({
@@ -105,6 +107,7 @@ describe('Orca cloud auth config', () => {
         enabled: true,
         apiBaseUrl: 'https://auth.sg01.example',
         relayDirectorUrl: 'https://relay.sg01.example',
+        pushGatewayUrl: 'https://push.sg01.example',
         clientId: 'orca-desktop'
       })
     ).toEqual({
@@ -138,6 +141,7 @@ describe('Orca cloud auth config', () => {
         enabled: true,
         apiBaseUrl: 'https://auth.sg01.example',
         relayDirectorUrl: 'https://relay.sg01.example',
+        pushGatewayUrl: 'https://push.sg01.example',
         clientId: 'fork-client'
       }
     )
