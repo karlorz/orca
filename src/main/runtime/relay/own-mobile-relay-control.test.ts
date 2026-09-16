@@ -659,7 +659,7 @@ describe('own mobile relay host-control', () => {
       // Replace password verifier which bumps authEpoch
       const acc = await securityState.getAccountPasswordRecord()
       expect(acc).not.toBeNull()
-      const replaceResult = await securityState.replacePasswordVerifier({
+      const replaceResult = await securityState.replacePasswordVerifier(acc!.accountId, {
         expectedVerifierVersion: acc!.verifierVersion,
         newPasswordRecord: {
           version: 1,

@@ -223,7 +223,7 @@ export async function handlePasswordPost(
     return
   }
 
-  const replaceResult = await securityState.replacePasswordVerifier({
+  const replaceResult = await securityState.replacePasswordVerifier(account.accountId, {
     expectedVerifierVersion: passwordRec.verifierVersion,
     newPasswordRecord
   })

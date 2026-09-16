@@ -6,9 +6,11 @@ export type InternalAccountRecord = {
   userId: string
   profileId: string
   organizationId: string
+  role: 'admin' | 'user'
+  status: 'invited' | 'active' | 'disabled'
   verifierVersion: number
   authEpoch: number
-  passwordRecord: PasswordRecord
+  passwordRecord: PasswordRecord | null
   createdAt: number
   updatedAt: number
 }

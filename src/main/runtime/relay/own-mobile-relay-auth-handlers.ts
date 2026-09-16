@@ -116,7 +116,7 @@ export async function handleAuthorizePost(
   if (verifyResult.needsRehash) {
     try {
       const newRecord = await derivePasswordRecord(password, passwordPolicy)
-      await securityState.upgradePasswordVerifier({
+      await securityState.upgradePasswordVerifier(account.accountId, {
         expectedVerifierVersion: passwordRec.verifierVersion,
         newPasswordRecord: newRecord
       })

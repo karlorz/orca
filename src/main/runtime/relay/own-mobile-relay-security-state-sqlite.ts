@@ -20,6 +20,11 @@ import {
   executeUpgradePasswordVerifierSqlite
 } from './own-mobile-relay-security-state-sqlite-account-ops'
 import {
+  executeInviteAccountSqlite,
+  executeActivateInvitedAccountSqlite,
+  executeDisableAccountSqlite
+} from './own-mobile-relay-security-state-sqlite-admin-ops'
+import {
   executeIssueAccessSessionSqlite,
   executeLookupAccessSessionByTokenSqlite,
   executeReplaceAccessSessionSqlite,
@@ -149,17 +154,29 @@ export function openOwnMobileRelaySecurityStateSqlite(
       assertOpen()
       return executeBootstrapAccountSqlite(ctx.db, input, now)
     },
-    getAccountPasswordRecord: async () => {
+    getAccountPasswordRecord: async (accountId?: string) => {
       assertOpen()
-      return executeGetAccountPasswordRecordSqlite(ctx.db)
+      return executeGetAccountPasswordRecordSqlite(ctx.db, accountId)
     },
-    replacePasswordVerifier: async (input, now = Date.now()) => {
+    inviteAccount: async (input, now = Date.now()) => {
       assertOpen()
-      return executeReplacePasswordVerifierSqlite(ctx.db, input, now)
+      return executeInviteAccountSqlite(ctx.db, input, now)
     },
-    upgradePasswordVerifier: async (input, now = Date.now()) => {
+    activateInvitedAccount: async (accountId, record, now = Date.now()) => {
       assertOpen()
-      return executeUpgradePasswordVerifierSqlite(ctx.db, input, now)
+      return executeActivateInvitedAccountSqlite(ctx.db, accountId, record, now)
+    },
+    replacePasswordVerifier: async (accountId, input, now = Date.now()) => {
+      assertOpen()
+      return executeReplacePasswordVerifierSqlite(ctx.db, accountId, input, now)
+    },
+    upgradePasswordVerifier: async (accountId, input, now = Date.now()) => {
+      assertOpen()
+      return executeUpgradePasswordVerifierSqlite(ctx.db, accountId, input, now)
+    },
+    disableAccount: async (accountId, now = Date.now()) => {
+      assertOpen()
+      return executeDisableAccountSqlite(ctx.db, accountId, now)
     },
     issueAccessSession: async (input, now = Date.now()) => {
       assertOpen()

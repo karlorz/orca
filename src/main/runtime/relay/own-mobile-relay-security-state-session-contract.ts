@@ -189,7 +189,7 @@ export function registerSessionAndGrantTests(
       ).not.toBeNull()
 
       // Concurrent epoch race: If epoch advances, guarded issuance fails
-      await state.replacePasswordVerifier({
+      await state.replacePasswordVerifier(account.accountId, {
         expectedVerifierVersion: account.verifierVersion,
         newPasswordRecord: passwordRecord
       })

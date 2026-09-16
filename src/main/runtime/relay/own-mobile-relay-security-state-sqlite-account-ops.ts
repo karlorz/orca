@@ -28,13 +28,15 @@ export type SqliteAccountRow = {
   updated_at: number
 }
 
-function mapAccountRow(row: SqliteAccountRow): SecurityStateAccountIdentity {
+export function mapAccountRow(row: SqliteAccountRow): SecurityStateAccountIdentity {
   return {
     accountId: row.account_id,
     email: row.email,
     userId: row.user_id,
     profileId: row.profile_id,
     organizationId: row.organization_id,
+    role: (row.role ?? 'admin') as 'admin' | 'user',
+    status: (row.status ?? 'active') as 'invited' | 'active' | 'disabled',
     verifierVersion: Number(row.verifier_version),
     authEpoch: Number(row.auth_epoch),
     createdAt: Number(row.created_at),
@@ -46,7 +48,7 @@ export function executeGetAccountSqlite(db: DatabaseSync): SecurityStateAccountI
   const row = db
     .prepare(
       `SELECT account_id, email, user_id, profile_id, organization_id,
-              verifier_version, auth_epoch, created_at, updated_at
+              role, status, verifier_version, auth_epoch, created_at, updated_at
        FROM operator_account LIMIT 1`
     )
     .get() as SqliteAccountRow | undefined
@@ -100,6 +102,8 @@ export function executeBootstrapAccountSqlite(
       userId: input.userId,
       profileId: input.profileId,
       organizationId: input.organizationId,
+      role: 'admin',
+      status: 'active',
       verifierVersion: 1,
       authEpoch: 1,
       createdAt: now,
@@ -111,20 +115,27 @@ export function executeBootstrapAccountSqlite(
   }
 }
 
-export function executeGetAccountPasswordRecordSqlite(db: DatabaseSync): {
+export function executeGetAccountPasswordRecordSqlite(
+  db: DatabaseSync,
+  accountId?: string
+): {
   accountId: string
   verifierVersion: number
   authEpoch: number
   passwordRecord: PasswordRecord
 } | null {
-  const row = db
-    .prepare(
-      `SELECT account_id, verifier_version, auth_epoch,
+  const query = accountId
+    ? `SELECT account_id, verifier_version, auth_epoch,
+              password_version, password_verifier, password_salt,
+              param_n, param_r, param_p, param_key_len, param_maxmem
+       FROM operator_account WHERE account_id = ?`
+    : `SELECT account_id, verifier_version, auth_epoch,
               password_version, password_verifier, password_salt,
               param_n, param_r, param_p, param_key_len, param_maxmem
        FROM operator_account LIMIT 1`
-    )
-    .get() as SqliteAccountRow | undefined
+  const row = (accountId ? db.prepare(query).get(accountId) : db.prepare(query).get()) as
+    | SqliteAccountRow
+    | undefined
   if (
     !row ||
     row.password_version === null ||
@@ -160,24 +171,29 @@ export function executeGetAccountPasswordRecordSqlite(db: DatabaseSync): {
 
 function executeMutatePasswordVerifierSqlite(
   db: DatabaseSync,
+  accountId: string,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number,
   advanceAuthEpoch: boolean
 ):
   | { ok: true; account: SecurityStateAccountIdentity }
-  | { ok: false; error: 'version_mismatch' | 'not_found' } {
+  | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' } {
   db.exec('BEGIN IMMEDIATE;')
   try {
     const existing = db
       .prepare(
         `SELECT account_id, email, user_id, profile_id, organization_id,
-                verifier_version, auth_epoch, created_at, updated_at
-         FROM operator_account LIMIT 1`
+                role, status, verifier_version, auth_epoch, created_at, updated_at
+         FROM operator_account WHERE account_id = ?`
       )
-      .get() as SqliteAccountRow | undefined
+      .get(accountId) as SqliteAccountRow | undefined
     if (!existing) {
       db.exec('ROLLBACK;')
       return { ok: false, error: 'not_found' }
+    }
+    if (existing.status !== 'active') {
+      db.exec('ROLLBACK;')
+      return { ok: false, error: 'not_active' }
     }
     if (Number(existing.verifier_version) !== input.expectedVerifierVersion) {
       db.exec('ROLLBACK;')
@@ -231,6 +247,8 @@ function executeMutatePasswordVerifierSqlite(
         userId: existing.user_id,
         profileId: existing.profile_id,
         organizationId: existing.organization_id,
+        role: (existing.role ?? 'admin') as 'admin' | 'user',
+        status: 'active',
         verifierVersion: newVerifierVersion,
         authEpoch: newAuthEpoch,
         createdAt: Number(existing.created_at),
@@ -245,20 +263,22 @@ function executeMutatePasswordVerifierSqlite(
 
 export function executeReplacePasswordVerifierSqlite(
   db: DatabaseSync,
+  accountId: string,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number
 ):
   | { ok: true; account: SecurityStateAccountIdentity }
-  | { ok: false; error: 'version_mismatch' | 'not_found' } {
-  return executeMutatePasswordVerifierSqlite(db, input, now, true)
+  | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' } {
+  return executeMutatePasswordVerifierSqlite(db, accountId, input, now, true)
 }
 
 export function executeUpgradePasswordVerifierSqlite(
   db: DatabaseSync,
+  accountId: string,
   input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
   now: number
 ):
   | { ok: true; account: SecurityStateAccountIdentity }
-  | { ok: false; error: 'version_mismatch' | 'not_found' } {
-  return executeMutatePasswordVerifierSqlite(db, input, now, false)
+  | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' } {
+  return executeMutatePasswordVerifierSqlite(db, accountId, input, now, false)
 }

@@ -242,6 +242,7 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       const newPw = await derivePasswordRecord('atom-new-pwd-12345678', TEST_FAST_PASSWORD_POLICY)
 
       const res = await state.replacePasswordVerifier(
+        boot.accountId,
         {
           expectedVerifierVersion: boot.verifierVersion,
           newPasswordRecord: newPw

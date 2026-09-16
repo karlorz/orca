@@ -82,6 +82,7 @@ export function registerDeviceAndEpochTests(
         TEST_FAST_PASSWORD_POLICY
       )
       await state.replacePasswordVerifier(
+        bootstrap.accountId,
         {
           expectedVerifierVersion: bootstrap.verifierVersion,
           newPasswordRecord: newPassword

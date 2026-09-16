@@ -92,7 +92,7 @@ export function registerRefreshRevokeAndKeyExpiryTests(
         'new-password-1234',
         TEST_FAST_PASSWORD_POLICY
       )
-      await state.replacePasswordVerifier({
+      await state.replacePasswordVerifier(account.accountId, {
         expectedVerifierVersion: account.verifierVersion,
         newPasswordRecord
       })

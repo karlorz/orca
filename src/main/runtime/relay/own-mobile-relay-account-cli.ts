@@ -254,7 +254,7 @@ export async function runAccountCli(options: AccountCliOptions): Promise<Account
     }
 
     const newPasswordRecord = await derivePasswordRecord(newPassword, policy)
-    const replaceResult = await securityState.replacePasswordVerifier({
+    const replaceResult = await securityState.replacePasswordVerifier(passwordRec.accountId, {
       expectedVerifierVersion: passwordRec.verifierVersion,
       newPasswordRecord
     })

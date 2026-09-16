@@ -74,7 +74,7 @@ export async function loginOperatorAccount(
   if (verifyResult.needsRehash) {
     try {
       const newRecord = await derivePasswordRecord(password, policy)
-      await context.securityState.upgradePasswordVerifier({
+      await context.securityState.upgradePasswordVerifier(passwordRec.accountId, {
         expectedVerifierVersion: passwordRec.verifierVersion,
         newPasswordRecord: newRecord
       })

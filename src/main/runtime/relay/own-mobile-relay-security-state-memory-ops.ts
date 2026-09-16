@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto'
-import type { PasswordRecord } from './own-mobile-relay-password'
 import type {
   InternalAccountRecord,
   InternalDeviceRecord,
@@ -9,7 +8,6 @@ import type {
   InternalRefreshTokenRecord
 } from './own-mobile-relay-security-state-types'
 import type {
-  SecurityStateAccountBootstrapInput,
   SecurityStateAccountIdentity,
   SecurityStateIssueAccessSessionInput,
   SecurityStateIssuedAccessSession,
@@ -23,6 +21,7 @@ import { sha256Base64Url } from './own-mobile-relay-security-state-device-cleanu
 export type MemoryStoreContext = {
   isClosed: boolean
   account: InternalAccountRecord | null
+  accountsById: Map<string, InternalAccountRecord>
   sessionsById: Map<string, InternalSessionRecord>
   sessionsByAccessHash: Map<string, string>
   grantsById: Map<string, InternalGrantRecord>
@@ -48,78 +47,13 @@ export function toPublicAccount(acc: InternalAccountRecord): SecurityStateAccoun
     userId: acc.userId,
     profileId: acc.profileId,
     organizationId: acc.organizationId,
+    role: acc.role,
+    status: acc.status,
     verifierVersion: acc.verifierVersion,
     authEpoch: acc.authEpoch,
     createdAt: acc.createdAt,
     updatedAt: acc.updatedAt
   }
-}
-
-export function bootstrapAccountMemory(
-  ctx: MemoryStoreContext,
-  input: SecurityStateAccountBootstrapInput,
-  now: number
-): SecurityStateAccountIdentity {
-  assertOpen(ctx)
-  if (ctx.account) {
-    throw new Error('account_already_initialized')
-  }
-  const accountId = randomBytes(16).toString('base64url')
-  ctx.account = {
-    accountId,
-    email: input.email,
-    userId: input.userId,
-    profileId: input.profileId,
-    organizationId: input.organizationId,
-    verifierVersion: 1,
-    authEpoch: 1,
-    passwordRecord: input.passwordRecord,
-    createdAt: now,
-    updatedAt: now
-  }
-  return toPublicAccount(ctx.account)
-}
-
-export function replacePasswordVerifierMemory(
-  ctx: MemoryStoreContext,
-  input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-  now: number
-):
-  | { ok: true; account: SecurityStateAccountIdentity }
-  | { ok: false; error: 'version_mismatch' | 'not_found' } {
-  assertOpen(ctx)
-  if (!ctx.account) {
-    return { ok: false, error: 'not_found' }
-  }
-  if (ctx.account.verifierVersion !== input.expectedVerifierVersion) {
-    return { ok: false, error: 'version_mismatch' }
-  }
-  ctx.account.verifierVersion += 1
-  ctx.account.authEpoch += 1
-  ctx.account.passwordRecord = input.newPasswordRecord
-  ctx.account.updatedAt = now
-  return { ok: true, account: toPublicAccount(ctx.account) }
-}
-
-export function upgradePasswordVerifierMemory(
-  ctx: MemoryStoreContext,
-  input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-  now: number
-):
-  | { ok: true; account: SecurityStateAccountIdentity }
-  | { ok: false; error: 'version_mismatch' | 'not_found' } {
-  assertOpen(ctx)
-  if (!ctx.account) {
-    return { ok: false, error: 'not_found' }
-  }
-  if (ctx.account.verifierVersion !== input.expectedVerifierVersion) {
-    return { ok: false, error: 'version_mismatch' }
-  }
-  ctx.account.verifierVersion += 1
-  // authEpoch preserved unchanged
-  ctx.account.passwordRecord = input.newPasswordRecord
-  ctx.account.updatedAt = now
-  return { ok: true, account: toPublicAccount(ctx.account) }
 }
 
 export function issueAccessSessionMemory(

@@ -31,26 +31,43 @@ export type OwnMobileRelaySecurityState = {
     input: SecurityStateAccountBootstrapInput,
     now?: number
   ): Promise<SecurityStateAccountIdentity>
-  getAccountPasswordRecord(): Promise<{
+  getAccountPasswordRecord(accountId?: string): Promise<{
     accountId: string
     verifierVersion: number
     authEpoch: number
     passwordRecord: PasswordRecord
   } | null>
+  inviteAccount(
+    input: {
+      email: string
+      userId: string
+      profileId: string
+      organizationId: string
+    },
+    now?: number
+  ): Promise<SecurityStateAccountIdentity>
+  activateInvitedAccount(
+    accountId: string,
+    record: PasswordRecord,
+    now?: number
+  ): Promise<'ok' | 'conflict'>
   replacePasswordVerifier(
+    accountId: string,
     input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
     now?: number
   ): Promise<
     | { ok: true; account: SecurityStateAccountIdentity }
-    | { ok: false; error: 'version_mismatch' | 'not_found' }
+    | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' }
   >
   upgradePasswordVerifier(
+    accountId: string,
     input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
     now?: number
   ): Promise<
     | { ok: true; account: SecurityStateAccountIdentity }
-    | { ok: false; error: 'version_mismatch' | 'not_found' }
+    | { ok: false; error: 'version_mismatch' | 'not_found' | 'not_active' }
   >
+  disableAccount(accountId: string, now?: number): Promise<'ok' | 'last_admin'>
 
   issueAccessSession(
     input: SecurityStateIssueAccessSessionInput,

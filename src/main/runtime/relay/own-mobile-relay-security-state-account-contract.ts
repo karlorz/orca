@@ -95,7 +95,7 @@ export function registerAccountAndVerifierTests(
         TEST_FAST_PASSWORD_POLICY
       )
 
-      const badVersionResult = await state.replacePasswordVerifier({
+      const badVersionResult = await state.replacePasswordVerifier(bootstrap.accountId, {
         expectedVerifierVersion: bootstrap.verifierVersion + 99,
         newPasswordRecord: newRecord
       })
@@ -104,7 +104,7 @@ export function registerAccountAndVerifierTests(
         expect(badVersionResult.error).toBe('version_mismatch')
       }
 
-      const updateResult = await state.replacePasswordVerifier({
+      const updateResult = await state.replacePasswordVerifier(bootstrap.accountId, {
         expectedVerifierVersion: bootstrap.verifierVersion,
         newPasswordRecord: newRecord
       })
@@ -114,7 +114,7 @@ export function registerAccountAndVerifierTests(
         expect(updateResult.account.authEpoch).toBe(2)
       }
 
-      const internalRec = await state.getAccountPasswordRecord()
+      const internalRec = await state.getAccountPasswordRecord(bootstrap.accountId)
       expect(internalRec?.verifierVersion).toBe(2)
       expect(internalRec?.authEpoch).toBe(2)
       expect(internalRec?.passwordRecord.verifier).toBe(newRecord.verifier)
@@ -162,7 +162,7 @@ export function registerAccountAndVerifierTests(
         TEST_FAST_PASSWORD_POLICY
       )
 
-      const badVersionResult = await state.upgradePasswordVerifier({
+      const badVersionResult = await state.upgradePasswordVerifier(bootstrap.accountId, {
         expectedVerifierVersion: bootstrap.verifierVersion + 99,
         newPasswordRecord: upgradedRecord
       })
@@ -171,7 +171,7 @@ export function registerAccountAndVerifierTests(
         expect(badVersionResult.error).toBe('version_mismatch')
       }
 
-      const upgradeResult = await state.upgradePasswordVerifier({
+      const upgradeResult = await state.upgradePasswordVerifier(bootstrap.accountId, {
         expectedVerifierVersion: bootstrap.verifierVersion,
         newPasswordRecord: upgradedRecord
       })
@@ -182,7 +182,7 @@ export function registerAccountAndVerifierTests(
         expect(upgradeResult.account).not.toHaveProperty('passwordRecord')
       }
 
-      const internalRec = await state.getAccountPasswordRecord()
+      const internalRec = await state.getAccountPasswordRecord(bootstrap.accountId)
       expect(internalRec?.verifierVersion).toBe(2)
       expect(internalRec?.authEpoch).toBe(1) // Auth epoch preserved!
       expect(internalRec?.passwordRecord.verifier).toBe(upgradedRecord.verifier)

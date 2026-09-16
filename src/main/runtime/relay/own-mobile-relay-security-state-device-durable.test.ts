@@ -590,7 +590,7 @@ describe('own mobile relay durable device security integration', () => {
 
       const acc = await securityState.getAccountPasswordRecord()
       expect(acc).not.toBeNull()
-      const replaceResult = await securityState.replacePasswordVerifier({
+      const replaceResult = await securityState.replacePasswordVerifier(acc!.accountId, {
         expectedVerifierVersion: acc!.verifierVersion,
         newPasswordRecord: {
           version: 1,

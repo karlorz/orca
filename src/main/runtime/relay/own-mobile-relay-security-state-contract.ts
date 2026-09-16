@@ -7,12 +7,14 @@ import { registerDeviceAndEpochTests } from './own-mobile-relay-security-state-d
 import { registerRefreshTokenAndKeyExpiryTests } from './own-mobile-relay-security-state-refresh-contract'
 import { registerRefreshGrantReparentTests } from './own-mobile-relay-security-state-refresh-reparent-contract'
 import { registerRefreshRevokeAndKeyExpiryTests } from './own-mobile-relay-security-state-refresh-revoke-contract'
+import { registerAccountScopedStoreTests } from './own-mobile-relay-security-state-scoped-contract'
 
 export function registerOwnMobileRelaySecurityStateContractTests(
   createAdapter: () => Promise<OwnMobileRelaySecurityState> | OwnMobileRelaySecurityState
 ): void {
   describe('OwnMobileRelaySecurityState Contract', () => {
     registerAccountAndVerifierTests(createAdapter)
+    registerAccountScopedStoreTests(createAdapter)
     registerSessionAndGrantTests(createAdapter)
     registerGrantLifecycleTests(createAdapter)
     registerDeviceAndEpochTests(createAdapter)

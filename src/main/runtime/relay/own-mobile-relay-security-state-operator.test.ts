@@ -356,6 +356,7 @@ describe('OwnMobileRelaySecurityState Slice 2: List APIs and Operator Sessions',
           TEST_FAST_PASSWORD_POLICY
         )
         const replaceRes = await state.replacePasswordVerifier(
+          bootstrap.accountId,
           {
             expectedVerifierVersion: bootstrap.verifierVersion,
             newPasswordRecord: newPassword

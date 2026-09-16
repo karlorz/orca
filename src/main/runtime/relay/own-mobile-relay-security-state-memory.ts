@@ -1,8 +1,5 @@
-import type { PasswordRecord } from './own-mobile-relay-password'
 import type {
   OwnMobileRelaySecurityState,
-  SecurityStateAccountBootstrapInput,
-  SecurityStateAccountIdentity,
   SecurityStateAccessSession,
   SecurityStateIssueAccessSessionInput,
   SecurityStateIssuedAccessSession,
@@ -26,22 +23,19 @@ import type {
   SecurityStateRotateRefreshTokenInput
 } from './own-mobile-relay-security-state'
 import type {
+  InternalAccountRecord,
   InternalDeviceRecord,
   InternalGrantRecord,
   InternalOperatorSessionRecord,
   InternalSessionRecord
 } from './own-mobile-relay-security-state-types'
 import {
-  assertOpen,
-  bootstrapAccountMemory,
-  replacePasswordVerifierMemory,
-  upgradePasswordVerifierMemory,
   issueAccessSessionMemory,
   replaceAccessSessionMemory,
   issueRelayGrantMemory,
-  toPublicAccount,
   type MemoryStoreContext
 } from './own-mobile-relay-security-state-memory-ops'
+import { createMemoryAccountFacet } from './own-mobile-relay-security-state-memory-account-facet'
 import {
   lookupAccessSessionByTokenMemory,
   revokeAccessSessionByIdMemory,
@@ -83,6 +77,7 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
   const ctx: MemoryStoreContext = {
     isClosed: false,
     account: null,
+    accountsById: new Map<string, InternalAccountRecord>(),
     sessionsById: new Map<string, InternalSessionRecord>(),
     sessionsByAccessHash: new Map<string, string>(),
     grantsById: new Map<string, InternalGrantRecord>(),
@@ -96,55 +91,7 @@ export function createOwnMobileRelaySecurityStateMemory(): OwnMobileRelaySecurit
   }
 
   return {
-    async getAccount(): Promise<SecurityStateAccountIdentity | null> {
-      assertOpen(ctx)
-      return ctx.account ? toPublicAccount(ctx.account) : null
-    },
-
-    async bootstrapAccount(
-      input: SecurityStateAccountBootstrapInput,
-      now = Date.now()
-    ): Promise<SecurityStateAccountIdentity> {
-      return bootstrapAccountMemory(ctx, input, now)
-    },
-
-    async getAccountPasswordRecord(): Promise<{
-      accountId: string
-      verifierVersion: number
-      authEpoch: number
-      passwordRecord: PasswordRecord
-    } | null> {
-      assertOpen(ctx)
-      if (!ctx.account) {
-        return null
-      }
-      return {
-        accountId: ctx.account.accountId,
-        verifierVersion: ctx.account.verifierVersion,
-        authEpoch: ctx.account.authEpoch,
-        passwordRecord: ctx.account.passwordRecord
-      }
-    },
-
-    async replacePasswordVerifier(
-      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-      now = Date.now()
-    ): Promise<
-      | { ok: true; account: SecurityStateAccountIdentity }
-      | { ok: false; error: 'version_mismatch' | 'not_found' }
-    > {
-      return replacePasswordVerifierMemory(ctx, input, now)
-    },
-
-    async upgradePasswordVerifier(
-      input: { expectedVerifierVersion: number; newPasswordRecord: PasswordRecord },
-      now = Date.now()
-    ): Promise<
-      | { ok: true; account: SecurityStateAccountIdentity }
-      | { ok: false; error: 'version_mismatch' | 'not_found' }
-    > {
-      return upgradePasswordVerifierMemory(ctx, input, now)
-    },
+    ...createMemoryAccountFacet(ctx),
 
     async issueAccessSession(
       input: SecurityStateIssueAccessSessionInput,

@@ -6,6 +6,8 @@ export type SecurityStateAccountIdentity = {
   readonly userId: string
   readonly profileId: string
   readonly organizationId: string
+  readonly role: 'admin' | 'user'
+  readonly status: 'invited' | 'active' | 'disabled'
   readonly verifierVersion: number
   readonly authEpoch: number
   readonly createdAt: number
@@ -18,6 +20,13 @@ export type SecurityStateAccountBootstrapInput = {
   readonly profileId: string
   readonly organizationId: string
   readonly passwordRecord: PasswordRecord
+}
+
+export type SecurityStateAccountInviteInput = {
+  readonly email: string
+  readonly userId: string
+  readonly profileId: string
+  readonly organizationId: string
 }
 
 export type SecurityStateAccessSession = {
