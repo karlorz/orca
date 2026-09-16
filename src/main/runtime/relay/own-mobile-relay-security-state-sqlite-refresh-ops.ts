@@ -26,23 +26,24 @@ export function executeIssueRefreshTokenSqlite(
 ): void {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
-    if (!acc) {
-      throw new Error('account_not_initialized')
-    }
-
     const session = db
       .prepare(`
-        SELECT session_id FROM access_sessions
+        SELECT session_id, account_id, auth_epoch FROM access_sessions
         WHERE session_id = ?
           AND revoked_at IS NULL
           AND expires_at > ?
-          AND auth_epoch = ?
       `)
-      .get(input.sessionId, now, acc.auth_epoch)
+      .get(input.sessionId, now) as
+      | { session_id: string; account_id: string; auth_epoch: number }
+      | undefined
     if (!session) {
+      throw new Error('invalid_session')
+    }
+
+    const acc = db
+      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
+      .get(session.account_id) as { account_id: string; auth_epoch: number } | undefined
+    if (!acc || Number(session.auth_epoch) !== Number(acc.auth_epoch)) {
       throw new Error('invalid_session')
     }
 
@@ -74,7 +75,7 @@ export function executeLookupRefreshTokenSqlite(
     .prepare(`
       SELECT r.token_hash, r.session_id, r.expires_at, s.cloud_profile_id
       FROM refresh_tokens r
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = r.account_id
+      JOIN operator_account a ON a.account_id = r.account_id
       JOIN access_sessions s ON s.session_id = r.session_id
       WHERE r.token_hash = ?
         AND r.revoked_at IS NULL
@@ -110,14 +111,6 @@ export function executeRotateRefreshTokenSqlite(
 ): SecurityStateIssuedAccessSession | null {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
-    if (!acc) {
-      db.exec('ROLLBACK;')
-      return null
-    }
-
     const oldTokenHash = sha256Base64Url(input.oldRawRefreshToken)
     const oldRefresh = db
       .prepare(`
@@ -126,11 +119,18 @@ export function executeRotateRefreshTokenSqlite(
         WHERE r.token_hash = ?
           AND r.revoked_at IS NULL
           AND (r.expires_at IS NULL OR r.expires_at > ?)
-          AND r.auth_epoch = ?
       `)
-      .get(oldTokenHash, now, acc.auth_epoch) as SqliteRefreshTokenRow | undefined
+      .get(oldTokenHash, now) as SqliteRefreshTokenRow | undefined
 
     if (!oldRefresh) {
+      db.exec('ROLLBACK;')
+      return null
+    }
+
+    const acc = db
+      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
+      .get(oldRefresh.account_id) as { account_id: string; auth_epoch: number } | undefined
+    if (!acc || Number(oldRefresh.auth_epoch) !== Number(acc.auth_epoch)) {
       db.exec('ROLLBACK;')
       return null
     }

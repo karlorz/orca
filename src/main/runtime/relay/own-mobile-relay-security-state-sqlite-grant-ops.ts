@@ -30,24 +30,25 @@ export function executeIssueRelayGrantSqlite(
 ): SecurityStateIssuedRelayGrant | null {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
-    if (!acc) {
+    const parent = db
+      .prepare(`
+        SELECT session_id, account_id, auth_epoch FROM access_sessions
+        WHERE session_id = ?
+          AND revoked_at IS NULL
+          AND expires_at > ?
+      `)
+      .get(input.parentSessionId, now) as
+      | { session_id: string; account_id: string; auth_epoch: number }
+      | undefined
+    if (!parent) {
       db.exec('ROLLBACK;')
       return null
     }
 
-    const parent = db
-      .prepare(`
-        SELECT session_id FROM access_sessions
-        WHERE session_id = ?
-          AND revoked_at IS NULL
-          AND expires_at > ?
-          AND auth_epoch = ?
-      `)
-      .get(input.parentSessionId, now, acc.auth_epoch)
-    if (!parent) {
+    const acc = db
+      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
+      .get(parent.account_id) as { account_id: string; auth_epoch: number } | undefined
+    if (!acc || Number(parent.auth_epoch) !== Number(acc.auth_epoch)) {
       db.exec('ROLLBACK;')
       return null
     }
@@ -123,7 +124,7 @@ export function executeValidateRelayGrantByTokenSqlite(
              g.host_public_key_b64, g.auth_epoch, g.expires_at, g.created_at,
              g.user_id, g.profile_id, g.organization_id
       FROM relay_grants g
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
+      JOIN operator_account a ON a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
       LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.relay_token_hash = ?
@@ -153,7 +154,7 @@ export function executeValidateRelayGrantByIdSqlite(
              g.host_public_key_b64, g.auth_epoch, g.expires_at, g.created_at,
              g.user_id, g.profile_id, g.organization_id
       FROM relay_grants g
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
+      JOIN operator_account a ON a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
       LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.grant_id = ?

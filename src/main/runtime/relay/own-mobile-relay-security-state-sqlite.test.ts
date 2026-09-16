@@ -505,7 +505,7 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
         sql: string
       ) {
         const res = origExec.call(this, sql)
-        if (!sidecarChmodded && sql.includes('PRAGMA user_version = 1;')) {
+        if (!sidecarChmodded && sql.includes('PRAGMA user_version = 5;')) {
           sidecarChmodded = true
           capturedDbInstances.push(this)
           if (existsSync(walPath)) {
@@ -728,14 +728,14 @@ describe('OwnMobileRelaySecurityState SQLite Adapter', () => {
       `)
       rawDb.close()
 
-      expect(CURRENT_SCHEMA_VERSION).toBe(4)
+      expect(CURRENT_SCHEMA_VERSION).toBe(5)
       const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
       expect(state).toBeDefined()
       await state.close()
 
       const checkDb = new DatabaseSync(dbPath)
       const ver = checkDb.prepare('PRAGMA user_version;').get() as { user_version: number }
-      expect(ver.user_version).toBe(4)
+      expect(ver.user_version).toBe(5)
       const tableCheck = checkDb
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_events';")
         .get()

@@ -8,9 +8,9 @@ export function executeCleanupExpiredSqlite(
 ): SecurityStateCleanupResult {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { auth_epoch: number } | undefined
+    const acc = db.prepare('SELECT auth_epoch FROM operator_account LIMIT 1').get() as
+      | { auth_epoch: number }
+      | undefined
     const currentEpoch = acc ? Number(acc.auth_epoch) : -1
 
     let remainingBudget = maxBatchSize

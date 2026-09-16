@@ -7,22 +7,23 @@ import type {
 } from './own-mobile-relay-security-state'
 
 export type SqliteAccountRow = {
-  singleton_id: number
   account_id: string
   email: string
   user_id: string
   profile_id: string
   organization_id: string
+  role?: string
+  status?: string
   verifier_version: number
   auth_epoch: number
-  password_version: number
-  password_verifier: string
-  password_salt: string
-  param_n: number
-  param_r: number
-  param_p: number
-  param_key_len: number
-  param_maxmem: number
+  password_version: number | null
+  password_verifier: string | null
+  password_salt: string | null
+  param_n: number | null
+  param_r: number | null
+  param_p: number | null
+  param_key_len: number | null
+  param_maxmem: number | null
   created_at: number
   updated_at: number
 }
@@ -44,9 +45,9 @@ function mapAccountRow(row: SqliteAccountRow): SecurityStateAccountIdentity {
 export function executeGetAccountSqlite(db: DatabaseSync): SecurityStateAccountIdentity | null {
   const row = db
     .prepare(
-      `SELECT singleton_id, account_id, email, user_id, profile_id, organization_id,
+      `SELECT account_id, email, user_id, profile_id, organization_id,
               verifier_version, auth_epoch, created_at, updated_at
-       FROM operator_account WHERE singleton_id = 1`
+       FROM operator_account LIMIT 1`
     )
     .get() as SqliteAccountRow | undefined
   return row ? mapAccountRow(row) : null
@@ -59,26 +60,25 @@ export function executeBootstrapAccountSqlite(
 ): SecurityStateAccountIdentity {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const existing = db
-      .prepare('SELECT account_id FROM operator_account WHERE singleton_id = 1')
-      .get()
+    const existing = db.prepare('SELECT account_id FROM operator_account LIMIT 1').get()
     if (existing) {
       throw new Error('account_already_initialized')
     }
     const accountId = randomBytes(16).toString('base64url')
     const stmt = db.prepare(`
       INSERT INTO operator_account (
-        singleton_id, account_id, email, user_id, profile_id, organization_id,
+        account_id, email, user_id, profile_id, organization_id,
+        role, status,
         verifier_version, auth_epoch, password_version, password_verifier,
         password_salt, param_n, param_r, param_p, param_key_len, param_maxmem,
         created_at, updated_at
       ) VALUES (
-        1, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, 'admin', 'active', 1, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `)
     stmt.run(
       accountId,
-      input.email,
+      input.email.toLowerCase(),
       input.userId,
       input.profileId,
       input.organizationId,
@@ -96,7 +96,7 @@ export function executeBootstrapAccountSqlite(
     db.exec('COMMIT;')
     return {
       accountId,
-      email: input.email,
+      email: input.email.toLowerCase(),
       userId: input.userId,
       profileId: input.profileId,
       organizationId: input.organizationId,
@@ -119,13 +119,23 @@ export function executeGetAccountPasswordRecordSqlite(db: DatabaseSync): {
 } | null {
   const row = db
     .prepare(
-      `SELECT singleton_id, account_id, verifier_version, auth_epoch,
+      `SELECT account_id, verifier_version, auth_epoch,
               password_version, password_verifier, password_salt,
               param_n, param_r, param_p, param_key_len, param_maxmem
-       FROM operator_account WHERE singleton_id = 1`
+       FROM operator_account LIMIT 1`
     )
     .get() as SqliteAccountRow | undefined
-  if (!row) {
+  if (
+    !row ||
+    row.password_version === null ||
+    row.password_verifier === null ||
+    row.password_salt === null ||
+    row.param_n === null ||
+    row.param_r === null ||
+    row.param_p === null ||
+    row.param_key_len === null ||
+    row.param_maxmem === null
+  ) {
     return null
   }
   const passwordRecord: PasswordRecord = {
@@ -160,9 +170,9 @@ function executeMutatePasswordVerifierSqlite(
   try {
     const existing = db
       .prepare(
-        `SELECT singleton_id, account_id, email, user_id, profile_id, organization_id,
+        `SELECT account_id, email, user_id, profile_id, organization_id,
                 verifier_version, auth_epoch, created_at, updated_at
-         FROM operator_account WHERE singleton_id = 1`
+         FROM operator_account LIMIT 1`
       )
       .get() as SqliteAccountRow | undefined
     if (!existing) {
@@ -191,7 +201,7 @@ function executeMutatePasswordVerifierSqlite(
           param_key_len = ?,
           param_maxmem = ?,
           updated_at = ?
-      WHERE singleton_id = 1 AND verifier_version = ?
+      WHERE account_id = ? AND verifier_version = ?
     `)
     const result = updateStmt.run(
       newVerifierVersion,
@@ -205,6 +215,7 @@ function executeMutatePasswordVerifierSqlite(
       input.newPasswordRecord.params.keyLen,
       input.newPasswordRecord.params.maxmem,
       now,
+      existing.account_id,
       input.expectedVerifierVersion
     )
     if (result.changes === 0) {

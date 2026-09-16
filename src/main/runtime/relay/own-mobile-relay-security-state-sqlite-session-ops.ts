@@ -30,9 +30,9 @@ export function executeIssueAccessSessionSqlite(
 ): SecurityStateIssuedAccessSession {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
+    const acc = db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get() as
+      | { account_id: string; auth_epoch: number }
+      | undefined
     if (!acc) {
       throw new Error('account_not_initialized')
     }
@@ -93,7 +93,7 @@ export function executeLookupAccessSessionByTokenSqlite(
       SELECT s.session_id, s.account_id, s.auth_epoch, s.expires_at, s.created_at,
              s.user_id, s.profile_id, s.organization_id, s.email, s.cloud_profile_id
       FROM access_sessions s
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = s.account_id
+      JOIN operator_account a ON a.account_id = s.account_id
       WHERE s.access_token_hash = ?
         AND s.revoked_at IS NULL
         AND s.expires_at > ?
@@ -127,14 +127,6 @@ export function executeReplaceAccessSessionSqlite(
 ): SecurityStateIssuedAccessSession | null {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
-    if (!acc) {
-      db.exec('ROLLBACK;')
-      return null
-    }
-
     const oldSession = db
       .prepare(`
         SELECT session_id, account_id, auth_epoch, expires_at, created_at,
@@ -143,11 +135,18 @@ export function executeReplaceAccessSessionSqlite(
         WHERE session_id = ?
           AND revoked_at IS NULL
           AND expires_at > ?
-          AND auth_epoch = ?
       `)
-      .get(input.oldSessionId, now, acc.auth_epoch) as SqliteSessionRow | undefined
+      .get(input.oldSessionId, now) as SqliteSessionRow | undefined
 
     if (!oldSession) {
+      db.exec('ROLLBACK;')
+      return null
+    }
+
+    const acc = db
+      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE account_id = ?')
+      .get(oldSession.account_id) as { account_id: string; auth_epoch: number } | undefined
+    if (!acc || Number(oldSession.auth_epoch) !== Number(acc.auth_epoch)) {
       db.exec('ROLLBACK;')
       return null
     }
@@ -173,9 +172,9 @@ export function executeReplaceAccessSessionSqlite(
       )
     `).run(
       newSessionId,
-      acc.account_id,
+      oldSession.account_id,
       newAccessTokenHash,
-      acc.auth_epoch,
+      oldSession.auth_epoch,
       newExpiresAt,
       now,
       oldSession.user_id,
@@ -188,8 +187,8 @@ export function executeReplaceAccessSessionSqlite(
     db.exec('COMMIT;')
     return {
       sessionId: newSessionId,
-      accountId: acc.account_id,
-      authEpoch: Number(acc.auth_epoch),
+      accountId: oldSession.account_id,
+      authEpoch: Number(oldSession.auth_epoch),
       expiresAt: newExpiresAt,
       identity: {
         userId: oldSession.user_id,

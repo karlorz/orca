@@ -33,7 +33,7 @@ export function executeListAccessSessionsSqlite(
       SELECT s.session_id, s.account_id, s.auth_epoch, s.expires_at, s.created_at,
              s.user_id, s.profile_id, s.organization_id, s.email, s.cloud_profile_id
       FROM access_sessions s
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = s.account_id
+      JOIN operator_account a ON a.account_id = s.account_id
       WHERE s.revoked_at IS NULL
         AND s.expires_at > ?
         AND s.auth_epoch = a.auth_epoch
@@ -66,7 +66,7 @@ export function executeListRelayGrantsSqlite(
              g.user_id, g.profile_id, g.organization_id,
              COALESCE(h.key_expiry_disabled, 1) as key_expiry_disabled
       FROM relay_grants g
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = g.account_id
+      JOIN operator_account a ON a.account_id = g.account_id
       JOIN access_sessions s ON s.session_id = g.parent_session_id
       LEFT JOIN host_key_expiry h ON h.relay_host_id = g.relay_host_id
       WHERE g.revoked_at IS NULL
@@ -127,9 +127,9 @@ export function executeIssueOperatorSessionSqlite(
 ): SecurityStateIssuedOperatorSession {
   db.exec('BEGIN IMMEDIATE;')
   try {
-    const acc = db
-      .prepare('SELECT account_id, auth_epoch FROM operator_account WHERE singleton_id = 1')
-      .get() as { account_id: string; auth_epoch: number } | undefined
+    const acc = db.prepare('SELECT account_id, auth_epoch FROM operator_account LIMIT 1').get() as
+      | { account_id: string; auth_epoch: number }
+      | undefined
     if (!acc) {
       throw new Error('account_not_initialized')
     }
@@ -169,7 +169,7 @@ export function executeLookupOperatorSessionSqlite(
     .prepare(`
       SELECT s.session_id, s.account_id, s.auth_epoch, s.expires_at, s.created_at
       FROM operator_sessions s
-      JOIN operator_account a ON a.singleton_id = 1 AND a.account_id = s.account_id
+      JOIN operator_account a ON a.account_id = s.account_id
       WHERE s.token_hash = ?
         AND s.revoked_at IS NULL
         AND s.expires_at > ?

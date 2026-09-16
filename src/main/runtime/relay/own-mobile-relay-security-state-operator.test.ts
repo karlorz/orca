@@ -504,7 +504,7 @@ describe('OwnMobileRelaySecurityState Slice 2: List APIs and Operator Sessions',
       rawDb.close()
 
       // Open with adapter, which should migrate to CURRENT_SCHEMA_VERSION
-      expect(CURRENT_SCHEMA_VERSION).toBe(4)
+      expect(CURRENT_SCHEMA_VERSION).toBe(5)
       const state = openOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
 
       // Verify v1 data is preserved
