@@ -317,3 +317,14 @@ features:
       - src/main/runtime/push/push-gateway-origin.ts
       - src/main/orca-profiles/fork-own-relay-defaults.ts
     wiki: projects/orca/work/2026-09-16-official-push-gateway-self-host
+
+  - id: own-auth-multiuser-password
+    title: Own-auth many accounts, admin Users page, session-bound password change
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/relay
+      - src/main/ipc/orca-profiles.ts
+      - src/preload/api
+      - src/renderer/src/components/settings/MobilePairingConnectionOptions.tsx
+    wiki: projects/orca/work/2026-09-16-own-auth-multiuser-password

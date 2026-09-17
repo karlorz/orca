@@ -168,4 +168,19 @@ describe('fork-features registry', () => {
     ])
     expect(entry.wiki).toBe('projects/orca/work/2026-09-16-official-push-gateway-self-host')
   })
+
+  it('records own-auth-multiuser-password landed product feature', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'own-auth-multiuser-password')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('product')
+    expect(entry.status).toBe('landed')
+    expect(entry.paths).toEqual([
+      'src/main/runtime/relay',
+      'src/main/ipc/orca-profiles.ts',
+      'src/preload/api',
+      'src/renderer/src/components/settings/MobilePairingConnectionOptions.tsx'
+    ])
+    expect(entry.wiki).toBe('projects/orca/work/2026-09-16-own-auth-multiuser-password')
+  })
 })
