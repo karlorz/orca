@@ -33,11 +33,14 @@ export function issueRefreshTokenMemory(
   now: number
 ): void {
   assertOpen(ctx)
-  if (!ctx.account) {
-    throw new Error('account_not_initialized')
-  }
   const session = ctx.sessionsById.get(input.sessionId)
-  if (!session || !isSessionValid(session, ctx.account, now)) {
+  if (!session) {
+    throw new Error('invalid_session')
+  }
+  const acc = session.accountId
+    ? (ctx.accountsById.get(session.accountId) ?? ctx.account)
+    : ctx.account
+  if (!acc || !isSessionValid(session, acc, now)) {
     throw new Error('invalid_session')
   }
 

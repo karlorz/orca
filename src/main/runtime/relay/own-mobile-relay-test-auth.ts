@@ -61,6 +61,11 @@ export async function loginAndObtainSessionToken(
     })
   })
 
+  if (sessionRes.status !== 200) {
+    const errText = await sessionRes.text()
+    throw new Error(`session exchange failed with status ${sessionRes.status}: ${errText}`)
+  }
+
   const session = (await sessionRes.json()) as { accessToken: string }
   return session.accessToken
 }

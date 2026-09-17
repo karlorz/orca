@@ -107,11 +107,14 @@ export function replaceAccessSessionMemory(
   now: number
 ): SecurityStateIssuedAccessSession | null {
   assertOpen(ctx)
-  if (!ctx.account) {
+  const oldSession = ctx.sessionsById.get(input.oldSessionId)
+  if (!oldSession) {
     return null
   }
-  const oldSession = ctx.sessionsById.get(input.oldSessionId)
-  if (!oldSession || !isSessionValid(oldSession, ctx.account, now)) {
+  const acc = oldSession.accountId
+    ? (ctx.accountsById.get(oldSession.accountId) ?? ctx.account)
+    : ctx.account
+  if (!acc || !isSessionValid(oldSession, acc, now)) {
     return null
   }
 
@@ -125,8 +128,8 @@ export function replaceAccessSessionMemory(
   const newExpiresAt = now + input.ttlMs
   const newSession: InternalSessionRecord = {
     sessionId: newSessionId,
-    accountId: ctx.account.accountId,
-    authEpoch: ctx.account.authEpoch,
+    accountId: acc.accountId,
+    authEpoch: acc.authEpoch,
     accessTokenHash: newAccessTokenHash,
     expiresAt: newExpiresAt,
     createdAt: now,
@@ -150,11 +153,14 @@ export function issueRelayGrantMemory(
   now: number
 ): SecurityStateIssuedRelayGrant | null {
   assertOpen(ctx)
-  if (!ctx.account) {
+  const parent = ctx.sessionsById.get(input.parentSessionId)
+  if (!parent) {
     return null
   }
-  const parent = ctx.sessionsById.get(input.parentSessionId)
-  if (!parent || !isSessionValid(parent, ctx.account, now)) {
+  const acc = parent.accountId
+    ? (ctx.accountsById.get(parent.accountId) ?? ctx.account)
+    : ctx.account
+  if (!acc || !isSessionValid(parent, acc, now)) {
     return null
   }
   const grantId = randomBytes(16).toString('base64url')
@@ -162,12 +168,12 @@ export function issueRelayGrantMemory(
   const expiresAt = now + input.ttlMs
   const grant: InternalGrantRecord = {
     grantId,
-    accountId: ctx.account.accountId,
+    accountId: acc.accountId,
     parentSessionId: input.parentSessionId,
     relayTokenHash,
     relayHostId: input.relayHostId,
     hostPublicKeyB64: input.hostPublicKeyB64,
-    authEpoch: ctx.account.authEpoch,
+    authEpoch: acc.authEpoch,
     expiresAt,
     createdAt: now,
     identity: input.identity
