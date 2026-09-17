@@ -27,6 +27,9 @@ import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 import { RpcClientContext } from './rpc-client-context'
 
+// Recorder exposure reaches this local by name (`HOST_CLIENT_CONTEXT_LOCAL`).
+const Ctx = RpcClientContext
+
 export {
   useDisconnectHostClient,
   useForceReconnect,
@@ -354,5 +357,5 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     ]
   )
 
-  return <RpcClientContext.Provider value={value}>{children}</RpcClientContext.Provider>
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
