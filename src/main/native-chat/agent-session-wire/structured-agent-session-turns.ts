@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -53,14 +54,16 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  requestedAt: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
@@ -115,7 +118,12 @@ export async function performSend(
   }
   ctx.publish()
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  // The row just written is the send's instant on the host clock; the turn this
+  // dispatch opens records it so the live counter never re-anchors at turn-open.
+  const requestedAt = ctx.journal
+    .submissions()
+    .find((entry) => entry.clientMessageId === input.clientMessageId)?.submittedAt
+  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, requestedAt)
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
     ctx.publish()
@@ -201,6 +209,7 @@ export async function performCancel(
   let cancelled = false
   let note = 'Cancellation requested.'
   try {
+    const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
       ? (
           await ctx.adapter.stopBackgroundTasks?.({
@@ -214,6 +223,9 @@ export async function performCancel(
             sessionId: ctx.sessionId,
             turnId: input.turnId,
             fence: ctx.fence,
+            // The journal is what the client read to name a turn, so it is what judges the request.
+            resolveLiveTurnId: () => ctx.journal.activeTurnId(),
+            ...(dispatchStatus ? { dispatchStatus } : {}),
             ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
         ).cancelled

@@ -14,6 +14,10 @@ export type MobileDictationLiveSnapshot = {
   live?: boolean
 }
 
+export function isMobileDictationLiveSnapshot(raw: unknown): raw is MobileDictationLiveSnapshot {
+  return typeof raw === 'object' && raw !== null && 'live' in raw && raw.live === true
+}
+
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean

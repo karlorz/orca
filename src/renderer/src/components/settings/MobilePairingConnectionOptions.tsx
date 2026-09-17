@@ -66,7 +66,6 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const openPasswordPage = useAppStore((state) => state.openPasswordPage)
   const [openingPassword, setOpeningPassword] = useState(false)
@@ -236,13 +235,11 @@ export function MobilePairingConnectionOptions({
               type="button"
               size="sm"
               className="shrink-0"
-              disabled={connecting}
               onClick={() => {
                 onChange('automatic')
                 void connect()
               }}
             >
-              {connecting ? <Loader2 className="animate-spin" /> : null}
               {reconnectRequired || relayReconnectSuggested
                 ? translate(
                     'auto.components.settings.MobilePairingConnectionOptions.signInAgain',

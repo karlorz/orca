@@ -12,7 +12,6 @@ import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions
 
 type MobileRelayStoreState = {
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
-  orcaProfileConnecting: boolean
   connectCurrentOrcaProfile: () => Promise<null>
   openPasswordPage?: () => Promise<{ ok: boolean; error?: string } | null>
   fetchOrcaProfileAuthStatus: () => Promise<OrcaProfileAuthStatus | null>
@@ -74,7 +73,6 @@ describe('MobilePairingConnectionOptions', () => {
         state: 'local',
         persistence: 'none'
       },
-      orcaProfileConnecting: false,
       connectCurrentOrcaProfile: connect,
       fetchOrcaProfileAuthStatus: fetchAuthStatus
     }
@@ -223,7 +221,6 @@ describe('MobilePairingConnectionOptions', () => {
         state: 'connected',
         persistence: 'encrypted'
       },
-      orcaProfileConnecting: false,
       connectCurrentOrcaProfile: connect,
       fetchOrcaProfileAuthStatus: fetchAuthStatus
     }

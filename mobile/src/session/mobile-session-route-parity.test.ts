@@ -66,11 +66,26 @@ const HEAD_MAIN_HOOK_SHA256 = '62bf9e97dbe404d055bc9ac26c2f993b85b8fb04c886d1c02
 const HEAD_HOOK_BINDING_SHA256 = '8deb141afa7288cda1fad1637e8be9d232526bc57303de1d26d1eb84809f601b'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
-const HEAD_CALLBACK_BODY_SHA256 = 'bc9c38d79a2aabeb832cf2411fe3e2c9585c26bf638c6db312c46012250aba24'
-const HEAD_EFFECT_SHA256 = '73d80845e0a4b6363cfb4bb55551af97965b1f676b97adf0b2a8504219b9a501'
+// Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
+// and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
+// Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
+// whose accepted-check became that operation's own verdict, then again when that check was spelled
+// `=== true` to match the other four sites reading the same verdict. Refreshed once more for the
+// display-mode toggle, whose send became `terminalDisplayModeSet`.
+const HEAD_CALLBACK_BODY_SHA256 = 'e86e357056826c49b0120beffaac99d3bbac80ff1ddd1118b6a3ac304e9d296b'
+// Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
+// the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
+// again when the reporter took the reply and interpreted it itself, retiring the hand-built
+// refusal the timer site passed when it had no reply at all.
+const HEAD_EFFECT_SHA256 = '812aaa9f5abf25dd5229f65231900825b2fd38d5d238b511f3fc2edf4ae31a47'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+// Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
+// rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
+// `handleClearTerminal`, whose send became `terminalBufferClear`, and once more for
+// `handleCreateTerminal`, whose send became `sessionTabCreateTerminal` and whose `response.ok`
+// branch became that operation's own throw-the-host-message acceptance.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '97ce5457d8059974f500022a4382ff687074e26843d6c1525be938d6c0537928'
+  '21931099ef59af0f748ccc69c9adac4f9ae397b39e03e7ca4f4901c40b33e4ec'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -78,8 +93,12 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
+// Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
+// first, then `worktree.activate` twice, `session.tabs.createTerminal` and
+// `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
+// spelled at the call site. Fork Mac-speech copy adds one runtime string on top of that.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd0328667fa4a9c1bfab98938732000f1a8c5c177998c4cbffa9d27bdbd81dbbe'
+  '880e78c0c2e41710fcf05823ca7e5e47c8c5b3471758bdf58747176e2d767324'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -517,7 +536,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(547)
+    expect(strings).toHaveLength(532)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

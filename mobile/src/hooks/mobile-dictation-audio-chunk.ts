@@ -3,6 +3,7 @@ import {
   MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
+import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
 import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { RpcClient } from '../transport/rpc-client'
@@ -31,17 +32,17 @@ export function enqueueMobileDictationAudioChunk(
     )
     return
   }
-  const sendChunk = client
-    .sendRequest('speech.dictation.chunk', {
+  const sendChunk = dictationAudioChunkSend
+    .request(client, {
       dictationId,
       audioBase64: bytesToBase64(bytes),
       sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
     })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(response.error.message)
+    .then((reply) => {
+      dictationAudioChunkSend.interpret(reply)
+      if (reply.ok) {
+        queue.onLiveSnapshot?.(reply.result)
       }
-      queue.onLiveSnapshot?.(response.result)
     })
     .catch((err) => queue.failActiveDictation(dictationId, err))
     .finally(() => {

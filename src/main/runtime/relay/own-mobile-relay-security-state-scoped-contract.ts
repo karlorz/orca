@@ -301,7 +301,6 @@ export function registerAccountScopedStoreTests(
         organizationId: 'org_main'
       })
 
-      // oxlint-disable-next-line typescript/no-non-null-assertion -- contract test
       const accounts = await state.listAccounts!()
       expect(accounts.length).toBe(3)
       expect(accounts[0].accountId).toBe(admin.accountId)

@@ -109,7 +109,7 @@ describe('useMobileDictation source invariants', () => {
       '  return true'
     )
     const desktopStartIndex = startBody.indexOf(
-      "client.sendRequest('speech.dictation.start', { dictationId })"
+      'dictationSessionStart.request(client, { dictationId })'
     )
     const acquireIndex = startBody.indexOf('.acquire(dictationId)')
     const desktopSessionIndex = hookStartBody.indexOf('await startMobileDictationDesktopSession')
@@ -154,7 +154,7 @@ describe('useMobileDictation source invariants', () => {
       'export async function startMobileDictationDesktopSession'
     )
     expect(cancelStaleStartBody).toContain(
-      "client.sendRequest('speech.dictation.cancel', { dictationId })"
+      'dictationSessionCancel.request(client, { dictationId })'
     )
     expect(cancelStaleStartBody).toContain('cleanups.push(keepAwakeOwner.release(dictationId))')
     expect(cancelStaleStartBody).toContain('await Promise.allSettled(cleanups)')
@@ -202,7 +202,7 @@ describe('useMobileDictation source invariants', () => {
     )
     // The wake tag must be held through chunk drain and the finish RPC so a
     // screen lock cannot suspend the app before the transcript arrives.
-    expect(stopBody.indexOf('speech.dictation.finish')).toBeLessThan(
+    expect(stopBody.indexOf('dictationSessionFinish')).toBeLessThan(
       stopBody.indexOf('void keepAwakeOwner.release')
     )
     expect(stopBody.indexOf('} finally {')).toBeLessThan(
