@@ -1,4 +1,3 @@
-import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
 import { MAC_SYSTEM_SPEECH_MODEL_ID } from '../../../src/shared/voice-dictation-selection'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -10,9 +9,10 @@ import {
   dictationModelDownload,
   dictationSetupRead
 } from './mobile-dictation-operations'
+import type { MobileSpeechModelReply, MobileSpeechSetupReply } from './dictation-reply-schema'
 
-export type MobileSpeechSetup = RuntimeSpeechSetupState
-export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
+export type MobileSpeechSetup = MobileSpeechSetupReply
+export type MobileSpeechModel = MobileSpeechModelReply
 
 // Dictation-setup errors startMobileDictation throws when the desktop isn't
 // configured. Mapping them lets the mic entry point open the setup sheet
@@ -46,11 +46,10 @@ export async function fetchDictationSetup(client: RpcClient): Promise<MobileSpee
   if (isLegacyDesktopSpeechSetupReply(reply)) {
     throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return interpretOrThrowRefusalMessage(
     () => dictationSetupRead.interpret(reply),
     'Failed to load dictation models'
-  ) as MobileSpeechSetup
+  )
 }
 
 async function requestDictationSetupReply(client: RpcClient): Promise<RpcResponse> {
@@ -79,11 +78,10 @@ export async function deleteDictationModel(
   modelId: string
 ): Promise<MobileSpeechSetup> {
   const reply = await dictationModelDelete.request(client, { modelId })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return interpretOrThrowRefusalMessage(
     () => dictationModelDelete.interpret(reply),
     'Failed to delete model'
-  ) as MobileSpeechSetup
+  )
 }
 
 export function resolveMobileDictationSetupParams(params: {
@@ -133,11 +131,10 @@ export async function setDictationConfig(
 ): Promise<MobileSpeechSetup> {
   const setupParams = resolveMobileDictationSetupParams(params)
   const reply = await dictationConfigWrite.request(client, setupParams)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const next = interpretOrThrowRefusalMessage(
     () => dictationConfigWrite.interpret(reply),
     'Failed to update dictation settings'
-  ) as MobileSpeechSetup
+  )
   assertMacSpeechWriteApplied(params, next)
   return next
 }

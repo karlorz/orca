@@ -2,7 +2,7 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.48",
+    "version": "0.0.50",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -79,10 +79,12 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.stably.orca.mobile",
-      "versionCode": 73
+      "versionCode": 73,
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
       [
         "expo-splash-screen",

@@ -116,9 +116,13 @@ export function createRelayServer(
     recordControlRenewal: (durationMs, outcome) =>
       observability.recordControlRenewal?.(durationMs, outcome)
   })
-  const ready = createRelayReadiness(observedDatabase, config.jwksUrl, {
-    observe: (observation) => observability.recordReadiness(observation)
+  const readiness = createRelayReadiness(observedDatabase, config.jwksUrl, {
+    jwksGraceMs: config.readinessJwksGraceMs,
+    sqlGraceMs: config.readinessSqlGraceMs,
+    observe: (observation) => observability.recordReadiness(observation),
+    observeGrace: (event) => observability.recordReadinessGrace(event)
   })
+  const ready = readiness.check
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -134,7 +138,7 @@ export function createRelayServer(
   const app = createRelayApp(config, {
     store,
     assignments,
-    drain: (graceMs) => sessions.drain(graceMs),
+    drain: (graceMs, options) => sessions.drain(graceMs, options ?? {}),
     drainHost: (input) => sessions.drainHost(input),
     idleRehome: (input) => {
       const now = (options.now ?? Date.now)()
@@ -158,6 +162,7 @@ export function createRelayServer(
       ...readRelayDatabasePoolPressure(database)
     }),
     ready,
+    readinessDegradation: () => readiness.degradedDependencies(),
     recordAssignmentAdmission: (outcome) => observability.recordAssignmentAdmission?.(outcome),
     recordAssignmentRejectionReason: (lane, reason) =>
       observability.recordAssignmentRejectionReason?.(lane, reason),

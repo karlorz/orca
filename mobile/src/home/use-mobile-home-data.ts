@@ -10,7 +10,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../onboarding/mobile-onboarding-plan'
-import { totalHomeStats, type HomeStatsSummary } from '../stats/home-stats-total'
+import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import type { TaskProvider } from '../tasks/mobile-task-providers'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { loadHostCatalog } from '../transport/host-store'
@@ -34,7 +34,7 @@ import { useMobileHomeHostConnections } from './use-mobile-home-host-connections
 export function useMobileHomeData() {
   const router = useRouter()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
-  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsSummary>>({})
+  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
   const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})

@@ -62,8 +62,8 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '62bf9e97dbe404d055bc9ac26c2f993b85b8fb04c886d1c02015d055675af1c9'
-const HEAD_HOOK_BINDING_SHA256 = '8deb141afa7288cda1fad1637e8be9d232526bc57303de1d26d1eb84809f601b'
+const HEAD_MAIN_HOOK_SHA256 = '0029935330ee3122412013387b2bc77b38dc31cc1ab1d6c0a7ae110bdc1476dc'
+const HEAD_HOOK_BINDING_SHA256 = 'ba7f00ee74c5d94edb659ff33aa7ef98692dd40bc13bd485507c06d1e7a0a6f1'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
@@ -73,8 +73,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // `=== true` to match the other four sites reading the same verdict. Refreshed in step 7 for the
 // reply casts the checked readers made unnecessary — the markdown tab doc, the worktree record's
 // `diffComments` and the browser tab's page id are typed by their schemas now. Refreshed once more
-// on the merge, for the display-mode toggle whose send became `terminalDisplayModeSet`.
-const HEAD_CALLBACK_BODY_SHA256 = 'fa279295eefc30b19a18afc14f4364c4768f373bef4f180db64c22bf0581aad0'
+// on the merge, for the display-mode toggle whose send became `terminalDisplayModeSet`. Refreshed
+// for the files domain's checked preview fallback and main's forwarded dictation mode.
+const HEAD_CALLBACK_BODY_SHA256 = 'bcda04bb68cf7554ec4f74c5733ebe034461adb6b7fc5c9e6e468b6d0270fbfb'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -88,7 +89,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // `handleCreateTerminal`, whose send became `sessionTabCreateTerminal` and whose `response.ok`
 // branch became that operation's own throw-the-host-message acceptance.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'e77614fd8ae98cce4009636520f0f3acb17e583d7395f954385a779b1decb7d1'
+  '923b5ea7fe3330cbd98213b72736bf1f653115ddb5492cb8eb8306d8ca4f28e8'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -494,7 +495,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(270)
+    expect(main.hooks).toHaveLength(271)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)

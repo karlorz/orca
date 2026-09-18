@@ -41,6 +41,7 @@ features:
     status: landed
     paths:
       - mobile
+      - mobile/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
   - id: fork-mobile-android-tags
     title: Mobile tags stay 0.0.46-N; APK-only fork workflow
     kind: release
@@ -57,6 +58,7 @@ features:
       - config/electron-builder.config.cjs
       - config/scripts/fork-desktop-build-version.mjs
       - config/scripts/fork-next-desktop-tag.mjs
+      - config/scripts/ci-dependency-download-cache.test.mjs
       - config/scripts/verify-fork-desktop-release-artifacts.mjs
   - id: pet-voice-fgs-hysteresis
     title: Keep pet-voice FGS through 5-minute Tailscale reconnects
@@ -90,6 +92,7 @@ features:
       - mobile/src/components
       - mobile/app/account-usage-settings.tsx
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
+      - mobile/src/storage/preferences.test.ts
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
   - id: fork-live-status
     title: Tiny read-only Coolify operator status app for own-auth and official-relay
@@ -214,6 +217,7 @@ features:
       - src/renderer/src/components/terminal-pane
       - src/main/runtime/runtime-mobile-dictation-controller.ts
       - mobile/src/session
+      - mobile/src/session/MobileNativeChatView.tsx
       - native/speech-macos
     wiki: projects/orca/work/2026-09-05-orca-dictation-stt-backends-no-macos-system
 
