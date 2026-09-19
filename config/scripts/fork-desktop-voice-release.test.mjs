@@ -132,6 +132,20 @@ describe('fork desktop voice release workflow', () => {
     const workflow = readWorkflow(workflowPath)
     expect(workflow.jobs['build-linux']).toBeDefined()
     expect(workflow.jobs['build-linux'].needs).toContain('verify')
+    const steps = workflow.jobs['build-linux'].steps
+    const packageInputsIndex = steps.findIndex((step) => step.name === 'Build package inputs')
+    const projectWebIndex = steps.findIndex(
+      (step) => step.name === 'Project web client from renderer build'
+    )
+    const mobileWebIndex = steps.findIndex((step) => step.name === 'Build mobile web bundle')
+    const nativeIndex = steps.findIndex((step) => step.name === 'Build native components')
+    const packageIndex = steps.findIndex((step) => step.name === 'Build Linux packages')
+    expect(packageInputsIndex).toBeGreaterThanOrEqual(0)
+    expect(projectWebIndex).toBeGreaterThan(packageInputsIndex)
+    expect(mobileWebIndex).toBeGreaterThan(projectWebIndex)
+    expect(steps[mobileWebIndex]?.run).toBe('pnpm run build:mobile-web')
+    expect(nativeIndex).toBeGreaterThan(mobileWebIndex)
+    expect(packageIndex).toBeGreaterThan(nativeIndex)
     const rawYaml = readFileSync(workflowPath, 'utf8')
     expect(rawYaml).toContain('build-linux:')
     expect(rawYaml).toContain('ubuntu-latest')
