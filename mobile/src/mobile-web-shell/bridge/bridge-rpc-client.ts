@@ -1,9 +1,10 @@
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
-import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from '../../transport/types'
+import type { ConnectionState, RpcResponse } from '../../transport/types'
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
+import { readShellSession, type BridgeShellSession } from './bridge-client-session'
 import { createBridgeInitHandshake } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
@@ -13,15 +14,17 @@ import {
   BridgeShellReplacedError
 } from './bridge-client-errors'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
+import { createBridgeClientNotifications } from './bridge-client-notifications'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeGrants,
   type BridgeHostMessage
 } from './bridge-envelope'
+
+export type { BridgeShellSession } from './bridge-client-session'
 
 export {
   BridgeClientCapExceededError,
@@ -37,13 +40,6 @@ const BRIDGE_ID_CHARS = 22
 
 export type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 
-/** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
-export type BridgeShellSession = {
-  sessionId: string
-  buildId: string
-  grants: BridgeGrants
-}
-
 export type BridgeRpcClientOptions = {
   /** Posts one frame to the shell. May throw; nothing about returning proves delivery. */
   send: (json: string) => void
@@ -55,6 +51,23 @@ export type BridgeRpcClient = RpcClient & {
   /** Fires once `init` has landed, immediately if it already has. Mount no screen before it. */
   onReady: (listener: () => void) => () => void
   getShellSession: () => BridgeShellSession | null
+  /**
+   * Asks the shell to open a screen this page does not render. False when the shell granted no
+   * `navigate`, which is an older shell that would refuse the frame outright: the caller then has
+   * to do something else, and a thrown error in a tap handler is not that.
+   */
+  notifyNavigate: (href: string) => boolean
+  /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
+  notifyStorageWrite: (key: string, value: string | null) => boolean
+  /**
+   * Tells the shell this page cannot render what it was opened for. Never throws and never rejects:
+   * the one caller is an error boundary, and a report that threw would be the second failure.
+   *
+   * False means nothing left — no session, a closed client, a shell that granted no fault
+   * reporting, or a port that refused the frame. There is no second attempt: what could not be said
+   * once will not say itself on a retry, and the shell's own load state is the other way it finds out.
+   */
+  notifyPageFault: (error: unknown) => boolean
 }
 
 /**
@@ -145,7 +158,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     }
-    session = { sessionId: message.sessionId, buildId: message.buildId, grants: message.grants }
+    session = readShellSession(message)
     cache.prime(message.connection)
     for (const listener of readyListeners) {
       listener()
@@ -261,26 +274,20 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     unsubscribeFromMessages()
   }
 
+  const notifications = createBridgeClientNotifications({
+    send: sendFrame,
+    requireSession,
+    isClosed: () => closed,
+    hasGrant: (name) => session?.grants.native.includes(name) === true
+  })
+
   const unsubscribeFromMessages = options.onMessage(receive)
   handshake.start()
 
   return {
     sendRequest,
     subscribe,
-    updateTerminalSubscriptionViewport: (terminal, viewport) => {
-      requireSession()
-      if (closed) {
-        return
-      }
-      sendFrame({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: 'terminalViewport',
-        terminal,
-        cols: viewport.cols,
-        rows: viewport.rows
-      })
-    },
+    updateTerminalSubscriptionViewport: notifications.updateTerminalSubscriptionViewport,
     getState: (): ConnectionState => snapshot().state,
     getReconnectAttempt: () => snapshot().reconnectAttempt,
     getLastConnectedAt: () => snapshot().lastConnectedAt,
@@ -292,18 +299,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Not gated on the session: it registers a listener and reads nothing, so it cannot answer
     // wrongly, and a provider that subscribes before `init` is how a screen hears the first change.
     onStateChange: (listener) => cache.onStateChange(listener),
-    notifyForeground: (reason?: ForegroundNudgeReason) => {
-      requireSession()
-      if (closed) {
-        return
-      }
-      sendFrame({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: 'foreground',
-        ...(reason === undefined ? {} : { reason })
-      })
-    },
+    notifyForeground: notifications.notifyForeground,
+    notifyNavigate: notifications.notifyNavigate,
+    notifyStorageWrite: notifications.notifyStorageWrite,
+    notifyPageFault: notifications.notifyPageFault,
     close,
     onReady: (listener) => {
       if (session !== null) {

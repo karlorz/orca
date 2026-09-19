@@ -1,14 +1,24 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { FakeRpcClient } from './bridge-host-test-fakes'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
 type ScreenDependencies = {
   retry: Mock
   reportShellFailure: Mock
+  reportDocumentLoaded: Mock
+  reportPageReady: Mock
+  /** The profile read rejected, which is the one state that has no host to build against. */
+  snapshotUnreadable: boolean
+  storageRefreshes: number
   openUrl: Mock
+  push: Mock
+  pageRoutes: readonly string[]
   lifecycle: string[]
   state: MobileWebShellSessionState
+  /** Null for every case but the bridge's: with no client the hook builds no host at all. */
+  client: FakeRpcClient | null
 }
 
 const dependencies = vi.hoisted((): ScreenDependencies => {
@@ -18,9 +28,16 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
   return {
     retry: vi.fn(),
     reportShellFailure: vi.fn(),
+    reportDocumentLoaded: vi.fn(),
+    reportPageReady: vi.fn(),
+    snapshotUnreadable: false,
+    storageRefreshes: 0,
     openUrl: vi.fn(),
+    push: vi.fn(),
+    pageRoutes: ['/h/[hostId]'],
     lifecycle: [],
-    state: { kind: 'checking' }
+    state: { kind: 'checking' },
+    client: null
   }
 })
 
@@ -36,7 +53,10 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))
-vi.mock('expo-router', () => ({ router: { replace: vi.fn() } }))
+vi.mock('expo-router', () => ({
+  router: { replace: vi.fn() },
+  useRouter: () => ({ push: dependencies.push })
+}))
 // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
 // and a mount/unmount log is the only thing that can tell a remount from a prop update.
 vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
@@ -57,16 +77,43 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
 })
 // The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
 // client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
-vi.mock('../transport/client-context', () => ({ useHostClient: () => ({ client: null }) }))
+vi.mock('../transport/client-context', () => ({
+  useHostClient: () => ({ client: dependencies.client })
+}))
+// Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
+// global this test does not have. What it answers is the screen's input, not its behaviour.
+vi.mock('./use-page-host-snapshot', () => ({
+  usePageHostSnapshot: () => ({
+    snapshot: {
+      host: { id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 3 }
+    },
+    unreadable: dependencies.snapshotUnreadable,
+    readStorage: () => ({}),
+    refreshStorage: () => {
+      dependencies.storageRefreshes += 1
+    },
+    writeStorage: () => {}
+  })
+}))
 vi.mock('./use-mobile-web-shell-session', () => ({
   useMobileWebShellSession: () => ({
     state: dependencies.state,
+    pageRoutes: dependencies.pageRoutes,
     retry: dependencies.retry,
-    reportShellFailure: dependencies.reportShellFailure
+    reportShellFailure: dependencies.reportShellFailure,
+    reportDocumentLoaded: dependencies.reportDocumentLoaded,
+    reportPageReady: dependencies.reportPageReady
   })
 }))
 
+import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
+
+/** The caller's native screen, as a component so `findAllByType` can name it without a host string. */
+function NativeFallback(): null {
+  return null
+}
 
 const BUILD_ID = 'a1b2c3d4e5f6'.repeat(5) + 'abcd'
 const DIRECTORY = '/var/mobile/Containers/Data/Caches/mobile-web/deadbeef/generations/a1b2'
@@ -75,7 +122,13 @@ async function render(state: MobileWebShellSessionState): Promise<ReactTestRende
   dependencies.state = state
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(createElement(MobileWebShellScreen, { hostId: 'host-1' }))
+    rendered.tree = create(
+      createElement(MobileWebShellScreen, {
+        hostId: 'host-1',
+        route: { pathname: '/h/host-1' },
+        fallback: createElement(NativeFallback)
+      })
+    )
   })
   if (rendered.tree === null) {
     throw new Error('screen did not render')
@@ -97,7 +150,13 @@ function readyState(sessionId: string): MobileWebShellSessionState {
 async function update(tree: ReactTestRenderer, state: MobileWebShellSessionState): Promise<void> {
   dependencies.state = state
   await act(async () => {
-    tree.update(createElement(MobileWebShellScreen, { hostId: 'host-1' }))
+    tree.update(
+      createElement(MobileWebShellScreen, {
+        hostId: 'host-1',
+        route: { pathname: '/h/host-1' },
+        fallback: createElement(NativeFallback)
+      })
+    )
   })
 }
 
@@ -117,7 +176,12 @@ describe('the hybrid shell screen', () => {
   beforeEach(() => {
     dependencies.retry.mockReset()
     dependencies.reportShellFailure.mockReset()
+    dependencies.reportDocumentLoaded.mockReset()
+    dependencies.reportPageReady.mockReset()
+    dependencies.snapshotUnreadable = false
+    dependencies.storageRefreshes = 0
     dependencies.lifecycle.length = 0
+    dependencies.client = null
   })
 
   it('renders the update wall for a bundle verdict, with no shell view', async () => {
@@ -235,6 +299,81 @@ describe('the hybrid shell screen', () => {
     expect(dependencies.reportShellFailure.mock.calls).toEqual([['render-process-gone']])
   })
 
+  it('starts the wait for the page when the native view says the document finished', async () => {
+    const tree = await render(readyState('session-one'))
+    const view = byName(tree, 'ShellViewProbe')[0]
+    await act(async () => {
+      view.props.onLoadState({ nativeEvent: { state: 'loading' } })
+      view.props.onLoadState({ nativeEvent: { state: 'ready' } })
+      view.props.onLoadState({ nativeEvent: { state: 'failed', reason: 'document-load-failed' } })
+    })
+    // Once, for the one finished document, and never for the failure: a view that reported a
+    // failure has nothing left to wait for.
+    expect(dependencies.reportDocumentLoaded).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails the session when this host could not be read from the app store', async () => {
+    // Without this the session stays `ready` with the view un-hidden, no host behind it, and the
+    // page re-posting `ready` on its backoff for as long as the screen is open.
+    dependencies.snapshotUnreadable = true
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await render(readyState('session-one'))
+    expect(dependencies.reportShellFailure.mock.calls).toEqual([['document-load-failed']])
+    warned.mockRestore()
+  })
+
+  it('re-reads the app store on every ask, so the next init is not the first one again', async () => {
+    dependencies.client = createFakeRpcClient()
+    const tree = await render(readyState('session-one'))
+    const view = byName(tree, 'ShellViewProbe')[0]
+    await act(async () => {
+      view.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
+      view.props.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
+    })
+    // A document that reloads inside one mount asks again; a refresh per ask is what lets a key
+    // the app changed meanwhile reach the `init` after it.
+    expect(dependencies.storageRefreshes).toBe(2)
+  })
+
+  it('ends that wait on the page asking for a session', async () => {
+    dependencies.client = createFakeRpcClient()
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+    })
+    expect(dependencies.reportPageReady).toHaveBeenCalled()
+  })
+
+  it('fails the session on a page fault, so a blank page becomes the failure screen', async () => {
+    dependencies.client = createFakeRpcClient()
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const tree = await render(readyState('session-one'))
+    await act(async () => {
+      // The page asks for its session first, which is what earns it the `fault` grant: a host that
+      // has told a page nothing refuses the name.
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: { json: clientFrame({ type: 'ready' }) }
+      })
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({
+            type: 'notify',
+            name: BRIDGE_FAULT_GRANT,
+            error: { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
+          })
+        }
+      })
+    })
+    expect(dependencies.reportShellFailure.mock.calls).toEqual([['document-load-failed']])
+    warned.mockRestore()
+    // The reducer's answer to that reason, rendered: this is what the page's blank turns into.
+    expect(
+      textOf(await render({ kind: 'failed', reason: 'document-load-failed', retriedOnce: true }))
+    ).toContain('The downloaded workspace could not be opened.')
+  })
+
   it('shows a build id prefix and never the whole one, the cache path, or the host id', async () => {
     const tree = await render(readyState('session-one'))
     const text = textOf(tree)
@@ -244,5 +383,14 @@ describe('the hybrid shell screen', () => {
     expect(text).not.toContain(BUILD_ID)
     expect(text).not.toContain(DIRECTORY)
     expect(text).not.toContain('host-1')
+  })
+})
+
+describe('the route the shell was not asked to render', () => {
+  it('hands the screen back to the caller rather than painting anything of its own', async () => {
+    const tree = await render({ kind: 'native-route' })
+    expect(tree.root.findAllByType(NativeFallback)).toHaveLength(1)
+    expect(byName(tree, 'ShellViewProbe')).toEqual([])
+    expect(byName(tree, 'ActivityIndicator')).toEqual([])
   })
 })

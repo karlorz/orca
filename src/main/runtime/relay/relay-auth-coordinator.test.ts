@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RelayHttpError } from './relay-http-client'
 import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -197,7 +198,7 @@ describe('RelayAuthCoordinator', () => {
 
   it('rejects a refresh result after capability removal', async () => {
     let current: RelayAuthContext | null = context
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => current,
       openBroker: async (input) => {
@@ -210,7 +211,7 @@ describe('RelayAuthCoordinator', () => {
     await vi.waitFor(() => expect(refreshAccessToken).not.toBeNull())
     current = { ...context, relayEntitled: false }
     coordinator.reconcile()
-    await expect(refreshAccessToken!()).resolves.toBeNull()
+    await expect(refreshAccessToken!()).resolves.toEqual({ accessToken: null })
   })
 
   it('invalidates pending ownership immediately while broker opening is paused', async () => {
@@ -243,7 +244,7 @@ describe('RelayAuthCoordinator', () => {
     const refreshRead = deferred<RelayAuthContext | null>()
     let readCount = 0
     let current = context
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const coordinator = new RelayAuthCoordinator({
       readContext: () => {
         readCount += 1
@@ -262,7 +263,7 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     refreshRead.resolve(context)
 
-    await expect(refreshing).resolves.toBeNull()
+    await expect(refreshing).resolves.toEqual({ accessToken: null })
     await vi.waitFor(() => expect(readCount).toBeGreaterThanOrEqual(3))
   })
 
@@ -349,7 +350,7 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('triggers force refresh when reminting access token for broker', async () => {
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const readOptionsList: ({ forceRefresh?: boolean } | undefined)[] = []
     const coordinator = new RelayAuthCoordinator({
       readContext: vi.fn(async (options?: { forceRefresh?: boolean }) => {
@@ -368,13 +369,13 @@ describe('RelayAuthCoordinator', () => {
     expect(readOptionsList[0]?.forceRefresh).toBeFalsy()
 
     const token = await refreshAccessToken!()
-    expect(token).toBe(context.accessToken)
+    expect(token).toEqual({ accessToken: context.accessToken })
     expect(readOptionsList).toHaveLength(2)
     expect(readOptionsList[1]).toEqual({ forceRefresh: true })
   })
 
   it('rotates session to full TTL on broker remint rather than leaving <= 120s leftover', async () => {
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const now = Date.now()
     let parentSessionExpiresAt = now + 90_000 // <= 120s leftover
 
@@ -406,7 +407,7 @@ describe('RelayAuthCoordinator', () => {
     expect(parentSessionExpiresAt - now).toBeLessThanOrEqual(120_000)
 
     const remintedToken = await refreshAccessToken!()
-    expect(remintedToken).toBe('rotated-full-ttl-token')
+    expect(remintedToken).toEqual({ accessToken: 'rotated-full-ttl-token' })
     // After remint, parent session has a full TTL
     expect(parentSessionExpiresAt - now).toBeGreaterThan(120_000)
   })

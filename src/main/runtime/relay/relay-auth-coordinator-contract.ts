@@ -1,5 +1,6 @@
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { RelayBrokerStatus } from './relay-session-broker'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 
 export type RelayAuthIdentity = {
   userId: string
@@ -25,7 +26,7 @@ export type RelayAuthCoordinatorOptions = {
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
-    refreshAccessToken: () => Promise<string | null>
+    refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
   lingerMs?: number

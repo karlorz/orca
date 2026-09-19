@@ -5,8 +5,10 @@ import {
   readBridgeClientMessage,
   readBridgeHostMessage,
   type BridgeClientMessage,
-  type BridgeHostMessage
+  type BridgeHostMessage,
+  type BridgeInitRoute
 } from './bridge-envelope'
+import type { BridgeErrorCapture } from './bridge-error-capture'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
@@ -35,6 +37,16 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   toPage: string[]
   diagnostics: BridgeRpcClientDiagnostic[]
   hostDiagnostics: BridgeHostDiagnostic[]
+  /** Every screen the page asked the shell to open, in order. */
+  navigations: string[]
+  /** Every allowlisted key the page wrote through the shell, in order. */
+  storageWrites: { key: string; value: string | null }[]
+  /** Every fault the page reported, in order, as the shell received it. */
+  pageFaults: BridgeErrorCapture[]
+  /** How many times the page asked for a session; it re-asks on a backoff until one lands. */
+  readonly pageReadyCount: () => number
+  /** Why the host refused to open a session at all, if it did. */
+  readonly routeRefusals: string[]
   /** Runs both lanes until a full round moves nothing. */
   flush: () => Promise<void>
   /**
@@ -54,6 +66,9 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   rpc: TRpc
   sessionId?: string
   buildId?: string
+  route?: BridgeInitRoute
+  pageRoutes?: readonly string[]
+  storage?: Readonly<Record<string, string>>
   /**
    * Rewrites each frame on its way to the page, for asking the page a counterfactual it cannot be
    * asked any other way: would this run have gone differently had the shell sent one more field?
@@ -130,6 +145,11 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const rpc = options.rpc
   const diagnostics: BridgeRpcClientDiagnostic[] = []
   const hostDiagnostics: BridgeHostDiagnostic[] = []
+  const navigations: string[] = []
+  const storageWrites: { key: string; value: string | null }[] = []
+  const pageFaults: BridgeErrorCapture[] = []
+  let pageReadies = 0
+  const routeRefusals: string[] = []
   let receiveOnPage: ((json: string) => void) | null = null
 
   const rewrite = options.rewriteToPage ?? ((json: string) => json)
@@ -144,6 +164,17 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     },
     buildId: options.buildId ?? 'build-a',
     sessionId: options.sessionId ?? 'session-a',
+    route: options.route ?? { pathname: '/h/host-a' },
+    pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
+    onNavigate: (href) => navigations.push(href),
+    host: { id: 'host-a', name: 'Host A', endpoint: 'ws://host-a', lastConnected: 0 },
+    readStorage: () => options.storage ?? {},
+    onStorageWrite: (key, value) => storageWrites.push({ key, value }),
+    onPageFault: (error) => pageFaults.push(error),
+    onPageReady: () => {
+      pageReadies += 1
+    },
+    onRouteRefused: (issue) => routeRefusals.push(issue),
     onDiagnostic: (diagnostic) => hostDiagnostics.push(diagnostic)
   })
   const toShell = createLane((json) => {
@@ -170,6 +201,11 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     toPage: toPage.sent,
     diagnostics,
     hostDiagnostics,
+    navigations,
+    storageWrites,
+    pageFaults,
+    pageReadyCount: () => pageReadies,
+    routeRefusals,
     async flush(): Promise<void> {
       for (let round = 0; round < 64; round += 1) {
         const moved = toShell.sent.length + toPage.sent.length
