@@ -178,7 +178,6 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
           publicKeyB64: hostPublicKeyB64
         },
         appVersion: '0.0.0-test',
-        silenceLimitMs,
         onClose: (code) => {
           oldControlCloseCode = code
         },
@@ -351,7 +350,6 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
           publicKeyB64: hostPublicKeyB64
         },
         appVersion: '0.0.0-test',
-        silenceLimitMs,
         onClose: vi.fn(),
         onConnectionOpen: vi.fn(),
         onDrain: vi.fn()
@@ -532,7 +530,6 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
           publicKeyB64: hostPublicKeyB64
         },
         appVersion: '0.0.0-test',
-        silenceLimitMs,
         onClose: (code) => {
           oldControlCloseCode = code
         },
@@ -671,7 +668,6 @@ describe('own-mobile-relay-password-mutation.integration (Scenario 2 & 3)', () =
           publicKeyB64: hostPublicKeyB64
         },
         appVersion: '0.0.0-test',
-        silenceLimitMs,
         onClose: vi.fn(),
         onConnectionOpen: vi.fn(),
         onDrain: vi.fn()
