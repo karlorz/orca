@@ -23,7 +23,8 @@ describe('TUI_AGENT_CONFIG', () => {
       'claude-agent-teams': { launchCmd: 'orca claude-teams', expectedProcess: 'claude' },
       kiro: { launchCmd: 'kiro-cli chat --tui', expectedProcess: 'kiro-cli' },
       'command-code': { launchCmd: 'command-code --trust' },
-      hermes: { launchCmd: 'hermes --tui' }
+      hermes: { launchCmd: 'hermes --tui' },
+      opencode2: { launchCmd: 'opencode2 --standalone', expectedProcess: 'opencode2' }
     }
     for (const [agent, expected] of Object.entries(overrides)) {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)
