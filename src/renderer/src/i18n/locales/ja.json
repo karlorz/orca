@@ -356,7 +356,8 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
-          "df221ddcb3": "Herdr"
+          "df221ddcb3": "Herdr",
+          "opencode2_label": "OpenCode 2"
         },
         "skill": {
           "cli": {
@@ -1313,7 +1314,7 @@
         "326a578923": "orca.yaml + ローカル",
         "2132b670da": "両方",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "名前または「作成元」",
+        "ac3748dcda": "作成元",
         "f660aa1454": "接続中",
         "7711ad5122": "ローカルセットアップコマンド",
         "e5db1b0419": "組み合わせセットアップコマンド",

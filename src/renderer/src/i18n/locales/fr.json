@@ -457,7 +457,9 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "df221ddcb3": "Herdr",
+          "opencode2_label": "OpenCode 2"
         },
         "skill": {
           "cli": {
@@ -1472,7 +1474,7 @@
         "326a578923": "orca.yaml + local",
         "2132b670da": "les deux",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "Nom ou « Créer à partir de »",
+        "ac3748dcda": "Créer à partir de",
         "f660aa1454": "Connexion",
         "7711ad5122": "Commande de setup locale",
         "e5db1b0419": "Commande de setup combinée",

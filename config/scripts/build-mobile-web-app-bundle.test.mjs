@@ -4,6 +4,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_APP_ROOT_RESET,
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
   buildMobileWebAppBundle,
@@ -71,6 +72,26 @@ async function withScratch(run) {
   }
 }
 
+/**
+ * Every page route this bundle declares, written out rather than read from the source that
+ * produces it: the point is to pin the list, and comparing the manifest to its own input would
+ * pass whatever that input became. Shared by the two assertions below, which is also what keeps
+ * this file under the 600-line cap.
+ */
+const EXPECTED_PAGE_ROUTES = [
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] },
+  { pathname: '/h/[hostId]/agent-history/[worktreeId]', grants: ['navigate', 'storage'] },
+  {
+    pathname: '/h/[hostId]/tasks',
+    grants: ['navigate', 'storage', 'externalLink', 'native.clipboard.write']
+  },
+  { pathname: '/h/[hostId]/files/[worktreeId]', grants: ['navigate', 'storage', 'externalLink'] },
+  {
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    grants: ['navigate', 'storage', 'externalLink']
+  }
+]
+
 describe('the page routes the manifest declares', () => {
   it('turns a route key into the URL pattern expo-router gives it', () => {
     expect(routePathnameFromKey('./h/[hostId]/index.tsx')).toBe('/h/[hostId]')
@@ -87,9 +108,7 @@ describe('the page routes the manifest declares', () => {
 
   it('declares only routes the bundle has a module for', async () => {
     const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(resolveMobileWebPageRoutes(keys)).toEqual([
-      { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }
-    ])
+    expect(resolveMobileWebPageRoutes(keys)).toEqual(EXPECTED_PAGE_ROUTES)
   })
 
   it('fails the build on a declaration the bundle cannot render', () => {
@@ -108,9 +127,7 @@ describe('the page routes the manifest declares', () => {
     async () => {
       await withScratch(async (scratch) => {
         const { manifest } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
-        expect(manifest.routes).toEqual([
-          { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }
-        ])
+        expect(manifest.routes).toEqual(EXPECTED_PAGE_ROUTES)
         // The routes are derived from the same tree the script is built from, so the assets
         // already decide them and the id has no reason to carry them as well.
         expect(manifest.buildId).toBe(computeMobileWebBundleBuildId(manifest.assets))
@@ -357,8 +374,8 @@ describeBundling('the app bundle', () => {
 
   it('fails the named shim, not the whole build, when its option goes missing', async () => {
     const options = mobileWebAppBuildOptions(await collectMobileWebAppRoutes(appDir))
-    // Each shim reads a different option, so removing one leaves the other five true. Without
-    // that, the list could name a shim the build stopped applying.
+    // Each shim reads an option of its own (two read `banner.js`), so stripping every option
+    // leaves none applying. Without that, the list could name a shim the build stopped applying.
     const stripped = {
       ...options,
       alias: {},
@@ -381,6 +398,21 @@ describeBundling('the app bundle', () => {
     expect(shipped).not.toContain('react-native-web')
     expect(shipped).not.toContain('lucide')
   })
+
+  it('ships no haptic that reaches for the DOM', async () => {
+    // expo-haptics' web build fakes an iOS haptic by appending a hidden
+    // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
+    // once per call. The file explorer calls triggerSelection on every row tap, and C1.9 already
+    // traced a swallowed long press on the worktree list to that stray click. `haptics.web.ts` is
+    // what keeps the whole shim out of the bundle, so this reads the bytes rather than the import.
+    for (const source of allScriptSource(await bundleMobileWebApp())) {
+      // The shim's own fingerprint, not `navigator.vibrate`: react-native-web's Vibration export
+      // calls that too, and it touches no DOM until something invokes it.
+      expect(source).not.toContain('ariaHidden')
+      expect(source).not.toContain('pointer: coarse')
+      expect(source).not.toContain('setAttribute("switch"')
+    }
+  }, 120_000)
 
   it('embeds no absolute path from this checkout', async () => {
     // Every chunk, not only the entry: the route manifest names each route by absolute path, and
@@ -409,6 +441,32 @@ describeBundling('the app bundle', () => {
       expect(html).toContain('<script type="module" src="/assets/')
       const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
       expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
+    })
+  }, 120_000)
+
+  it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'root-reset')
+      await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+      // Literals rather than substrings taken off the constant, which would read it back against
+      // itself and follow any rule dropped from it. Every rule, because the chain is only as
+      // definite as its weakest link: a height on #root alone resolves against a body that has
+      // none, and percent of auto is auto. Named one by one so a failure says which rule went.
+      for (const rule of [
+        'html,body{height:100%}',
+        'body{overflow:hidden}',
+        '#root{display:flex;height:100%;flex:1}'
+      ]) {
+        expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
+      }
+      // The id travels with the rules: it is what marks this block as the template's reset rather
+      // than something the page grew its own copy of.
+      expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
+      // In the document itself, not a linked asset: the CSP that allows it is the one already
+      // relaxed for react-native-web's runtime sheet.
+      expect(html).not.toContain('<link rel="stylesheet"')
     })
   }, 120_000)
 

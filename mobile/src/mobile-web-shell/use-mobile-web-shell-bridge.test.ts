@@ -2,8 +2,11 @@ import { createElement, useImperativeHandle, useLayoutEffect, type ReactElement 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
+import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 import {
   BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
   readBridgeHostMessage,
   type BridgeHostMessage
 } from './bridge/bridge-envelope'
@@ -40,7 +43,11 @@ type PostedFrame = { sessionId: string; json: string }
 type Probe = {
   view: MobileWebShellBridgeView | null
   navigations: string[]
+  externalLinks: string[]
+  backPops: number
   storageWrites: { key: string; value: string | null }[]
+  /** The running total after each dropped screencast frame, as the screen receives it. */
+  droppedBinaryFrames: number[]
 }
 
 /** What the page cannot read for itself, as the screen hands it over. */
@@ -83,7 +90,9 @@ function FakeShellView(props: {
  * still has passive work queued, and it is the only window this suite can address.
  */
 function DeliverDuringCommit(props: {
-  deliver: string | null
+  /** Delivered in order from the parent's layout effect, so a session can be opened and used in
+   *  one commit — which is what a native batch carrying both frames looks like. */
+  deliver: readonly string[]
   posted: PostedFrame[]
   probe: Probe
   faults: BridgeErrorCapture[]
@@ -91,8 +100,8 @@ function DeliverDuringCommit(props: {
 }): ReactElement {
   const { deliver, probe } = props
   useLayoutEffect(() => {
-    if (deliver !== null) {
-      probe.view?.onBridgeMessage({ nativeEvent: { json: deliver } })
+    for (const json of deliver) {
+      probe.view?.onBridgeMessage({ nativeEvent: { json } })
     }
   }, [deliver, probe])
   return createElement(Harness, {
@@ -117,7 +126,20 @@ function Harness(props: {
     // Built inline on every render, as a caller writes it: the host is not rebuilt for it.
     route: { pathname: '/h/host-1' },
     pageRoutes: ['/h/[hostId]'],
+    routeGrants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      BRIDGE_SCREENCAST_BINARY_GRANT,
+      ...BRIDGE_NATIVE_VERB_NAMES
+    ],
     onNavigate: (href) => props.probe.navigations.push(href),
+    onExternalLink: (url) => props.probe.externalLinks.push(url),
+    serveNativeVerb: () => Promise.resolve({ value: 'pasteboard' }),
+    onNavigateBack: () => {
+      props.probe.backPops += 1
+      return 'popped'
+    },
     snapshot: SNAPSHOT,
     readStorage: () => STORAGE,
     onStorageWrite: (key, value) => props.probe.storageWrites.push({ key, value }),
@@ -125,6 +147,7 @@ function Harness(props: {
     // absorb: rebuilding the host here would settle every pending request on each render.
     onPageFault: (error) => props.faults.push(error),
     onRouteRefused: () => {},
+    onBinaryFramesDropped: (total) => props.probe.droppedBinaryFrames.push(total),
     onPageReady: () => {
       props.readies.push(
         props.session.kind === 'ready' ? props.session.sessionId : props.session.kind
@@ -169,7 +192,14 @@ let warned: MockInstance<typeof console.warn>
 
 async function mount(session: MobileWebShellSessionState): Promise<Mounted> {
   const posted: PostedFrame[] = []
-  const probe: Probe = { view: null, navigations: [], storageWrites: [] }
+  const probe: Probe = {
+    view: null,
+    navigations: [],
+    externalLinks: [],
+    backPops: 0,
+    droppedBinaryFrames: [],
+    storageWrites: []
+  }
   const faults: BridgeErrorCapture[] = []
   const readies: string[] = []
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -258,8 +288,27 @@ describe('the bridge channel', () => {
     expect(mounted.probe.navigations).toEqual(['/h/host-1/session/wt-1'])
   })
 
+  it('hands a URL the page asked for to the caller that can leave the app', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({ type: 'notify', name: 'externalLink', url: 'https://example.com/x' })
+    )
+    expect(mounted.probe.externalLinks).toEqual(['https://example.com/x'])
+    expect(mounted.probe.navigations).toEqual([])
+  })
+
+  it('pops the stack the page was pushed onto, through the caller that owns it', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }))
+    expect(mounted.probe.backPops).toBe(1)
+    expect(mounted.probe.navigations).toEqual([])
+  })
+
   it('does not rebuild the host for a route object the caller built again', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     // Same session, re-rendered: the harness passes a fresh `{ pathname }` every time. A rebuilt
     // host would have settled that request delivery-unknown on its way out.
@@ -307,6 +356,7 @@ describe('the bridge channel', () => {
 
   it('forwards to the client the hook was given', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
   })
@@ -341,30 +391,98 @@ describe('teardown', () => {
 
   it('disposes when the session leaves ready, and answers nothing after', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'subscribe', id: ID, method: 'x.sub', params: {} }))
     await mounted.update({ kind: 'failed', reason: 'render-process-gone', retriedOnce: false })
     expect(fakeClient().streams[0]?.unsubscribes).toBe(1)
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.frames('session-one')).toEqual([])
+    // The `init` the session opened with, and nothing after the host left ready.
+    expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([])
     expect(fakeClient().requests).toEqual([])
+  })
+
+  /** The one thing a dropped frame leaves behind on a device, so the hook carrying it to the
+   *  screen is the whole of that evidence path. */
+  it('carries the dropped-frame total from the host to the screen', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({
+        type: 'subscribe',
+        id: ID,
+        method: 'browser.screencast',
+        params: {},
+        wantsBinary: true
+      })
+    )
+    const oversized = {
+      opcode: 1 as const,
+      seq: 1,
+      format: 'jpeg' as const,
+      metadata: {},
+      image: new Uint8Array(500_000)
+    }
+    await act(async () => {
+      fakeClient().streams[0]?.emitBinary?.(oversized)
+      fakeClient().streams[0]?.emitBinary?.({ ...oversized, seq: 2 })
+    })
+    // The leading 0 is the host announcing a fresh count as it is built; then one per drop.
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 2])
+    // Dropped, not ended: the stream is still the shell's to serve.
+    expect(fakeClient().streams[0]?.unsubscribes).toBe(0)
+  })
+
+  /**
+   * The count belongs to the host, so it has to go when the host does.
+   *
+   * Without this the screen keeps the retired host's number and the next drop reports the new
+   * host's first, so the line reads lower than it did a moment ago — which is worse than starting
+   * over, because a number that falls looks like frames coming back.
+   */
+  it('resets the dropped-frame total when the host is rebuilt', async () => {
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(
+      clientFrame({
+        type: 'subscribe',
+        id: ID,
+        method: 'browser.screencast',
+        params: {},
+        wantsBinary: true
+      })
+    )
+    await act(async () => {
+      fakeClient().streams[0]?.emitBinary?.({
+        opcode: 1 as const,
+        seq: 1,
+        format: 'jpeg' as const,
+        metadata: {},
+        image: new Uint8Array(500_000)
+      })
+    })
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1])
+    await mounted.update(readyState('session-two'))
+    // Zero again on the rebuild, before the new host has dropped anything of its own.
+    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 0])
   })
 
   it('disposes on unmount and settles what was in flight as delivery-unknown', async () => {
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
     await act(async () => {
       mounted.tree.unmount()
     })
     // The commit tears the host down while its own view is still attached, so the page hears why
     // its request will never answer instead of being left holding it.
-    expect(mounted.frames('session-one')).toEqual([
+    expect(mounted.frames('session-one').filter((frame) => frame.type !== 'init')).toEqual([
       expect.objectContaining({ type: 'error', id: ID })
     ])
     expect(warned).not.toHaveBeenCalled()
     fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await flushBridge()
-    expect(mounted.posted).toHaveLength(1)
+    expect(mounted.posted).toHaveLength(2)
   })
 
   it('ignores a frame that arrives for a session the hook has moved past', async () => {
@@ -417,7 +535,14 @@ describe('the callbacks a render passes', () => {
     const first: BridgeErrorCapture[] = []
     const second: BridgeErrorCapture[] = []
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], storageWrites: [] }
+    const probe: Probe = {
+      view: null,
+      navigations: [],
+      externalLinks: [],
+      backPops: 0,
+      droppedBinaryFrames: [],
+      storageWrites: []
+    }
     // One session throughout, so the host is never rebuilt: only the ref refresh can carry the
     // second render's callback to a frame that arrives after it.
     const render = (faults: BridgeErrorCapture[]): ReactElement =>
@@ -459,6 +584,7 @@ describe('client changes', () => {
   it('rebuilds the host on a new client, so nothing crosses to the one that was replaced', async () => {
     const first = fakeClient()
     const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
     const next = createFakeRpcClient()
     doubles.client = next
     await mounted.update(readyState('session-one'))
@@ -470,19 +596,32 @@ describe('client changes', () => {
   it('hands the host over in the commit, so no frame reaches the replaced client', async () => {
     const first = fakeClient()
     const posted: PostedFrame[] = []
-    const probe: Probe = { view: null, navigations: [], storageWrites: [] }
-    const render = (deliver: string | null): ReactElement =>
+    const probe: Probe = {
+      view: null,
+      navigations: [],
+      externalLinks: [],
+      backPops: 0,
+      droppedBinaryFrames: [],
+      storageWrites: []
+    }
+    const render = (deliver: readonly string[]): ReactElement =>
       createElement(DeliverDuringCommit, { deliver, posted, probe, faults: [], readies: [] })
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(render(null))
+      rendered.tree = create(render([]))
     })
     const next = createFakeRpcClient()
     doubles.client = next
     // The session id does not change, so the handler's own fence does not apply: only handing the
-    // host over in the commit keeps this frame off the client that was replaced.
+    // host over in the commit keeps this frame off the client that was replaced. The `ready` rides
+    // with it because the rebuilt host has issued no `init` and serves no request before one.
     await act(async () => {
-      rendered.tree?.update(render(clientFrame({ type: 'request', id: ID, method: 'status.get' })))
+      rendered.tree?.update(
+        render([
+          clientFrame({ type: 'ready' }),
+          clientFrame({ type: 'request', id: ID, method: 'status.get' })
+        ])
+      )
     })
     expect(first.requests).toHaveLength(0)
     expect(next.requests).toHaveLength(1)

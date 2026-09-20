@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { clientFrame, createFakeRpcClient, flushBridge } from './bridge-host-test-fakes'
-import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY
+} from './bridge/bridge-envelope'
 import { BRIDGE_NATIVE_GRANTS } from './bridge/bridge-init-frame'
 
 describe('notifications, refusals and the fence', () => {
@@ -172,7 +176,7 @@ describe('notifications, refusals and the fence', () => {
   it('forwards to the client it was built with, whatever the frame names', () => {
     const mine = createFakeRpcClient()
     const theirs = createFakeRpcClient()
-    const bridge = harness({ client: mine })
+    const bridge = harness({ ready: true, client: mine })
     harness({ client: theirs })
     bridge.host.receive(
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
@@ -182,10 +186,152 @@ describe('notifications, refusals and the fence', () => {
   })
 
   it('carries no host name into the client message it parsed', () => {
-    const bridge = harness()
+    const bridge = harness({ ready: true })
     bridge.host.receive(
       clientFrame({ type: 'request', id: ID, method: 'status.get', hostId: 'other-host' })
     )
     expect(bridge.client.requests[0]?.args).toEqual(['status.get'])
+  })
+})
+
+/**
+ * The one notify whose sink is the shell's own stack rather than the client or the app store.
+ *
+ * Nothing crosses back, so the only thing that can tell a pop from a page tapping into a stack that
+ * has nothing left is the diagnostic: a dead Back button is exactly what silence here would hide.
+ */
+describe('navigate-back', () => {
+  const back = clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY })
+
+  it('pops the shell stack and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual(['popped'])
+    expect(bridge.navigations).toEqual([])
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('reports the pop that found nothing, because the page hears nothing either way', () => {
+    const bridge = harness({ onNavigateBack: () => 'nothing-to-pop' })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual(['nothing-to-pop'])
+    expect(bridge.diagnostics).toEqual([{ kind: 'navigate-back-refused', why: 'nothing-to-pop' }])
+  })
+
+  it('names a pop refused for a pop already pending, which is a different bug', () => {
+    const bridge = harness({ onNavigateBack: () => 'pop-pending' })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(back)
+    expect(bridge.diagnostics).toEqual([{ kind: 'navigate-back-refused', why: 'pop-pending' }])
+  })
+
+  it('refuses it from a page that has not asked for a session', () => {
+    const bridge = harness()
+    bridge.host.receive(back)
+    expect(bridge.backPops).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_NAVIGATE_BACK_NOTIFY, why: 'before-ready' }
+    ])
+  })
+
+  it('is carried by the navigate grant this host already issues, under no name of its own', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toContain('navigate')
+    expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_NAVIGATE_BACK_NOTIFY)
+  })
+
+  it('reports a screen that threw on the pop once, and keeps reading', () => {
+    const failure = new Error('the stack is gone')
+    const bridge = harness({
+      onNavigateBack: () => {
+        throw failure
+      }
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // The frame arrives on a native event handler, and a throw that escapes takes it down.
+    bridge.host.receive(back)
+    bridge.host.receive(back)
+    expect(bridge.diagnostics).toEqual([{ kind: 'notify-failed', error: failure }])
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.last().type).toBe('init')
+  })
+})
+
+/**
+ * The one notify that leaves the app rather than the page.
+ *
+ * Nothing crosses back, so a refusal is only ever a log. Which is why the scheme is checked at the
+ * frame and not only at the page's call site: a page that skipped its own check would otherwise
+ * hand the device handler whatever it liked.
+ */
+describe('externalLink', () => {
+  const open = (url: string) =>
+    clientFrame({ type: 'notify', name: BRIDGE_EXTERNAL_LINK_GRANT, url })
+
+  it('hands an allowed URL to the caller and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(open('https://github.com/stablyai/orca/pull/1'))
+    bridge.host.receive(open('mailto:someone@example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://github.com/stablyai/orca/pull/1',
+      'mailto:someone@example.com'
+    ])
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.navigations).toEqual([])
+    expect(bridge.diagnostics).toEqual([])
+  })
+
+  it('hands over the URL the parser read, not the string the page sent', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    // Each of these passes the scheme check and is not what a device handler should be given: the
+    // WHATWG parser strips tab, LF and CR anywhere and trims leading C0 and space.
+    bridge.host.receive(open('ht\ntps://example.com'))
+    bridge.host.receive(open('https://example.com/a\r\n'))
+    bridge.host.receive(open('  https://example.com/a  '))
+    bridge.host.receive(open('https:example.com'))
+    expect(bridge.externalLinks).toEqual([
+      'https://example.com/',
+      'https://example.com/a',
+      'https://example.com/a',
+      'https://example.com/'
+    ])
+  })
+
+  it('refuses a scheme the grant does not cover, as a frame the reader never accepts', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'orca-mobile-web://s/x']) {
+      bridge.host.receive(open(url))
+    }
+    expect(bridge.externalLinks).toEqual([])
+    // Dropped by the envelope rather than by the grant check, which is what keeps a page that
+    // skipped its own check from reaching the device handler at all. One per frame: the bound to
+    // a line per cause is the reporter's, and this harness reads what the host actually said.
+    expect(bridge.diagnostics).toEqual(
+      Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
+    )
+  })
+
+  it('refuses it from a page that has not asked for a session', () => {
+    const bridge = harness()
+    bridge.host.receive(open('https://example.com'))
+    expect(bridge.externalLinks).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_EXTERNAL_LINK_GRANT, why: 'before-ready' }
+    ])
+  })
+
+  it('is advertised under its own grant name, which a route can declare', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_EXTERNAL_LINK_GRANT)
   })
 })

@@ -62,10 +62,11 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '0029935330ee3122412013387b2bc77b38dc31cc1ab1d6c0a7ae110bdc1476dc'
-const HEAD_HOOK_BINDING_SHA256 = 'ba7f00ee74c5d94edb659ff33aa7ef98692dd40bc13bd485507c06d1e7a0a6f1'
+// Re-recorded against the merged tree: C7.2 clipboard hooks plus the fork's Mac-speech copy.
+const HEAD_MAIN_HOOK_SHA256 = '11054c09139575423579752ddee5034bc9a6db60280eacff0e7e3cb0c9a518bf'
+const HEAD_HOOK_BINDING_SHA256 = 'f453f7ac9ea6ecc76e9bfa74fe61213e55f28e05ff006b65e7740313de80e373'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
+  'ed45268b61372abcfeb29e9ce91822f1fb5214542b78356c7cef869824a09d37'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -75,14 +76,15 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // `diffComments` and the browser tab's page id are typed by their schemas now. Refreshed once more
 // on the merge, for the display-mode toggle whose send became `terminalDisplayModeSet`. Refreshed
 // for the files domain's checked preview fallback and main's forwarded dictation mode.
-const HEAD_CALLBACK_BODY_SHA256 = 'bcda04bb68cf7554ec4f74c5733ebe034461adb6b7fc5c9e6e468b6d0270fbfb'
+// Re-recorded against the merged tree, since neither side's hash covers the other's body.
+const HEAD_CALLBACK_BODY_SHA256 = '012e4e1f03386d46a33dc7d3d85e9ed57d5106bf52e6ee4457e81f0eda6d71b2'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
 // refusal the timer site passed when it had no reply at all. Refreshed once more for the
 // last-visited-worktree effect, whose bare store write became the one writer of that key, so the
 // hybrid shell's page mirror sees it as it is written rather than one `init` later.
-const HEAD_EFFECT_SHA256 = '224184b2559a09067001ac2bfc8779122637c5f40727ba4bcbb789264fc91b4e'
+const HEAD_EFFECT_SHA256 = 'dfce9d5cb921c734bd44801283aa579ee61ab69acbbf69ac1e769de24fd829ce'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // Same pin for the 12 bodies that sit in nested functions rather than callbacks, moved by the same
 // rewrite of those send and read expressions. Count unchanged. Refreshed again in step 6 for
@@ -102,11 +104,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // Six method literals fewer than before step 6: `terminal.send` and `terminal.clearBuffer` went
 // first, then `worktree.activate` twice, `session.tabs.createTerminal` and
 // `terminal.setDisplayMode`. Each is now fixed at its operation's definition instead of being
-// spelled at the call site. Fork Mac-speech copy adds one runtime string on top of that.
+// spelled at the call site. Fork Mac-speech copy adds one runtime string; C7.2 added two copy
+// failure toasts. Re-recorded against the merged tree.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '880e78c0c2e41710fcf05823ca7e5e47c8c5b3471758bdf58747176e2d767324'
+  '7d3307d997ace1b84449aa01dac1116b1b64c52eeb1f1cd3d2ffb5fe348745db'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -497,7 +500,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(271)
+    expect(main.hooks).toHaveLength(276)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)
@@ -542,7 +545,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(532)
+    expect(strings).toHaveLength(535)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)
