@@ -30,6 +30,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
 import { getCanonicalUserDataPath } from '../persistence'
+import { stopDesktopRelayStartup } from './main-process-relay-startup'
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
@@ -72,6 +73,7 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
+    stopDesktopRelayStartup()
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
