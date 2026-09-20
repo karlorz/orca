@@ -18,7 +18,7 @@ describe('mobile RAM current bounds characterization', () => {
 
   it('pins terminal webview html scrollback to 5000', () => {
     const terminalHtmlSourcePath = fileURLToPath(
-      new URL('../terminal/terminal-webview-html/terminal-init-and-write.ts', import.meta.url)
+      new URL('../terminal/document/terminal-init.ts', import.meta.url)
     )
     const terminalHtmlSource = readFileSync(terminalHtmlSourcePath, 'utf8')
     expect(terminalHtmlSource).toMatch(/\bscrollback:\s*5000\b/)
