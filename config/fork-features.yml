@@ -332,3 +332,15 @@ features:
       - src/preload/api
       - src/renderer/src/components/settings/MobilePairingConnectionOptions.tsx
     wiki: projects/orca/work/2026-09-16-own-auth-multiuser-password
+
+  - id: desktop-relay-missed-launch-retry
+    title: Retry-construct desktop Relay when launch missed wiring
+    kind: product
+    status: landed
+    paths:
+      - src/main/startup/main-process-relay-startup.ts
+      - src/main/startup/main-process-relay-startup.test.ts
+      - src/main/startup/main-process-runtime-launch.ts
+      - src/main/startup/main-window-core-services.ts
+      - src/main/startup/main-process-quit.ts
+    wiki: projects/orca/work/2026-09-21-desktop-relay-missed-launch-construct
