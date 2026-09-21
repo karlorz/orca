@@ -152,4 +152,20 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
       `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
     )
   })
+
+  it('opens claude --continue when no stored session remains', async () => {
+    const { launchLastAgentSessionForWorktree } = await import('./sleeping-agent-session-launch')
+    expect(launchLastAgentSessionForWorktree('wt-1', 'claude')).toBe(true)
+    const options = mockCreateTab.mock.calls.at(-1)?.[3] as
+      | { pendingStartup?: { command: string }; launchAgent?: string }
+      | undefined
+    expect(options?.launchAgent).toBe('claude')
+    expect(options?.pendingStartup?.command).toMatch(/--continue/)
+  })
+
+  it('does not open --continue for agents that have no last-session flag', async () => {
+    const { launchLastAgentSessionForWorktree } = await import('./sleeping-agent-session-launch')
+    expect(launchLastAgentSessionForWorktree('wt-1', 'codex')).toBe(false)
+    expect(mockCreateTab).not.toHaveBeenCalled()
+  })
 })

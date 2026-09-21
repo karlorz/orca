@@ -187,6 +187,9 @@ export function updateAutomationRun(
     terminalPtyId: Object.hasOwn(result, 'terminalPtyId')
       ? normalizeAutomationRunTerminalPtyId(result.terminalPtyId)
       : normalizeAutomationRunTerminalPtyId(current.terminalPtyId),
+    providerSessionId: Object.hasOwn(result, 'providerSessionId')
+      ? result.providerSessionId?.trim() || null
+      : (current.providerSessionId ?? null),
     outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
       ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
       : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),

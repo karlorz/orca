@@ -153,8 +153,15 @@ describe('a finished local agent', () => {
     expect(launched, 'a finished agent must never be respawned').toBe(0)
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
-    // The orphaned record is retired rather than left queued for the next visit.
-    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    // Why: keep the record so Resume workspace can reopen `--resume` without
+    // auto-spawning on every workspace visit.
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(
+      expect.objectContaining({
+        state: 'done',
+        origin: 'live',
+        providerSession: { key: 'session_id', id: SESSION_ID }
+      })
+    )
   })
 
   it('still holds its resume identity for a cold restore while its pane exists', () => {

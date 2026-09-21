@@ -185,11 +185,16 @@ vi.mock('@/store', () => ({
   }
 }))
 
+vi.mock('./automation-session-history-flush', () => ({
+  waitForAutomationSessionHistoryFlush: async () => undefined
+}))
+
 describe('useAutomationDispatchEvents setup launch', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+    mockFinalizeTerminalOwnership.mockReset()
     state.activeView = 'terminal'
     state.activeWorktreeId = 'wt-active'
     state.activeTabId = 'tab-active'
@@ -545,11 +550,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
       async (result: { status: string; terminalPaneKey?: string | null }) => {
         // The retirement clear reuses status 'completed' but nulls the terminal
         // identity; label it distinctly so ordering stays legible.
-        order.push(
-          result.status === 'completed' && result.terminalPaneKey === null
-            ? 'clear-terminal-identity'
-            : `persist:${result.status}`
-        )
+        const clearsPty =
+          result.status === 'completed' &&
+          result.terminalPtyId === null &&
+          !Object.hasOwn(result, 'terminalPaneKey')
+        order.push(clearsPty ? 'clear-terminal-pty' : `persist:${result.status}`)
       }
     )
     mockFinalizeTerminalOwnership.mockImplementation(() => {
@@ -578,16 +583,13 @@ describe('useAutomationDispatchEvents setup launch', () => {
       'persist:dispatched',
       'persist:completed',
       'finalize',
-      'clear-terminal-identity'
+      'clear-terminal-pty'
     ])
     expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
-    // Why: the retired terminal is gone; the run must drop its pane/pty pointers
-    // so "View run" resolves to the workspace/snapshot, not an unavailable terminal.
+    // Why: drop only the dead PTY; paneKey stays so Resume can remount the closed tab.
     expect(mockMarkDispatchResult).toHaveBeenLastCalledWith({
       runId: expect.any(String),
       status: 'completed',
-      terminalSessionId: null,
-      terminalPaneKey: null,
       terminalPtyId: null
     })
   })
@@ -775,7 +777,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     expect(
       mockMarkDispatchResult.mock.calls.filter(
-        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+        ([result]) => result.status === 'completed' && !Object.hasOwn(result, 'terminalPtyId')
       )
     ).toHaveLength(1)
     expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
@@ -879,7 +881,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
     expect(
       mockMarkDispatchResult.mock.calls.filter(
-        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
+        ([result]) => result.status === 'completed' && !Object.hasOwn(result, 'terminalPtyId')
       )
     ).toHaveLength(1)
     errorSpy.mockRestore()

@@ -428,6 +428,17 @@ describe('renderer startup runtime routing', () => {
     expect(shellSource).toContain('shouldMountTerminalWorkbench ?')
   })
 
+  it('keeps Automations mounted after View run so the Resume label can update live', () => {
+    const shellSource = readSource(WORKSPACE_SHELL_PATH)
+
+    expect(shellSource).toContain('const [hasMountedAutomations, setHasMountedAutomations]')
+    expect(shellSource).toContain('setHasMountedAutomations(true)')
+    expect(shellSource).not.toContain("activeView === 'automations' ? <AutomationsPage /> : null")
+    expect(shellSource).toContain(
+      "activeView === 'automations' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'"
+    )
+  })
+
   it('keeps the new-workspace composer eager because it is a critical create surface', () => {
     const source = readSource(ROOT_SURFACES_PATH)
     const lazyModalSource = readSource('src/renderer/src/lazy-modal-mount-state.ts')

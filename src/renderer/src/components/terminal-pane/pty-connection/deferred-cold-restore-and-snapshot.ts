@@ -7,6 +7,7 @@ import { getTerminalPasteSshRemotePlatform } from '../terminal-paste-ssh-platfor
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
+import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './foreground-output-budgets'
 import type { FreshSpawnOptions, ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -39,6 +40,12 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
+      const record = startup.sleepingRecordEntry.record
+      // Why: Resume workspace can remount this pane again after the tab is closed.
+      // Consuming a finished explicit-resume record made the second click a dead workspace toast.
+      if (isPassiveCompletedHibernationEvidence(record) || record.restoreOnTabOpenOnly === true) {
+        return
+      }
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
         startup.sleepingRecordEntry

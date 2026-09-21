@@ -313,20 +313,17 @@ describe('connectPanePty', () => {
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
   })
 
-  it('lets a declined resume replace an already-shown restored banner', async () => {
-    // Why: the banner latch is one-shot per pane. A pane that showed "session restored"
-    // and then respawned into a session main declined must stop claiming the restore.
+  it('keeps the restored banner when View run reveals a hibernated completed pane', async () => {
+    // Why: the banner latch is one-shot per pane. Revealing ping/pong must not
+    // spawn `--resume` and must not replace the restored banner.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     let connectCount = 0
     transport.connect.mockImplementation(async () => {
       connectCount += 1
-      // The wake respawn is the one main declines; the first spawn is an ordinary resume.
-      const spawnedPtyId = connectCount === 1 ? 'fresh-pty' : 'woken-pty'
+      const spawnedPtyId = 'fresh-pty'
       transport.getPtyId.mockReturnValue(spawnedPtyId)
-      return connectCount === 1
-        ? spawnedPtyId
-        : { id: spawnedPtyId, agentResumeUnavailable: true as const }
+      return spawnedPtyId
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_2)
@@ -378,8 +375,6 @@ describe('connectPanePty', () => {
 
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
 
-    // Hibernate the pane, then reveal it so the wake respawns the recorded session.
-    // Hibernation writes the sleeping record the first spawn consumed.
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = sleepingRecord
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     onPtyExit?.('fresh-pty')
@@ -387,8 +382,8 @@ describe('connectPanePty', () => {
     binding.noteVisibilityResume()
     await flushAsyncTicks(10)
 
-    expect(connectCount).toBeGreaterThan(1)
-    expect(deps.onShowSessionRestoredBanner).toHaveBeenLastCalledWith(2, 'resume-unavailable')
+    expect(connectCount).toBe(1)
+    expect(deps.onShowSessionRestoredBanner).toHaveBeenLastCalledWith(2, 'restored')
   })
 
   it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {

@@ -111,10 +111,17 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
     expect(store.getState().deferredSshSessionIdsByTabId['tab-1']).toBeUndefined()
     expect(store.getState().pendingReconnectPtyIdByTabId['tab-1']).toBeUndefined()
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({
-      'tab-2:leaf-2': siblingRecord
-    })
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-2:leaf-2']).toBe(siblingRecord)
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'done',
+      origin: 'live',
+      restoreOnTabOpenOnly: true
+    })
+    expect(store.getState().sleepingAgentSessionsByPaneKey['legacy-key']).toMatchObject({
+      state: 'done',
+      origin: 'live',
+      restoreOnTabOpenOnly: true
+    })
     expect(dispose).toHaveBeenCalledOnce()
     expect(parkedWatchersByTabId.has('tab-1')).toBe(false)
     expect(capturedPanesByTabId.has('tab-1')).toBe(false)
@@ -167,6 +174,159 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
     expect(store.getState().pendingSnapshotByPtyId['pty-shared']).toBe(snapshot)
     expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
+  })
+
+  it('keeps completed worktree-sleep records when the user closes the tab', async () => {
+    const store = createRetirementStore()
+    const hibernated: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      prompt: 'ping',
+      state: 'done',
+      origin: 'worktree-sleep',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: null })]
+      },
+      sleepingAgentSessionsByPaneKey: { 'tab-1:leaf-1': hibernated }
+    })
+
+    store.getState().closeTab('tab-1')
+    await Promise.resolve()
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(hibernated)
+  })
+
+  it('keeps completed worktree-sleep records when cleanup closes the automation tab', async () => {
+    const store = createRetirementStore()
+    const hibernated: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      prompt: 'ping',
+      state: 'done',
+      origin: 'live',
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: null })]
+      },
+      sleepingAgentSessionsByPaneKey: { 'tab-1:leaf-1': hibernated }
+    })
+
+    store.getState().closeTab('tab-1', { recordInteraction: false, reason: 'cleanup' })
+    await Promise.resolve()
+
+    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'done',
+      origin: 'live'
+    })
+  })
+
+  it('captures a live Claude session when the user closes the tab without hibernate', () => {
+    const store = createRetirementStore()
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-live' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-live'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': 'pty-live' }
+        }
+      },
+      agentStatusByPaneKey: {
+        'tab-1:leaf-1': {
+          state: 'working',
+          prompt: 'ping',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          paneKey: 'tab-1:leaf-1',
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'sess-live' }
+        }
+      }
+    })
+
+    store.getState().closeTab('tab-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'done',
+      origin: 'live',
+      restoreOnTabOpenOnly: true,
+      providerSession: { id: 'sess-live' }
+    })
+  })
+
+  it('captures a unified-only terminal session when tabsByWorktree has no row', () => {
+    const store = createRetirementStore()
+    const unified = makeUnifiedTab({
+      id: 'unified-tab-1',
+      entityId: 'terminal-tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+    seedStore(store, {
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [unified] },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: unified.id,
+            tabOrder: [unified.id]
+          })
+        ]
+      },
+      ptyIdsByTabId: { 'terminal-tab-1': ['pty-unified-only'] },
+      terminalLayoutsByTabId: {
+        'terminal-tab-1': {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': 'pty-unified-only' }
+        }
+      },
+      agentStatusByPaneKey: {
+        'terminal-tab-1:leaf-1': {
+          state: 'working',
+          prompt: 'ping',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          paneKey: 'terminal-tab-1:leaf-1',
+          tabId: 'terminal-tab-1',
+          worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'sess-unified' }
+        }
+      }
+    })
+
+    store.getState().closeTab('terminal-tab-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['terminal-tab-1:leaf-1']).toMatchObject({
+      providerSession: { id: 'sess-unified' },
+      restoreOnTabOpenOnly: true
+    })
   })
 
   it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {

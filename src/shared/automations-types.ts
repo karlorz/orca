@@ -152,6 +152,8 @@ export type AutomationRun = {
    *  run reopening must target the pane that actually executed the run. */
   terminalPaneKey: string | null
   terminalPtyId: string | null
+  /** Provider CLI session id for `--resume` after the run tab is closed. */
+  providerSessionId?: string | null
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
@@ -237,6 +239,7 @@ export type AutomationDispatchResult = {
   terminalSessionId?: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  providerSessionId?: string | null
   outputSnapshot?: AutomationRunOutputSnapshot | null
   precheckResult?: AutomationPrecheckResult | null
   usage?: AutomationRunUsage | null

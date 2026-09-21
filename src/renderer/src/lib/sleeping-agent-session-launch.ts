@@ -13,7 +13,18 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  isResumableTuiAgent,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
+import { buildAgentResumeLaunchCommand } from '../../../shared/agent-resume-launch-command'
+import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
+import { buildSleepingAgentLaunchConfig } from '../../../shared/sleeping-agent-launch-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentStartupPlan } from '../../../shared/tui-agent-startup'
+import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -60,6 +71,63 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   state.setTabBarOrder(worktreeId, order)
 }
 
+function cannotResumeSession(): false {
+  toast.error(
+    translate(
+      'auto.lib.resume.sleeping.agent.session.f235f604fd',
+      'This agent session cannot be resumed.'
+    )
+  )
+  return false
+}
+
+function openResumeTab(args: {
+  worktreeId: string
+  agent: SleepingAgentSessionRecord['agent']
+  startupPlan: AgentStartupPlan
+  providerSession?: AgentProviderSessionMetadata
+  agentArgsOverride?: string
+  options?: ResumeSleepingAgentSessionsOptions
+}): boolean {
+  const state = useAppStore.getState()
+  const tab = state.createTab(args.worktreeId, undefined, undefined, {
+    launchAgent: args.agent,
+    pendingStartup: {
+      command: args.startupPlan.launchCommand,
+      ...(args.startupPlan.env ? { env: args.startupPlan.env } : {}),
+      launchConfig: args.startupPlan.launchConfig,
+      ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+      launchAgent: args.agent,
+      ...(args.agentArgsOverride ? { agentArgsOverride: args.agentArgsOverride } : {}),
+      ...(args.startupPlan.startupCommandDelivery
+        ? { startupCommandDelivery: args.startupPlan.startupCommandDelivery }
+        : {}),
+      showSessionRestoredBanner: true,
+      telemetry: {
+        agent_kind: tuiAgentToAgentKind(args.agent),
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    },
+    ...(args.providerSession
+      ? {
+          automaticResumeClaim: {
+            worktreeId: args.worktreeId,
+            launchAgent: args.agent,
+            providerSession: args.providerSession
+          }
+        }
+      : {}),
+    ...(args.options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
+  })
+  if (!args.options?.suppressNavigation) {
+    state.setActiveTabType('terminal')
+  }
+  appendTabToWorktreeOrder(args.worktreeId, tab.id)
+  args.options?.onSessionLaunched?.(tab.id)
+  return true
+}
+
 // Why: mobile-driven wake runs on the desktop host renderer, so it must create
 // the resume tab without stealing the desktop's active worktree/tab/view.
 export function launchSleepingAgentSession(
@@ -89,46 +157,68 @@ export function launchSleepingAgentSession(
     shell: resumeTarget.shell
   })
   if (!startupPlan) {
-    toast.error(
-      translate(
-        'auto.lib.resume.sleeping.agent.session.f235f604fd',
-        'This agent session cannot be resumed.'
-      )
-    )
-    return false
+    return cannotResumeSession()
   }
 
-  const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent,
-    pendingStartup: {
-      command: startupPlan.launchCommand,
-      ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
-      resumeProviderSession: record.providerSession,
-      launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
-      ...(startupPlan.startupCommandDelivery
-        ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-        : {}),
-      showSessionRestoredBanner: true,
-      telemetry: {
-        agent_kind: tuiAgentToAgentKind(record.agent),
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
-    },
-    automaticResumeClaim: {
-      worktreeId: record.worktreeId,
-      launchAgent: record.agent,
-      providerSession: record.providerSession
-    },
-    ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
+  const opened = openResumeTab({
+    worktreeId: record.worktreeId,
+    agent: record.agent,
+    startupPlan,
+    providerSession: record.providerSession,
+    ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
+    options
   })
-  state.clearSleepingAgentSession(record.paneKey)
-  if (!options?.suppressNavigation) {
-    state.setActiveTabType('terminal')
+  if (opened) {
+    state.clearSleepingAgentSession(record.paneKey)
   }
-  appendTabToWorktreeOrder(record.worktreeId, tab.id)
-  options?.onSessionLaunched?.(tab.id)
-  return true
+  return opened
+}
+
+/** Opens a new Claude tab with `--continue` when no stored session id remains. */
+export function launchLastAgentSessionForWorktree(
+  worktreeId: string,
+  agent: TuiAgent,
+  options?: ResumeSleepingAgentSessionsOptions
+): boolean {
+  if (agent !== 'claude' || !isResumableTuiAgent(agent)) {
+    return false
+  }
+  const state = useAppStore.getState()
+  const resumeTarget = getResumeLaunchTarget(worktreeId)
+  const shell = resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+  const agentArgs = resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
+  const baseCommand = resolveAgentLaunchCommand({
+    agent,
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    platform: resumeTarget.platform,
+    shell,
+    agentArgs
+  })
+  if (!baseCommand.ok) {
+    return cannotResumeSession()
+  }
+  const startupPlan: AgentStartupPlan = {
+    agent,
+    launchCommand: buildAgentResumeLaunchCommand(
+      agent,
+      baseCommand.command,
+      ['claude', '--continue'],
+      shell
+    ),
+    expectedProcess: TUI_AGENT_CONFIG.claude.expectedProcess,
+    followupPrompt: null,
+    launchConfig: buildSleepingAgentLaunchConfig({
+      agentArgs,
+      agentEnv,
+      agentCommand: baseCommand.commandWithoutSessionOptions
+    }),
+    ...(agentEnv ? { env: { ...agentEnv } } : {})
+  }
+  return openResumeTab({
+    worktreeId,
+    agent,
+    startupPlan,
+    options
+  })
 }

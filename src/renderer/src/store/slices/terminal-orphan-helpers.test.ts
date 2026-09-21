@@ -108,6 +108,30 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
   // nulls ptyId/ptyIdsByTabId/reconnect maps but intentionally leaves the layout
   // leaf ptyIds pointing at a relay that is gone. Such a tab must still be swept,
   // or it lingers forever bound to a dead relay it can never reattach.
+  it('does not orphan a hibernated tab that still owns a sleeping session record', () => {
+    const state = makeState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'hibernated', ptyId: null })] },
+      ptyIdsByTabId: { hibernated: [] },
+      unifiedTabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: {
+        'hibernated:leaf-1': {
+          paneKey: 'hibernated:leaf-1',
+          tabId: 'hibernated',
+          worktreeId: 'wt-1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'sess-1' },
+          prompt: 'ping',
+          state: 'done',
+          origin: 'worktree-sleep',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('hibernated')
+  })
+
   it('still orphans a tab whose only reference is a stale layout leaf binding', () => {
     const state = makeState({
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'stale-layout', ptyId: null })] },

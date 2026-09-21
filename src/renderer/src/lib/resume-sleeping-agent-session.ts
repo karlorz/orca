@@ -228,9 +228,11 @@ export function resumeSleepingAgentSessionsForWorktree(
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
     if (isPassiveCompletedHibernationEvidence(record)) {
-      // Why: completed-agent hibernation is passive history; activation should
-      // only keep displayable evidence, never start new work from it.
-      if (!isPaneOwned || activeClaimKeys.has(claimKey)) {
+      // Why: completed hibernation is passive history — never spawn it here.
+      // Non-interrupted done records stay after the pane is gone so Resume
+      // workspace can launch `--resume` even when origin was live.
+      const keepForExplicitResume = record.interrupted !== true
+      if (activeClaimKeys.has(claimKey) || (!isPaneOwned && !keepForExplicitResume)) {
         state.clearSleepingAgentSession(record.paneKey)
       }
       continue

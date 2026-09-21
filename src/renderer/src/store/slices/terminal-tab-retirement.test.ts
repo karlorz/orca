@@ -8,6 +8,7 @@ import {
   buildTerminalTabRetirementPlan,
   buildTerminalTabRetirementPlans,
   isTerminalTabPresent,
+  markClosedTabSessionsForExplicitResume,
   removeSleepingAgentSessionsForTab
 } from './terminal-tab-retirement'
 
@@ -436,5 +437,45 @@ describe('sleeping agent retirement', () => {
     expect(next).toEqual({ 'tab-2:leaf-2': sibling })
     expect(next['tab-2:leaf-2']).toBe(sibling)
     expect(removeSleepingAgentSessionsForTab(next, 'missing-tab')).toBe(next)
+  })
+
+  it('keeps completed worktree-sleep records so Resume can reopen the session tab', () => {
+    const hibernated = {
+      ...makeSleepingRecord('tab-1:leaf-1', 'tab-1'),
+      state: 'done' as const,
+      origin: 'worktree-sleep' as const
+    }
+    const working = makeSleepingRecord('tab-1:leaf-2', 'tab-1')
+    const next = removeSleepingAgentSessionsForTab(
+      { [hibernated.paneKey]: hibernated, [working.paneKey]: working },
+      'tab-1'
+    )
+    expect(next).toEqual({ [hibernated.paneKey]: hibernated })
+    expect(next[hibernated.paneKey]).toBe(hibernated)
+  })
+
+  it('keeps completed live records so Resume can reopen a closed Claude tab', () => {
+    const finished = {
+      ...makeSleepingRecord('tab-1:leaf-1', 'tab-1'),
+      state: 'done' as const,
+      origin: 'live' as const
+    }
+    const next = removeSleepingAgentSessionsForTab({ [finished.paneKey]: finished }, 'tab-1')
+    expect(next).toEqual({ [finished.paneKey]: finished })
+  })
+
+  it('marks a live session as explicit-resume before close drops working records', () => {
+    const working = makeSleepingRecord('tab-1:leaf-1', 'tab-1')
+    const marked = markClosedTabSessionsForExplicitResume({ [working.paneKey]: working }, 'tab-1')
+    expect(marked[working.paneKey]).toMatchObject({
+      paneKey: working.paneKey,
+      state: 'done',
+      origin: 'live',
+      restoreOnTabOpenOnly: true
+    })
+    expect(removeSleepingAgentSessionsForTab(marked, 'tab-1')[working.paneKey]).toMatchObject({
+      state: 'done',
+      origin: 'live'
+    })
   })
 })

@@ -7,8 +7,8 @@ import { translate } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { getAutomationRunContent } from './automation-run-content'
-import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { useAutomationRunLiveViewState } from './use-automation-run-live-view-state'
 import {
   formatAutomationDateTimeWithRelative,
   getAutomationRunStatusLabel,
@@ -20,7 +20,6 @@ export function AutomationRunDetailsPage({
   run,
   relativeNow,
   workspaceDisplay,
-  viewState,
   canRerun,
   isRerunPending,
   onRerun,
@@ -31,13 +30,16 @@ export function AutomationRunDetailsPage({
   run: AutomationRun
   relativeNow: number
   workspaceDisplay: AutomationRunWorkspaceDisplay | null
-  viewState: AutomationRunViewState | null
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
   onOpenWorkspace: () => void
   onBack: () => void
 }): React.JSX.Element {
+  const viewState = useAutomationRunLiveViewState({
+    run,
+    workspaceExists: Boolean(workspaceDisplay)
+  })
   return (
     <section className="flex min-h-0 flex-1 p-5">
       <AutomationRunPageFrame

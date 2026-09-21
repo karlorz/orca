@@ -37,6 +37,7 @@ export function useAutomationsPageRefresh({
     automationHostTargetKey,
     setRelativeNow,
     runHistoryReloadToken,
+    setRunHistoryReloadToken,
     workspaceNameCacheRef
   } = local
   const { scopedExternal, selectedRow } = list
@@ -142,10 +143,13 @@ export function useAutomationsPageRefresh({
   useEffect(() => {
     const onAutomationsChanged = (): void => {
       void refresh()
+      // Why: the page stays mounted after View run; lastRunAt/list refresh alone
+      // used to leave the Runs tab on a stale count until the user left and came back.
+      setRunHistoryReloadToken((token) => token + 1)
     }
     window.addEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
     return () => window.removeEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
-  }, [refresh])
+  }, [refresh, setRunHistoryReloadToken])
   useEffect(() => {
     const onVisibilityOrFocus = (): void => {
       if (document.visibilityState === 'visible') {
