@@ -344,3 +344,15 @@ features:
       - src/main/startup/main-window-core-services.ts
       - src/main/startup/main-process-quit.ts
     wiki: projects/orca/work/2026-09-21-desktop-relay-missed-launch-construct
+
+  - id: automation-model-effort-profile
+    title: Pin model and reasoning effort for any agent, plus Grok minimal and guarded extra args
+    kind: product
+    status: landed
+    paths:
+      - src/shared/automation-model.ts
+      - src/shared/rpc-contract/automation-params.ts
+      - src/shared/rpc-contract/agent-session-params.ts
+      - src/cli/specs/automations.ts
+      - src/renderer/src/components/automations
+    wiki: projects/orca/work/2026-09-22-automation-reasoning-effort

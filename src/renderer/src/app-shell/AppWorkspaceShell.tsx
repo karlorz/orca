@@ -1,4 +1,4 @@
-import { Suspense, useRef } from 'react'
+import { Suspense, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import Sidebar from '../components/Sidebar'
@@ -66,13 +66,23 @@ function WorktreeSidebar({
 
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, activeWorktreeId, activePendingCreationId, creationLayoutActive } = layout
+  // Why: View run hides Automations; stay subscribed so closing the run tab
+  // flips View run → Resume without a force reload.
+  const [hasMountedAutomations, setHasMountedAutomations] = useState(false)
+  if (activeView === 'automations' && !hasMountedAutomations) {
+    setHasMountedAutomations(true)
+  }
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
       {activeView === 'tasks' ? <TaskPage /> : null}
-      {activeView === 'automations' ? <AutomationsPage /> : null}
+      {hasMountedAutomations ? (
+        <div className={activeView === 'automations' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+          <AutomationsPage />
+        </div>
+      ) : null}
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}

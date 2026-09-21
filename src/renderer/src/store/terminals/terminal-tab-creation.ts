@@ -85,11 +85,11 @@ export function createTerminalTabCreationActions(
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+        // Why: honor an explicit leaf so a closed automation tab remounts the
+        // same paneKey; otherwise startup delivery pins a fresh leaf.
         const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
-            ? (requestedInitialLeafId ?? createBrowserUuid())
-            : undefined
+          requestedInitialLeafId ??
+          (options?.initialPtyId || options?.pendingStartup ? createBrowserUuid() : undefined)
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`

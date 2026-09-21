@@ -142,6 +142,7 @@ export function buildWorktreeStartupForAgent(
   const platform = environment.getLaunchPlatform()
   const isRemote = repoIsRemote(repo)
   const sessionOptions = environment.toSessionOptions(environment.launchPreferences)
+  const extraArgs = environment.launchPreferences?.extraArgs
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: environment.prompt ?? '',
@@ -149,6 +150,7 @@ export function buildWorktreeStartupForAgent(
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
     sessionOptions,
+    extraArgs,
     sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
     platform,
     shell: resolveLocalWindowsAgentStartupShell({

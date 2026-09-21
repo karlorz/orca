@@ -160,6 +160,26 @@ describe('useSelectedAutomationRunHistory', () => {
     })
   })
 
+  it('re-asks when the selected row lastRunAt changes, so a new run appears without leaving', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const input = makeInput()
+    const rerender = await render(input)
+    expect(mocks.dispatch).toHaveBeenCalledTimes(1)
+
+    const nextRun = makeRun({ id: 'run-2', automationId: 'a-1' })
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [nextRun] })
+    await rerender({
+      ...input,
+      selected: {
+        ...DESKTOP_ROW,
+        automation: { ...DESKTOP_ROW.automation, lastRunAt: 99 }
+      }
+    })
+
+    expect(mocks.dispatch).toHaveBeenCalledTimes(2)
+    expect(settled(input).at(-1)?.runs).toEqual([nextRun])
+  })
+
   it('names the owner the history was read under', async () => {
     mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
     const owner: AutomationOwnerRef = {

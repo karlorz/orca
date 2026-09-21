@@ -47,6 +47,7 @@ export function buildAgentStartupPlan(args: {
   shell?: AgentStartupShell
   allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
+  extraArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
@@ -65,6 +66,12 @@ export function buildAgentStartupPlan(args: {
     platform,
     shell,
     agentArgs: usesQuery ? null : args.agentArgs,
+    extraArgs: usesQuery
+      ? null
+      : (args.extraArgs ??
+        (typeof args.sessionOptions?.extraArgs === 'string'
+          ? args.sessionOptions.extraArgs
+          : null)),
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote

@@ -1,4 +1,5 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { buildAutomationModelLaunchPreferences } from '../../shared/automation-model'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -32,6 +33,13 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   repo: Repo
   createdAt?: number
 }): RuntimeCreateManagedWorktreeArgs {
+  const modelLaunchPreferences = buildAutomationModelLaunchPreferences(
+    automation.agentId,
+    automation.model,
+    automation.reasoningEffort,
+    automation.agentProfile,
+    automation.extraArgs
+  )
   return {
     repoSelector: repo.id,
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
@@ -40,6 +48,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,
+    ...(modelLaunchPreferences ? { startupLaunchPreferences: modelLaunchPreferences } : {}),
     startupPrompt: automation.prompt,
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)

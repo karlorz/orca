@@ -76,7 +76,7 @@ describe('automation run view state', () => {
     })
   })
 
-  it('keeps View run for exact terminal identity even before the live target is resolved', () => {
+  it('offers Resume workspace after the run tab is closed even if PTY identity remains', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
@@ -84,9 +84,8 @@ describe('automation run view state', () => {
         terminalTargetExists: false
       })
     ).toMatchObject({
-      availability: 'terminal',
-      actionLabel: 'View run',
-      statusLabel: 'Run terminal is unavailable.',
+      availability: 'workspace',
+      actionLabel: 'Resume workspace',
       canOpen: true
     })
   })
@@ -102,6 +101,20 @@ describe('automation run view state', () => {
       availability: 'workspace',
       actionLabel: 'Resume workspace',
       statusLabel: 'Workspace is available.'
+    })
+  })
+
+  it('keeps View run when the pane is still mounted after hibernation', () => {
+    expect(
+      getAutomationRunViewState({
+        run: makeRun({ terminalPtyId: null }),
+        workspaceExists: true,
+        terminalTargetExists: true
+      })
+    ).toMatchObject({
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run is open'
     })
   })
 

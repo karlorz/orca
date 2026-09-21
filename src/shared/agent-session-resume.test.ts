@@ -4,7 +4,8 @@ import {
   extractAgentProviderSession,
   getAgentResumeArgv,
   isResumableTuiAgent,
-  normalizeAgentProviderSession
+  normalizeAgentProviderSession,
+  providerSessionMetadataForAgentResume
 } from './agent-session-resume'
 
 describe('agent session resume metadata', () => {
@@ -130,6 +131,24 @@ describe('agent session resume metadata', () => {
 
   it('rejects devin resume when provider session key is not session_id', () => {
     expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
+  })
+
+  it('synthesizes agent-correct resume metadata from a persisted session id', () => {
+    expect(providerSessionMetadataForAgentResume('claude', 's1')).toEqual({
+      key: 'session_id',
+      id: 's1'
+    })
+    expect(providerSessionMetadataForAgentResume('antigravity', 'conv-1')).toEqual({
+      key: 'conversation_id',
+      id: 'conv-1'
+    })
+    expect(providerSessionMetadataForAgentResume('pi', 'pi-1')).toBeNull()
+    expect(providerSessionMetadataForAgentResume('pi', 'pi-1', '/tmp/pi.jsonl')).toEqual({
+      key: 'session_id',
+      id: 'pi-1',
+      transcriptPath: '/tmp/pi.jsonl'
+    })
+    expect(providerSessionMetadataForAgentResume('prime-agent', 'p1')).toBeNull()
   })
 
   it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {

@@ -105,6 +105,68 @@ describe('automation RPC methods', () => {
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1', undefined)
   })
 
+  it('forwards an optional launch model and keeps an unset one undefined', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-2' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Grok sweep',
+        prompt: 'Triage alerts',
+        agentId: 'grok',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'xhigh',
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Default model',
+        prompt: 'Triage alerts',
+        agentId: 'grok',
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    )
+
+    const calls = (runtime.createAutomation as unknown as { mock: { calls: [unknown][] } }).mock
+      .calls
+    expect(calls).toHaveLength(2)
+    expect((calls[0][0] as { model?: string; reasoningEffort?: string }).model).toBe(
+      'deepseek-v4-flash'
+    )
+    expect((calls[0][0] as { reasoningEffort?: string }).reasoningEffort).toBe('xhigh')
+    // Absent, not present-and-undefined: the store's spread would otherwise carry
+    // a key it cannot tell from a caller that meant to clear the field.
+    expect(Object.hasOwn(calls[1][0] as object, 'model')).toBe(false)
+  })
+
+  it('clears a stored model when the caller sends an empty one', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('automation.update', { id: 'auto-1', updates: { model: '' } })
+    )
+
+    // `null` reaches the store as an explicit clear; `''` would be filtered out
+    // as "omitted" and the removed model would keep launching.
+    expect(runtime.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      expect.objectContaining({ model: null }),
+      expect.anything()
+    )
+  })
+
   it('returns a cursor page when the caller requests a bounded run history', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -137,6 +199,20 @@ describe('automation RPC methods', () => {
           name: 'Bad provider',
           prompt: 'Run',
           agentId: 'not-real',
+          repo: 'repo-1',
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: 1
+        })
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('automation.create', {
+          name: 'Bad effort',
+          prompt: 'Run',
+          agentId: 'grok',
+          reasoningEffort: 'bogus',
           repo: 'repo-1',
           rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
           dtstart: 1

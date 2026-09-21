@@ -148,4 +148,28 @@ describe('createTab tabId hint', () => {
       warn.mockRestore()
     }
   })
+
+  it('pins a caller-supplied leaf without pending startup so the pane key stays stable', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-leaf-hint'
+    const tabId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-leaf-hint' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const tab = store.getState().createTab(wt, undefined, undefined, {
+      id: tabId,
+      initialLeafId: leafId,
+      launchAgent: 'claude'
+    })
+
+    expect(tab.id).toBe(tabId)
+    expect(store.getState().terminalLayoutsByTabId[tabId]?.activeLeafId).toBe(leafId)
+  })
 })

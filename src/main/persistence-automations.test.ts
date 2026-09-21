@@ -108,6 +108,36 @@ describe('Store', () => {
     expect(store.listAutomations()).toHaveLength(1)
   })
 
+  it('round-trips an automation model through the persisted file', async () => {
+    // Why the file and not just the in-memory record: `orca automations show
+    // --json` reads whatever the load path reconstructs, so a field the loader
+    // drops would read back as unset and silently launch the agent default.
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const automation = store.createAutomation({
+      name: 'Grok sweep',
+      prompt: 'Triage alerts',
+      agentId: 'grok',
+      model: 'deepseek-v4-flash',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    expect(automation.model).toBe('deepseek-v4-flash')
+
+    const persisted = readDataFile() as { automations: { model?: string | null }[] }
+    expect(persisted.automations.find((entry) => entry.model)?.model).toBe('deepseek-v4-flash')
+
+    // A cleared model is the "agent default" case and must not persist the old id.
+    const cleared = store.updateAutomation(automation.id, { model: null })
+    expect(cleared.model).toBeNull()
+    const afterClear = readDataFile() as { automations: { model?: string | null }[] }
+    expect(afterClear.automations[0]?.model ?? null).toBeNull()
+  })
+
   it('persists session reuse only for existing-workspace automations', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -203,6 +233,7 @@ describe('Store', () => {
       name: 'Nightly',
       prompt: 'Run checks',
       agentId: 'claude',
+      model: 'deepseek-v4-flash',
       projectId: 'r1',
       workspaceMode: 'new_per_run',
       baseBranch: 'origin/release',
@@ -214,6 +245,7 @@ describe('Store', () => {
     })
 
     const updated = store.updateAutomation(automation.id, {
+      model: undefined,
       precheck: undefined,
       runContext: undefined,
       sourceContext: undefined,
@@ -221,6 +253,9 @@ describe('Store', () => {
       setupDecision: undefined
     })
 
+    expect(updated.model).toBe('deepseek-v4-flash')
+    // `null` is the explicit clear the editor sends for an emptied field.
+    expect(store.updateAutomation(automation.id, { model: null }).model).toBeNull()
     expect(updated.precheck).toEqual(automation.precheck)
     expect(updated.runContext).toEqual(automation.runContext)
     expect(updated.sourceContext).toEqual(automation.sourceContext)

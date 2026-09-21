@@ -13,6 +13,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
+import { AutomationModelField } from './AutomationModelField'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
@@ -20,6 +21,7 @@ import { AutomationSessionField } from './AutomationSessionField'
 import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
 import { AutomationDestinationField } from './AutomationDestinationField'
+import { Input } from '@/components/ui/input'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
@@ -107,6 +109,24 @@ export function AutomationEditorSettingsSidebar({
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger
+                />
+              </Field>
+              <AutomationModelField
+                draft={draft}
+                pickerTriggerClassName={pickerTriggerClassName}
+                onDraftChange={onDraftChange}
+              />
+              <Field className="mt-3">
+                <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>Extra args</span>
+                <Input
+                  value={draft.extraArgs}
+                  onChange={(event) =>
+                    onDraftChange((current) => ({ ...current, extraArgs: event.target.value }))
+                  }
+                  placeholder="Optional provider flags"
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="font-mono text-xs"
                 />
               </Field>
             </div>

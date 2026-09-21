@@ -15906,7 +15906,9 @@
           "51a470b966": "ssh",
           "b09b2384fd": "Paused",
           "eaa02014f8": "Enabled",
-          "29baf8f4c2": "Source"
+          "29baf8f4c2": "Source",
+          "ebdcb0023c": "Model",
+          "4c08827ec8": "Agent default"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -16399,6 +16401,10 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Automations breadcrumb",
           "runDetails": "Run details"
+        },
+        "AutomationModelField": {
+          "0c29384d39": "Model",
+          "d5bfdc61bd": "grok-4.5"
         }
       },
       "agent": {

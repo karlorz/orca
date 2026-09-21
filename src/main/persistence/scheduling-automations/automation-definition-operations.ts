@@ -9,6 +9,10 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
+  launchFieldsForAutomationCreate,
+  launchFieldUpdatesForAutomation
+} from './automation-launch-field-updates'
+import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
   deriveAutomationExecutionTargetForUpdate
@@ -86,6 +90,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    ...launchFieldsForAutomationCreate(input),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -162,6 +167,7 @@ export function updateAutomation(
   const merged: Automation = {
     ...current,
     ...definedUpdates,
+    ...launchFieldUpdatesForAutomation(current, definedUpdates),
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)

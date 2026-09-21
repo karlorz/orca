@@ -5,6 +5,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchRequest,
@@ -51,10 +52,10 @@ export async function handleAutomationDispatchRequest({
     terminalOwnership = null
     ownership?.release()
   }
-  const finalizeTerminalOwnership = (): boolean => {
+  const finalizeTerminalOwnership = async (): Promise<boolean> => {
     const ownership = terminalOwnership
     terminalOwnership = null
-    return ownership?.finalize() ?? false
+    return (await ownership?.finalize()) ?? false
   }
 
   if (!resolved.repo) {
@@ -164,10 +165,21 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+    // Why the agent decides: the catalog is the only place a per-provider model
+    // flag is verified, so a provider without one keeps its configured default
+    // rather than receiving a guessed `--model` that would fail its launch.
+    const modelSessionOptions = buildAutomationModelLaunchPreferences(
+      automation.agentId,
+      automation.model,
+      automation.reasoningEffort,
+      automation.agentProfile,
+      automation.extraArgs
+    )
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
+      sessionOptions: modelSessionOptions,
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,

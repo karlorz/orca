@@ -143,13 +143,12 @@ describe('connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
-  it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
-    // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
+  it('disarms input modes and keeps a hibernated completed session frozen on visibility reveal', async () => {
+    // Why: View run must show ping/pong, not type `claude --resume` into the live pane.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
-    // Hibernation only targets hidden panes, so the exit lands while not visible and the wake must wait for the reveal.
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
@@ -178,34 +177,20 @@ describe('connectPanePty', () => {
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(onPtyExit).toBeTypeOf('function')
-    // The deferred connect attached this transport to the persisted tab PTY, so the kill's exit must carry that id for the wake guard's same-pty check.
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
     const connectCallsBeforeExit = transport.connect.mock.calls.length
     onPtyExit?.('tab-pty')
     await flushAsyncTicks()
 
-    // The frozen frame's input-eating modes are disarmed at hibernation-exit (mouse tracking / bracketed paste would otherwise swallow clicks).
     const writesAfterExit = pane.terminal.write.mock.calls.flat().join('')
     expect(writesAfterExit).toContain('\x1b[?1003l')
     expect(writesAfterExit).toContain('\x1b[?2004l')
-    // A hidden pane must not respawn on exit — the wake waits for the reveal.
     expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
     binding.noteVisibilityResume()
     await flushAsyncTicks()
 
-    expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-1')
-
-    // The wake is one-shot: a second reveal must not spawn again.
-    const connectCallsAfterWake = transport.connect.mock.calls.length
-    binding.noteVisibilityResume()
-    await flushAsyncTicks()
-    expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
+    expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
   })
 
   it('resumes a hibernated agent from a navigation-free wake without a visibility reveal', async () => {
@@ -369,7 +354,7 @@ describe('connectPanePty', () => {
 
     deferredSpawn.resolve('pty-resumed')
     await flushAsyncTicks()
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 
   it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
@@ -442,8 +427,8 @@ describe('connectPanePty', () => {
     expect(binding.wakeHibernatedAgentIfArmed()).toBeNull()
   })
 
-  it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
-    // Race: reveal's noteVisibilityResume runs before onExit arms the wake, so the arm-time foreground check must resume the pane instead of stranding a disarmed-but-dead frame.
+  it('keeps a visible completed pane frozen when hibernation kill lands after reveal', async () => {
+    // Why: View run / an already-open ping tab must not type `--resume` after hibernate.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
@@ -475,25 +460,16 @@ describe('connectPanePty', () => {
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(onPtyExit).toBeTypeOf('function')
-    // The deferred connect attached this transport to the persisted tab PTY, so the kill's exit must carry that id for the wake guard's same-pty check.
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
     const connectCallsBeforeExit = transport.connect.mock.calls.length
     onPtyExit?.('tab-pty')
     await flushAsyncTicks()
 
-    // No second reveal was needed: the foreground pane resumed its recorded session directly from the arm-time wake.
-    expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
-    const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
-      | { command?: string }
-      | undefined
-    expect(resumeConnectOptions?.command).toContain('--resume')
-    expect(resumeConnectOptions?.command).toContain('sess-hibernated-2')
+    expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
-    // Still one-shot: a later reveal must not spawn again.
-    const connectCallsAfterWake = transport.connect.mock.calls.length
     binding.noteVisibilityResume()
     await flushAsyncTicks()
-    expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
+    expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
   })
 
   it('invalidates the hibernation wake when another flow rebinds the pane before reveal', async () => {

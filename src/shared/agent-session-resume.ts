@@ -245,6 +245,28 @@ export function extractAgentProviderSession(
   }
 }
 
+/** Build resume metadata from a persisted session id. Pi/Prime need a transcript path. */
+export function providerSessionMetadataForAgentResume(
+  agent: ResumableTuiAgent,
+  sessionId: string,
+  transcriptPath?: string
+): AgentProviderSessionMetadata | null {
+  const id = normalizeSessionId(sessionId)
+  if (!id) {
+    return null
+  }
+  if (agent === 'antigravity') {
+    return { key: 'conversation_id', id }
+  }
+  if (agent === 'pi' || agent === 'prime-agent') {
+    const path = transcriptPath?.trim()
+    return path && !hasUnsafeProviderSessionIdChars(path)
+      ? { key: 'session_id', id, transcriptPath: path }
+      : null
+  }
+  return { key: 'session_id', id }
+}
+
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
   providerSession: AgentProviderSessionMetadata,

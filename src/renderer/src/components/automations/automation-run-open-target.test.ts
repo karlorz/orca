@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import {
   automationRunMatchesPaneKey,
+  automationRunTerminalTabExists,
   buildAutomationRunOpenLayout,
   canOpenAutomationRunOpenTarget,
-  resolveAutomationRunOpenTarget
+  isAutomationRunPaneMounted,
+  resolveAutomationRunOpenTarget,
+  selectAutomationRunPaneMounted
 } from './automation-run-open-target'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
@@ -80,48 +83,80 @@ describe('automation run open target', () => {
     ).toBe(true)
   })
 
-  it('requires the run PTY to be live for View run', () => {
+  it('counts only live workspace tabs, not leftover unified-tab ghosts', () => {
     expect(
-      canOpenAutomationRunOpenTarget({
+      automationRunTerminalTabExists({
         run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
+        tabsByWorktree: {}
+      })
+    ).toBe(false)
+    expect(
+      automationRunTerminalTabExists({
+        run: run(),
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] }
       })
     ).toBe(true)
     expect(
-      canOpenAutomationRunOpenTarget({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds: []
-      })
-    ).toBe(false)
-  })
-
-  it('rejects a layout whose run leaf is bound to another PTY', () => {
-    expect(
-      resolveAutomationRunOpenTarget({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: {
-          ...runLeafLayout,
-          ptyIdsByLeafId: { [leafId]: 'pty-other' }
+      selectAutomationRunPaneMounted(
+        {
+          tabsByWorktree: {},
+          terminalLayoutsByTabId: { 'tab-1': runLeafLayout }
         },
-        livePtyIds
-      })
-    ).toBeNull()
+        run()
+      )
+    ).toBe(false)
+    expect(
+      selectAutomationRunPaneMounted(
+        {
+          tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+          terminalLayoutsByTabId: { 'tab-1': runLeafLayout }
+        },
+        run()
+      )
+    ).toBe(true)
   })
 
-  it('rejects a run without an exact PTY identity', () => {
+  it('keeps View run when the pane is still mounted after the original PTY is gone', () => {
+    expect(
+      isAutomationRunPaneMounted({
+        run: run({ terminalPtyId: null }),
+        terminalTabExists: true,
+        currentLayout: runLeafLayout
+      })
+    ).toBe(true)
     expect(
       canOpenAutomationRunOpenTarget({
         run: run({ terminalPtyId: null }),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
+        livePtyIds: []
+      })
+    ).toBe(true)
+    expect(
+      canOpenAutomationRunOpenTarget({
+        run: run(),
+        terminalTabExists: false,
+        currentLayout: runLeafLayout,
         livePtyIds
       })
     ).toBe(false)
+  })
+
+  it('still focuses the run leaf after hibernation rebound it to a new PTY', () => {
+    const target = resolveAutomationRunOpenTarget({
+      run: run({ terminalPtyId: null }),
+      terminalTabExists: true,
+      currentLayout: {
+        ...runLeafLayout,
+        ptyIdsByLeafId: { [leafId]: 'pty-reborn' }
+      },
+      livePtyIds: ['pty-reborn']
+    })
+    expect(target).toMatchObject({
+      tabId: 'tab-1',
+      leafId,
+      ptyId: 'pty-reborn'
+    })
   })
 
   it('opens an existing run leaf when the layout has no PTY mapping yet', () => {

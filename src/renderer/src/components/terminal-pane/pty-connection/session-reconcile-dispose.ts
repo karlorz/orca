@@ -123,7 +123,9 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         claimedProviderSessions?.add(session.hibernatedWakeInFlightClaimKey)
         return session.hibernatedWakeInFlightClaimKey
       }
-      const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions)
+      const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions, {
+        forceWake: true
+      })
       if (consumedClaimKey) {
         return consumedClaimKey
       }

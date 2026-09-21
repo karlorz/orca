@@ -168,6 +168,7 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     }
     await expect(launch(omp)).resolves.toBe(expected)
   })
+
   it('keeps the remote OMP path instead of using the local Windows shell or UUID', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
@@ -183,5 +184,21 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     await expect(launch(omp)).resolves.toBe(
       "omp '--resume' '/remote/custom sessions/session.jsonl'"
     )
+  })
+
+  it('opens claude --continue when no stored session remains', async () => {
+    const { launchLastAgentSessionForWorktree } = await import('./sleeping-agent-session-launch')
+    expect(launchLastAgentSessionForWorktree('wt-1', 'claude')).toBe(true)
+    const options = mockCreateTab.mock.calls.at(-1)?.[3] as
+      | { pendingStartup?: { command: string }; launchAgent?: string }
+      | undefined
+    expect(options?.launchAgent).toBe('claude')
+    expect(options?.pendingStartup?.command).toMatch(/--continue/)
+  })
+
+  it('does not open --continue for agents that have no last-session flag', async () => {
+    const { launchLastAgentSessionForWorktree } = await import('./sleeping-agent-session-launch')
+    expect(launchLastAgentSessionForWorktree('wt-1', 'codex')).toBe(false)
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 })

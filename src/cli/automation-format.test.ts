@@ -71,6 +71,13 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     expect(output).toContain('host: self')
   })
 
+  it('reports the launch model, naming the agent default when none is set', () => {
+    expect(
+      formatAutomationShow({ automation: automation({ model: 'deepseek-v4-flash' }) })
+    ).toContain('model: deepseek-v4-flash')
+    expect(formatAutomationShow({ automation: automation() })).toContain('model: agent default')
+  })
+
   // An older authority projects no owner; inventing one from the stored fields would
   // report a removed host as healthy.
   it('omits the host line when the authority reports no owner', () => {

@@ -106,7 +106,10 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   // in-flight hibernation kill runs noteVisibilityResume before onExit arms the
   // wake. Sharing the guarded consume lets both the reveal hook and the
   // arm-time foreground check resume the pane exactly once.
-  session.consumeHibernatedAgentWake = (claimedProviderSessions?: Set<string>): string | null => {
+  session.consumeHibernatedAgentWake = (
+    claimedProviderSessions?: Set<string>,
+    opts?: { forceWake?: boolean }
+  ): string | null => {
     const target = session.hibernatedWakeTarget
     if (!target || session.disposed) {
       return null
@@ -131,6 +134,11 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     if (!session.wakeHibernatedAgentPane) {
+      return null
+    }
+    // Why: View run / tab reveal must show the frozen ping/pong frame. `--resume`
+    // is Resume workspace after the tab is gone, or an explicit mobile wake.
+    if (!opts?.forceWake && isPassiveCompletedHibernationEvidence(target.record)) {
       return null
     }
     const claimKey = getProviderSessionClaimKey(target.record)
@@ -259,10 +267,9 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         sleepingRecordEntry &&
         isPassiveCompletedHibernationEvidence(sleepingRecordEntry.record)
       ) {
-        // Why: hibernation killed this pane's PTY while hidden. The frozen TUI
-        // frame still has mouse-tracking/bracketed-paste armed, which silently
-        // eats every click and keystroke against a dead transport — disarm the
-        // modes now and arm the reveal-time wake.
+        // Why: hibernation killed this pane's PTY. Keep the ping/pong frame
+        // frozen for View run; `--resume` waits for Resume workspace remount
+        // or an explicit mobile wake.
         replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_MODE_RESET, {
           breadcrumbIdentity: {
             tabId: session.deps.tabId,
@@ -278,13 +285,11 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         if (session.pendingHibernatedWakeTarget && !pendingWakeMatches) {
           session.pendingHibernatedWakeTarget = null
         }
-        if (session.deps.isVisibleRef.current || pendingWakeMatches) {
-          // Why: a reveal (or a mobile wake) that raced this kill already ran
-          // before the exit landed, so it saw nothing armed. Consume the wake
-          // now (deferred off the exit handler) so the pane still resumes
-          // without needing a second hide/reveal or wake event.
+        if (pendingWakeMatches) {
+          // Why: a mobile wake that raced this kill already ran before the
+          // exit armed the target. Consume it now with forceWake.
           queueMicrotask(() => {
-            session.consumeHibernatedAgentWake()
+            session.consumeHibernatedAgentWake(undefined, { forceWake: true })
           })
         }
       } else if (session.pendingHibernatedWakeTarget?.ptyId === ptyId) {

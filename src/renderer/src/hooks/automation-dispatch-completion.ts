@@ -15,6 +15,7 @@ import {
 } from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import { waitForAutomationSessionHistoryFlush } from './automation-session-history-flush'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -24,7 +25,7 @@ export function createAutomationDispatchCompletion(args: {
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
-  finalizeTerminalOwnership: () => boolean
+  finalizeTerminalOwnership: () => boolean | Promise<boolean>
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
@@ -35,6 +36,7 @@ export function createAutomationDispatchCompletion(args: {
   let pendingDone = false
   let completionMarked = false
   let contactLost = false
+  let observedPaneKey = args.run.terminalPaneKey
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
@@ -52,6 +54,7 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
+    const providerSessionId = readProviderSessionId(observedPaneKey)
     try {
       await args.markDispatchResult({
         runId: args.run.id,
@@ -60,27 +63,42 @@ export function createAutomationDispatchCompletion(args: {
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: null
+        error: null,
+        ...(providerSessionId ? { providerSessionId } : {})
       })
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
     }
-    if (args.finalizeTerminalOwnership()) {
+    await waitForAutomationSessionHistoryFlush(observedPaneKey)
+    if (await args.finalizeTerminalOwnership()) {
       await clearRetiredRunTerminalIdentity()
     }
+    await persistLateProviderSessionId(providerSessionId)
   }
-  const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
-    // Why: the owned terminal was just retired, so the run's pane/pty
-    // pointers now reference a closed tab. Drop them (best-effort) so
-    // "View run" resolves to the workspace/snapshot instead of dead-ending
-    // on an unavailable terminal.
+  const persistLateProviderSessionId = async (alreadyPersisted: string | null): Promise<void> => {
+    const lateId = readProviderSessionId(observedPaneKey)
+    if (!lateId || lateId === alreadyPersisted) {
+      return
+    }
     try {
       await args.markDispatchResult({
         runId: args.run.id,
         status: 'completed',
-        terminalSessionId: null,
-        terminalPaneKey: null,
+        providerSessionId: lateId
+      })
+    } catch (error) {
+      console.error('[automations] Failed to persist late provider session:', error)
+    }
+  }
+  const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
+    // Why: closeTab already removed the tab. Null only the live PTY so View run
+    // (pane-mounted) is not offered. Keep paneKey/sessionId so Resume can remount
+    // the original leaf and `--resume` the persisted provider session.
+    try {
+      await args.markDispatchResult({
+        runId: args.run.id,
+        status: 'completed',
         terminalPtyId: null
       })
     } catch (error) {
@@ -119,6 +137,7 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
+    const providerSessionId = readProviderSessionId(observedPaneKey)
     try {
       await args.markDispatchResult({
         runId: args.run.id,
@@ -127,16 +146,18 @@ export function createAutomationDispatchCompletion(args: {
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: code === 0 ? null : `Automation process exited with code ${code}.`
+        error: code === 0 ? null : `Automation process exited with code ${code}.`,
+        ...(providerSessionId ? { providerSessionId } : {})
       })
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
     }
     if (code === 0) {
-      if (args.finalizeTerminalOwnership()) {
+      if (await args.finalizeTerminalOwnership()) {
         await clearRetiredRunTerminalIdentity()
       }
+      await persistLateProviderSessionId(providerSessionId)
     } else {
       args.releaseTerminalOwnership()
     }
@@ -173,6 +194,7 @@ export function createAutomationDispatchCompletion(args: {
     startedAfter: number,
     options?: { requireWorkingAfterStart?: boolean }
   ): void => {
+    observedPaneKey = targetPaneKey
     let sawWorkingAfterStart = false
     let observedStateHistory: AgentStateHistoryEntry[] = []
     let observedEntry: AgentStatusEntry | undefined
@@ -260,6 +282,18 @@ export function createAutomationDispatchCompletion(args: {
       }
     }
   }
+}
+
+function readProviderSessionId(paneKey: string | null | undefined): string | null {
+  if (!paneKey) {
+    return null
+  }
+  const state = useAppStore.getState()
+  return (
+    state.agentStatusByPaneKey?.[paneKey]?.providerSession?.id?.trim() ||
+    state.sleepingAgentSessionsByPaneKey?.[paneKey]?.providerSession?.id?.trim() ||
+    null
+  )
 }
 
 function agentStateHistoryEntriesEqual(
