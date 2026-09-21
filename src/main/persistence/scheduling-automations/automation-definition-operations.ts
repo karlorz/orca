@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeAutomationModel } from '../../../shared/automation-model'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -79,6 +80,7 @@ export function createAutomation(
   }
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+  const model = normalizeAutomationModel(input.model)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -86,6 +88,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    ...(model ? { model } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -159,9 +162,16 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  // Why `Object.hasOwn` and not the spread alone: an empty or unlaunchable id has
+  // to clear the stored model, or the automation keeps launching a model the user
+  // removed. An absent field keeps it.
+  const modelUpdate: Pick<Automation, 'model'> = Object.hasOwn(definedUpdates, 'model')
+    ? { model: normalizeAutomationModel(definedUpdates.model) ?? null }
+    : {}
   const merged: Automation = {
     ...current,
     ...definedUpdates,
+    ...modelUpdate,
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)

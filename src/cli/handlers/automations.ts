@@ -38,6 +38,7 @@ import {
 } from '../worktree-project-target'
 import {
   getEnabledFlag,
+  getModelFlag,
   getOptionalProviderFlag,
   getPrecheckFlag,
   getProviderFlag,
@@ -184,6 +185,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
+      model: getModelFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -214,6 +216,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getOptionalStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
+      model: getModelFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,

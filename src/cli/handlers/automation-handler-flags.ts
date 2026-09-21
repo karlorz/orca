@@ -92,6 +92,20 @@ export function getOptionalProviderFlag(
   return provider
 }
 
+/**
+ * `--model ""` clears a saved model; an absent flag leaves it untouched.
+ *
+ * Why the empty string has to survive: the flag is free-form, so an explicit
+ * empty value is the only way a caller returns an automation to its agent's own
+ * default model, and the plain accessor reads that as "no value given".
+ */
+export function getModelFlag(flags: Map<string, string | boolean>): string | null | undefined {
+  if (!flags.has('model')) {
+    return undefined
+  }
+  return getOptionalStringFlag(flags, 'model') ?? null
+}
+
 function getTimeFlag(flags: Map<string, string | boolean>): { hour: number; minute: number } {
   const value = flags.get('time')
   if (value === undefined) {

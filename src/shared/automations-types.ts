@@ -96,6 +96,10 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Why: an optional id the agent CLI is launched with (`-m <model>` for grok).
+   *  Absent means the agent's own configured default model, which is what runs
+   *  did before this field existed. */
+  model?: string | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -185,6 +189,8 @@ export type AutomationCreateInput = {
   prompt: string
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Optional launch model id; absent keeps the agent's configured default. */
+  model?: string | null
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
@@ -209,6 +215,7 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'model'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'

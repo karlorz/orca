@@ -6,6 +6,7 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeAutomationModel } from '../../../../shared/automation-model'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
@@ -53,6 +54,20 @@ const OptionalNullablePlainString = z
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
+
+/**
+ * An optional launch model id, normalized so every path lands on one contract:
+ * a launchable id, `null` for "no model override", or `undefined` for "not part
+ * of this request" — the omitted case a caller cannot express as a clear.
+ *
+ * Why empty and unlaunchable ids clear rather than 400: the field is free-form
+ * (ids come from the user's own agent config), so the renderer's empty input and
+ * a stale id are both ordinary edits, and rejecting them would strand an edit
+ * dialog that can no longer save. An empty string never reaches a command line.
+ */
+const AutomationModel = OptionalNullablePlainString.transform((value) =>
+  value === undefined || value === null ? value : (normalizeAutomationModel(value) ?? null)
+)
 
 const TaskProviderIdentity = z
   .custom<SharedTaskProviderIdentity>(
@@ -148,6 +163,7 @@ export const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  model: AutomationModel,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -169,6 +185,7 @@ const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  model: AutomationModel,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

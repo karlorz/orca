@@ -293,6 +293,13 @@ export function AutomationDetail({
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.ebdcb0023c', 'Model')}
+          value={
+            automation.model ??
+            translate('auto.components.automations.AutomationDetail.4c08827ec8', 'Agent default')
+          }
+        />
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

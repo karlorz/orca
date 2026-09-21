@@ -103,4 +103,32 @@ describe('headless automation workspace create args', () => {
 
     expect(args.setupDecision).toBe('skip')
   })
+
+  it('passes an automation model as the create launch preference', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, agentId: 'grok', model: 'deepseek-v4-flash' },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.startupLaunchPreferences).toEqual({ model: 'deepseek-v4-flash' })
+  })
+
+  it('omits the launch preference when no model is set', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, agentId: 'grok' },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.startupLaunchPreferences).toBeUndefined()
+  })
 })

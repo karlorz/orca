@@ -1,4 +1,5 @@
 import { AutomationService } from '../automations/service'
+import { buildAutomationModelLaunchPreferences } from '../../shared/automation-model'
 import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
@@ -22,6 +23,10 @@ export function initializeMainProcessAutomations(): AutomationService {
     headlessDispatcher: state.isServeMode
       ? async ({ automation, run, target }) => {
           const terminalSnapshotLimit = 2_000
+          const modelLaunchPreferences = buildAutomationModelLaunchPreferences(
+            automation.agentId,
+            automation.model
+          )
           let terminalHandle: string
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
@@ -51,6 +56,7 @@ export function initializeMainProcessAutomations(): AutomationService {
             const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
+              ...(modelLaunchPreferences ? { launchPreferences: modelLaunchPreferences } : {}),
               title: run.title
             })
             terminalHandle = terminal.handle

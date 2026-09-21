@@ -13,6 +13,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
+import { AutomationModelField } from './AutomationModelField'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
@@ -109,6 +110,11 @@ export function AutomationEditorSettingsSidebar({
                   allowNarrowTrigger
                 />
               </Field>
+              <AutomationModelField
+                draft={draft}
+                pickerTriggerClassName={pickerTriggerClassName}
+                onDraftChange={onDraftChange}
+              />
             </div>
           </div>
         </div>
