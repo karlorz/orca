@@ -34,7 +34,7 @@ describe('buildAutomationModelLaunchPreferences', () => {
 
   it('accepts only the supported reasoning effort ladder', () => {
     expect(normalizeAutomationReasoningEffort(' xhigh ')).toBe('xhigh')
-    expect(normalizeAutomationReasoningEffort('max')).toBeUndefined()
+    expect(normalizeAutomationReasoningEffort('bogus')).toBeUndefined()
     expect(buildAutomationModelLaunchPreferences('grok', 'deepseek-v4-flash', 'xhigh')).toEqual({
       model: 'deepseek-v4-flash',
       effort: 'xhigh'

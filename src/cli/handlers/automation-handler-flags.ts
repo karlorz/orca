@@ -120,7 +120,7 @@ export function getReasoningEffortFlag(
   if (!effort) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--reasoning-effort must be one of low, medium, high, or xhigh'
+      '--reasoning-effort must be one of low, medium, high, xhigh, max, or ultra'
     )
   }
   return effort

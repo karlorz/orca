@@ -45,6 +45,18 @@ describe('automation model launch command', () => {
     )
   })
 
+  it('emits Claude model and effort flags', () => {
+    expect(launchCommandFor('claude', 'opus', 'high')).toContain(
+      "claude '--model' 'opus' '--effort' 'high'"
+    )
+  })
+
+  it('emits Codex model and max effort flags', () => {
+    expect(launchCommandFor('codex', 'gpt-5.6-luna', 'max')).toContain(
+      "codex '-m' 'gpt-5.6-luna' '-c' 'model_reasoning_effort=max'"
+    )
+  })
+
   it('emits no model flag for a grok run without one', () => {
     expect(launchCommandFor('grok', undefined)).toBe(
       "grok '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"

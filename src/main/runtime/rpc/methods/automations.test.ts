@@ -212,7 +212,7 @@ describe('automation RPC methods', () => {
           name: 'Bad effort',
           prompt: 'Run',
           agentId: 'grok',
-          reasoningEffort: 'max',
+          reasoningEffort: 'bogus',
           repo: 'repo-1',
           rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
           dtstart: 1

@@ -8,9 +8,11 @@ import type {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import {
+  isAutomationReasoningEffortSupported,
   normalizeAutomationModel,
   normalizeAutomationReasoningEffort
 } from '../../../shared/automation-model'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -86,6 +88,19 @@ export function createAutomation(
   const model = normalizeAutomationModel(input.model)
   const reasoningEffort = normalizeAutomationReasoningEffort(input.reasoningEffort)
   const agentProfile = input.agentProfile === 'minimal' ? 'minimal' : undefined
+  if (model && !getAgentSessionOptionCatalog(input.agentId)?.modelApply.launchArgs) {
+    throw new Error('The selected agent does not support automation model overrides.')
+  }
+  if (
+    input.reasoningEffort !== undefined &&
+    input.reasoningEffort !== null &&
+    !isAutomationReasoningEffortSupported(input.agentId, model, input.reasoningEffort)
+  ) {
+    throw new Error('Reasoning effort is not supported by the selected agent model.')
+  }
+  if (agentProfile && input.agentId !== 'grok') {
+    throw new Error('Agent profile is only supported by Grok.')
+  }
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -189,6 +204,25 @@ export function updateAutomation(
   )
     ? { agentProfile: definedUpdates.agentProfile === 'minimal' ? 'minimal' : null }
     : {}
+  const effectiveModel = Object.hasOwn(definedUpdates, 'model')
+    ? normalizeAutomationModel(definedUpdates.model)
+    : current.model
+  const effectiveAgent = definedUpdates.agentId ?? current.agentId
+  const effectiveEffort = Object.hasOwn(definedUpdates, 'reasoningEffort')
+    ? normalizeAutomationReasoningEffort(definedUpdates.reasoningEffort)
+    : current.reasoningEffort
+  if (
+    effectiveEffort &&
+    !isAutomationReasoningEffortSupported(effectiveAgent, effectiveModel, effectiveEffort)
+  ) {
+    throw new Error('Reasoning effort is not supported by the selected agent model.')
+  }
+  if (effectiveModel && !getAgentSessionOptionCatalog(effectiveAgent)?.modelApply.launchArgs) {
+    throw new Error('The selected agent does not support automation model overrides.')
+  }
+  if (definedUpdates.agentProfile === 'minimal' && effectiveAgent !== 'grok') {
+    throw new Error('Agent profile is only supported by Grok.')
+  }
   const merged: Automation = {
     ...current,
     ...definedUpdates,
