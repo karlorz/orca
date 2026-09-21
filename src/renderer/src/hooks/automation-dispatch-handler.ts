@@ -170,7 +170,8 @@ export async function handleAutomationDispatchRequest({
     // rather than receiving a guessed `--model` that would fail its launch.
     const modelSessionOptions = buildAutomationModelLaunchPreferences(
       automation.agentId,
-      automation.model
+      automation.model,
+      automation.reasoningEffort
     )
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,

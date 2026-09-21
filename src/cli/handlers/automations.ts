@@ -39,6 +39,7 @@ import {
 import {
   getEnabledFlag,
   getModelFlag,
+  getReasoningEffortFlag,
   getOptionalProviderFlag,
   getPrecheckFlag,
   getProviderFlag,
@@ -186,6 +187,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
       model: getModelFlag(flags),
+      reasoningEffort: getReasoningEffortFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -217,6 +219,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
       model: getModelFlag(flags),
+      reasoningEffort: getReasoningEffortFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,

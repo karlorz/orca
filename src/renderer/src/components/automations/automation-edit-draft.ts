@@ -25,6 +25,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     prompt: automation.prompt,
     agentId: automation.agentId,
     model: automation.model ?? '',
+    reasoningEffort: automation.reasoningEffort ?? '',
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',
@@ -60,6 +61,7 @@ export function buildExternalAutomationEditDraft(
     agentId: 'hermes',
     // Hermes jobs carry no model field of ours; its own schedule owns that.
     model: '',
+    reasoningEffort: '',
     projectId: placement.projectId,
     workspaceMode: 'existing',
     workspaceId: placement.workspaceId,

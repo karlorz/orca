@@ -9,6 +9,10 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
 } from '../../shared/automation-precheck'
 import { buildAutomationRrule } from '../../shared/automation-schedule-occurrences'
+import {
+  normalizeAutomationReasoningEffort,
+  type AutomationReasoningEffort
+} from '../../shared/automation-model'
 import { isValidAutomationSchedule } from '../../shared/automation-schedule-parsing'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
@@ -104,6 +108,22 @@ export function getModelFlag(flags: Map<string, string | boolean>): string | nul
     return undefined
   }
   return getOptionalStringFlag(flags, 'model') ?? null
+}
+
+export function getReasoningEffortFlag(
+  flags: Map<string, string | boolean>
+): AutomationReasoningEffort | null | undefined {
+  if (!flags.has('reasoning-effort')) return undefined
+  const raw = getOptionalStringFlag(flags, 'reasoning-effort') ?? ''
+  if (!raw) return null
+  const effort = normalizeAutomationReasoningEffort(raw)
+  if (!effort) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--reasoning-effort must be one of low, medium, high, or xhigh'
+    )
+  }
+  return effort
 }
 
 function getTimeFlag(flags: Map<string, string | boolean>): { hour: number; minute: number } {

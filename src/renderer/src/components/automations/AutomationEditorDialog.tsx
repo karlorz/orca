@@ -41,6 +41,7 @@ export type AutomationDraft = {
   /** Empty means "agent default"; the id is free-form because models come from
    *  the user's own agent config, not from a catalog Orca ships. */
   model: string
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | ''
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string

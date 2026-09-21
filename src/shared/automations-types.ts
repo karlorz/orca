@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { AutomationReasoningEffort } from './automation-model'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -100,6 +101,7 @@ export type Automation = {
    *  Absent means the agent's own configured default model, which is what runs
    *  did before this field existed. */
   model?: string | null
+  reasoningEffort?: AutomationReasoningEffort | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -191,6 +193,7 @@ export type AutomationCreateInput = {
   agentId: TuiAgent
   /** Optional launch model id; absent keeps the agent's configured default. */
   model?: string | null
+  reasoningEffort?: AutomationReasoningEffort | null
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
@@ -216,6 +219,7 @@ export type AutomationUpdateInput = Partial<
     | 'precheck'
     | 'agentId'
     | 'model'
+    | 'reasoningEffort'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'

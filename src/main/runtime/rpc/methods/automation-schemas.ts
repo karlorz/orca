@@ -6,7 +6,10 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { normalizeAutomationModel } from '../../../../shared/automation-model'
+import {
+  normalizeAutomationModel,
+  normalizeAutomationReasoningEffort
+} from '../../../../shared/automation-model'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
@@ -68,6 +71,18 @@ const OptionalNullablePlainString = z
 const AutomationModel = OptionalNullablePlainString.transform((value) =>
   value === undefined || value === null ? value : (normalizeAutomationModel(value) ?? null)
 )
+const AutomationReasoningEffort = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null || value === '') return value
+  const normalized = normalizeAutomationReasoningEffort(value)
+  if (!normalized) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Invalid reasoning effort; expected low, medium, high, or xhigh'
+    })
+    return z.NEVER
+  }
+  return normalized
+})
 
 const TaskProviderIdentity = z
   .custom<SharedTaskProviderIdentity>(
@@ -164,6 +179,7 @@ export const AutomationCreate = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
   model: AutomationModel,
+  reasoningEffort: AutomationReasoningEffort,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -186,6 +202,7 @@ const AutomationUpdateFields = z.object({
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
   model: AutomationModel,
+  reasoningEffort: AutomationReasoningEffort,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

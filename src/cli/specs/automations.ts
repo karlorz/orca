@@ -20,7 +20,7 @@ const AUTOMATION_STATE_FLAGS = [
   'reuse-session',
   'fresh-session'
 ]
-const AUTOMATION_MODEL_FLAGS = ['model']
+const AUTOMATION_MODEL_FLAGS = ['model', 'reasoning-effort']
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -42,7 +42,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--model <model-id>] [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--model <model-id>] [--reasoning-effort <low|medium|high|xhigh>] [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
@@ -62,6 +62,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --model to launch the agent with a specific model id; omit it to use the agent default. On edit, pass an empty --model to clear it.',
+      'Use --reasoning-effort with low, medium, high, or xhigh; omit it for the agent default. On edit, pass an empty value to clear it.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
     ],
@@ -76,7 +77,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'edit'],
     summary: 'Edit an Orca automation',
     usage:
-      'orca automations edit <id> [--name <name>] [--model <model-id>] [--trigger <preset|cron|rrule>] [--json]',
+      'orca automations edit <id> [--name <name>] [--model <model-id>] [--reasoning-effort <low|medium|high|xhigh>] [--trigger <preset|cron|rrule>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'id',

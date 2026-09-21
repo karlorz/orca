@@ -54,7 +54,7 @@ function callsFor(method: string): unknown[][] {
   return callMock.mock.calls.filter((call) => call[0] === method)
 }
 
-function lastCallArgs(method: string): { updates: { model?: unknown } } {
+function lastCallArgs(method: string): { updates: { model?: unknown; reasoningEffort?: unknown } } {
   const call = callsFor(method).at(-1)
   if (!call) {
     throw new Error(`No ${method} call was recorded.`)
@@ -72,7 +72,7 @@ describe('orca cli automation model flag', () => {
     spawnMock
   })
 
-  it('passes --model through create and edit', async () => {
+  it('passes --model and --reasoning-effort through create and edit', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
@@ -97,19 +97,39 @@ describe('orca cli automation model flag', () => {
         'grok',
         '--model',
         'deepseek-v4-flash',
+        '--reasoning-effort',
+        'xhigh',
         '--workspace',
         'current',
         '--json'
       ],
       '/tmp/repo/feature/src'
     )
-    await main(['automations', 'edit', 'auto-1', '--model', 'grok-4.5', '--json'], '/tmp/repo')
+    await main(
+      [
+        'automations',
+        'edit',
+        'auto-1',
+        '--model',
+        'grok-4.5',
+        '--reasoning-effort',
+        'high',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
 
     expect(callsFor('automation.create').at(-1)?.[1]).toEqual(
-      expect.objectContaining({ agentId: 'grok', model: 'deepseek-v4-flash' })
+      expect.objectContaining({
+        agentId: 'grok',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'xhigh'
+      })
     )
     expect(callsFor('automation.update').at(-1)?.[1]).toEqual(
-      expect.objectContaining({ updates: expect.objectContaining({ model: 'grok-4.5' }) })
+      expect.objectContaining({
+        updates: expect.objectContaining({ model: 'grok-4.5', reasoningEffort: 'high' })
+      })
     )
   })
 

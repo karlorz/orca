@@ -162,6 +162,7 @@ export async function saveOrcaAutomation(
     // Why `null` and not `''`: the wire contract reads an empty value as "clear",
     // and `''` would reach the launch command as an empty model argument.
     model: draft.model.trim() || null,
+    reasoningEffort: draft.reasoningEffort || null,
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,
@@ -182,6 +183,7 @@ export async function saveOrcaAutomation(
     precheck,
     agentId: draft.agentId,
     model: draft.model.trim() || null,
+    reasoningEffort: draft.reasoningEffort || null,
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,

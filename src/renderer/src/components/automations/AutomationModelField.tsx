@@ -1,4 +1,11 @@
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
@@ -38,6 +45,30 @@ export function AutomationModelField({
         }
         className={`font-mono text-xs ${pickerTriggerClassName}`}
       />
+      <Select
+        value={draft.reasoningEffort || 'default'}
+        onValueChange={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            reasoningEffort:
+              value === 'default' ? '' : (value as 'low' | 'medium' | 'high' | 'xhigh')
+          }))
+        }
+      >
+        <SelectTrigger
+          className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
+          aria-label="Reasoning effort"
+        >
+          <SelectValue placeholder="Agent default" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">Agent default</SelectItem>
+          <SelectItem value="low">Low</SelectItem>
+          <SelectItem value="medium">Medium</SelectItem>
+          <SelectItem value="high">High</SelectItem>
+          <SelectItem value="xhigh">Extra high</SelectItem>
+        </SelectContent>
+      </Select>
     </Field>
   )
 }

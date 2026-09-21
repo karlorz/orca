@@ -7,7 +7,10 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
-import { normalizeAutomationModel } from '../../../shared/automation-model'
+import {
+  normalizeAutomationModel,
+  normalizeAutomationReasoningEffort
+} from '../../../shared/automation-model'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
@@ -81,6 +84,7 @@ export function createAutomation(
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const model = normalizeAutomationModel(input.model)
+  const reasoningEffort = normalizeAutomationReasoningEffort(input.reasoningEffort)
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -89,6 +93,7 @@ export function createAutomation(
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
     ...(model ? { model } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -168,10 +173,19 @@ export function updateAutomation(
   const modelUpdate: Pick<Automation, 'model'> = Object.hasOwn(definedUpdates, 'model')
     ? { model: normalizeAutomationModel(definedUpdates.model) ?? null }
     : {}
+  const reasoningEffortUpdate: Pick<Automation, 'reasoningEffort'> = Object.hasOwn(
+    definedUpdates,
+    'reasoningEffort'
+  )
+    ? {
+        reasoningEffort: normalizeAutomationReasoningEffort(definedUpdates.reasoningEffort) ?? null
+      }
+    : {}
   const merged: Automation = {
     ...current,
     ...definedUpdates,
     ...modelUpdate,
+    ...reasoningEffortUpdate,
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)

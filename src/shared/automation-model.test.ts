@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAutomationModelLaunchPreferences,
+  normalizeAutomationReasoningEffort,
   MAX_AUTOMATION_MODEL_ID_LENGTH,
   normalizeAutomationModel
 } from './automation-model'
@@ -28,6 +29,15 @@ describe('buildAutomationModelLaunchPreferences', () => {
   it('maps grok models onto the catalog default model flag', () => {
     expect(buildAutomationModelLaunchPreferences('grok', ' deepseek-v4-flash ')).toEqual({
       model: 'deepseek-v4-flash'
+    })
+  })
+
+  it('accepts only the supported reasoning effort ladder', () => {
+    expect(normalizeAutomationReasoningEffort(' xhigh ')).toBe('xhigh')
+    expect(normalizeAutomationReasoningEffort('max')).toBeUndefined()
+    expect(buildAutomationModelLaunchPreferences('grok', 'deepseek-v4-flash', 'xhigh')).toEqual({
+      model: 'deepseek-v4-flash',
+      effort: 'xhigh'
     })
   })
 

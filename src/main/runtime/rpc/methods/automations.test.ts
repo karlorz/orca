@@ -118,6 +118,7 @@ describe('automation RPC methods', () => {
         prompt: 'Triage alerts',
         agentId: 'grok',
         model: 'deepseek-v4-flash',
+        reasoningEffort: 'xhigh',
         repo: 'repo-1',
         rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
         dtstart: 1
@@ -137,7 +138,10 @@ describe('automation RPC methods', () => {
     const calls = (runtime.createAutomation as unknown as { mock: { calls: [unknown][] } }).mock
       .calls
     expect(calls).toHaveLength(2)
-    expect((calls[0][0] as { model?: string }).model).toBe('deepseek-v4-flash')
+    expect((calls[0][0] as { model?: string; reasoningEffort?: string }).model).toBe(
+      'deepseek-v4-flash'
+    )
+    expect((calls[0][0] as { reasoningEffort?: string }).reasoningEffort).toBe('xhigh')
     // Absent, not present-and-undefined: the store's spread would otherwise carry
     // a key it cannot tell from a caller that meant to clear the field.
     expect(Object.hasOwn(calls[1][0] as object, 'model')).toBe(false)
@@ -195,6 +199,20 @@ describe('automation RPC methods', () => {
           name: 'Bad provider',
           prompt: 'Run',
           agentId: 'not-real',
+          repo: 'repo-1',
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: 1
+        })
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('automation.create', {
+          name: 'Bad effort',
+          prompt: 'Run',
+          agentId: 'grok',
+          reasoningEffort: 'max',
           repo: 'repo-1',
           rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
           dtstart: 1

@@ -25,7 +25,8 @@ export function initializeMainProcessAutomations(): AutomationService {
           const terminalSnapshotLimit = 2_000
           const modelLaunchPreferences = buildAutomationModelLaunchPreferences(
             automation.agentId,
-            automation.model
+            automation.model,
+            automation.reasoningEffort
           )
           let terminalHandle: string
           let terminalSessionId: string | null = null
