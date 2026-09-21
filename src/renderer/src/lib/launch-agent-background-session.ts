@@ -95,6 +95,8 @@ export async function launchAgentBackgroundSession(
     agentArgs,
     agentEnv,
     sessionOptions: args.sessionOptions,
+    extraArgs:
+      typeof args.sessionOptions?.extraArgs === 'string' ? args.sessionOptions.extraArgs : undefined,
     platform: launchPlatform,
     shell: startupShell,
     isRemote,

@@ -83,7 +83,8 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     const options = {
       ...(preferences.model ? { model: preferences.model } : {}),
       ...(preferences.effort ? { effort: preferences.effort } : {}),
-      ...(preferences.mode ? { mode: preferences.mode } : {})
+      ...(preferences.mode ? { mode: preferences.mode } : {}),
+      ...(preferences.extraArgs ? { extraArgs: preferences.extraArgs } : {})
     }
     return Object.keys(options).length > 0 ? options : undefined
   }
@@ -158,6 +159,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       },
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
+      extraArgs: request.launchPreferences?.extraArgs,
       sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
       platform,
       shell,

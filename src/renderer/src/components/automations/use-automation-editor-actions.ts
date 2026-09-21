@@ -64,6 +64,7 @@ export function useAutomationEditorActions({
       prompt: '',
       agentId: defaultAgent,
       model: '',
+      extraArgs: '',
       reasoningEffort: '',
       agentProfile: '',
       projectId: target.projectId,

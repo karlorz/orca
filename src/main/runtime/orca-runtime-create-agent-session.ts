@@ -62,6 +62,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
+          request.launchPreferences?.extraArgs ?? null,
           request.startupCwd ?? null,
           request.presentation ?? null,
           request.placement?.tabId ?? null,
@@ -168,6 +169,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
+        extraArgs: request.launchPreferences?.extraArgs,
         platform,
         shell,
         isRemote

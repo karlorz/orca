@@ -27,7 +27,8 @@ export function initializeMainProcessAutomations(): AutomationService {
             automation.agentId,
             automation.model,
             automation.reasoningEffort,
-            automation.agentProfile
+            automation.agentProfile,
+            automation.extraArgs
           )
           let terminalHandle: string
           let terminalSessionId: string | null = null

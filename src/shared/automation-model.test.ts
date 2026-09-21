@@ -39,6 +39,19 @@ describe('buildAutomationModelLaunchPreferences', () => {
       model: 'deepseek-v4-flash',
       effort: 'xhigh'
     })
+    expect(buildAutomationModelLaunchPreferences('grok', 'deepseek-v4-flash', 'max')).toEqual({
+      model: 'deepseek-v4-flash'
+    })
+    expect(buildAutomationModelLaunchPreferences('codex', 'gpt-5.6-luna', 'max')).toMatchObject({
+      model: 'gpt-5.6-luna',
+      effort: 'max'
+    })
+    expect(
+      buildAutomationModelLaunchPreferences('claude', 'opus', 'high', 'minimal')
+    ).toMatchObject({
+      model: 'opus',
+      effort: 'high'
+    })
   })
 
   it('launches the agent default when no model is set', () => {

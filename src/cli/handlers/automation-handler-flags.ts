@@ -11,6 +11,7 @@ import {
 import { buildAutomationRrule } from '../../shared/automation-schedule-occurrences'
 import {
   normalizeAutomationReasoningEffort,
+  validateAutomationExtraArgs,
   type AutomationReasoningEffort
 } from '../../shared/automation-model'
 import { isValidAutomationSchedule } from '../../shared/automation-schedule-parsing'
@@ -136,6 +137,20 @@ export function getAgentProfileFlag(
     throw new RuntimeClientError('invalid_argument', '--agent-profile must be minimal')
   }
   return 'minimal'
+}
+
+export function getExtraArgsFlag(flags: Map<string, string | boolean>): string | null | undefined {
+  if (!flags.has('extra-args')) return undefined
+  const raw = getOptionalStringFlag(flags, 'extra-args') ?? ''
+  if (!raw) return null
+  try {
+    return validateAutomationExtraArgs(raw) ?? null
+  } catch (error) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      error instanceof Error ? error.message : 'Invalid extra args'
+    )
+  }
 }
 
 function getTimeFlag(flags: Map<string, string | boolean>): { hour: number; minute: number } {

@@ -8,7 +8,8 @@ import {
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeAutomationModel,
-  normalizeAutomationReasoningEffort
+  normalizeAutomationReasoningEffort,
+  validateAutomationExtraArgs
 } from '../../../../shared/automation-model'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -78,7 +79,7 @@ const AutomationReasoningEffort = OptionalNullablePlainString.transform((value, 
   if (!normalized) {
     ctx.addIssue({
       code: 'custom',
-      message: 'Invalid reasoning effort; expected low, medium, high, or xhigh'
+      message: 'Invalid reasoning effort; expected low, medium, high, xhigh, max, or ultra'
     })
     return z.NEVER
   }
@@ -92,6 +93,18 @@ const AutomationAgentProfile = OptionalNullablePlainString.transform((value, ctx
     return z.NEVER
   }
   return 'minimal' as const
+})
+const AutomationExtraArgs = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null || value === '') return value
+  try {
+    return validateAutomationExtraArgs(value) ?? null
+  } catch (error) {
+    ctx.addIssue({
+      code: 'custom',
+      message: error instanceof Error ? error.message : 'Invalid extra args'
+    })
+    return z.NEVER
+  }
 })
 
 const TaskProviderIdentity = z
@@ -191,6 +204,7 @@ export const AutomationCreate = z.object({
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
   agentProfile: AutomationAgentProfile,
+  extraArgs: AutomationExtraArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -215,6 +229,7 @@ const AutomationUpdateFields = z.object({
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
   agentProfile: AutomationAgentProfile,
+  extraArgs: AutomationExtraArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

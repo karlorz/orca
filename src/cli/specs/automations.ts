@@ -20,7 +20,7 @@ const AUTOMATION_STATE_FLAGS = [
   'reuse-session',
   'fresh-session'
 ]
-const AUTOMATION_MODEL_FLAGS = ['model', 'reasoning-effort', 'agent-profile']
+const AUTOMATION_MODEL_FLAGS = ['model', 'reasoning-effort', 'agent-profile', 'extra-args']
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -42,7 +42,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--model <model-id>] [--reasoning-effort <low|medium|high|xhigh>] [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--model <model-id>] [--reasoning-effort <level>] [--agent-profile minimal] [--extra-args <args>] [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
@@ -62,7 +62,9 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --model to launch the agent with a specific model id; omit it to use the agent default. On edit, pass an empty --model to clear it.',
-      'Use --reasoning-effort with low, medium, high, or xhigh; omit it for the agent default. On edit, pass an empty value to clear it.',
+      'Use --reasoning-effort with a level the selected agent catalog accepts. Grok accepts low, medium, high, or xhigh. Codex can also accept max or ultra. Omit it for the agent default. On edit, pass an empty value to clear it.',
+      'Use --agent-profile minimal only with --provider grok. On edit, pass an empty value to clear it.',
+      'Use --extra-args to append flags after the model and effort flags. A value that itself starts with -- must use the equals form, for example --extra-args=--verbose. Flags that set model, agent, effort, or permission mode are rejected.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
     ],
@@ -77,7 +79,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'edit'],
     summary: 'Edit an Orca automation',
     usage:
-      'orca automations edit <id> [--name <name>] [--model <model-id>] [--reasoning-effort <low|medium|high|xhigh>] [--trigger <preset|cron|rrule>] [--json]',
+      'orca automations edit <id> [--name <name>] [--model <model-id>] [--reasoning-effort <level>] [--agent-profile minimal] [--extra-args <args>] [--trigger <preset|cron|rrule>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'id',

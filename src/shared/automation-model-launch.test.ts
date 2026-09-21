@@ -5,7 +5,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildAutomationModelLaunchPreferences } from './automation-model'
+import {
+  buildAutomationModelLaunchPreferences,
+  normalizeAutomationExtraArgs
+} from './automation-model'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import type { TuiAgent } from './tui-agent'
 
@@ -13,9 +16,16 @@ function launchCommandFor(
   agent: TuiAgent,
   model: string | undefined,
   effort?: string,
-  agentProfile?: string
+  agentProfile?: string,
+  extraArgs?: string
 ): string | undefined {
-  const sessionOptions = buildAutomationModelLaunchPreferences(agent, model, effort, agentProfile)
+  const sessionOptions = buildAutomationModelLaunchPreferences(
+    agent,
+    model,
+    effort,
+    agentProfile,
+    extraArgs
+  )
   return buildAgentStartupPlan({
     agent,
     prompt: 'Triage the alert queue',
@@ -27,6 +37,20 @@ function launchCommandFor(
 }
 
 describe('automation model launch command', () => {
+  it('appends extra args for a non-grok provider after its own model flag', () => {
+    expect(
+      launchCommandFor('claude', 'claude-sonnet', undefined, undefined, '--verbose')
+    ).toContain(
+      "claude '--model' 'claude-sonnet' '--permission-mode' 'bypassPermissions' '--verbose'"
+    )
+  })
+
+  it('rejects protected model flags in extra args', () => {
+    expect(normalizeAutomationExtraArgs('--model sneak')).toBeUndefined()
+    expect(normalizeAutomationExtraArgs('-c model_reasoning_effort=max')).toBeUndefined()
+    expect(normalizeAutomationExtraArgs('--config model_reasoning_effort=max')).toBeUndefined()
+    expect(normalizeAutomationExtraArgs('--verbose')).toBe('--verbose')
+  })
   it('emits -m <model> for a grok run with a model', () => {
     expect(launchCommandFor('grok', 'deepseek-v4-flash')).toBe(
       "grok '-m' 'deepseek-v4-flash' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"

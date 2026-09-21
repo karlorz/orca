@@ -92,6 +92,7 @@ export type AgentLaunchPreferences = {
   effort?: string
   agentProfile?: string
   mode?: string
+  extraArgs?: string
 }
 
 export type AgentPromptDelivery = 'auto-submit' | 'draft'

@@ -56,10 +56,12 @@ export function toAgentLaunchPreferences(
   const model = readString('model')
   const effort = readString('effort')
   const mode = readString('mode')
+  const extraArgs = readString('extraArgs')
   const preferences: AgentLaunchPreferences = {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
     ...(mode ? { mode } : {})
+    ...(extraArgs ? { extraArgs } : {})
   }
   return Object.keys(preferences).length > 0 ? preferences : undefined
 }

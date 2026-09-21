@@ -10,7 +10,8 @@ import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck
 import {
   isAutomationReasoningEffortSupported,
   normalizeAutomationModel,
-  normalizeAutomationReasoningEffort
+  normalizeAutomationReasoningEffort,
+  validateAutomationExtraArgs
 } from '../../../shared/automation-model'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
@@ -88,6 +89,10 @@ export function createAutomation(
   const model = normalizeAutomationModel(input.model)
   const reasoningEffort = normalizeAutomationReasoningEffort(input.reasoningEffort)
   const agentProfile = input.agentProfile === 'minimal' ? 'minimal' : undefined
+  const extraArgs =
+    input.extraArgs == null || input.extraArgs === ''
+      ? undefined
+      : validateAutomationExtraArgs(input.extraArgs)
   if (model && !getAgentSessionOptionCatalog(input.agentId)?.modelApply.launchArgs) {
     throw new Error('The selected agent does not support automation model overrides.')
   }
@@ -111,6 +116,7 @@ export function createAutomation(
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(agentProfile ? { agentProfile } : {}),
+    ...(extraArgs ? { extraArgs } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -204,6 +210,14 @@ export function updateAutomation(
   )
     ? { agentProfile: definedUpdates.agentProfile === 'minimal' ? 'minimal' : null }
     : {}
+  const extraArgsUpdate: Pick<Automation, 'extraArgs'> = Object.hasOwn(definedUpdates, 'extraArgs')
+    ? {
+        extraArgs:
+          definedUpdates.extraArgs == null || definedUpdates.extraArgs === ''
+            ? null
+            : (validateAutomationExtraArgs(definedUpdates.extraArgs) ?? null)
+      }
+    : {}
   const effectiveModel = Object.hasOwn(definedUpdates, 'model')
     ? normalizeAutomationModel(definedUpdates.model)
     : current.model
@@ -229,6 +243,7 @@ export function updateAutomation(
     ...modelUpdate,
     ...reasoningEffortUpdate,
     ...agentProfileUpdate,
+    ...extraArgsUpdate,
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)

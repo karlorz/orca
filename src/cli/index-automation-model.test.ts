@@ -99,6 +99,7 @@ describe('orca cli automation model flag', () => {
         'deepseek-v4-flash',
         '--reasoning-effort',
         'xhigh',
+        '--extra-args=--verbose',
         '--workspace',
         'current',
         '--json'
@@ -123,7 +124,8 @@ describe('orca cli automation model flag', () => {
       expect.objectContaining({
         agentId: 'grok',
         model: 'deepseek-v4-flash',
-        reasoningEffort: 'xhigh'
+        reasoningEffort: 'xhigh',
+        extraArgs: '--verbose'
       })
     )
     expect(callsFor('automation.update').at(-1)?.[1]).toEqual(
@@ -131,6 +133,38 @@ describe('orca cli automation model flag', () => {
         updates: expect.objectContaining({ model: 'grok-4.5', reasoningEffort: 'high' })
       })
     )
+  })
+
+  it('rejects protected model flags in --extra-args', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      ...workspaceDestinationFixtures()
+    )
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'Guarded',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Run',
+        '--provider',
+        'codex',
+        '--extra-args=--model sneak',
+        '--workspace',
+        'current',
+        '--json'
+      ],
+      '/tmp/repo/feature/src'
+    )
+    expect(log.mock.calls.map((call) => String(call[0])).join('\n')).toMatch(
+      /may not override model/i
+    )
+    expect(callsFor('automation.create')).toEqual([])
   })
 
   it('sends an explicit clear for an empty --model', async () => {

@@ -21,6 +21,7 @@ import { AutomationSessionField } from './AutomationSessionField'
 import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
 import { AutomationDestinationField } from './AutomationDestinationField'
+import { Input } from '@/components/ui/input'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
@@ -115,6 +116,19 @@ export function AutomationEditorSettingsSidebar({
                 pickerTriggerClassName={pickerTriggerClassName}
                 onDraftChange={onDraftChange}
               />
+              <Field className="mt-3">
+                <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>Extra args</span>
+                <Input
+                  value={draft.extraArgs}
+                  onChange={(event) =>
+                    onDraftChange((current) => ({ ...current, extraArgs: event.target.value }))
+                  }
+                  placeholder="Optional provider flags"
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="font-mono text-xs"
+                />
+              </Field>
             </div>
           </div>
         </div>

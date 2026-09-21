@@ -2,6 +2,7 @@ import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-
 import { hasUnsafeProviderSessionIdChars } from './agent-session-resume'
 import type { TuiAgent } from './tui-agent'
 import type { AgentLaunchPreferences } from './agent-session-host-authority'
+import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 
 /** Same bound as `MAX_LAUNCH_PREFERENCE_LENGTH`, which already carries model ids
  *  from pickers and workers over the wire. */
@@ -15,6 +16,52 @@ export const AUTOMATION_REASONING_EFFORTS = [
   'ultra'
 ] as const
 export type AutomationReasoningEffort = (typeof AUTOMATION_REASONING_EFFORTS)[number]
+
+const FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS = new Set([
+  '-m',
+  '--model',
+  '--agent',
+  '--effort',
+  '--reasoning-effort',
+  '--permission-mode'
+])
+
+export function normalizeAutomationExtraArgs(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = tokenizeStartupCommand(trimmed, 'posix')
+  if (!parsed.ok) return undefined
+  for (let index = 0; index < parsed.tokens.length; index += 1) {
+    const token = parsed.tokens[index]
+    const next = parsed.tokens[index + 1]
+    if (
+      FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS.has(token) ||
+      [...FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS].some((flag) => token.startsWith(`${flag}=`)) ||
+      ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) ||
+      token.startsWith('-cmodel_reasoning_effort=') ||
+      token.startsWith('-c=model_reasoning_effort=') ||
+      token.startsWith('--config=model_reasoning_effort=') ||
+      token.startsWith('model_reasoning_effort=')
+    ) {
+      return undefined
+    }
+  }
+  return trimmed
+}
+
+export function validateAutomationExtraArgs(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  const trimmed = value.trim()
+  const parsed = tokenizeStartupCommand(trimmed, 'posix')
+  if (!parsed.ok) throw new Error(`Invalid extra args: ${parsed.error}`)
+  if (normalizeAutomationExtraArgs(trimmed) === undefined) {
+    throw new Error(
+      'Extra args may not override model, agent, effort, reasoning effort, or permission mode.'
+    )
+  }
+  return trimmed
+}
 
 /** `undefined` is "unset": the run launches with the agent's configured default. */
 export function normalizeAutomationModel(value: unknown): string | undefined {
@@ -66,11 +113,13 @@ export function buildAutomationModelLaunchPreferences(
   agent: TuiAgent,
   model: unknown,
   effort?: unknown,
-  agentProfile?: unknown
+  agentProfile?: unknown,
+  extraArgs?: unknown
 ): AgentLaunchPreferences | undefined {
   const modelId = normalizeAutomationModel(model)
+  const normalizedExtraArgs = normalizeAutomationExtraArgs(extraArgs)
   if (!modelId || !getAgentSessionOptionCatalog(agent)?.modelApply.launchArgs) {
-    return undefined
+    return normalizedExtraArgs ? { extraArgs: normalizedExtraArgs } : undefined
   }
   const reasoningEffort = isAutomationReasoningEffortSupported(agent, modelId, effort)
     ? normalizeAutomationReasoningEffort(effort)
@@ -79,6 +128,7 @@ export function buildAutomationModelLaunchPreferences(
   return {
     model: modelId,
     ...(reasoningEffort ? { effort: reasoningEffort } : {}),
-    ...(profile ? { agentProfile: profile } : {})
+    ...(profile ? { agentProfile: profile } : {}),
+    ...(normalizedExtraArgs ? { extraArgs: normalizedExtraArgs } : {})
   }
 }

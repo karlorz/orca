@@ -103,6 +103,7 @@ export type Automation = {
   model?: string | null
   reasoningEffort?: AutomationReasoningEffort | null
   agentProfile?: 'minimal' | null
+  extraArgs?: string | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -196,6 +197,7 @@ export type AutomationCreateInput = {
   model?: string | null
   reasoningEffort?: AutomationReasoningEffort | null
   agentProfile?: 'minimal' | null
+  extraArgs?: string | null
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored
@@ -223,6 +225,7 @@ export type AutomationUpdateInput = Partial<
     | 'model'
     | 'reasoningEffort'
     | 'agentProfile'
+    | 'extraArgs'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'
