@@ -85,6 +85,7 @@ export function createAutomation(
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const model = normalizeAutomationModel(input.model)
   const reasoningEffort = normalizeAutomationReasoningEffort(input.reasoningEffort)
+  const agentProfile = input.agentProfile === 'minimal' ? 'minimal' : undefined
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -94,6 +95,7 @@ export function createAutomation(
     agentId: input.agentId,
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(agentProfile ? { agentProfile } : {}),
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -181,11 +183,18 @@ export function updateAutomation(
         reasoningEffort: normalizeAutomationReasoningEffort(definedUpdates.reasoningEffort) ?? null
       }
     : {}
+  const agentProfileUpdate: Pick<Automation, 'agentProfile'> = Object.hasOwn(
+    definedUpdates,
+    'agentProfile'
+  )
+    ? { agentProfile: definedUpdates.agentProfile === 'minimal' ? 'minimal' : null }
+    : {}
   const merged: Automation = {
     ...current,
     ...definedUpdates,
     ...modelUpdate,
     ...reasoningEffortUpdate,
+    ...agentProfileUpdate,
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)

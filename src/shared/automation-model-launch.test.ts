@@ -12,9 +12,10 @@ import type { TuiAgent } from './tui-agent'
 function launchCommandFor(
   agent: TuiAgent,
   model: string | undefined,
-  effort?: string
+  effort?: string,
+  agentProfile?: string
 ): string | undefined {
-  const sessionOptions = buildAutomationModelLaunchPreferences(agent, model, effort)
+  const sessionOptions = buildAutomationModelLaunchPreferences(agent, model, effort, agentProfile)
   return buildAgentStartupPlan({
     agent,
     prompt: 'Triage the alert queue',
@@ -35,6 +36,12 @@ describe('automation model launch command', () => {
   it('emits reasoning effort before the prompt terminator', () => {
     expect(launchCommandFor('grok', 'deepseek-v4-flash', 'xhigh')).toBe(
       "grok '-m' 'deepseek-v4-flash' '--reasoning-effort' 'xhigh' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+    )
+  })
+
+  it('emits the minimal Grok profile before model and effort', () => {
+    expect(launchCommandFor('grok', 'deepseek-v4-flash', 'xhigh', 'minimal')).toBe(
+      "grok '--agent' 'minimal' '-m' 'deepseek-v4-flash' '--reasoning-effort' 'xhigh' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 

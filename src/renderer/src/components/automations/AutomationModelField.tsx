@@ -69,6 +69,26 @@ export function AutomationModelField({
           <SelectItem value="xhigh">Extra high</SelectItem>
         </SelectContent>
       </Select>
+      <Select
+        value={draft.agentProfile || 'default'}
+        onValueChange={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            agentProfile: value === 'default' ? '' : 'minimal'
+          }))
+        }
+      >
+        <SelectTrigger
+          className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
+          aria-label="Agent profile"
+        >
+          <SelectValue placeholder="Agent default" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">Agent default</SelectItem>
+          <SelectItem value="minimal">Minimal</SelectItem>
+        </SelectContent>
+      </Select>
     </Field>
   )
 }

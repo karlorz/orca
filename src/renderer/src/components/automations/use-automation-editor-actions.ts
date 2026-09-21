@@ -65,6 +65,7 @@ export function useAutomationEditorActions({
       agentId: defaultAgent,
       model: '',
       reasoningEffort: '',
+      agentProfile: '',
       projectId: target.projectId,
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,

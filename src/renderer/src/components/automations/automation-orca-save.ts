@@ -163,6 +163,7 @@ export async function saveOrcaAutomation(
     // and `''` would reach the launch command as an empty model argument.
     model: draft.model.trim() || null,
     reasoningEffort: draft.reasoningEffort || null,
+    agentProfile: draft.agentProfile || null,
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,
@@ -184,6 +185,7 @@ export async function saveOrcaAutomation(
     agentId: draft.agentId,
     model: draft.model.trim() || null,
     reasoningEffort: draft.reasoningEffort || null,
+    agentProfile: draft.agentProfile || null,
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,

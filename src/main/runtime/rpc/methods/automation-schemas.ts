@@ -72,7 +72,8 @@ const AutomationModel = OptionalNullablePlainString.transform((value) =>
   value === undefined || value === null ? value : (normalizeAutomationModel(value) ?? null)
 )
 const AutomationReasoningEffort = OptionalNullablePlainString.transform((value, ctx) => {
-  if (value === undefined || value === null || value === '') return value
+  if (value === undefined || value === null) return value
+  if (value === '') return null
   const normalized = normalizeAutomationReasoningEffort(value)
   if (!normalized) {
     ctx.addIssue({
@@ -82,6 +83,15 @@ const AutomationReasoningEffort = OptionalNullablePlainString.transform((value, 
     return z.NEVER
   }
   return normalized
+})
+const AutomationAgentProfile = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null) return value
+  if (value === '') return null
+  if (value !== 'minimal') {
+    ctx.addIssue({ code: 'custom', message: 'Invalid agent profile; expected minimal' })
+    return z.NEVER
+  }
+  return 'minimal' as const
 })
 
 const TaskProviderIdentity = z
@@ -180,6 +190,7 @@ export const AutomationCreate = z.object({
   agentId: TuiAgent,
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
+  agentProfile: AutomationAgentProfile,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -203,6 +214,7 @@ const AutomationUpdateFields = z.object({
   agentId: TuiAgent.optional(),
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
+  agentProfile: AutomationAgentProfile,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

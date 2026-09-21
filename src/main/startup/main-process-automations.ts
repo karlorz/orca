@@ -26,7 +26,8 @@ export function initializeMainProcessAutomations(): AutomationService {
           const modelLaunchPreferences = buildAutomationModelLaunchPreferences(
             automation.agentId,
             automation.model,
-            automation.reasoningEffort
+            automation.reasoningEffort,
+            automation.agentProfile
           )
           let terminalHandle: string
           let terminalSessionId: string | null = null

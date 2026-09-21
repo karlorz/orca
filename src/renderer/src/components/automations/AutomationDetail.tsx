@@ -304,6 +304,7 @@ export function AutomationDetail({
           label="Reasoning effort"
           value={automation.reasoningEffort ?? 'Agent default'}
         />
+        <DetailMetric label="Agent profile" value={automation.agentProfile ?? 'Agent default'} />
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

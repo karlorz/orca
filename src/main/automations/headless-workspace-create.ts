@@ -36,7 +36,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   const modelLaunchPreferences = buildAutomationModelLaunchPreferences(
     automation.agentId,
     automation.model,
-    automation.reasoningEffort
+    automation.reasoningEffort,
+    automation.agentProfile
   )
   return {
     repoSelector: repo.id,

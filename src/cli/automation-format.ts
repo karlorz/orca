@@ -78,6 +78,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `provider: ${automation.agentId}`,
     `model: ${automation.model ?? 'agent default'}`,
     `reasoningEffort: ${automation.reasoningEffort ?? 'agent default'}`,
+    `agentProfile: ${automation.agentProfile ?? 'agent default'}`,
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,

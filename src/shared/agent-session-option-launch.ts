@@ -66,6 +66,9 @@ export function resolveAgentSessionOptionLaunch(
   const modelOverridden = catalog.modelApply.agentArgsOverride?.(trailingAgentArgs) === true
 
   if (catalog.modelApply.launchArgs) {
+    if (agent === 'grok' && values.agentProfile === 'minimal') {
+      args.push('--agent', 'minimal')
+    }
     args.push(...catalog.modelApply.launchArgs(composedModelId))
     if (!modelOverridden) {
       appliedValues.model = modelId

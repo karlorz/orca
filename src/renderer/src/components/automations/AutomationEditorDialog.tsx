@@ -42,6 +42,7 @@ export type AutomationDraft = {
    *  the user's own agent config, not from a catalog Orca ships. */
   model: string
   reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | ''
+  agentProfile?: 'minimal' | ''
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string

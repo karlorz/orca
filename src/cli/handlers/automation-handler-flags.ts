@@ -126,6 +126,18 @@ export function getReasoningEffortFlag(
   return effort
 }
 
+export function getAgentProfileFlag(
+  flags: Map<string, string | boolean>
+): 'minimal' | null | undefined {
+  if (!flags.has('agent-profile')) return undefined
+  const raw = getOptionalStringFlag(flags, 'agent-profile') ?? ''
+  if (!raw) return null
+  if (raw !== 'minimal') {
+    throw new RuntimeClientError('invalid_argument', '--agent-profile must be minimal')
+  }
+  return 'minimal'
+}
+
 function getTimeFlag(flags: Map<string, string | boolean>): { hour: number; minute: number } {
   const value = flags.get('time')
   if (value === undefined) {

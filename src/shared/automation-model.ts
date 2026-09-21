@@ -39,12 +39,18 @@ export function normalizeAutomationReasoningEffort(
 export function buildAutomationModelLaunchPreferences(
   agent: TuiAgent,
   model: unknown,
-  effort?: unknown
+  effort?: unknown,
+  agentProfile?: unknown
 ): AgentLaunchPreferences | undefined {
   const modelId = normalizeAutomationModel(model)
   if (!modelId || !getAgentSessionOptionCatalog(agent)?.modelApply.launchArgs) {
     return undefined
   }
   const reasoningEffort = normalizeAutomationReasoningEffort(effort)
-  return { model: modelId, ...(reasoningEffort ? { effort: reasoningEffort } : {}) }
+  const profile = agent === 'grok' && agentProfile === 'minimal' ? 'minimal' : undefined
+  return {
+    model: modelId,
+    ...(reasoningEffort ? { effort: reasoningEffort } : {}),
+    ...(profile ? { agentProfile: profile } : {})
+  }
 }

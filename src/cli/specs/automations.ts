@@ -20,7 +20,7 @@ const AUTOMATION_STATE_FLAGS = [
   'reuse-session',
   'fresh-session'
 ]
-const AUTOMATION_MODEL_FLAGS = ['model', 'reasoning-effort']
+const AUTOMATION_MODEL_FLAGS = ['model', 'reasoning-effort', 'agent-profile']
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {

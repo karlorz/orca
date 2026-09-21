@@ -38,6 +38,7 @@ import {
 } from '../worktree-project-target'
 import {
   getEnabledFlag,
+  getAgentProfileFlag,
   getModelFlag,
   getReasoningEffortFlag,
   getOptionalProviderFlag,
@@ -188,6 +189,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       agentId: getProviderFlag(flags),
       model: getModelFlag(flags),
       reasoningEffort: getReasoningEffortFlag(flags),
+      agentProfile: getAgentProfileFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -220,6 +222,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       agentId: getOptionalProviderFlag(flags),
       model: getModelFlag(flags),
       reasoningEffort: getReasoningEffortFlag(flags),
+      agentProfile: getAgentProfileFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
