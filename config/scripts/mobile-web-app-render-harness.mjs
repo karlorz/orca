@@ -44,17 +44,51 @@ export async function readShellCsp() {
 }
 
 /**
+ * The other headers the shell puts on the document, read from the Kotlin source for the same reason
+ * the policy is. String literals only, so the policy itself -- assigned from a constant -- stays
+ * `readShellCsp`'s job and is not reported twice.
+ *
+ * Throws on an empty result rather than returning one: a rig that served no header would otherwise
+ * measure the browser's own default and call it the shell's guarantee.
+ */
+export async function readShellDocumentHeaders() {
+  const source = await readFile(
+    join(
+      projectDir,
+      'mobile/modules/orca-mobile-web-shell/android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellResponseHeaders.kt'
+    ),
+    'utf8'
+  )
+  const start = source.indexOf('if (path == "/")')
+  const end = source.indexOf('return headers', start)
+  if (start === -1 || end < start) {
+    throw new Error('could not find the shell document-header branch')
+  }
+  const headers = {}
+  for (const match of source.slice(start, end).matchAll(/headers\["([^"]+)"\] = "([^"]+)"/g)) {
+    headers[match[1]] = match[2]
+  }
+  if (Object.keys(headers).length === 0) {
+    throw new Error('could not parse the shell document headers')
+  }
+  return headers
+}
+
+/**
  * The envelope version the page speaks, read from the contract rather than written down twice. A
  * bumped `v` would otherwise reach a test as a 30s timeout naming nothing.
  */
 export async function readBridgeProtocolVersion() {
+  // The module that declares it, which is the one both halves of the envelope import: the envelope
+  // re-exports the name, so a reader keyed on the re-export would answer for whichever file the
+  // last split left it in.
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
   if (!match) {
-    throw new Error('could not read BRIDGE_PROTOCOL_VERSION')
+    throw new Error('could not read BRIDGE_PROTOCOL_VERSION from bridge-frame-fields.ts')
   }
   return Number(match[1])
 }
@@ -132,12 +166,12 @@ export async function readBrowserFrameQuality() {
 /** The grant the shell offers every page, read from the same source for the same reason. */
 export async function readBridgeFaultGrant() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-envelope.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
   if (!match) {
-    throw new Error('could not read BRIDGE_FAULT_GRANT')
+    throw new Error('could not read BRIDGE_FAULT_GRANT from bridge-frame-fields.ts')
   }
   return match[1]
 }
@@ -170,6 +204,7 @@ export function installShellDouble({
   faultGrant,
   grants,
   pageRoutes = null,
+  pageRouteGrants = null,
   replies,
   streams = [],
   windowCaps = null
@@ -224,6 +259,9 @@ export function installShellDouble({
             native: grants ?? [faultGrant]
           },
           ...(pageRoutes === null ? {} : { pageRoutes }),
+          // Omitted when the caller names none, which is the older-shell case the page falls back
+          // on: an absent field is not an empty one, and the page reads the difference.
+          ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
           // Omitted for a shell too old to name one, which is the case the page has a panel for.
           ...(route === null ? {} : { route }),
           ...(host === null ? {} : { host }),
@@ -344,10 +382,23 @@ export function installShellDouble({
  * The page server the render checks run against: the built bundle, under the shell's own policy.
  *
  * `transformChunk` is how a check poisons one route chunk without building a second bundle.
+ * `cspHeader` may be a function of the request, and `handleRequest` lets a check answer a path of
+ * its own on this origin.
  */
-export async function createBundleServer({ outDir, cspHeader, transformChunk }) {
+export async function createBundleServer({
+  outDir,
+  cspHeader,
+  documentHeaders,
+  transformChunk,
+  handleRequest
+}) {
   const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname
+    // An endpoint of the check's own, answered before anything is looked for on disk: a policy's
+    // `report-uri` has to name a real server, and naming this one keeps it on the page's origin.
+    if (handleRequest?.(request, response, path)) {
+      return
+    }
     // A browser asks for this on its own and the shell's WebView never does. The bundle carries
     // no icon, so a 404 would put a console error in every check that runs against a full Chrome
     // -- which is what CI resolves -- and none against the bundled headless shell.
@@ -370,7 +421,15 @@ export async function createBundleServer({ outDir, cspHeader, transformChunk }) 
         // The document carries the shell's real policy, so a directive the page violates fails
         // here rather than on a phone. Assets carry none, exactly as the native handler does.
         if (file === 'index.html' && cspHeader) {
-          headers['content-security-policy'] = cspHeader
+          // A function when the policy is per-document: the preview rig appends this document's own
+          // report endpoint, which carries the arm's nonce.
+          headers['content-security-policy'] =
+            typeof cspHeader === 'function' ? cspHeader(request) : cspHeader
+        }
+        // Whatever else the shell puts on the document, on the document only, exactly as the native
+        // handler does.
+        if (file === 'index.html' && documentHeaders) {
+          Object.assign(headers, documentHeaders)
         }
         response.writeHead(200, headers)
         response.end(bytes)
@@ -383,4 +442,174 @@ export async function createBundleServer({ outDir, cspHeader, transformChunk }) 
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   return { server, origin: `http://127.0.0.1:${String(server.address().port)}` }
+}
+
+/**
+ * A handler of the page's own, installed before the bundle so the terminal meets a `window.onerror`
+ * that belongs to someone else.
+ *
+ * Reading `null` three times would pass on a terminal that assigned `null` over a real handler,
+ * which is the failure this seam exists to prevent. The sentinel is identity-checked in the page
+ * rather than marshalled out of it — a function does not survive `evaluate` — and it returns
+ * false so the browser still reports the error normally.
+ */
+export function installPageErrorSentinel() {
+  globalThis.__orcaSentinelCalls = []
+  const sentinel = (message) => {
+    globalThis.__orcaSentinelCalls.push(String(message))
+    return false
+  }
+  globalThis.__orcaSentinel = sentinel
+  window.onerror = sentinel
+}
+
+/**
+ * Every animation frame and timer, tagged with the mount that scheduled it.
+ *
+ * Installed before the bundle loads, so the document's own scheduling goes through it. Each
+ * schedule remembers the `#terminal-container` that was on the page at the time; a callback that
+ * runs once that element has left the document is a frame or timer of the first mount firing
+ * into the second, which is the whole finding. The element rather than a counter the test bumps,
+ * because React unmounts on its own schedule and a callback that runs while the first terminal is
+ * still up is not a leak. Every schedule is kept, not just the ones still owed, so the test can
+ * say that there was something to leak before it says that nothing did.
+ */
+export function installSchedulerRecorder() {
+  globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [] }
+  const state = globalThis.__orcaScheduler
+  const wrap = (schedule, kind) =>
+    function (callback, ...rest) {
+      if (!state.watching || typeof callback !== 'function') {
+        return schedule(callback, ...rest)
+      }
+      // The line that called this, which is the script the work belongs to. Line 0 is the error's
+      // own header and line 1 is this wrapper.
+      const caller = ((new Error('scheduled').stack ?? '').split('\n')[2] ?? '').trim()
+      const container = document.getElementById('terminal-container')
+      // `fired` is what makes "owed" readable: a callback that has not run is still owed, whether
+      // it was cancelled or is merely waiting, and cancelling never sets it.
+      const entry = { kind, caller, owned: container !== null, fired: false }
+      state.scheduled.push(entry)
+      return schedule(
+        (...args) => {
+          entry.fired = true
+          if (container !== null && !container.isConnected) {
+            state.leaked.push(`${kind} from ${caller}`)
+          }
+          return callback(...args)
+        },
+        ...rest
+      )
+    }
+  globalThis.requestAnimationFrame = wrap(
+    globalThis.requestAnimationFrame.bind(globalThis),
+    'frame'
+  )
+  globalThis.setTimeout = wrap(globalThis.setTimeout.bind(globalThis), 'timer')
+  globalThis.setInterval = wrap(globalThis.setInterval.bind(globalThis), 'interval')
+}
+
+/** Recorded before anything else runs, so a refusal during the page's own boot is counted. */
+/**
+ * Every window and document listener the page holds, by target, type and phase.
+ *
+ * Identity, not a tally: `addEventListener` with a listener the target already holds is a no-op in
+ * the DOM, and `removeEventListener` with one it does not hold is too, so counting calls would
+ * report leaks a browser does not have. The set is the live listeners, which is what a snapshot
+ * before and after a mount can be compared on.
+ */
+export function installListenerRecorder() {
+  const live = new Map()
+  globalThis.__orcaListeners = {
+    snapshot: () =>
+      Object.fromEntries(
+        [...live.entries()]
+          .map(([key, listeners]) => [key, listeners.size])
+          .filter(([, n]) => n > 0)
+      )
+  }
+  const keyFor = (target, type, options) => {
+    const where = target === globalThis ? 'window' : target === document ? 'document' : null
+    if (where === null) {
+      return null
+    }
+    const capture = typeof options === 'object' && options !== null ? !!options.capture : !!options
+    return `${where} ${type}${capture ? ' capture' : ''}`
+  }
+  const add = EventTarget.prototype.addEventListener
+  const remove = EventTarget.prototype.removeEventListener
+  EventTarget.prototype.addEventListener = function (type, listener, options) {
+    const key = keyFor(this, type, options)
+    if (key !== null && listener) {
+      if (!live.has(key)) {
+        live.set(key, new Set())
+      }
+      live.get(key).add(listener)
+    }
+    return add.call(this, type, listener, options)
+  }
+  EventTarget.prototype.removeEventListener = function (type, listener, options) {
+    const key = keyFor(this, type, options)
+    if (key !== null && listener) {
+      live.get(key)?.delete(listener)
+    }
+    return remove.call(this, type, listener, options)
+  }
+}
+
+export function installCspViolationRecorder() {
+  globalThis.__orcaCspViolations = []
+  document.addEventListener('securitypolicyviolation', (event) => {
+    globalThis.__orcaCspViolations.push(
+      `${event.violatedDirective}: ${event.blockedURI || 'inline'} @ ${event.sourceFile ?? '?'}:${String(event.lineNumber ?? 0)}`
+    )
+  })
+}
+
+/**
+ * Every computed property of `html` and `body`, as one string each.
+ *
+ * The oracle for "the page mount styles only what it owns" is a page of the same application with
+ * no terminal on it, so the comparison is against another page rather than against a list of
+ * properties someone chose. A rule that escaped the host would have to move one of these.
+ */
+export async function readRootComputedStyles(page) {
+  return await page.evaluate(() => {
+    const read = (element) => {
+      const computed = getComputedStyle(element)
+      const entries = []
+      for (const property of computed) {
+        entries.push(`${property}: ${computed.getPropertyValue(property)}`)
+      }
+      return entries.join('\n')
+    }
+    return { body: read(document.body), html: read(document.documentElement) }
+  })
+}
+
+/**
+ * What the terminal's injected sheet matches, and how much of it there is.
+ *
+ * The rule count is the precondition for the empty list: a sheet that was never planted, or one
+ * the browser refused, would match nothing for a reason that has nothing to do with scoping.
+ */
+export async function terminalStyleReach(page) {
+  return await page.evaluate(() => {
+    const sheet = [...document.styleSheets].find(
+      (one) => one.ownerNode?.id === 'orca-terminal-document-style'
+    )
+    if (!sheet) {
+      return { rules: 0, outside: ['the terminal stylesheet is not in the head'] }
+    }
+    const host = document.querySelector('.orca-terminal-document-host')
+    const outside = []
+    for (const rule of sheet.cssRules) {
+      for (const element of document.querySelectorAll(rule.selectorText)) {
+        if (!host || !host.contains(element)) {
+          outside.push(`${rule.selectorText} matched ${element.tagName}`)
+        }
+      }
+    }
+    return { rules: sheet.cssRules.length, outside }
+  })
 }

@@ -55,6 +55,19 @@ type CachedOrcaCloudSession = {
 }
 
 const memorySessions = new Map<string, CachedOrcaCloudSession>()
+export const MAX_MEMORY_CLOUD_SESSIONS = 64
+
+function rememberMemorySession(key: string, session: CachedOrcaCloudSession): void {
+  memorySessions.delete(key)
+  memorySessions.set(key, session)
+  while (memorySessions.size > MAX_MEMORY_CLOUD_SESSIONS) {
+    const oldest = memorySessions.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    memorySessions.delete(oldest.value)
+  }
+}
 
 function sessionCacheKey(profileId: string, userDataPath: string): string {
   return `${userDataPath}\0${profileId}`
@@ -119,7 +132,7 @@ export function saveOrcaCloudSession(
       ciphertext: safeStorage.encryptString(JSON.stringify(session)).toString('base64')
     }
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
-    memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+    rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
     return 'encrypted'
   }
 
@@ -131,7 +144,7 @@ export function saveOrcaCloudSession(
       session
     }
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
-    memorySessions.set(cacheKey, { session, persistence: 'dev-plaintext' })
+    rememberMemorySession(cacheKey, { session, persistence: 'dev-plaintext' })
     return 'dev-plaintext'
   }
 
@@ -143,7 +156,7 @@ export function saveOrcaCloudSession(
 
   // Why: Orca account refresh tokens must not silently fall back to plaintext
   // in production. Memory-only keeps cloud features usable until restart.
-  memorySessions.set(cacheKey, { session, persistence: 'memory-only' })
+  rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
   return 'memory-only'
 }
 
@@ -183,6 +196,8 @@ export function readOrcaCloudSession(
   const cacheKey = sessionCacheKey(profileId, userDataPath)
   const memorySession = memorySessions.get(cacheKey)
   if (memorySession) {
+    memorySessions.delete(cacheKey)
+    memorySessions.set(cacheKey, memorySession)
     return {
       status: 'found',
       session: memorySession.session,
@@ -215,14 +230,14 @@ export function readOrcaCloudSession(
       if (!isOrcaCloudSession(session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
-      memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+      rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
       return { status: 'found', session, persistence: 'encrypted' }
     }
     if (parsed.format === 'dev-plaintext-v1' && allowsPlaintextOrcaCloudSession()) {
       if (!isOrcaCloudSession(parsed.session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
-      memorySessions.set(cacheKey, { session: parsed.session, persistence: 'dev-plaintext' })
+      rememberMemorySession(cacheKey, { session: parsed.session, persistence: 'dev-plaintext' })
       return { status: 'found', session: parsed.session, persistence: 'dev-plaintext' }
     }
     return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
@@ -245,4 +260,8 @@ export function readOrcaCloudSession(
 export function clearOrcaCloudSession(profileId: string, userDataPath: string): void {
   memorySessions.delete(sessionCacheKey(profileId, userDataPath))
   rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+}
+
+export function getOrcaCloudMemorySessionCountForTests(): number {
+  return memorySessions.size
 }

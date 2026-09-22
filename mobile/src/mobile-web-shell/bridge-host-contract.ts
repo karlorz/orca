@@ -2,9 +2,12 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
+import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
+import type { PageStorageForInit } from './page-storage-keys'
 
 /**
  * What the shell did with a `navigate-back`. Only `popped` moved the stack, and the other two are
@@ -41,6 +44,10 @@ export type BridgeHostDiagnostic =
   /** The shell asked this host to open a screen the protocol does not allow. The host serves no
    *  session at all in that state: an `init` the page refuses is worse than no `init`. */
   | { kind: 'route-refused'; issue: string }
+  /** A rewritten route this host would not hand its page: a different screen, or a shape the
+   *  page's own reader would refuse. Local only — nothing crosses, and the tap it came from is
+   *  then the lost repeat tap it was before ruling 33.1. */
+  | { kind: 'route-update-refused'; issue: string }
   /** A page subscribed with `wantsBinary` on a session whose route was never granted the lane.
    *  Local only: the subscription proceeds and its JSON events cross, so nothing crosses back and
    *  this line is the only thing that can say why the frames never became binary. */
@@ -84,6 +91,14 @@ export type BridgeHostOptions = {
   /** Every route pattern the shell would render from the page, so the page knows what to keep. */
   pageRoutes: readonly string[]
   /**
+   * What each of those patterns declared, from the manifest this shell already holds.
+   *
+   * The page decides an in-page hop with it: a push is kept local only when the target's grants are
+   * covered by this session's. Optional, because a shell with no manifest entry for a pattern has
+   * nothing to say about it and the page then keeps its old rule.
+   */
+  pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
+  /**
    * What the route this session was opened for declared, narrowed to what this shell implements.
    *
    * This is the session's whole capability, not the app's: `init` grants exactly these plus the
@@ -107,7 +122,7 @@ export type BridgeHostOptions = {
    * mount: a document that reloads inside one mount has to be primed from after its own writes.
    * Synchronous, because `init` is — see `sendInit`.
    */
-  readStorage: () => Readonly<Record<string, string>>
+  readStorage: () => PageStorageForInit
   /** One allowlisted key written, or removed when the value is null. */
   onStorageWrite: (key: string, value: string | null) => void
   /**
@@ -135,6 +150,16 @@ export type BridgeHostOptions = {
    */
   onExternalLink: (url: string) => void
   /**
+   * Plays one haptic on this device. Required for the reason `onExternalLink` is: the `haptics`
+   * grant is issued on the strength of this existing.
+   *
+   * Injected rather than called here, as every other device-local notify is: a static import of the
+   * app's haptics would put `react-native` and `expo-haptics` in this module's graph, and the host
+   * is the protocol's half of the bridge on either. It must not throw — this runs on the native
+   * frame handler — and it owes the page nothing, which is why a notify rather than a verb.
+   */
+  onHaptic: (kind: BridgeHapticsKind) => void
+  /**
    * Pops the native stack this page was pushed onto. Required for the reason `onNavigate` is: the
    * `navigate` grant carries this verb too, and a page told it may hand its Back button over and
    * then handed it into nothing is the dead tap the grant exists to rule out.
@@ -155,6 +180,12 @@ export type BridgeHostOptions = {
    * would leave a document that never spoke looking exactly like one still starting up.
    */
   onPageReady: () => void
+  /**
+   * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
+   * the value it applied. The holder of that param compares before it clears: a tap that has moved
+   * on since leaves a newer value here, and a clear naming the older one is not for it.
+   */
+  onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /**
    * The route this shell was built with is not one the protocol allows, so no honest `init` can be
    * sent and the page will never mount. Loud on purpose: the page's own refusal is a `console.warn`

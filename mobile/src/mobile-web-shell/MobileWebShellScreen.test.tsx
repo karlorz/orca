@@ -23,7 +23,13 @@ type ScreenDependencies = {
   lifecycle: string[]
   /** Every render of the shell view, which is one per render of the screen above it. */
   viewRenders: number
+  /** Every frame the shell posted to the page, raw. */
+  posted: string[]
+  /** Whether the view refuses what it is handed, which is a page the post never reached. */
+  postFails: boolean
   state: MobileWebShellSessionState
+  /** What the session reducer says about the page's handshake; true only for the fence's case. */
+  pageReady: boolean
   /** Null for every case but the bridge's: with no client the hook builds no host at all. */
   client: FakeRpcClient | null
 }
@@ -59,7 +65,10 @@ const dependencies = vi.hoisted((): ScreenDependencies => {
     routeGrants: DEFAULT_ROUTE_GRANTS,
     lifecycle: [],
     viewRenders: 0,
+    posted: [],
+    postFails: false,
     state: { kind: 'checking' },
+    pageReady: false,
     client: null
   }
 })
@@ -79,7 +88,29 @@ vi.mock('expo-clipboard', () => ({
   setStringAsync: () => Promise.resolve(true),
   getStringAsync: () => Promise.resolve('')
 }))
+// Same reason, and the screen only hands `playPageHaptic` over: which expo member each kind
+// reaches is `page-haptics.test.ts`. `Platform.OS` above is pinned to `ios`, so the Android
+// members are never evaluated and are not listed.
+vi.mock('expo-haptics', () => ({
+  impactAsync: () => Promise.resolve(),
+  notificationAsync: () => Promise.resolve(),
+  selectionAsync: () => Promise.resolve(),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+  NotificationFeedbackType: { Error: 'error', Success: 'success' }
+}))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: () => Promise.resolve(null) }))
+vi.mock('@orca/expo-two-way-audio', () => ({
+  addExpoTwoWayAudioEventListener: () => ({ remove: () => {} }),
+  initialize: () => Promise.resolve(true),
+  requestMicrophonePermissionsAsync: () =>
+    Promise.resolve({ granted: true, canAskAgain: true, status: 'granted', expires: 'never' }),
+  tearDown: () => {},
+  toggleRecording: () => true
+}))
+vi.mock('expo-keep-awake', () => ({
+  activateKeepAwakeAsync: () => Promise.resolve(),
+  deactivateKeepAwake: () => Promise.resolve()
+}))
 vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
   requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
@@ -110,7 +141,10 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
   const React = await import('react')
   const loadState = await import('../../modules/orca-mobile-web-shell/src/load-state')
   return {
-    OrcaMobileWebShellView: (props: { sessionId: string }) => {
+    OrcaMobileWebShellView: (props: {
+      sessionId: string
+      ref?: (handle: { postBridgeMessage: (json: string) => Promise<void> } | null) => void
+    }) => {
       dependencies.viewRenders += 1
       React.useEffect(() => {
         dependencies.lifecycle.push(`mount:${props.sessionId}`)
@@ -118,6 +152,22 @@ vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
           dependencies.lifecycle.push(`unmount:${props.sessionId}`)
         }
       }, [props.sessionId])
+      // The handle the real view exposes, which nothing here used to attach: without it every
+      // post rejected as a view that is gone, so no case could see a frame reach the page.
+      const attach = props.ref
+      React.useLayoutEffect(() => {
+        attach?.({
+          postBridgeMessage: (json: string) => {
+            dependencies.posted.push(json)
+            return dependencies.postFails
+              ? Promise.reject(new Error('the view would not take it'))
+              : Promise.resolve()
+          }
+        })
+        return () => {
+          attach?.(null)
+        }
+      }, [attach])
       return React.createElement('ShellViewProbe', props)
     },
     parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
@@ -137,7 +187,7 @@ vi.mock('./use-page-host-snapshot', () => ({
     // down and rebuilt on every render of this screen — and every pending request settled with it.
     snapshot: SNAPSHOT,
     unreadable: dependencies.snapshotUnreadable,
-    readStorage: () => ({}),
+    readStorage: () => ({ storage: {}, storageOversize: [] }),
     refreshStorage: () => {
       dependencies.storageRefreshes += 1
     },
@@ -152,12 +202,18 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     retry: dependencies.retry,
     reportShellFailure: dependencies.reportShellFailure,
     reportDocumentLoaded: dependencies.reportDocumentLoaded,
-    reportPageReady: dependencies.reportPageReady
+    reportPageReady: dependencies.reportPageReady,
+    pageReady: dependencies.pageReady
   })
 }))
 
-import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { BRIDGE_FAULT_GRANT, BRIDGE_NAVIGATE_BACK_NOTIFY } from './bridge/bridge-envelope'
+import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import {
+  BRIDGE_FAULT_GRANT,
+  BRIDGE_NAVIGATE_BACK_NOTIFY,
+  readBridgeHostMessage
+} from './bridge/bridge-envelope'
+import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge/bridge-route-update'
 import { MobileWebShellScreen } from './MobileWebShellScreen'
 
 /** The caller's native screen, as a component so `findAllByType` can name it without a host string. */
@@ -251,7 +307,10 @@ beforeEach(() => {
   dependencies.storageRefreshes = 0
   dependencies.lifecycle.length = 0
   dependencies.viewRenders = 0
+  dependencies.posted.length = 0
+  dependencies.postFails = false
   dependencies.client = null
+  dependencies.pageReady = false
   dependencies.routeGrants = DEFAULT_ROUTE_GRANTS
   dependencies.back.mockReset()
   dependencies.openUrl.mockReset()
@@ -412,6 +471,103 @@ describe('the hybrid shell screen', () => {
     expect(dependencies.storageRefreshes).toBe(2)
   })
 
+  /**
+   * One screen whose route this case moves, and every frame that went out for it.
+   *
+   * The shell tracks nothing about delivery (ruling 34): what a case can see here is what reached
+   * the wire, and the request a frame carried is spent by the page, not by this screen.
+   */
+  async function renderForRoute(params: Record<string, string>): Promise<{
+    tree: ReactTestRenderer
+    initRoutes: () => (Record<string, string> | undefined)[]
+    move: (next: Record<string, string>) => Promise<void>
+    ready: (accepts?: readonly string[]) => Promise<void>
+  }> {
+    const element = (next: Record<string, string>) =>
+      createElement(MobileWebShellScreen, {
+        hostId: 'host-1',
+        route: { pathname: '/h/host-1', params: next },
+        fallback: createElement(NativeFallback)
+      })
+    dependencies.state = readyState('session-one')
+    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+    await act(async () => {
+      rendered.tree = create(element(params))
+    })
+    const tree = rendered.tree
+    if (tree === null) {
+      throw new Error('screen did not render')
+    }
+    mounted.push(tree)
+    return {
+      tree,
+      // Read with the page's own reader rather than parsed loose: a frame this refuses is one the
+      // page would have refused too, and a case counting inits must not count one of those.
+      initRoutes: () =>
+        dependencies.posted
+          .map((json) => readBridgeHostMessage(json))
+          .flatMap((read) => (read.ok && read.message.type === 'init' ? [read.message] : []))
+          .map((frame) => frame.route?.params),
+      move: async (next) => {
+        await act(async () => {
+          tree.update(element(next))
+        })
+      },
+      ready: async (accepts = [BRIDGE_ROUTE_UPDATE_ACCEPT]) => {
+        await act(async () => {
+          byName(tree, 'ShellViewProbe')[0]?.props.onBridgeMessage({
+            nativeEvent: { json: clientFrame({ type: 'ready', accepts }) }
+          })
+        })
+      }
+    }
+  }
+
+  /**
+   * A route that moved under a screen that stayed mounted (ruling 33.1, as ruling 34 leaves it).
+   *
+   * One frame per move and none for a render that moved nothing. Whether it arrived is not asked
+   * here and is not asked anywhere: the page's next `ready` is answered with the route the shell
+   * holds then, which is the whole repair path.
+   */
+  it('posts one init for a route that moved, and none for a render that moved nothing', async () => {
+    dependencies.client = createFakeRpcClient()
+    const page = await renderForRoute({ paneKey: '' })
+    await page.ready()
+    expect(page.initRoutes()).toEqual([{ paneKey: '' }])
+    await page.move({ paneKey: 'pane-1' })
+    expect(page.initRoutes()).toEqual([{ paneKey: '' }, { paneKey: 'pane-1' }])
+    await page.move({ paneKey: 'pane-1' })
+    expect(page.initRoutes()).toHaveLength(2)
+  })
+
+  it('answers every ask with the route it holds then, which is how a lost frame is repaired', async () => {
+    dependencies.client = createFakeRpcClient()
+    dependencies.postFails = true
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const page = await renderForRoute({ paneKey: '' })
+    await page.ready()
+    await page.move({ paneKey: 'pane-1' })
+    // Both frames were refused by the view, and nothing here is holding either of them.
+    expect(dependencies.posted).toHaveLength(2)
+    dependencies.postFails = false
+    await page.ready()
+    expect(page.initRoutes().at(-1)).toEqual({ paneKey: 'pane-1' })
+    warned.mockRestore()
+  })
+
+  it('sends no second init to a page that never said it takes one', async () => {
+    dependencies.client = createFakeRpcClient()
+    const page = await renderForRoute({ paneKey: '' })
+    // A page built before route updates existed declares nothing, and reads a second `init` as a
+    // replacement: the route still moves, so its next `ready` is answered with the new one.
+    await page.ready([])
+    await page.move({ paneKey: 'pane-1' })
+    expect(page.initRoutes()).toEqual([{ paneKey: '' }])
+    await page.ready([])
+    expect(page.initRoutes()).toEqual([{ paneKey: '' }, { paneKey: 'pane-1' }])
+  })
+
   it('ends that wait on the page asking for a session', async () => {
     dependencies.client = createFakeRpcClient()
     const tree = await render(readyState('session-one'))
@@ -421,6 +577,28 @@ describe('the hybrid shell screen', () => {
       })
     })
     expect(dependencies.reportPageReady).toHaveBeenCalled()
+  })
+
+  /**
+   * The host is rebuilt when the client under it changes, and the page is never told: the session
+   * id does not move, so it neither handshakes again nor hears that the shell was replaced. The
+   * screen hands over what its reducer already knows about the session rather than the bridge
+   * remembering it for the life of one mount.
+   */
+  it('serves a page whose session handshook before this host was built', async () => {
+    const client = createFakeRpcClient()
+    dependencies.client = client
+    dependencies.pageReady = true
+    const tree = await render(readyState('session-one'))
+    // No `ready` first, which is exactly what a page that was never told cannot send.
+    await act(async () => {
+      byName(tree, 'ShellViewProbe')[0].props.onBridgeMessage({
+        nativeEvent: {
+          json: clientFrame({ type: 'request', id: bridgeId(1), method: 'status.get' })
+        }
+      })
+    })
+    expect(client.requests.map((request) => request.method)).toEqual(['status.get'])
   })
 
   it('fails the session on a page fault, so a blank page becomes the failure screen', async () => {

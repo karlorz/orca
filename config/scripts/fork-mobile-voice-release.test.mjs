@@ -171,7 +171,7 @@ describe('fork voice electron-builder config gate', () => {
         provider: 'github',
         owner: 'stablyai',
         repo: 'orca',
-        releaseType: 'release'
+        releaseType: 'draft'
       })
       expect(config.mac.identity).toBeUndefined()
       expect(config.mac.hardenedRuntime).toBe(false)
@@ -437,6 +437,8 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(patch).toContain("['ElementRef', 'ComponentRef']")
     expect(patch).toContain('React.ComponentRef<>')
     const lockfile = readFileSync(join(projectDir, 'mobile/pnpm-lock.yaml'), 'utf8')
-    expect(lockfile).toMatch(/'@react-native\/codegen@0\.83\.10': [0-9a-f]{64}/)
+    expect(lockfile).toMatch(
+      /'@react-native\/codegen@0\.83\.10':\n    hash: [0-9a-f]{64}\n    path: patches\/@react-native__codegen@0\.83\.10\.patch/
+    )
   })
 })

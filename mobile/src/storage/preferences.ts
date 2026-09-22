@@ -4,7 +4,8 @@ import {
   USAGE_PROVIDER_IDS,
   type UsageProviderKey
 } from '../components/account-usage-state'
-import { noteMirroredWrite } from './mirrored-storage-keys'
+import { persistMirrored } from './mirrored-storage-keys'
+import { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 
 const PINS_PREFIX = 'orca:pins:'
 // Consent to the push service is separate from the old socket notification choice.
@@ -76,14 +77,9 @@ export async function saveRemotePushHostRegistrations(
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
-// Why: the mobile terminal fits the desktop's full column count to the phone
-// width with a CSS scale, so xterm's raw fontSize is cancelled out and can't
-// drive apparent size. Instead we persist a baseline zoom multiplier ("text
-// size") that the WebView applies on top of the fit. Discrete presets keep the
-// settings picker simple and bound the value to ones the zoom logic handles;
-// pinch-to-zoom in the terminal snaps to these same presets. Sub-1 steps shrink
-// below fit-to-width (more columns visible with side margins).
-export const TERMINAL_TEXT_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+// Declared beside the terminal that applies them, because the document is bundled for the WebView
+// and must not reach this module's storage import; re-exported here for the settings screen.
+export { TERMINAL_TEXT_SCALES } from '../terminal/terminal-text-scales'
 const DEFAULT_TEXT_SCALE = 1
 
 export async function loadTerminalTextScale(): Promise<number> {
@@ -102,7 +98,10 @@ export async function loadTerminalTextScale(): Promise<number> {
 }
 
 export async function saveTerminalTextScale(scale: number): Promise<void> {
-  await AsyncStorage.setItem(TEXT_SCALE_KEY, String(scale))
+  const value = String(scale)
+  // Through the one write path: the hybrid shell hands this key to the page on every `init`,
+  // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
+  await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
 const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
@@ -120,7 +119,8 @@ export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
 }
 
 export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
-  await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
+  const value = String(enabled)
+  await persistMirrored(AUTOCOMPLETE_KEY, value)
 }
 
 const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
@@ -128,11 +128,23 @@ const MOBILE_WEB_SHELL_KEY = 'orca:mobileWebShellEnabled'
 // Why: the hybrid shell route is dark. Default-off means a store build never fetches, writes or
 // sweeps a bundle cache, and the only writer is the __DEV__ Troubleshoot toggle — anything but
 // `'true'`, including an unreadable store, is off.
+/**
+ * Whether this build can have the flag on at all.
+ *
+ * A release build never reads the key: it shares its bundle id with the development build and the
+ * iOS data container survives an install-over, so a flag a developer left on would otherwise
+ * follow the store build in and mount the shell on a deep link.
+ *
+ * Named rather than spelled twice. The hook beside the reader starts its state on this answer so
+ * a store build is decided on its first render rather than after an effect, and two spellings of
+ * one `__DEV__` test would be two things to keep true.
+ */
+export function mobileWebShellFlagCanBeOn(): boolean {
+  return typeof __DEV__ !== 'undefined' && __DEV__
+}
+
 export async function loadMobileWebShellEnabled(): Promise<boolean> {
-  // A release build never reads the key at all: it shares its bundle id with the development build
-  // and the iOS data container survives an install-over, so a flag a developer left on would
-  // otherwise follow the store build in and mount the shell on a deep link.
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+  if (!mobileWebShellFlagCanBeOn()) {
     return false
   }
   try {
@@ -155,9 +167,9 @@ export type DisabledTerminalLiveInputHandlesPreference = {
 }
 
 function terminalLiveInputDisabledKey(hostId: string, worktreeId: string): string {
-  return `${TERMINAL_LIVE_INPUT_DISABLED_PREFIX}${encodeURIComponent(
-    hostId
-  )}:${encodeURIComponent(worktreeId)}`
+  return `${TERMINAL_LIVE_INPUT_DISABLED_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(
+    worktreeId
+  )}`
 }
 
 export async function readDisabledTerminalLiveInputHandlesPreference(
@@ -188,10 +200,9 @@ export async function saveDisabledTerminalLiveInputHandles(
   worktreeId: string,
   handles: ReadonlySet<string>
 ): Promise<void> {
-  await AsyncStorage.setItem(
-    terminalLiveInputDisabledKey(hostId, worktreeId),
-    JSON.stringify([...handles])
-  )
+  const key = terminalLiveInputDisabledKey(hostId, worktreeId)
+  const value = JSON.stringify([...handles])
+  await persistMirrored(key, value)
 }
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
@@ -223,7 +234,8 @@ export async function loadHostSidebarWidth(): Promise<number> {
 }
 
 export async function saveHostSidebarWidth(width: number): Promise<void> {
-  await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
+  const value = String(clampHostSidebarWidth(width))
+  await persistMirrored(SIDEBAR_WIDTH_KEY, value)
 }
 
 const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
@@ -257,7 +269,8 @@ export async function loadHostDockWidth(): Promise<number> {
 }
 
 export async function saveHostDockWidth(width: number): Promise<void> {
-  await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
+  const value = String(clampHostDockWidth(width))
+  await persistMirrored(DOCK_WIDTH_KEY, value)
 }
 
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
@@ -275,7 +288,7 @@ export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpen
 }
 
 export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  await AsyncStorage.setItem(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+  await persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
 }
 
 function stringArray(value: unknown): string[] {
@@ -299,27 +312,15 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   const key = PINS_PREFIX + hostId
   const value = JSON.stringify([...ids])
-  // Noted before it is persisted: the hybrid shell hands this key to the page on every `init`,
-  // built synchronously, so a write that only reached the store would be one `init` behind.
-  noteMirroredWrite(key, value)
-  await AsyncStorage.setItem(key, value)
+  await persistMirrored(key, value)
 }
 
 const VISIBLE_USAGE_PROVIDERS_KEY = 'orca:visibleUsageProviders'
 
-// Why: intersect stored ids with the known descriptor ids so a removed,
-// misspelled, or future id can't linger in the set or silently re-enable a
-// provider after an id is reused. An explicit empty set is a valid "show none".
 function knownVisibleUsageProviders(ids: string[]): UsageProviderKey[] {
   return USAGE_PROVIDER_IDS.filter((id) => ids.includes(id))
 }
 
-// Distinguishes an I/O read failure from corrupt content. Only the I/O failure
-// propagates: a write must abort on it (it can't know the real stored set), but
-// corrupt content — missing, malformed JSON, or a non-array — normalizes to the
-// default so a toggle can self-heal it. loadVisibleUsageProviders maps the I/O
-// failure to the default for display; a write re-bases on the default and
-// rewrites, which repairs the stored value.
 async function readVisibleUsageProviders(): Promise<Set<UsageProviderKey>> {
   const raw = await AsyncStorage.getItem(VISIBLE_USAGE_PROVIDERS_KEY)
   if (raw === null) {
@@ -331,8 +332,6 @@ async function readVisibleUsageProviders(): Promise<Set<UsageProviderKey>> {
   } catch {
     return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
   }
-  // Only a real array carries the "explicit empty set = show none" semantics;
-  // corrupted non-array JSON (e.g. `{}`) falls back to the default instead.
   if (!Array.isArray(parsed)) {
     return new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
   }
@@ -348,15 +347,12 @@ export async function loadVisibleUsageProviders(): Promise<Set<UsageProviderKey>
 }
 
 export async function saveVisibleUsageProviders(ids: ReadonlySet<UsageProviderKey>): Promise<void> {
-  // Persist in canonical descriptor order so the stored value is stable.
   await AsyncStorage.setItem(
     VISIBLE_USAGE_PROVIDERS_KEY,
     JSON.stringify(USAGE_PROVIDER_IDS.filter((id) => ids.has(id)))
   )
 }
 
-// Why: serialize the settings screen's read-modify-write toggles so rapid
-// changes cannot overwrite a provider that another toggle just persisted.
 let visibleUsageWrite: Promise<Set<UsageProviderKey>> = Promise.resolve(new Set())
 
 export function setUsageProviderVisible(
@@ -366,8 +362,6 @@ export function setUsageProviderVisible(
   visibleUsageWrite = visibleUsageWrite
     .catch(() => undefined)
     .then(async () => {
-      // Strict read: if the read fails, abort the write rather than clobber the
-      // stored set with the default (which would drop stored-only providers).
       const next = await readVisibleUsageProviders()
       if (value) {
         next.add(id)
@@ -380,8 +374,6 @@ export function setUsageProviderVisible(
   return visibleUsageWrite
 }
 
-// Why: retry if a toggle is appended while the stored read is in flight, so
-// rollback/focus reloads cannot overwrite newer optimistic state.
 export async function loadVisibleUsageProvidersSettled(): Promise<Set<UsageProviderKey>> {
   while (true) {
     const pending = visibleUsageWrite
