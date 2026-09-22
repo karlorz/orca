@@ -229,8 +229,25 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * diffed to name the difference: those two leave and nothing joins. The same measurement, taken
  * before #22067 landed, is how this branch read main's pin of 4,330 as three modules stale — the
  * three the paragraph above names.
+ *
+ * Then the two other table parsers gave up their own row splitters and read the editor's
+ * `src/components/rich-markdown/markdown-table-rows.ts` instead, which the session page reaches
+ * through the PR comment renderer. It is the one module that joins, and the only one it can be: it
+ * imports nothing, and no other file under `rich-markdown/` is in the closure beside it.
+ *
+ *   modules        4331 -> 4332   (+1)
+ *   local modules   989 ->  990   (+1)
+ *
+ * Then #18790 (`0677271709`) taught the agent icon table a new agent, and its icon
+ * `src/shared/agent-icons/freebuff.png` entered through `mobile-agent-icon-assets.ts`, which the
+ * session page reaches as it reaches every other icon there. An image asset, not a package, and
+ * the one line that differs between the closure at `226f4a0775` and at `059ee59a48`; it landed
+ * between #22114's measurement and its merge, so main read one short.
+ *
+ *   modules        4332 -> 4333   (+1)
+ *   local modules   990 ->  991   (+1)
  */
-const SESSION_ROUTE_MODULES = 4331
+const SESSION_ROUTE_MODULES = 4333
 
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [
