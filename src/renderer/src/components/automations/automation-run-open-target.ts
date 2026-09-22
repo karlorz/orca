@@ -103,7 +103,7 @@ export function resolveAutomationRunOpenTarget({
 }
 
 export function canOpenAutomationRunOpenTarget(args: {
-  run: AutomationRun
+  run: Pick<AutomationRun, 'terminalPaneKey'>
   terminalTabExists: boolean
   currentLayout: TerminalLayoutSnapshot | null | undefined
   livePtyIds?: readonly string[]

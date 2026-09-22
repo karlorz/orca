@@ -546,7 +546,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     const order: string[] = []
     let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
     mockMarkDispatchResult.mockImplementation(
-      async (result: { status: string; terminalPaneKey?: string | null }) => {
+      async (result: Parameters<typeof window.api.automations.markDispatchResult>[0]) => {
         // The retirement clear reuses status 'completed' but nulls the terminal
         // identity; label it distinctly so ordering stays legible.
         const clearsPty =

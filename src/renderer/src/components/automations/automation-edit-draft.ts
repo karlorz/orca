@@ -17,6 +17,15 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
 
+function getAutomationDraftReasoningEffort(
+  effort: Automation['reasoningEffort']
+): AutomationDraft['reasoningEffort'] {
+  if (effort === 'low' || effort === 'medium' || effort === 'high' || effort === 'xhigh') {
+    return effort
+  }
+  return ''
+}
+
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
@@ -26,7 +35,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     agentId: automation.agentId,
     model: automation.model ?? '',
     extraArgs: automation.extraArgs ?? '',
-    reasoningEffort: automation.reasoningEffort ?? '',
+    reasoningEffort: getAutomationDraftReasoningEffort(automation.reasoningEffort),
     agentProfile: automation.agentProfile ?? '',
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,

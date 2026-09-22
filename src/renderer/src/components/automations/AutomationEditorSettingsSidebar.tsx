@@ -116,8 +116,11 @@ export function AutomationEditorSettingsSidebar({
                 pickerTriggerClassName={pickerTriggerClassName}
                 onDraftChange={onDraftChange}
               />
-              <Field className="mt-3">
-                <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>Extra args</span>
+              <Field
+                className="mt-3"
+                label="Extra args"
+                labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
+              >
                 <Input
                   value={draft.extraArgs}
                   onChange={(event) =>
