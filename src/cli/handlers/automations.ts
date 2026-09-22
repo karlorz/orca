@@ -37,7 +37,13 @@ import {
   resolveProjectCreateTarget
 } from '../worktree-project-target'
 import {
+  getAgentProfileFlag,
+  getExtraArgsFlag,
+  getReasoningEffortFlag
+} from './automation-model-flags'
+import {
   getEnabledFlag,
+  getModelFlag,
   getOptionalProviderFlag,
   getPrecheckFlag,
   getProviderFlag,
@@ -184,6 +190,10 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
+      model: getModelFlag(flags),
+      reasoningEffort: getReasoningEffortFlag(flags),
+      agentProfile: getAgentProfileFlag(flags),
+      extraArgs: getExtraArgsFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -214,6 +224,10 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getOptionalStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
+      model: getModelFlag(flags),
+      reasoningEffort: getReasoningEffortFlag(flags),
+      agentProfile: getAgentProfileFlag(flags),
+      extraArgs: getExtraArgsFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,

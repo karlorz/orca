@@ -9,7 +9,7 @@ export type AutomationRunPaneTarget = {
   tabId: string
   paneKey: string
   leafId: string
-  ptyId: string
+  ptyId: string | null
 }
 
 export function getAutomationRunOpenTabId(
@@ -18,11 +18,60 @@ export function getAutomationRunOpenTabId(
   return parsePaneKey(run.terminalPaneKey ?? '')?.tabId ?? null
 }
 
+/** Same source the click path uses (`tabsByWorktree`), not leftover unified-tab ghosts. */
+export function automationRunTerminalTabExists({
+  run,
+  tabsByWorktree
+}: {
+  run: Pick<AutomationRun, 'terminalPaneKey' | 'workspaceId'>
+  tabsByWorktree: Record<string, readonly { id: string }[] | undefined>
+}): boolean {
+  const tabId = getAutomationRunOpenTabId(run)
+  if (!tabId || !run.workspaceId) {
+    return false
+  }
+  return (tabsByWorktree[run.workspaceId] ?? []).some((tab) => tab.id === tabId)
+}
+
+export function selectAutomationRunPaneMounted(
+  state: {
+    tabsByWorktree: Record<string, readonly { id: string }[] | undefined>
+    terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+  },
+  run: Pick<AutomationRun, 'terminalPaneKey' | 'workspaceId'>
+): boolean {
+  const openTabId = getAutomationRunOpenTabId(run)
+  return canOpenAutomationRunOpenTarget({
+    run,
+    terminalTabExists: automationRunTerminalTabExists({
+      run,
+      tabsByWorktree: state.tabsByWorktree
+    }),
+    currentLayout: openTabId ? state.terminalLayoutsByTabId[openTabId] : null
+  })
+}
+
 export function automationRunMatchesPaneKey(
   run: Pick<AutomationRun, 'terminalPaneKey'>,
   paneKey: string
 ): boolean {
   return run.terminalPaneKey ? paneKey === run.terminalPaneKey : false
+}
+
+export function isAutomationRunPaneMounted({
+  run,
+  terminalTabExists,
+  currentLayout
+}: {
+  run: Pick<AutomationRun, 'terminalPaneKey'>
+  terminalTabExists: boolean
+  currentLayout: TerminalLayoutSnapshot | null | undefined
+}): boolean {
+  const parsed = parsePaneKey(run.terminalPaneKey ?? '')
+  if (!terminalTabExists || !parsed || !currentLayout?.root) {
+    return false
+  }
+  return terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)
 }
 
 export function resolveAutomationRunOpenTarget({
@@ -37,24 +86,19 @@ export function resolveAutomationRunOpenTarget({
   livePtyIds: readonly string[]
 }): AutomationRunPaneTarget | null {
   const parsed = parsePaneKey(run.terminalPaneKey ?? '')
-  if (!terminalTabExists || !parsed || !run.terminalPtyId || !currentLayout?.root) {
+  if (!isAutomationRunPaneMounted({ run, terminalTabExists, currentLayout }) || !parsed) {
     return null
   }
-  if (!terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)) {
-    return null
-  }
-  if (!livePtyIds.includes(run.terminalPtyId)) {
-    return null
-  }
-  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
-  if (layoutPtyId !== undefined && layoutPtyId !== run.terminalPtyId) {
-    return null
-  }
+  const layoutPtyId = currentLayout?.ptyIdsByLeafId?.[parsed.leafId]
+  const ptyId =
+    run.terminalPtyId && livePtyIds.includes(run.terminalPtyId)
+      ? run.terminalPtyId
+      : (layoutPtyId ?? run.terminalPtyId ?? null)
   return {
     tabId: parsed.tabId,
     paneKey: run.terminalPaneKey!,
     leafId: parsed.leafId,
-    ptyId: run.terminalPtyId
+    ptyId
   }
 }
 
@@ -62,9 +106,9 @@ export function canOpenAutomationRunOpenTarget(args: {
   run: AutomationRun
   terminalTabExists: boolean
   currentLayout: TerminalLayoutSnapshot | null | undefined
-  livePtyIds: readonly string[]
+  livePtyIds?: readonly string[]
 }): boolean {
-  return resolveAutomationRunOpenTarget(args) !== null
+  return isAutomationRunPaneMounted(args)
 }
 
 export function buildAutomationRunOpenLayout({
@@ -78,10 +122,12 @@ export function buildAutomationRunOpenLayout({
     ...currentLayout,
     activeLeafId: target.leafId,
     expandedLeafId: currentLayout.expandedLeafId === target.leafId ? target.leafId : null,
-    ptyIdsByLeafId: {
-      ...currentLayout.ptyIdsByLeafId,
-      [target.leafId]: target.ptyId
-    }
+    ptyIdsByLeafId: target.ptyId
+      ? {
+          ...currentLayout.ptyIdsByLeafId,
+          [target.leafId]: target.ptyId
+        }
+      : currentLayout.ptyIdsByLeafId
   }
 }
 

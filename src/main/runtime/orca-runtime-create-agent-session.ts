@@ -58,6 +58,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
+          request.launchPreferences?.agentProfile ?? null,
+          request.launchPreferences?.extraArgs ?? null,
           request.startupCwd ?? null,
           request.presentation ?? null,
           request.placement?.tabId ?? null,
@@ -135,6 +137,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
+            request.launchPreferences?.agentProfile ?? null,
+            request.launchPreferences?.extraArgs ?? null,
             startupCwd ?? null,
             request.presentation ?? null,
             request.placement?.tabId ?? null,
@@ -148,16 +152,19 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const startupArgs = resolveAgentStartupPlanInputs({
-        agent: request.agent,
-        settings,
-        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
-        // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-        // shape must match the PTY route this scope already resolved.
-        isRemote: Boolean(workspace.connectionId),
-        ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
-        sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
-      })
+      const startupArgs = {
+        ...resolveAgentStartupPlanInputs({
+          agent: request.agent,
+          settings,
+          platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+          // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+          // shape must match the PTY route this scope already resolved.
+          isRemote: Boolean(workspace.connectionId),
+          ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+          sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
+        }),
+        extraArgs: request.launchPreferences?.extraArgs
+      }
       const startup =
         request.promptDelivery === 'draft'
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })

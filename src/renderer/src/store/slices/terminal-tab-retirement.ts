@@ -252,6 +252,35 @@ export function buildTerminalTabRetirementPlans(
   return plans
 }
 
+export function markClosedTabSessionsForExplicitResume(
+  records: Record<string, SleepingAgentSessionRecord>,
+  tabId: string
+): Record<string, SleepingAgentSessionRecord> {
+  let next = records
+  for (const [paneKey, record] of Object.entries(records)) {
+    if (!paneKey.startsWith(`${tabId}:`) && record.tabId !== tabId) {
+      continue
+    }
+    if (!record.providerSession || record.interrupted === true) {
+      continue
+    }
+    if (record.state === 'done') {
+      continue
+    }
+    if (next === records) {
+      next = { ...records }
+    }
+    next[paneKey] = {
+      ...record,
+      state: 'done',
+      origin: 'live',
+      restoreOnTabOpenOnly: true,
+      updatedAt: Date.now()
+    }
+  }
+  return next
+}
+
 export function removeSleepingAgentSessionsForTab(
   records: Record<string, SleepingAgentSessionRecord>,
   tabId: string
@@ -259,6 +288,10 @@ export function removeSleepingAgentSessionsForTab(
   let next = records
   for (const [paneKey, record] of Object.entries(records)) {
     if (!paneKey.startsWith(`${tabId}:`) && record.tabId !== tabId) {
+      continue
+    }
+    // Why: Resume workspace still needs `--resume` after the Claude tab closes.
+    if (record.state === 'done' && record.interrupted !== true) {
       continue
     }
     if (next === records) {

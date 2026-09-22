@@ -14,6 +14,11 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
+import {
+  normalizeAutomationModel,
+  normalizeAutomationReasoningEffort,
+  validateAutomationExtraArgs
+} from '../automation-model'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -56,6 +61,54 @@ export const OptionalNullablePlainString = z
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
+
+const AutomationModel = OptionalNullablePlainString.transform((value) =>
+  value === undefined || value === null ? value : (normalizeAutomationModel(value) ?? null)
+)
+const AutomationReasoningEffort = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null) {
+    return value
+  }
+  if (value === '') {
+    return null
+  }
+  const normalized = normalizeAutomationReasoningEffort(value)
+  if (!normalized) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Invalid reasoning effort; expected low, medium, high, xhigh, max, or ultra'
+    })
+    return z.NEVER
+  }
+  return normalized
+})
+const AutomationAgentProfile = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null) {
+    return value
+  }
+  if (value === '') {
+    return null
+  }
+  if (value !== 'minimal') {
+    ctx.addIssue({ code: 'custom', message: 'Invalid agent profile; expected minimal' })
+    return z.NEVER
+  }
+  return 'minimal' as const
+})
+const AutomationExtraArgs = OptionalNullablePlainString.transform((value, ctx) => {
+  if (value === undefined || value === null || value === '') {
+    return value
+  }
+  try {
+    return validateAutomationExtraArgs(value) ?? null
+  } catch (error) {
+    ctx.addIssue({
+      code: 'custom',
+      message: error instanceof Error ? error.message : 'Invalid extra args'
+    })
+    return z.NEVER
+  }
+})
 
 // A GitHub identity is only usable with both fields present and non-blank.
 const GithubIdentityField = z.string().refine((value) => value.trim().length > 0, {
@@ -189,6 +242,10 @@ export const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  model: AutomationModel,
+  reasoningEffort: AutomationReasoningEffort,
+  agentProfile: AutomationAgentProfile,
+  extraArgs: AutomationExtraArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -210,6 +267,10 @@ export const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  model: AutomationModel,
+  reasoningEffort: AutomationReasoningEffort,
+  agentProfile: AutomationAgentProfile,
+  extraArgs: AutomationExtraArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

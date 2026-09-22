@@ -94,6 +94,7 @@ export async function launchAgentBackgroundSession(
     cmdOverrides,
     agentArgs,
     agentEnv,
+    sessionOptions: args.sessionOptions,
     platform: launchPlatform,
     shell: startupShell,
     isRemote,

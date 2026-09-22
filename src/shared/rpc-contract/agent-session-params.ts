@@ -61,7 +61,9 @@ export const LaunchPreferences = z
       MAX_LAUNCH_PREFERENCE_LENGTH,
       'Invalid effort preference'
     ).optional(),
-    mode: StrictNonEmptyString(MAX_LAUNCH_PREFERENCE_LENGTH, 'Invalid mode preference').optional()
+    agentProfile: z.literal('minimal').optional(),
+    mode: StrictNonEmptyString(MAX_LAUNCH_PREFERENCE_LENGTH, 'Invalid mode preference').optional(),
+    extraArgs: StrictNonEmptyString(MAX_LAUNCH_PREFERENCE_LENGTH, 'Invalid extra args').optional()
   })
   .strict()
 

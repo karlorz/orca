@@ -752,7 +752,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('clears completed worktree-sleep records without preserved panes instead of resuming', () => {
+  it('keeps completed worktree-sleep records without preserved panes for explicit resume', () => {
     const record = makeRecord({ origin: 'worktree-sleep', state: 'done' })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
@@ -765,7 +765,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(0)
     expect(state.tabsByWorktree['wt-1']).toEqual([])
     expect(state.pendingStartupByTabId).toEqual({})
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
   it('clears stale manual records without launching a tab', () => {
@@ -829,8 +829,8 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('clears legacy completed live records without launching a tab', () => {
-    const record = makeRecord({ state: 'done' })
+  it('keeps completed live records without launching a tab so Resume can reopen them', () => {
+    const record = makeRecord({ state: 'done', origin: 'live' })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
@@ -840,7 +840,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
     expect(launched).toBe(0)
     expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
   it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {

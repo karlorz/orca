@@ -244,7 +244,6 @@ export function AutomationsPageSurface({
           run={selectedAutomationRunPage}
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
-          viewState={runPage.selectedAutomationRunPageViewState}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           onRerun={() =>

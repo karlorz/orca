@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { AutomationLaunchFields, AutomationStoredSession } from './automation-model'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -88,7 +89,7 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
-export type Automation = {
+export type Automation = AutomationLaunchFields & {
   id: string
   /** Optional client request key used to make cross-authority creates retry-safe. */
   creationKey?: string
@@ -132,7 +133,7 @@ export type Automation = {
   updatedAt: number
 }
 
-export type AutomationRun = {
+export type AutomationRun = AutomationStoredSession & {
   id: string
   automationId: string
   runContext?: WorkspaceRunContext | null
@@ -176,7 +177,7 @@ export type AutomationRunsPage = {
   nextCursor: string | null
 }
 
-export type AutomationCreateInput = {
+export type AutomationCreateInput = AutomationLaunchFields & {
   /** Optional idempotency key; repeated creates return the original record. */
   creationKey?: string
   name: string
@@ -207,6 +208,10 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'model'
+    | 'reasoningEffort'
+    | 'agentProfile'
+    | 'extraArgs'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'
@@ -229,7 +234,7 @@ export type AutomationDispatchRequest = {
   dispatchToken: string
 }
 
-export type AutomationDispatchResult = {
+export type AutomationDispatchResult = AutomationStoredSession & {
   runId: string
   status: AutomationRunStatus
   workspaceId?: string | null

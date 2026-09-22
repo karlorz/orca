@@ -67,13 +67,15 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
 
   const automationId = input.selected?.automation.id ?? null
   const rowKey = input.selected?.key ?? null
+  const lastRunAt = input.selected?.automation.lastRunAt ?? 0
   const reloadToken = input.reloadToken
   const fetchKey =
     automationId && rowKey
       ? [
           rowKey,
           capturedAutomationOwnerKey(capturedAutomationOwner(input.context.capturedOwners, rowKey)),
-          navigationHostId(input.navigation, automationId) ?? ''
+          navigationHostId(input.navigation, automationId) ?? '',
+          String(lastRunAt)
         ].join('|')
       : ''
   const captured = input.selected

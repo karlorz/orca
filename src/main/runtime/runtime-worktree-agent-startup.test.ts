@@ -134,6 +134,50 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
   })
 })
 
+describe('buildWorktreeStartupForAgent launch preferences', () => {
+  // Why this is the serve-mode path: automations that run without a window build
+  // their startup command here, so an automation model has to survive it.
+  function commandFor(
+    agent: 'grok' | 'aider',
+    launchPreferences: { model: string } | undefined
+  ): { command: string; agentCommand: string | undefined } {
+    const startup = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent,
+      prompt: 'Triage alerts',
+      ...(launchPreferences ? { launchPreferences } : {}),
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: (preferences) =>
+        preferences ? { model: preferences.model as never } : undefined
+    })
+    return {
+      command: startup.startup.command,
+      agentCommand: startup.startup.launchConfig?.agentCommand
+    }
+  }
+
+  it('launches grok with the requested model', () => {
+    expect(commandFor('grok', { model: 'deepseek-v4-flash' }).command).toBe(
+      "grok '--permission-mode' 'bypassPermissions' '-m' 'deepseek-v4-flash' -- 'Triage alerts'"
+    )
+  })
+
+  it('launches grok without a model flag when none is requested', () => {
+    expect(commandFor('grok', undefined).command).toBe(
+      "grok '--permission-mode' 'bypassPermissions' -- 'Triage alerts'"
+    )
+  })
+
+  it('keeps an unlaunchable model out of the command on agents Orca cannot flag', () => {
+    // `aider` has no catalog model flag, so a request for one must not invent a
+    // flag: that list order or spacing would fail the launch outright.
+    expect(commandFor('aider', { model: 'deepseek-v4-flash' }).command).not.toContain(
+      'deepseek-v4-flash'
+    )
+  })
+})
+
 describe('markLocalWorktreeTrusted', () => {
   it('waits for the Codex trust write before resolving', async () => {
     let finish!: () => void

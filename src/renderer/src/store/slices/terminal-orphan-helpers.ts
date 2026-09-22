@@ -1,3 +1,5 @@
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
 import type { AppState } from '../types'
 
 type TerminalTabReconnectState = Pick<
@@ -10,7 +12,29 @@ type TerminalTabReconnectState = Pick<
 >
 
 type OrphanTerminalDetectionState = Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'> &
-  TerminalTabReconnectState
+  TerminalTabReconnectState & {
+    sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  }
+
+function terminalTabOwnsPassiveCompletedHibernation(
+  records: Record<string, SleepingAgentSessionRecord> | undefined,
+  tabId: string
+): boolean {
+  if (!records) {
+    return false
+  }
+  for (const paneKey in records) {
+    const record = records[paneKey]
+    if (
+      record &&
+      (record.tabId === tabId || paneKey.startsWith(`${tabId}:`)) &&
+      isPassiveCompletedHibernationEvidence(record)
+    ) {
+      return true
+    }
+  }
+  return false
+}
 
 /**
  * Whether a tab is currently attached to, or actively reconnecting to, a live
@@ -71,6 +95,13 @@ export function getOrphanTerminalIds(
     runtimeTabs
       .filter((tab) => {
         if (unifiedTerminalEntityIds.has(tab.id)) {
+          return false
+        }
+        // Why: hibernation kills the live PTY on purpose; sweeping the row
+        // would drop the pane that in-place `--resume` still needs to mount.
+        if (
+          terminalTabOwnsPassiveCompletedHibernation(state.sleepingAgentSessionsByPaneKey, tab.id)
+        ) {
           return false
         }
         // A missing PTY is not proof that the user closed the tab: the host

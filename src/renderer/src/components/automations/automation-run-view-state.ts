@@ -57,7 +57,6 @@ export function getAutomationRunViewState({
   workspaceExists: boolean
   terminalTargetExists: boolean
 }): AutomationRunViewState {
-  const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
@@ -67,15 +66,8 @@ export function getAutomationRunViewState({
     }
   }
 
-  if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
-    return {
-      availability: 'terminal',
-      actionLabel: 'View run',
-      statusLabel: 'Run terminal is unavailable.',
-      canOpen: true
-    }
-  }
-
+  // Why: leftover paneKey/ptyId after the user closes the tab is not a live
+  // terminal — offer Resume so we reopen the session instead of View run.
   if (run.workspaceId && workspaceExists) {
     return {
       availability: 'workspace',

@@ -11,8 +11,10 @@ import {
 import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   buildTerminalTabRetirementPlan,
+  markClosedTabSessionsForExplicitResume,
   removeSleepingAgentSessionsForTab
 } from '../slices/terminal-tab-retirement'
+import { captureSleepingSessionsBeforeUserTabClose } from './terminal-tab-close-sleeping-preserve'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
@@ -27,6 +29,9 @@ export function createTerminalTabCloseActions(
     closeTab: (tabId, opts) => {
       const closeReason = opts?.reason ?? 'user'
       const retiresSession = closeReason === 'user' || closeReason === 'cleanup'
+      if (retiresSession) {
+        captureSleepingSessionsBeforeUserTabClose(get, tabId)
+      }
       const retirementPlan =
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
@@ -130,7 +135,10 @@ export function createTerminalTabCloseActions(
           tabId
         )
         const nextSleepingAgentSessionsByPaneKey = retiresSession
-          ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
+          ? removeSleepingAgentSessionsForTab(
+              markClosedTabSessionsForExplicitResume(s.sleepingAgentSessionsByPaneKey, tabId),
+              tabId
+            )
           : s.sleepingAgentSessionsByPaneKey
         const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
         const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(

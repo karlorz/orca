@@ -141,6 +141,7 @@ export function buildWorktreeStartupForAgent(
       ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
       sessionOptions: environment.toSessionOptions(environment.launchPreferences)
     }),
+    extraArgs: environment.launchPreferences?.extraArgs,
     prompt: environment.prompt ?? '',
     allowEmptyPromptLaunch: true
   })
