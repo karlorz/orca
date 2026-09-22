@@ -37,7 +37,8 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
-  AppState: { addEventListener: () => ({ remove() {} }) }
+  AppState: { addEventListener: () => ({ remove() {} }) },
+  Platform: { OS: 'ios' }
 }))
 vi.mock('lucide-react-native', () => ({ RefreshCw: 'Icon' }))
 
