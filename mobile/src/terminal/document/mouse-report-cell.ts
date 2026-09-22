@@ -1,5 +1,5 @@
-import { getCellHeight } from './fit-scale'
-import { getCellWidth, getTotalScale } from './viewport-transform'
+import { getCellHeight, getCellWidth } from './cell-metrics'
+import { getTotalScale } from './viewport-scale'
 import type { TerminalDocumentScope } from './document-scope'
 
 /** Where a viewport point lands in the terminal's cell grid, for an xterm mouse report. */
