@@ -618,6 +618,24 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
     expect(client.isLive()).toBe(false)
   })
 
+  it('marks a silent control as not live before the silence watchdog closes the socket', async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await expect(client.connect()).resolves.toMatchObject({ generation: 4 })
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+
+    vi.advanceTimersByTime(76_000)
+
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(client.isLive()).toBe(false)
+
+    socket.deliver({ type: 'ping', t: Date.now() })
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+  })
+
   it('keeps a control live while server pings keep arriving', async () => {
     vi.useFakeTimers()
     const { client, socket } = scriptedControl()

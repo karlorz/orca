@@ -52,7 +52,7 @@ export class RelayControlLiveness {
     this.openedAt = Date.now()
     this.lastInboundAt = this.openedAt
     this.silenceTimer = setInterval(() => {
-      if (Date.now() - this.lastInboundAt > SILENCE_LIMIT_MS) {
+      if (this.isInboundStale()) {
         this.tearDown('silence-limit')
       }
     }, SILENCE_CHECK_INTERVAL_MS)
@@ -62,6 +62,10 @@ export class RelayControlLiveness {
   noteInbound(): void {
     this.lastInboundAt = Date.now()
     this.clearProbe()
+  }
+
+  isInboundStale(): boolean {
+    return this.lastInboundAt > 0 && Date.now() - this.lastInboundAt > SILENCE_LIMIT_MS
   }
 
   // A pong proves the pipe and nothing more — it can come from a socket the

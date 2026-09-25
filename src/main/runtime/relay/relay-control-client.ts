@@ -111,7 +111,8 @@ export class RelayControlClient {
     return (
       (this.state === 'active' || this.state === 'draining') &&
       this.socket !== null &&
-      this.socket.readyState === WebSocket.OPEN
+      this.socket.readyState === WebSocket.OPEN &&
+      !this.liveness.isInboundStale()
     )
   }
 
