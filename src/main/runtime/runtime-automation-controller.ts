@@ -16,7 +16,10 @@ import type {
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
-import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  copyRuntimeAutomationPatchValues,
+  hasRuntimeAutomationUpdateValue
+} from './runtime-automation-update-value'
 import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
 
 export type RuntimeAutomationCreateInput = Omit<
@@ -113,7 +116,7 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.createAutomation(
+    const automation = this.store.createAutomation(
       {
         creationKey: input.creationKey,
         name: input.name,
@@ -142,6 +145,8 @@ export class RuntimeAutomationController {
         ? { destination: destination ?? input.destination }
         : undefined
     )
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
   async update(
@@ -154,7 +159,7 @@ export class RuntimeAutomationController {
     }
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
-    this.copyPatchValues(updates, patch)
+    copyRuntimeAutomationPatchValues(updates, patch)
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
@@ -183,18 +188,21 @@ export class RuntimeAutomationController {
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.updateAutomation(id, patch, options)
+    const automation = this.store.updateAutomation(id, patch, options)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
+    return automation
   }
 
-  delete(
+  async delete(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
-  ): { removed: boolean; id: string } {
+  ): Promise<{ removed: boolean; id: string }> {
     if (!this.store?.deleteAutomation) {
       throw new Error('runtime_unavailable')
     }
     this.show(id)
     this.store.deleteAutomation(id, expectedOwner ? { expectedOwner } : undefined)
+    await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return { removed: true, id }
   }
 
@@ -220,37 +228,6 @@ export class RuntimeAutomationController {
         })
       }
     })
-  }
-
-  private copyPatchValues(
-    updates: RuntimeAutomationUpdateInput,
-    patch: AutomationUpdateInput
-  ): void {
-    const keys = [
-      'name',
-      'prompt',
-      'precheck',
-      'agentId',
-      'model',
-      'reasoningEffort',
-      'agentProfile',
-      'extraArgs',
-      'runContext',
-      'sourceContext',
-      'baseBranch',
-      'setupDecision',
-      'reuseSession',
-      'timezone',
-      'rrule',
-      'dtstart',
-      'enabled',
-      'missedRunGraceMinutes'
-    ] as const
-    for (const key of keys) {
-      if (hasRuntimeAutomationUpdateValue(updates, key)) {
-        Object.assign(patch, { [key]: updates[key] })
-      }
-    }
   }
 
   private async resolveTarget(

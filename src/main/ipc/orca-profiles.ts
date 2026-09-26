@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
 import type {
@@ -8,7 +8,6 @@ import type {
   CreateCloudLinkedOrcaProfileResult,
   FindOrcaProfileProjectsByPathArgs,
   FindOrcaProfileProjectsByPathResult,
-  OpenDesktopPasswordPageResult,
   OrcaProfileListResult,
   RefreshCurrentOrcaProfileAuthResult,
   SwitchOrcaProfileArgs,
@@ -34,8 +33,12 @@ import {
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
+import { transferActiveProfileProject } from '../orca-profiles/profile-active-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
-import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
+import {
+  flushActiveProfileBeforeFileMutation,
+  flushActiveProfileBeforeRelaunch
+} from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
@@ -48,7 +51,8 @@ import {
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
 import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
 import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
-import { openDesktopPasswordPage } from '../runtime/relay/desktop-password-handoff'
+import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
+import { registerOrcaProfilePasswordPageHandler } from './orca-profile-password-page'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -57,33 +61,14 @@ type RegisterOrcaProfileHandlersOptions = {
 }
 
 function profileIdFromArgs(args: unknown): string {
-  if (
-    !args ||
-    typeof args !== 'object' ||
-    typeof (args as SwitchOrcaProfileArgs).profileId !== 'string'
-  ) {
-    throw new Error('invalid_orca_profile_id')
-  }
-  const profileId = (args as SwitchOrcaProfileArgs).profileId.trim()
+  const profileId =
+    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
+      ? args.profileId.trim()
+      : ''
   if (!profileId) {
     throw new Error('invalid_orca_profile_id')
   }
   return profileId
-}
-
-function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProjectArgs {
-  if (!args || typeof args !== 'object') {
-    throw new Error('invalid_orca_profile_project_transfer')
-  }
-  const candidate = args as TransferOrcaProfileProjectArgs
-  const sourceProfileId = candidate.sourceProfileId?.trim()
-  const targetProfileId = candidate.targetProfileId?.trim()
-  const repoId = candidate.repoId?.trim()
-  const mode = candidate.mode
-  if (!sourceProfileId || !targetProfileId || !repoId || (mode !== 'move' && mode !== 'copy')) {
-    throw new Error('invalid_orca_profile_project_transfer')
-  }
-  return { sourceProfileId, targetProfileId, repoId, mode }
 }
 
 function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
@@ -135,7 +120,10 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   const candidate = args as CreateCloudLinkedOrcaProfileArgs
   const orgId = typeof candidate.orgId === 'string' ? candidate.orgId.trim() : undefined
   const name = typeof candidate.name === 'string' ? candidate.name.trim() : undefined
-  return { ...(orgId ? { orgId } : {}), ...(name ? { name } : {}) }
+  return {
+    ...(orgId ? { orgId } : {}),
+    ...(name ? { name } : {})
+  }
 }
 
 async function runBeforeProfileRelaunch(
@@ -151,7 +139,12 @@ async function runBeforeProfileRelaunch(
   }
 }
 
-function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
+type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
+
+function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
+  if (!sender.isDestroyed()) {
+    sender.send('app:restart-committed')
+  }
   setTimeout(() => {
     relaunchApp(reason)
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
@@ -191,7 +184,7 @@ export function registerOrcaProfileHandlers(
 
   ipcMain.handle(
     'orcaProfiles:switch',
-    async (_event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
+    async (event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
       const profileId = profileIdFromArgs(args)
       const current = getOrcaProfileListState()
       if (profileId === current.activeProfileId) {
@@ -211,11 +204,12 @@ export function registerOrcaProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
-      await flushActiveProfileBeforeFileMutation(store)
-      await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+      // Switching leaves source files intact; relaunch cleanup still needs its live writer.
+      await flushActiveProfileBeforeRelaunch(store)
       setActiveOrcaProfile(profileId)
+      await runBeforeProfileRelaunch(options.onBeforeRelaunch)
 
-      scheduleProfileRelaunch('profile-switch')
+      scheduleProfileRelaunch('profile-switch', event.sender)
 
       return { status: 'relaunching' }
     }
@@ -224,7 +218,7 @@ export function registerOrcaProfileHandlers(
   ipcMain.handle(
     'orcaProfiles:transferProject',
     async (
-      _event,
+      event,
       rawArgs: TransferOrcaProfileProjectArgs
     ): Promise<TransferOrcaProfileProjectResult> => {
       const args = transferProjectArgsFromUnknown(rawArgs)
@@ -235,19 +229,37 @@ export function registerOrcaProfileHandlers(
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
-        await flushActiveProfileBeforeFileMutation(store)
-        const result = transferOrcaProfileProject(args, getProfileUserDataPath())
+        const result = await transferActiveProfileProject(
+          args,
+          getProfileUserDataPath(),
+          store,
+          async () => {
+            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+            scheduleProfileRelaunch('profile-transfer', event.sender)
+          }
+        )
         if (result.status === 'transferred') {
-          store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-          setActiveOrcaProfile(args.targetProfileId)
-          scheduleProfileRelaunch('profile-transfer')
+          try {
+            setActiveOrcaProfile(args.targetProfileId)
+          } finally {
+            // The source has already changed and its writer cannot resume.
+            scheduleProfileRelaunch('profile-transfer', event.sender)
+          }
           return { ...result, willRelaunch: true }
         }
         return result
       }
-      await flushActiveProfileBeforeFileMutation(store)
-      return transferOrcaProfileProject(args, getProfileUserDataPath())
+      if (args.sourceProfileId !== current.activeProfileId) {
+        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        return transferOrcaProfileProject(args, getProfileUserDataPath())
+      }
+      const maintenance = await flushActiveProfileBeforeFileMutation(store)
+      try {
+        return transferOrcaProfileProject(args, getProfileUserDataPath())
+      } finally {
+        await maintenance.resume()
+      }
     }
   )
 
@@ -271,16 +283,7 @@ export function registerOrcaProfileHandlers(
     }
   )
 
-  ipcMain.handle(
-    'orcaProfiles:openPasswordPage',
-    async (event): Promise<OpenDesktopPasswordPageResult> => {
-      const win = BrowserWindow.fromWebContents(event.sender)
-      return openDesktopPasswordPage({
-        userDataPath: getProfileUserDataPath(),
-        getWindow: () => win
-      })
-    }
-  )
+  registerOrcaProfilePasswordPageHandler()
 
   ipcMain.handle(
     'orcaProfiles:createCloudLinked',

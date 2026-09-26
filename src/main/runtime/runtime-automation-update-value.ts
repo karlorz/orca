@@ -1,3 +1,4 @@
+import type { AutomationUpdateInput } from '../../shared/automations-types'
 import type { RuntimeAutomationUpdateInput } from './runtime-automation-controller'
 
 export function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
@@ -5,4 +6,36 @@ export function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomatio
   key: K
 ): boolean {
   return Object.hasOwn(updates, key) && updates[key] !== undefined
+}
+
+const RUNTIME_AUTOMATION_PATCH_KEYS = [
+  'name',
+  'prompt',
+  'precheck',
+  'agentId',
+  'model',
+  'reasoningEffort',
+  'agentProfile',
+  'extraArgs',
+  'runContext',
+  'sourceContext',
+  'baseBranch',
+  'setupDecision',
+  'reuseSession',
+  'timezone',
+  'rrule',
+  'dtstart',
+  'enabled',
+  'missedRunGraceMinutes'
+] as const satisfies readonly (keyof RuntimeAutomationUpdateInput)[]
+
+export function copyRuntimeAutomationPatchValues(
+  updates: RuntimeAutomationUpdateInput,
+  patch: AutomationUpdateInput
+): void {
+  for (const key of RUNTIME_AUTOMATION_PATCH_KEYS) {
+    if (hasRuntimeAutomationUpdateValue(updates, key)) {
+      Object.assign(patch, { [key]: updates[key] })
+    }
+  }
 }
