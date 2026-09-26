@@ -101,6 +101,20 @@ export function useMobileSessionNativeChatDictation(
     baseline: { current: null as string | null },
     spoken: { current: '' }
   }).current
+  // Why: a refused start and an active-session error share the same setup-sheet policy.
+  const reportDictationFailure = useCallback(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
+      if (isDictationSetupRequiredError(message)) {
+        setShowDictationSetup(true)
+        return
+      }
+      triggerError()
+      showToast(message)
+    },
+    [setShowDictationSetup, showToast]
+  )
 
   const dictation = useMobileDictation({
     client,
@@ -169,13 +183,7 @@ export function useMobileSessionNativeChatDictation(
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
-      if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(err.message)
+      reportDictationFailure(err)
     }
   })
 
@@ -189,10 +197,9 @@ export function useMobileSessionNativeChatDictation(
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
-      triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      reportDictationFailure(err)
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [activeHandle, dictation, liveInputTerminalHandles, reportDictationFailure])
 
   const cancelDictation = useCallback(() => {
     resetMobileLiveSession(liveSessionRef)

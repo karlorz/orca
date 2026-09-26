@@ -24,7 +24,8 @@ describe('TUI_AGENT_CONFIG', () => {
       kiro: { launchCmd: 'kiro-cli chat --tui', expectedProcess: 'kiro-cli' },
       'command-code': { launchCmd: 'command-code --trust' },
       hermes: { launchCmd: 'hermes --tui' },
-      opencode2: { launchCmd: 'opencode2 --standalone', expectedProcess: 'opencode2' }
+      opencode2: { launchCmd: 'opencode2 --standalone', expectedProcess: 'opencode2' },
+      muse: { launchCmd: 'muse --trust-workspace' }
     }
     for (const [agent, expected] of Object.entries(overrides)) {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)

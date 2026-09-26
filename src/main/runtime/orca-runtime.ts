@@ -1,6 +1,8 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
 import type { PetSpeakEvent, PetSpeakOutcome, PetVoiceRelay } from './pet-voice-relay'
@@ -9,6 +11,13 @@ import { PetSpeechDeviceRegistry, type PetSpeechDeviceStatus } from './pet-speec
 import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 
 class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithResolveWaiter>) {
+    super(...args)
+    // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
+    registerDetectedWorktreeScanInvalidation()
+    registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+  }
+
   private petSpeakListeners = new Set<(event: ReplayablePetSpeakEvent) => void>()
   private petVoiceSubscriptionTracker: PetVoiceSubscriptionTracker | null = null
   private readonly petSpeakReplay = new PetSpeakReplayBuffer()

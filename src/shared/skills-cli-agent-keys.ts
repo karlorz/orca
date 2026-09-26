@@ -35,7 +35,6 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
-  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',
@@ -52,6 +51,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   ante: null,
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
   trae: 'trae-cn',
+  muse: null,
+  zcode: 'zcode',
   // Why: terminal multiplexer, not a `skills --agent` target.
   herdr: null
 } satisfies Record<TuiAgent, string | null>

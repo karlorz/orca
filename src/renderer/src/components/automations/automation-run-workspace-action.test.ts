@@ -141,7 +141,7 @@ describe('automation run workspace action', () => {
     openRun()
 
     expect(mocks.setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-downloads')
     expect(mocks.createTab).not.toHaveBeenCalled()
     expect(mocks.setState).not.toHaveBeenCalled()
     expect(mocks.toastMessage).not.toHaveBeenCalled()

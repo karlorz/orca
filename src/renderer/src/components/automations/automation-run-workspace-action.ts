@@ -157,6 +157,10 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       toast.error(runViewState.statusLabel)
       return
     }
+    if (runViewState.availability === 'terminal' && !terminalTarget) {
+      toast.error(runViewState.statusLabel)
+      return
+    }
     const workspaceId = run.workspaceId
     const revealWorkspace = (): boolean => {
       if (activateAndRevealWorktree(workspaceId)) {
@@ -181,7 +185,7 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
           buildAutomationRunOpenLayout({ target: terminalTarget, currentLayout })
         )
         appStore.setActiveTab(terminalTarget.tabId)
-        appStore.setActiveTabType('terminal')
+        appStore.setActiveTabType('terminal', workspaceId)
       }
       return
     }
@@ -193,7 +197,7 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
     if (remountedTabId) {
       const focused = useAppStore.getState()
       focused.setActiveTab(remountedTabId)
-      focused.setActiveTabType('terminal')
+      focused.setActiveTabType('terminal', workspaceId)
       return
     }
     toast.message(runViewState.statusLabel)
