@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { constants, type Stats } from 'node:fs'
 import { access, lstat, realpath, stat } from 'node:fs/promises'
-import { dirname, normalize, resolve } from 'node:path'
+import { basename, dirname, normalize, resolve, sep } from 'node:path'
 import type { SkillInstallationTopology } from '../../shared/skill-freshness'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
@@ -29,6 +29,20 @@ export function normalizedSkillIdentityPath(value: string): string {
 export function skillPhysicalIdentity(resolvedPath: string, fileStat: Stats): string {
   const inodeIdentity = fileStat.dev || fileStat.ino ? `${fileStat.dev}:${fileStat.ino}` : null
   return inodeIdentity ?? normalizedSkillIdentityPath(resolvedPath)
+}
+
+/**
+ * A CC-Switch master is `~/.cc-switch/skills/<skillName>` (or the same tail
+ * under another home). Provider homes symlink there; the updater may write
+ * through that alias. Any other symlink stays an external link.
+ */
+export function isCcSwitchSkillMaster(resolvedPath: string, skillName: string): boolean {
+  if (!skillName || skillName.includes(sep) || skillName.includes('/')) {
+    return false
+  }
+  const normalized = normalizedSkillIdentityPath(resolvedPath)
+  const marker = normalizedSkillIdentityPath(`${sep}.cc-switch${sep}skills${sep}${skillName}`)
+  return normalized.endsWith(marker)
 }
 
 export function skillTopologyPriority(topology: SkillInstallationTopology): number {
@@ -129,7 +143,15 @@ export async function classifyHomeSkillTopology(
     normalizedSkillIdentityPath(dirname(resolvedPath)) ===
     normalizedSkillIdentityPath(canonicalRoot)
   let topology: SkillInstallationTopology
-  if (linked || rootOrProviderParentLinked) {
+  if (
+    (linked || rootOrProviderParentLinked) &&
+    isCcSwitchSkillMaster(resolvedPath, basename(unresolvedPath))
+  ) {
+    // Why: CC-Switch is the shared skill master for Codex/Claude/Grok links.
+    // Treating it as an external link leaves the copy unrecognized forever and
+    // the Update skills dialog stuck on Review.
+    topology = 'provider-alias'
+  } else if (linked || rootOrProviderParentLinked) {
     topology = isCanonicalTarget ? 'provider-alias' : 'external-link'
   } else {
     topology = root.id === 'home-agents' ? 'canonical-copy' : 'independent-copy'

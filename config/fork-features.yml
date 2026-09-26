@@ -9,6 +9,14 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: fork-skill-stick-cc-switch
+    title: Fork skill guide for the Tasks inbox and CC-Switch provider aliases
+    kind: product
+    status: landed
+    paths:
+      - skill-guides/orca-cli.md
+      - src/main/skills/skill-installation-topology.ts
+    wiki: projects/orca/work/2026-09-26-fork-sticky-cc-switch-skills
   - id: herdr-agent-picker
     title: Herdr as a hook-free selectable agent
     kind: product

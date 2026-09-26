@@ -22,6 +22,19 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Tasks inbox
+
+The desktop GitHub Tasks inbox (the screen labeled GitHub · Local Mac) is part of this skill. It is not an orchestration task, a wiki work item, or a Linear issue. Do not use `ORCA orchestration task-create` to list or open it.
+
+The installed `orca` binary does not yet expose `orca tasks`. From the local `karlorz/orca` checkout, after `pnpm build:cli`:
+
+```text
+scripts/tasks-review list
+scripts/tasks-review start --repo <owner/repo> --number <n> --type pr|issue [--dry-run]
+```
+
+`list` reads the desktop's saved project chip, GitHub Items query, and each repo's Upstream / Origin choice. It does not keep its own project list. `start` without `--dry-run` creates one worktree, no parent, with Grok in the first terminal and a read-only review prompt. `--dry-run` prints that payload and creates nothing. If a worktree is already linked to that pull request or issue, `start` returns it instead of creating another.
+
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
