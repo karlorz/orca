@@ -257,7 +257,7 @@ describe('own-mobile-relay-startup-failure.integration (Scenario 5)', () => {
       sql: string
     ) {
       const res = origExec.call(this, sql)
-      if (!sidecarChmodded && sql.includes('PRAGMA user_version = 1;')) {
+      if (!sidecarChmodded && sql.includes('PRAGMA user_version = 5;')) {
         sidecarChmodded = true
         capturedDbInstances.push(this)
         if (existsSync(walPath)) {

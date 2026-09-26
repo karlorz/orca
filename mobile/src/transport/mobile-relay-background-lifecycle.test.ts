@@ -8,7 +8,8 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
@@ -30,7 +31,7 @@ describe('mobile Relay background lifecycle', () => {
   it('retains a relay session across a quick background and foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -50,7 +51,7 @@ describe('mobile Relay background lifecycle', () => {
   it('releases a retained relay after 30 seconds and recovers only on foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -71,7 +72,7 @@ describe('mobile Relay background lifecycle', () => {
   it('enforces an overdue grace on foreground when the background timer was suspended', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -88,7 +89,7 @@ describe('mobile Relay background lifecycle', () => {
   it('recovers after a retained relay fails while backgrounded', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -108,7 +109,7 @@ describe('mobile Relay background lifecycle', () => {
   it('does not retain or suspend a healthy direct session in the background', async () => {
     const logical = new FakeLogicalClient('connected', 'tailscale')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -127,7 +128,7 @@ describe('mobile Relay background lifecycle', () => {
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     await vi.advanceTimersByTimeAsync(40_000)
@@ -154,7 +155,7 @@ describe('mobile Relay background lifecycle', () => {
       openRelay,
       writeBundle: vi.fn(() => writeStarted)
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     const starting = supervisor.start()
     await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledOnce())
 
@@ -173,7 +174,7 @@ describe('mobile Relay background lifecycle', () => {
     setHostConnectionRetainRuntime(true)
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -187,7 +188,7 @@ describe('mobile Relay background lifecycle', () => {
   it('still suspends a relay after 30s when a background focus nudge arrives and retain is off', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)
@@ -204,7 +205,7 @@ describe('mobile Relay background lifecycle', () => {
     setHostConnectionRetainRuntime(true)
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.setForeground(false)

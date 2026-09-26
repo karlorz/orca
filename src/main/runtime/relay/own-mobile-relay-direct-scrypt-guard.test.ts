@@ -30,6 +30,17 @@ describe('Direct throttle and derivation-skip verification', () => {
         passwordModule.TEST_FAST_PASSWORD_POLICY
       )
     })
+    await securityState.issueAccessSession({
+      rawAccessToken: 'test-session-token',
+      ttlMs: 60000,
+      identity: {
+        userId: 'usr1',
+        profileId: 'prf1',
+        organizationId: 'org1',
+        email,
+        cloudProfileId: ''
+      }
+    })
 
     verifySpy.mockClear()
     deriveSpy.mockClear()
@@ -37,6 +48,7 @@ describe('Direct throttle and derivation-skip verification', () => {
     const req = {
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
+        authorization: 'Bearer test-session-token',
         origin: 'http://127.0.0.1'
       },
       socket: { remoteAddress: ip },

@@ -3,7 +3,7 @@ import { DirectReturnProbe } from './mobile-direct-return-probe'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
-import { liveRelayLeaseExpiry, persistRelayHost } from './mobile-endpoint-supervisor-support'
+import { liveRelayLeaseExpiry } from './mobile-endpoint-supervisor-support'
 import {
   recoverMobileRelay,
   rotateMobileRelayCredentialIfNeeded,
@@ -16,7 +16,8 @@ import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { ForegroundNudgeReason, HostProfile } from './types'
+import type { ForegroundNudgeReason } from './types'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
 import {
   getHostConnectionRetainRuntime,
@@ -51,7 +52,8 @@ export class MobileEndpointSupervisor {
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
-    private host: HostProfile,
+    private readonly hostId: string,
+    relay: MobileRelayEndpoint,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
     this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
@@ -92,11 +94,11 @@ export class MobileEndpointSupervisor {
       isActive: () => this.isActive(),
       isForeground: () => this.backgroundGrace.isForeground(),
       isRetainingHostConnection: () => this.backgroundGrace.isRetainingHostConnection(),
-      relay: () => this.host.relay,
+      isStopped: () => this.stopped,
+      hostId,
+      relay,
       resolveRelay: dependencies.resolveRelay,
-      persistResolvedRelay: async (resolved) => {
-        this.host = await persistRelayHost(this.host, resolved, dependencies.saveHost)
-      },
+      setRelayRouting: dependencies.setRelayRouting,
       bundle: () => this.bundle,
       adoptBundle: (bundle) => (this.bundle = bundle),
       recordMigration: () => {
@@ -115,7 +117,6 @@ export class MobileEndpointSupervisor {
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
-      host: () => this.host,
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
@@ -151,8 +152,8 @@ export class MobileEndpointSupervisor {
   }
 
   async start(): Promise<void> {
-    this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.host.relay) {
+    this.bundle = await this.dependencies.readBundle(this.hostId).catch(() => null)
+    if (this.stopped) {
       return
     }
     if (!this.bundle) {
@@ -226,10 +227,7 @@ export class MobileEndpointSupervisor {
   private recovery(): SupervisorRecoveryContext {
     return {
       isActive: () => this.isActive(),
-      host: () => this.host,
-      setHost: (host) => {
-        this.host = host
-      },
+      hostId: this.hostId,
       bundle: () => this.bundle,
       setBundle: (bundle) => {
         this.bundle = bundle

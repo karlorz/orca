@@ -16,7 +16,13 @@ export function updateFailureLines(
   now: number
 ): Line[] {
   return hosts.flatMap((host) => {
-    const newest = failures.findLast((failure) => failure.hostId === host.id)
+    let newest: MobileWebShellUpdateFailure | undefined
+    for (let index = failures.length - 1; index >= 0; index--) {
+      if (failures[index].hostId === host.id) {
+        newest = failures[index]
+        break
+      }
+    }
     return newest === undefined
       ? []
       : [{ hostId: host.id, text: formatUpdateFailure(newest, host.name, now) }]

@@ -70,7 +70,15 @@ export function createPageBackConsumers(args: {
     // A copy is walked, not the array: a consumer that closes its own sheet disposes itself from
     // inside this loop, and splicing under the iteration would skip the one beneath it.
     press: () => {
-      if (!held.toReversed().some((entry) => entry.consumer())) {
+      const snapshot = held.slice()
+      let consumed = false
+      for (let index = snapshot.length - 1; index >= 0; index--) {
+        if (snapshot[index].consumer()) {
+          consumed = true
+          break
+        }
+      }
+      if (!consumed) {
         args.onUnclaimed()
       }
     },

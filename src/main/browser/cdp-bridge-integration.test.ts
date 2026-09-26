@@ -463,6 +463,8 @@ describe('Browser automation pipeline (integration)', () => {
       await vi.advanceTimersByTimeAsync(25_000)
 
       await expect(gotoResult).resolves.toMatchObject({ code: 'browser_timeout' })
+      // Pet voice arms a reconnect timer on the same fake clock; stop the runtime before counting.
+      await server.stop()
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

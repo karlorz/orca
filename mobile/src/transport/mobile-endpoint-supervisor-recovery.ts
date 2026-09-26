@@ -1,7 +1,4 @@
-import {
-  persistRelayHost,
-  suspendRelayIfStillConnected
-} from './mobile-endpoint-supervisor-support'
+import { suspendRelayIfStillConnected } from './mobile-endpoint-supervisor-support'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
@@ -16,12 +13,10 @@ import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import type { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { HostProfile } from './types'
 
 export type SupervisorRecoveryContext = {
   isActive: () => boolean
-  host: () => HostProfile
-  setHost: (host: HostProfile) => void
+  hostId: string
   bundle: () => MobileRelayCredentialBundle | null
   setBundle: (bundle: MobileRelayCredentialBundle | null) => void
   operationInFlight: () => boolean
@@ -46,7 +41,7 @@ export async function recoverMobileRelay(
   forceReplacement = false,
   ownsRecovery = false
 ): Promise<void> {
-  if (!ctx.isActive() || !ctx.host().relay) {
+  if (!ctx.isActive()) {
     return
   }
   if (ctx.operationInFlight()) {
@@ -82,7 +77,7 @@ export async function recoverMobileRelay(
     const selection = await selectDialableRelayCredentials({
       bundle: ctx.bundle(),
       controller: ctx.relayReconnect,
-      readBundle: () => ctx.dependencies.readBundle(ctx.host().id),
+      readBundle: () => ctx.dependencies.readBundle(ctx.hostId),
       onAdoptedFresherBundle: () => ctx.logRelay('adopted fresher durable credential bundle')
     })
     ctx.setBundle(selection.bundle)
@@ -164,7 +159,7 @@ export async function rotateMobileRelayCredentialIfNeeded(
     ctx.setBundle(result.bundle)
     // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
     credentialRefreshed = true
-    ctx.setHost(await persistRelayHost(ctx.host(), result.relay, ctx.dependencies.saveHost))
+    await ctx.sessionEstablisher.adoptRelay(result.relay)
   } catch {
     // Why: pending material remains durable; the next authenticated direct
     // opportunity must reconcile it before creating another install key.

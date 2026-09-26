@@ -388,7 +388,7 @@ afterEach(() => {
 })
 
 describe('completed background-worker retirement resume matrix', () => {
-  it('does not cold-resume an explicitly completed and retired worker on first activation', async () => {
+  it('keeps completed sessions for explicit resume without cold-resuming retired workers', async () => {
     // Case 1: task completion alone keeps the still-owned provider session recoverable in place.
     const ownedRecord = recordCompletedWorker()
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
@@ -397,7 +397,7 @@ describe('completed background-worker retirement resume matrix', () => {
       ownedRecord
     )
 
-    // Case 2: the renderer boundary used by an explicit Orca close retires the exact authority.
+    // Case 2: explicit close keeps the provider session for Resume workspace.
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
@@ -405,14 +405,21 @@ describe('completed background-worker retirement resume matrix', () => {
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done',
+      restoreOnTabOpenOnly: true
+    })
+    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectCanaryUnchanged()
 
-    // Case 3: both running and PTY-exit-first release retire exact resume authority.
+    // Case 3: both release paths preserve only explicit resume authority.
     seedWorkspace()
     recordCompletedWorker()
     await releaseCompletedWorker('running')
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done',
+      restoreOnTabOpenOnly: true
+    })
     expectCanaryUnchanged()
 
     seedWorkspace()
@@ -428,15 +435,17 @@ describe('completed background-worker retirement resume matrix', () => {
       providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
     })
     await releaseCompletedWorker('exited')
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
 
     const retiredRestart = persistAndParseCurrentSession()
     expect(retiredRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
 
-    // Case 4: legacy rollback preserves the settled worker's record as an ordinary sleeping
-    // record; with its tab gone it is passive completed evidence that wake clears, and an exited
-    // resolution clears it too. No fence: a finished worker follows the same rule as any agent pane.
+    // Case 4: legacy rollback leaves a completed record available without waking it.
     seedWorkspace()
     recordCompletedWorker()
     const legacyAction = resolveLegacyWorkerTerminalRecoveryAction({
@@ -457,14 +466,16 @@ describe('completed background-worker retirement resume matrix', () => {
       useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]
     ).not.toHaveProperty('automaticResumeBlockedBy')
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
     const exitedAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'exited'
     })
     expect(exitedAction).toEqual({ kind: 'clear-sleeping', paneKey: ORIGINAL_PANE_KEY })
 
-    // Case 5: coordinator manual close is the same safe exact-tab retirement boundary.
+    // Case 5: coordinator manual close also leaves explicit resume available.
     seedWorkspace()
     recordCompletedWorker()
     closeTerminalTab(ORIGINAL_TAB_ID, {
@@ -472,7 +483,11 @@ describe('completed background-worker retirement resume matrix', () => {
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done',
+      restoreOnTabOpenOnly: true
+    })
+    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectCanaryUnchanged()
 
     // Case 6: normal Codex exit leaves the shell pane; helper close retires only the helper.
@@ -508,12 +523,15 @@ describe('completed background-worker retirement resume matrix', () => {
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[HELPER_PANE_KEY]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[HELPER_PANE_KEY]).toMatchObject({
+      state: 'done',
+      restoreOnTabOpenOnly: true
+    })
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeDefined()
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectCanaryUnchanged()
 
-    // Case 7: restart preserves owned panes, while post-retirement restart keeps authority absent.
+    // Case 7: restart preserves owned panes and explicit resume after retirement.
     seedWorkspace()
     const workingProviderSession = recordWorkingWorker()
     const beforeCompletion = persistAndParseCurrentSession()
@@ -555,11 +573,13 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
+    // Case 8: first activation leaves the completed session for explicit Resume workspace.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
-    expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+    expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
     expect(Object.keys(beforeActivation.pendingStartupByTabId)).toEqual([])
     expect(beforeActivation.tabsByWorktree[WORKTREE_ID]).toEqual([])
     const activationResult = activateAndRevealWorktree(WORKTREE_ID, {
@@ -569,12 +589,11 @@ describe('completed background-worker retirement resume matrix', () => {
     const activated = useAppStore.getState()
 
     const replacementTabs = activated.tabsByWorktree[WORKTREE_ID] ?? []
-    expect(replacementTabs).toHaveLength(1)
-    expect(replacementTabs[0]?.id).not.toBe(ORIGINAL_TAB_ID)
+    expect(replacementTabs).toEqual([])
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expectCanaryUnchanged()
-    // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
+    // Required invariant: completion and retirement must not automatically resume the provider.
     expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(0)
     expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })

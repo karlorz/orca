@@ -101,6 +101,10 @@ const loadHostCatalogMock = vi.fn()
 vi.mock('../transport/host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => openHostLogicalClientMock(...args)
 }))
+// These voice-session fakes have no RPC surface for the opener's descriptor probe.
+vi.mock('../transport/runtime-status-probe', () => ({
+  startRuntimeStatusProbe: () => () => {}
+}))
 vi.mock('../transport/host-store', () => ({
   loadHostCatalog: () => loadHostCatalogMock(),
   loadHosts: () => loadHostCatalogMock()

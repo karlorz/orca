@@ -204,13 +204,10 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         return true
       },
       rollbackRecordingStart: () => {
-        acceptingChunksRef.current = false
-        pendingChunksRef.current.clear()
-        pendingAudioBudgetRef.current.reset()
-        void capture.end()
+        closeDictationAudio()
       }
     })
-  }, [applyStatus, capture])
+  }, [applyStatus, capture, closeDictationAudio])
 
   const stop = useCallback(async () => {
     const client = clientRef.current

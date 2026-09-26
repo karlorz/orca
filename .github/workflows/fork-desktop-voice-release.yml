@@ -62,6 +62,8 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      - uses: ./.github/actions/install-mobile-dependencies
+
       # macos-15 is arm64; beforePack needs darwin/x64 natives too (same flag as
       # official mac packaging). Keep the composite host-only for Linux/Windows.
       - name: Widen CPU variants for mac x64 and arm64
@@ -188,6 +190,8 @@ jobs:
         with:
           native-runtime: electron
 
+      - uses: ./.github/actions/install-mobile-dependencies
+
       - name: Resolve fork build version
         id: version
         env:
@@ -293,6 +297,8 @@ jobs:
         with:
           native-runtime: node
           persist-native-cache: 'false'
+
+      - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Resolve fork build version
         id: version
