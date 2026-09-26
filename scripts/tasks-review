@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+const path = require('node:path')
+
+try {
+  const command = require(path.join(__dirname, '..', 'out', 'cli', 'tasks-review.js'))
+  void command.main(process.argv.slice(2))
+} catch (error) {
+  process.stderr.write(`Build the Orca CLI first with pnpm build:cli: ${String(error)}\n`)
+  process.exitCode = 1
+}

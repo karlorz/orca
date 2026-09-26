@@ -356,3 +356,17 @@ features:
       - src/cli/specs/automations.ts
       - src/renderer/src/components/automations
     wiki: projects/orca/work/2026-09-22-automation-reasoning-effort
+
+  - id: tasks-review-saved-inbox
+    title: CLI review list and Grok worktree start from the saved Tasks view
+    kind: product
+    status: landed
+    paths:
+      - scripts/tasks-review
+      - src/cli/tasks-review.ts
+      - src/cli/tasks-review-view.ts
+      - src/cli/tasks-review-start.ts
+      - src/shared/task-page-default-repo-selection.ts
+      - src/shared/task-page-source-context.ts
+      - src/shared/github-work-item-workspace-attachment.ts
+    wiki: projects/orca/work/2026-09-26-tasks-review-interface
