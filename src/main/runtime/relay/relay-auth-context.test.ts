@@ -54,6 +54,7 @@ const sampleActiveProfile: ActiveOrcaProfileState = {
     }
   },
   dataFile: '/tmp/test-user-data/profile-1.json',
+  stateDatabaseFile: '/tmp/test-user-data/profile-1/profile-state.db',
   profileDirectory: '/tmp/test-user-data/profile-1'
 }
 
