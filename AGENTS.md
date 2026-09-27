@@ -14,7 +14,6 @@ This is `karlorz/orca`, a fork of `stablyai/orca`. Follow these rules for all fo
 6. **CI publishes as prerelease, not draft.** `--draft --prerelease`, verify assets, then `gh release edit --draft=false --prerelease --latest=false`. Operator switches Latest in the GitHub UI (uncheck Pre-release first).
 7. **Fence the copied upstream mobile workflow** with `if: github.repository == 'stablyai/orca'` so `mobile-android-v0.0.44-0` does not run it on this fork.
 8. **No GitHub issues/PRs upstream.** Issues and PRs only against `github.com/karlorz/*` repos.
-9. **Sync `upstream/main` only after a launchable APK exists** for the current mobile line. Do not tag a merge that has not opened on the phone.
 
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Most of it is linted: `pnpm run check:code-quality:changed` fails on new restyles of a `components/ui/` primitive, raw palette colors, and computed `className` strings; `pnpm lint` fails on any class Tailwind cannot generate. See the Enforcement section of the style guide before suppressing either. Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 

@@ -9,6 +9,14 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: cmd-j-recent-agent-activity
+    title: Cmd+J recent chats and worktrees follow agent activity
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/components/use-worktree-jump-palette-recent-tabs.ts
+      - src/renderer/src/components/worktree-jump-palette-recent-worktree-order.ts
+      - src/renderer/src/lib/recent-workspace-tab-rows.ts
   - id: fork-skill-stick-cc-switch
     title: Fork skill guide for the Tasks inbox and CC-Switch provider aliases
     kind: product

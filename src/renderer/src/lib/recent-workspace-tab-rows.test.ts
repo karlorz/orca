@@ -63,9 +63,9 @@ function sources(
 describe('orderRecentWorkspaceTabs', () => {
   it('orders individual tab visits across worktrees and hosts', () => {
     const rows = [
-      row('old', { lastFocusedAt: NOW - 3 * 86400_000 }),
-      row('recent', { lastFocusedAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
-      row('newest', { lastFocusedAt: NOW, worktreeId: 'folder:/project' })
+      row('old', { lastActiveAt: NOW - 3 * 86400_000 }),
+      row('recent', { lastActiveAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
+      row('newest', { lastActiveAt: NOW, worktreeId: 'folder:/project' })
     ]
     expect(orderRecentWorkspaceTabs({ rows })).toEqual(['newest', 'recent', 'old'])
   })
@@ -73,10 +73,10 @@ describe('orderRecentWorkspaceTabs', () => {
   it('keeps unknown and invalid visit times below visited tabs with stable ties', () => {
     const rows = [
       row('unknown'),
-      row('nan', { lastFocusedAt: Number.NaN }),
-      row('first', { lastFocusedAt: NOW }),
-      row('infinite', { lastFocusedAt: Infinity }),
-      row('second', { lastFocusedAt: NOW })
+      row('nan', { lastActiveAt: Number.NaN }),
+      row('first', { lastActiveAt: NOW }),
+      row('infinite', { lastActiveAt: Infinity }),
+      row('second', { lastActiveAt: NOW })
     ]
     expect(orderRecentWorkspaceTabs({ rows })).toEqual([
       'first',
@@ -90,22 +90,22 @@ describe('orderRecentWorkspaceTabs', () => {
 
   it('keeps duplicate ids on different hosts as separate occurrences', () => {
     const rows = [
-      row('same', { occurrenceId: 'local', lastFocusedAt: NOW - 1 }),
-      row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastFocusedAt: NOW })
+      row('same', { occurrenceId: 'local', lastActiveAt: NOW - 1 }),
+      row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastActiveAt: NOW })
     ]
     expect(orderRecentWorkspaceTabs({ rows })).toEqual(['ssh', 'local'])
   })
 
   it('retains permission badges without promoting an old permission title', () => {
     const old = row('old', {
-      lastFocusedAt: NOW - 3 * 86400_000,
+      lastActiveAt: NOW - 3 * 86400_000,
       terminalTab: { id: 'old', title: 'OMP - action required' }
     })
     const paneSources = sources([], { ptyIdsByTabId: { old: ['pty-1'] } })
     expect(resolveRecentWorkspaceTabStatus(old, paneSources, NOW)).toBe('permission')
-    expect(
-      orderRecentWorkspaceTabs({ rows: [old, row('recent', { lastFocusedAt: NOW })] })
-    ).toEqual(['recent', 'old'])
+    expect(orderRecentWorkspaceTabs({ rows: [old, row('recent', { lastActiveAt: NOW })] })).toEqual(
+      ['recent', 'old']
+    )
   })
 })
 

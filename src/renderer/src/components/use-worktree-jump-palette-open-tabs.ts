@@ -13,13 +13,7 @@ import {
 } from '@/lib/workspace-tab-palette-search'
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
 import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
-import type {
-  BrowserPaletteItem,
-  OpenTabPaletteItem,
-  SimulatorPaletteItem,
-  WorkspaceTabPaletteItem,
-  WorktreePaletteItem
-} from './worktree-jump-palette-model'
+import type { OpenTabPaletteItem, WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
@@ -34,6 +28,7 @@ import {
   buildSimulatorPaletteItems,
   buildWorkspaceTabPaletteItems
 } from './worktree-jump-palette-open-tab-items'
+import { orderRecentPaletteWorktrees } from './worktree-jump-palette-recent-worktree-order'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
@@ -75,6 +70,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   settings,
   terminalLayoutsByTabId,
   paneForegroundAgentByPaneKey,
+  lastVisitedAtByWorktreeId,
   deferredQuery,
   paletteSearchContext,
   hasQuery,
@@ -223,6 +219,19 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [workspaceTabEntries, deferredQuery, paletteSearchContext]
   )
+  const browserItems = useMemo(() => buildBrowserPaletteItems(browserMatches), [browserMatches])
+  const simulatorItems = useMemo(
+    () => buildSimulatorPaletteItems(simulatorMatches),
+    [simulatorMatches]
+  )
+  const workspaceTabItems = useMemo(
+    () => buildWorkspaceTabPaletteItems(workspaceTabMatches),
+    [workspaceTabMatches]
+  )
+  const openTabItems = useMemo<OpenTabPaletteItem[]>(
+    () => buildOpenTabPaletteItems({ browserItems, simulatorItems, workspaceTabItems }),
+    [browserItems, simulatorItems, workspaceTabItems]
+  )
   const worktreeItems = useMemo<WorktreePaletteItem[]>(() => {
     const items = worktreeMatches
       .map((match) => {
@@ -238,7 +247,13 @@ export function useWorktreeJumpPaletteOpenTabs({
       })
       .filter((item): item is WorktreePaletteItem => item !== null)
     if (!hasQuery) {
-      return items
+      return orderRecentPaletteWorktrees({
+        items,
+        openTabItems,
+        resolveWorktree,
+        lastVisitedAtByWorktreeId,
+        context: paletteSearchContext
+      })
     }
     const orderByIdentity = new Map(
       items.map((item, index) => [getPaletteWorktreeIdentity(item.worktree), index])
@@ -259,23 +274,14 @@ export function useWorktreeJumpPaletteOpenTabs({
         }
       )
     )
-  }, [hasQuery, resolveWorktree, worktreeMatches])
-  const browserItems = useMemo<BrowserPaletteItem[]>(
-    () => buildBrowserPaletteItems(browserMatches),
-    [browserMatches]
-  )
-  const simulatorItems = useMemo<SimulatorPaletteItem[]>(
-    () => buildSimulatorPaletteItems(simulatorMatches),
-    [simulatorMatches]
-  )
-  const workspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
-    () => buildWorkspaceTabPaletteItems(workspaceTabMatches),
-    [workspaceTabMatches]
-  )
-  const openTabItems = useMemo<OpenTabPaletteItem[]>(
-    () => buildOpenTabPaletteItems({ browserItems, simulatorItems, workspaceTabItems }),
-    [browserItems, simulatorItems, workspaceTabItems]
-  )
+  }, [
+    hasQuery,
+    lastVisitedAtByWorktreeId,
+    openTabItems,
+    paletteSearchContext,
+    resolveWorktree,
+    worktreeMatches
+  ])
 
   return {
     browserPageEntries,

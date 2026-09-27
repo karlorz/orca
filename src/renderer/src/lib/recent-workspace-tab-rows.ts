@@ -31,7 +31,7 @@ export type RecentWorkspaceTabRow = {
   /** Terminal tab whose panes carry agent state. Null for editor, browser and simulator rows. */
   terminalTab: Pick<TerminalTab, 'id' | 'title'> | null
   worktreeLastActivityAt: number
-  lastFocusedAt?: number | null
+  lastActiveAt?: number | null
 }
 
 export type RecentWorkspaceTabOrderInputs = {
@@ -100,15 +100,15 @@ export function resolveRecentWorkspaceTabStatus(
   return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
 }
 
-/** Unknown visit times stay at the bottom in their existing order. */
+/** Unknown activity times stay at the bottom in their existing order. */
 export function orderRecentWorkspaceTabs({ rows }: RecentWorkspaceTabOrderInputs): string[] {
-  const visitedAt = (row: RecentWorkspaceTabRow): number =>
-    typeof row.lastFocusedAt === 'number' &&
-    Number.isFinite(row.lastFocusedAt) &&
-    row.lastFocusedAt > 0
-      ? row.lastFocusedAt
+  const activeAt = (row: RecentWorkspaceTabRow): number =>
+    typeof row.lastActiveAt === 'number' &&
+    Number.isFinite(row.lastActiveAt) &&
+    row.lastActiveAt > 0
+      ? row.lastActiveAt
       : 0
   return [...rows]
-    .sort((a, b) => visitedAt(b) - visitedAt(a))
+    .sort((a, b) => activeAt(b) - activeAt(a))
     .map((row) => row.occurrenceId ?? row.id)
 }

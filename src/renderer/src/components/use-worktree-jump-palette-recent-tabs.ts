@@ -18,11 +18,7 @@ import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
-import {
-  getPaletteWorktreeExecutionHostId,
-  getPaletteWorktreeIdentity
-} from '@/lib/palette-repo-resolution'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteOpenTabs &
@@ -50,9 +46,6 @@ export function useWorktreeJumpPaletteRecentTabs({
   runtimePaneTitlesByTabId,
   terminalLayoutsByTabId,
   openTabItems,
-  workspaceTabEntries,
-  simulatorTabEntries,
-  browserPageEntries,
   resolveWorktree,
   unreadTerminalTabs,
   unreadAgentCompletionPanes,
@@ -63,22 +56,6 @@ export function useWorktreeJumpPaletteRecentTabs({
   autoSelectedItemIdRef,
   setSelectedItemId
 }: WorktreeJumpPaletteRecentTabsInput) {
-  const tabFocusTimes = useMemo(() => {
-    const times = new Map<string, number | undefined>()
-    for (const entry of [...workspaceTabEntries, ...simulatorTabEntries]) {
-      times.set(
-        encodePaletteIdentity(['tab', getPaletteWorktreeIdentity(entry.worktree), entry.tab.id]),
-        entry.tab.lastFocusedAt
-      )
-    }
-    for (const entry of browserPageEntries) {
-      times.set(
-        encodePaletteIdentity(['page', getPaletteWorktreeIdentity(entry.worktree), entry.page.id]),
-        entry.lastFocusedAt
-      )
-    }
-    return times
-  }, [workspaceTabEntries, simulatorTabEntries, browserPageEntries])
   const occurrenceIds = useMemo(() => {
     const counts = new Map<string, number>()
     return openTabItems.map((item) => {
@@ -134,13 +111,7 @@ export function useWorktreeJumpPaletteRecentTabs({
           occurrenceId,
           worktreeId: worktree.id,
           worktreeHostId: getPaletteWorktreeExecutionHostId(worktree),
-          lastFocusedAt: tabFocusTimes.get(
-            encodePaletteIdentity([
-              item.type === 'browser-page' ? 'page' : 'tab',
-              getPaletteWorktreeIdentity(worktree),
-              item.type === 'browser-page' ? item.result.pageId : item.result.tabId
-            ])
-          ),
+          lastActiveAt: item.result.lastActiveAt,
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
@@ -151,7 +122,7 @@ export function useWorktreeJumpPaletteRecentTabs({
       })
     }
     return entries
-  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree, tabFocusTimes])
+  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree])
   const recentTabRowByItem = useMemo(
     () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]

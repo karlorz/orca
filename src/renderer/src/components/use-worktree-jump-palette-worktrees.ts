@@ -10,7 +10,7 @@ import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-wo
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
+import { selectEmptyQueryWorktrees } from '@/lib/select-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
   searchWorktreeDocuments
@@ -50,7 +50,6 @@ export function useWorktreeJumpPaletteWorktrees({
   activeWorkspaceExecutionHostId,
   runtimeEnvironments,
   runtimeStatusByEnvironmentId,
-  lastVisitedAtByWorktreeId,
   paletteStatusInputsActive,
   repoMap,
   runtimePaneTitlesByTabId,
@@ -155,18 +154,12 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
-      orderEmptyQueryWorktrees({
+      selectEmptyQueryWorktrees({
         visibleWorktrees: emptyQueryVisibleWorktrees,
         activeWorktreeId,
-        activeWorkspaceExecutionHostId,
-        lastVisitedAtByWorktreeId
+        activeWorkspaceExecutionHostId
       }),
-    [
-      emptyQueryVisibleWorktrees,
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId,
-      lastVisitedAtByWorktreeId
-    ]
+    [emptyQueryVisibleWorktrees, activeWorktreeId, activeWorkspaceExecutionHostId]
   )
   const searchScopeWorktrees = useMemo(() => {
     const scope = getWorktreePaletteSearchScope({

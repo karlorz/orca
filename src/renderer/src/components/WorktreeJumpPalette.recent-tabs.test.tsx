@@ -572,7 +572,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(movedTo)
   })
 
-  it('preserves visit ordering and selection when terminal entities hydrate', async () => {
+  it('preserves activity ordering and selection when terminal entities hydrate', async () => {
     const hydrated = makeRecentTabState({
       agentStatusByPaneKey: {
         [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
@@ -593,7 +593,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       }
     })
     await renderPalette({ ...hydrated, tabsByWorktree: {} })
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
     const movedTo = getRenderedRowIds().filter((id) =>
       id.startsWith(encodePaletteIdentity(['workspace-tab']))
     )[1]
@@ -605,7 +605,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
     })
     await flushEffects()
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
     expect(getCommandValue()).toBe(movedTo)
   })
 
@@ -633,7 +633,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
   })
 
-  it('ranks a recently visited idle tab above a three-day-old blocked tab', async () => {
+  it('ranks fresh agent activity above a more recently focused idle tab', async () => {
     await renderPalette(
       makeRecentTabState({
         agentStatusByPaneKey: {
@@ -656,7 +656,58 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       })
     )
 
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+  })
+
+  it('ranks a newly created terminal without a focus timestamp', async () => {
+    const now = Date.now()
+    await renderPalette(
+      makeRecentTabState({
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              createdAt: now
+            }
+          ],
+          'wt-beta': [
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: now - 60_000
+            }
+          ]
+        }
+      })
+    )
+
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+  })
+
+  it('uses fresh agent activity for worktree order and displayed age', async () => {
+    const now = Date.now()
+    await renderPalette(
+      makeRecentTabState({
+        worktreesByRepo: {
+          'repo-1': [
+            makeWorktree('wt-alpha', 'Alpha workspace', { lastActivityAt: now - 3_600_000 }),
+            makeWorktree('wt-beta', 'Beta workspace', { lastActivityAt: now - 60_000 })
+          ]
+        },
+        lastVisitedAtByWorktreeId: {
+          'wt-alpha': now - 3_600_000,
+          'wt-beta': now - 60_000
+        },
+        agentStatusByPaneKey: {
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', now)
+        }
+      })
+    )
+
+    expect(getWorktreeRows()[0]).toContain('Alpha workspace')
+    const alphaRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', '|wt-alpha'])}"]`
+    )
+    expect(alphaRow?.querySelector('[aria-label="Last active <1m ago"]')).not.toBeNull()
   })
 
   it('freezes the order captured on open while statuses keep changing', async () => {
@@ -761,7 +812,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // Why: high-signal current tabs stay scannable (ask-question / permission badge) even though
     // idle "where you are" rows are still dropped.
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
     expect(testContainer.textContent).toContain('Current Tab')
   })
 
