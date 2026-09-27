@@ -18,6 +18,7 @@ import {
 } from '@/lib/orchestration-setup-state'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
+  ONBOARDING_FEATURE_SKILL_NAMES,
   buildOnboardingFeatureSetupClipboardText,
   createOnboardingFeatureSetupDeps,
   onboardingFeatureSetupRunTelemetry,
@@ -113,6 +114,24 @@ describe('onboarding feature setup runner', () => {
       orchestration: true,
       linearTickets: false
     })
+  })
+
+  it('maps onboarding feature items to fork-owned skill names', () => {
+    expect(ONBOARDING_FEATURE_SKILL_NAMES).toEqual({
+      browserUse: 'orca-cli',
+      computerUse: 'computer-use',
+      orchestration: 'orchestration',
+      linearTickets: 'orca-linear'
+    })
+    expect(ONBOARDING_FEATURE_SKILL_NAMES.browserUse).toBe(ORCA_CLI_SKILL_NAME)
+  })
+
+  it('builds the documented three-skill command for the default onboarding selection', () => {
+    expect(
+      buildOnboardingFeatureSetupClipboardText(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
+    ).toBe(
+      'npx skills add https://github.com/karlorz/orca/tree/fork-main --skill orca-cli --skill computer-use --skill orchestration --global'
+    )
   })
 
   it('builds one skill command for selected onboarding feature setup skills', () => {

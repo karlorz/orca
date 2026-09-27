@@ -23,15 +23,21 @@ The desktop app remains the CLI version authority.
 
 ## Agent skills
 
-Fork builds install skills from the fork working branch:
+Fork builds install skills from the fork working branch (`fork-main`). The default onboarding cards map to fork-owned skills:
+
+- Agent Browser Use -> `orca-cli`
+- Computer Use -> `computer-use`
+- Agent Orchestration -> `orchestration`
+
+Install the default skills together:
 
 ```bash
-npx skills add https://github.com/karlorz/orca/tree/fork-main \
-  --skill orca-cli \
-  --global
+npx skills add https://github.com/karlorz/orca/tree/fork-main --skill orca-cli --skill computer-use --skill orchestration --global
 ```
 
-`npx skills update orca-cli --global` follows the source recorded in `~/.agents/.skill-lock.json`. Existing upstream registrations can be migrated by running the fork install command again for the same skill names. The skills CLI records `karlorz/orca`, `fork-main`, and the selected skill paths in the lock.
+The npm `@karlorz/orca-cli` launcher is separate from the GitHub-installed skills: `@karlorz/orca-cli` is the shell launcher package that forwards commands to the desktop application, whereas agent skills (`orca-cli`, `computer-use`, `orchestration`) are installed directly from the `karlorz/orca` GitHub repository via `npx skills add`.
+
+`npx skills update orca-cli computer-use orchestration --global` follows the sources recorded in `~/.agents/.skill-lock.json`. Existing upstream lock records can be migrated to the fork by rerunning the combined install command above. The skills CLI records `karlorz/orca`, `fork-main`, and the selected skill paths in `~/.agents/.skill-lock.json`.
 
 ## npm publication
 

@@ -54,7 +54,7 @@ const ONBOARDING_PROGRESS_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[]
   'orchestration'
 ]
 
-const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
+export const ONBOARDING_FEATURE_SKILL_NAMES: Readonly<Record<OnboardingFeatureSetupId, string>> = {
   browserUse: ORCA_CLI_SKILL_NAME,
   computerUse: COMPUTER_USE_SKILL_NAME,
   orchestration: ORCHESTRATION_SKILL_NAME,
@@ -122,7 +122,7 @@ export function buildOnboardingFeatureSetupSkillCommand(
   selection: OnboardingFeatureSetupSelection
 ): string | null {
   const skillNames = selectedOnboardingFeatureSetupIds(selection).map(
-    (id) => FEATURE_SKILL_NAMES[id]
+    (id) => ONBOARDING_FEATURE_SKILL_NAMES[id]
   )
   if (skillNames.length === 0) {
     return null
