@@ -1,9 +1,17 @@
 {
   "name": "orca",
   "version": "1.4.214",
+  "private": true,
   "description": "Next-gen IDE for parallel agentic development",
-  "homepage": "https://github.com/stablyai/orca",
-  "author": "stablyai",
+  "homepage": "https://github.com/karlorz/orca",
+  "bugs": {
+    "url": "https://github.com/karlorz/orca/issues"
+  },
+  "author": "karlorz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karlorz/orca.git"
+  },
   "bin": {
     "orca": "./out/cli/index.js",
     "orca-dev": "./config/scripts/orca-dev.mjs"

@@ -1,0 +1,33 @@
+{
+  "name": "@karlorz/orca-cli",
+  "version": "0.1.0",
+  "description": "Launcher for the CLI bundled with karlorz/orca desktop releases",
+  "homepage": "https://github.com/karlorz/orca",
+  "bugs": {
+    "url": "https://github.com/karlorz/orca/issues"
+  },
+  "license": "Apache-2.0",
+  "author": "karlorz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karlorz/orca.git",
+    "directory": "packages/orca-cli"
+  },
+  "bin": {
+    "orca": "bin/orca.cjs"
+  },
+  "files": [
+    "bin/orca.cjs",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "test": "node bin/orca.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,51 @@
+name: Fork npm CLI Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: npm distribution tag
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - next
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'karlorz/orca' && github.ref == 'refs/heads/fork-main'
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify launcher package
+        run: npm test --prefix packages/orca-cli
+
+      - name: Refuse an existing version
+        working-directory: packages/orca-cli
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if npm view "@karlorz/orca-cli@$version" version >/dev/null 2>&1; then
+            echo "@karlorz/orca-cli@$version already exists. Bump packages/orca-cli/package.json first." >&2
+            exit 1
+          fi
+
+      - name: Publish public package with provenance
+        working-directory: packages/orca-cli
+        env:
+          NPM_CONFIG_PROVENANCE: 'true'
+        run: npm publish --access public --tag "${{ inputs.npm_tag }}"

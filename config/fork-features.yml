@@ -9,6 +9,15 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: fork-owned-entry-points
+    title: Fork-owned skill installs, package metadata, and npm CLI launcher
+    kind: release
+    status: landed
+    paths:
+      - src/shared/agent-feature-install-commands.ts
+      - packages/orca-cli
+      - .github/workflows/fork-npm-cli-release.yml
+      - docs/fork-entry-points.md
   - id: cmd-j-recent-agent-activity
     title: Cmd+J recent chats and worktrees follow agent activity
     kind: product

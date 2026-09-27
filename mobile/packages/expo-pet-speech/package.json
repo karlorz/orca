@@ -9,15 +9,15 @@
     "expo-pet-speech",
     "react-native"
   ],
-  "homepage": "https://github.com/stablyai/orca/tree/main/mobile/packages/expo-pet-speech",
+  "homepage": "https://github.com/karlorz/orca/tree/fork-main/mobile/packages/expo-pet-speech",
   "bugs": {
-    "url": "https://github.com/stablyai/orca/issues"
+    "url": "https://github.com/karlorz/orca/issues"
   },
   "license": "MIT",
   "author": "Orca contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/stablyai/orca.git",
+    "url": "git+https://github.com/karlorz/orca.git",
     "directory": "mobile/packages/expo-pet-speech"
   },
   "main": "src/index.ts",

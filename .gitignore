@@ -119,6 +119,7 @@ docs/**
 !docs/audits/crashpad-read-limit/
 !docs/audits/crashpad-read-limit/source-hashes.json
 !docs/agent-skill-sharing-implementation-checklist.md
+!docs/fork-entry-points.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/agent-pty-transcript-capture.md
