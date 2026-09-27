@@ -1,6 +1,6 @@
 {
   "name": "@karlorz/orca-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Launcher for the CLI bundled with karlorz/orca desktop releases",
   "homepage": "https://github.com/karlorz/orca",
   "bugs": {
