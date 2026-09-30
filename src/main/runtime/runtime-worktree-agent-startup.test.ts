@@ -1,20 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
-  markAntigravityWorkspaceTrusted: vi.fn(),
-  markCodexProjectTrusted: vi.fn(),
-  markCopilotFolderTrusted: vi.fn(),
-  markCursorWorkspaceTrusted: vi.fn(),
   detectRemoteAgents: vi.fn(),
   detectInstalledAgentsWithShellPathHydration: vi.fn()
-}))
-
-vi.mock('../agent-trust-presets', () => ({
-  markAntigravityWorkspaceTrusted: mocks.markAntigravityWorkspaceTrusted,
-  markCodexProjectTrusted: mocks.markCodexProjectTrusted,
-  markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
 }))
 
 vi.mock('../preflight/agent-detection', () => ({
@@ -24,8 +14,7 @@ vi.mock('../preflight/agent-detection', () => ({
 
 import {
   buildWorktreeStartupForAgent,
-  buildWorktreeStartupForDraft,
-  markLocalWorktreeTrusted
+  buildWorktreeStartupForDraft
 } from './runtime-worktree-agent-startup'
 
 function makeRepo(fields: Partial<Repo>): Repo {
@@ -101,6 +90,22 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
       request_kind: 'new'
     })
   })
+
+  it('attributes a startup agent whose caller named no surface as unknown', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'new'
+    })
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -134,100 +139,32 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
     expect(mocks.detectRemoteAgents).not.toHaveBeenCalled()
     expect(result?.agent).toBe('claude')
   })
-})
 
-describe('buildWorktreeStartupForAgent launch preferences', () => {
-  // Why this is the serve-mode path: automations that run without a window build
-  // their startup command here, so an automation model has to survive it.
-  function commandFor(
-    agent: 'grok' | 'aider',
-    launchPreferences: { model: string } | undefined
-  ): { command: string; agentCommand: string | undefined } {
-    const startup = buildWorktreeStartupForAgent({
-      repo: makeRepo({}),
-      settings,
-      agent,
-      prompt: 'Triage alerts',
-      ...(launchPreferences ? { launchPreferences } : {}),
-      getLaunchPlatform: () => 'linux',
-      toSessionOptions: (preferences) =>
-        preferences ? { model: preferences.model as never } : undefined
-    })
-    return {
-      command: startup.startup.command,
-      agentCommand: startup.startup.launchConfig?.agentCommand
-    }
-  }
-
-  it('launches grok with the requested model', () => {
-    expect(commandFor('grok', { model: 'deepseek-v4-flash' }).command).toBe(
-      "grok '--permission-mode' 'bypassPermissions' '-m' 'deepseek-v4-flash' -- 'Triage alerts'"
-    )
-  })
-
-  it('launches grok without a model flag when none is requested', () => {
-    expect(commandFor('grok', undefined).command).toBe(
-      "grok '--permission-mode' 'bypassPermissions' -- 'Triage alerts'"
-    )
-  })
-
-  it('keeps an unlaunchable model out of the command on agents Orca cannot flag', () => {
-    // `aider` has no catalog model flag, so a request for one must not invent a
-    // flag: that list order or spacing would fail the launch outright.
-    expect(commandFor('aider', { model: 'deepseek-v4-flash' }).command).not.toContain(
-      'deepseek-v4-flash'
-    )
-  })
-})
-
-describe('markLocalWorktreeTrusted', () => {
-  it('waits for the Codex trust write before resolving', async () => {
-    let finish!: () => void
-    mocks.markCodexProjectTrusted.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve
+  // The host picks and launches this agent itself, so it is attributed like any other it builds,
+  // whether the draft rides the launch command or is pasted once the agent is up.
+  it.each([
+    ['claude', 'cli', 'cli', false],
+    ['claude', undefined, 'unknown', false],
+    ['claude-agent-teams', 'orchestration', 'orchestration', true],
+    ['claude-agent-teams', undefined, 'unknown', true]
+  ] as const)(
+    'attributes a %s draft launch named %s as %s',
+    async (agent, launchSource, expected, pasted) => {
+      const result = await buildWorktreeStartupForDraft({
+        repo: makeRepo({}),
+        settings,
+        draft: 'ship it',
+        requestedAgent: agent,
+        getLaunchPlatform: () => 'linux',
+        ...(launchSource ? { launchSource } : {})
       })
-    )
-    let settled = false
-    const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
-      settled = true
-    })
 
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finish()
-    await marking
-    expect(mocks.markCodexProjectTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a rejected Codex trust write', async () => {
-    mocks.markCodexProjectTrusted.mockRejectedValueOnce(new Error('write failed'))
-
-    await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
-  })
-
-  /**
-   * Why this test exists: Orca has two trust dispatch chains — the renderer's
-   * preflightAgentTrust (via the agentTrust:markTrusted IPC) and this main-process
-   * one, which is the only path `orchestration worker-start` takes. Adding
-   * `preflightTrust: 'antigravity'` to TUI_AGENT_CONFIG clears the `!preset` guard
-   * here but matched none of the cursor/copilot/codex branches, so every supervised
-   * agy worker still failed at agent_readiness with 'agent-trust-workspace' while
-   * the renderer-side unit tests passed. Verified live: with the branch added, the
-   * worktree is appended to ~/.gemini/antigravity-cli/settings.json and the dispatch
-   * reaches worker_done.
-   */
-  it('writes the agy workspace trust artifact on the orchestration path', async () => {
-    await markLocalWorktreeTrusted('antigravity', '/workspace/app')
-
-    expect(mocks.markAntigravityWorkspaceTrusted).toHaveBeenCalledWith('/workspace/app')
-  })
-
-  it('contains a throwing agy trust write', async () => {
-    mocks.markAntigravityWorkspaceTrusted.mockImplementationOnce(() => {
-      throw new Error('write failed')
-    })
-
-    await expect(markLocalWorktreeTrusted('antigravity', '/workspace/app')).resolves.toBeUndefined()
-  })
+      expect(result?.draftPaste !== undefined).toBe(pasted)
+      expect(result?.startup.telemetry).toEqual({
+        agent_kind: tuiAgentToAgentKind(agent),
+        launch_source: expected,
+        request_kind: 'new'
+      })
+    }
+  )
 })

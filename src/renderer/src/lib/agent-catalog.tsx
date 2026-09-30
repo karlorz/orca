@@ -1,20 +1,9 @@
-import type React from 'react'
-import { ClaudeIcon, DroidIcon, GrokIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import { getCatalogPlatform } from './agent-catalog-platform'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import {
-  AgentLetterIcon,
-  AiderIcon,
-  CopilotIcon,
-  KiloIcon,
-  OmpIcon,
-  OpenCodeIcon,
-  PiIcon
-} from './agent-icon-glyphs'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -28,20 +17,6 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
-}
-
-function getCatalogPlatform(): NodeJS.Platform {
-  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  if (userAgent.includes('Mac')) {
-    return 'darwin'
-  }
-  if (userAgent) {
-    return 'linux'
-  }
-  return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
@@ -76,7 +51,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
-    faviconDomain: 'grok.com',
+    faviconDomain: 'x.ai',
     homepageUrl: 'https://x.ai/cli'
   },
   {
@@ -126,6 +101,20 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'muse',
     faviconDomain: 'dev.meta.ai',
     homepageUrl: 'https://dev.meta.ai/docs/muse-code'
+  },
+  {
+    id: 'dsh',
+    label: translate('auto.lib.agent.catalog.dsh_label', 'DeepSeek Harness'),
+    cmd: 'dsh-tui',
+    searchAliases: ['deepseek', 'dsh', 'dst', 'deepseek harness'],
+    homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
+  },
+  {
+    id: 'qoder',
+    label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),
+    cmd: 'qodercli',
+    faviconDomain: 'qoder.com',
+    homepageUrl: 'https://docs.qoder.com/cli/overview'
   },
   {
     id: 'zcode',
@@ -243,6 +232,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
   },
   {
+    id: 'freebuff',
+    label: translate('auto.lib.agent.catalog.freebuff_label', 'Freebuff'),
+    cmd: 'freebuff',
+    faviconDomain: 'freebuff.com',
+    homepageUrl: 'https://freebuff.com/cli'
+  },
+  {
     id: 'command-code',
     label: translate('auto.lib.agent.catalog.6f8056a565', 'Command Code'),
     // Why: `npm i -g command-code` installs both `command-code` and the
@@ -330,6 +326,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/openclaw/openclaw'
   },
   {
+    id: 'codebuddy',
+    label: translate('auto.lib.agent.catalog.codebuddy_label', 'CodeBuddy'),
+    cmd: 'codebuddy',
+    faviconDomain: 'codebuddy.ai',
+    homepageUrl: 'https://www.codebuddy.ai/cli'
+  },
+  {
     id: 'herdr',
     label: translate('auto.lib.agent.catalog.df221ddcb3', 'Herdr'),
     cmd: 'herdr',
@@ -345,88 +348,4 @@ export function getAgentLabel(agent: TuiAgent): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
-export function AgentIcon({
-  agent,
-  size = 14
-}: {
-  agent: TuiAgent | null | undefined
-  size?: number
-}): React.JSX.Element {
-  // Why: render a neutral question-mark glyph when the agent identity is not
-  // yet known. Before, the caller coerced null → 'claude', which caused Codex
-  // panes to briefly show the Claude icon until the first hook callback
-  // arrived.
-  if (!agent) {
-    return <AgentLetterIcon letter="?" size={size} />
-  }
-  if (agent === 'claude' || agent === 'claude-agent-teams') {
-    return <ClaudeIcon size={size} />
-  }
-  if (agent === 'codex') {
-    return <OpenAIIcon size={size} />
-  }
-  if (agent === 'grok') {
-    return <GrokIcon size={size} />
-  }
-  if (agent === 'droid') {
-    return <DroidIcon size={size} />
-  }
-  if (agent === 'pi') {
-    return <PiIcon size={size} />
-  }
-  if (agent === 'omp') {
-    return <OmpIcon size={size} />
-  }
-  if (agent === 'aider') {
-    return <AiderIcon size={size} />
-  }
-  if (agent === 'kilo') {
-    return <KiloIcon size={size} />
-  }
-  if (agent === 'copilot') {
-    return <CopilotIcon size={size} />
-  }
-  if (agent === 'opencode') {
-    return <OpenCodeIcon size={size} />
-  }
-  if (agent === 'opencode2') {
-    return <OpenCodeIcon size={size} />
-  }
-  const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
-  // Why: prefer the favicon bundled at build time so the icon renders without a
-  // live network request — Google's favicon service is unreachable in some
-  // regions and offline, which left these icons broken (#8451).
-  const bundledFaviconUrl = AGENT_FAVICON_ASSETS[agent]
-  // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
-  // a truthy `||` check while `??` still renders a broken `<img src="">`.
-  const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
-  if (iconSrc) {
-    return (
-      <img
-        src={iconSrc}
-        width={size}
-        height={size}
-        alt=""
-        aria-hidden
-        style={{ borderRadius: 2 }}
-      />
-    )
-  }
-  if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon or bundled favicon fall back to
-    // their site favicon via Google's favicon service — same source the README
-    // uses for the agent badge list.
-    return (
-      <img
-        src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}
-        width={size}
-        height={size}
-        alt=""
-        aria-hidden
-        style={{ borderRadius: 2 }}
-      />
-    )
-  }
-  const label = catalogEntry?.label ?? agent
-  return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
-}
+export { AgentIcon } from './agent-catalog-icon'

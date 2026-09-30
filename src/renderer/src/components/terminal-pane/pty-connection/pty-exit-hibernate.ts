@@ -6,13 +6,11 @@ import {
   deferPtyShutdownExit,
   isHostPtySleepPending
 } from '../pty-shutdown-exit-deferral'
-import { replayIntoTerminal } from '../replay-guard'
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
-import {
-  getProviderSessionClaimKey,
-  isPassiveCompletedHibernationEvidence
-} from '@/lib/sleeping-agent-pane-ownership'
+import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 import {
   createGitBashConsoleCapacityDetector,
   type GitBashConsoleCapacityDetector
@@ -21,6 +19,15 @@ import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
+
+// Why live+done arms too: kept from #16308's wake-sweep widening; hibernation itself only writes worktree-sleep notes.
+export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): boolean {
+  return (
+    record.state === 'done' &&
+    record.origin !== 'quit' &&
+    !(record.origin === 'live' && agentTurnEndedUncleanly(record))
+  )
+}
 
 /** PTY exit handling, hibernated-pane wake targets, and post-exit focus transfer. */
 export function installPtyExitHibernate(session: ConnectPanePtySession): void {
@@ -107,10 +114,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   // in-flight hibernation kill runs noteVisibilityResume before onExit arms the
   // wake. Sharing the guarded consume lets both the reveal hook and the
   // arm-time foreground check resume the pane exactly once.
-  session.consumeHibernatedAgentWake = (
-    claimedProviderSessions?: Set<string>,
-    opts?: { forceWake?: boolean }
-  ): string | null => {
+  session.consumeHibernatedAgentWake = (claimedProviderSessions?: Set<string>): string | null => {
     const target = session.hibernatedWakeTarget
     if (!target || session.disposed) {
       return null
@@ -135,11 +139,6 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     if (!session.wakeHibernatedAgentPane) {
-      return null
-    }
-    // Why: View run / tab reveal must show the frozen ping/pong frame. `--resume`
-    // is Resume workspace after the tab is gone, or an explicit mobile wake.
-    if (!opts?.forceWake && isPassiveCompletedHibernationEvidence(target.record)) {
       return null
     }
     const claimKey = getProviderSessionClaimKey(target.record)
@@ -225,9 +224,6 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     if (!isUnverifiedExit) {
       session.clearPanePtyFitBinding()
     }
-    // Why: the negotiating application died with its PTY; any replacement
-    // session starts with kitty keyboard flags at zero.
-    session.kittyKeyboardModes.reset()
     const isSuppressedExit =
       session.deps.consumeSuppressedPtyExit(ptyId) ||
       preserveRendererBinding ||
@@ -267,21 +263,12 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       // is a wake hint or should be discarded; runtime cleanup above is enough.
       session.manager.setPaneGpuRendering(session.pane.id, true)
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
-      if (
-        sleepingRecordEntry &&
-        isPassiveCompletedHibernationEvidence(sleepingRecordEntry.record)
-      ) {
-        // Why: hibernation killed this pane's PTY. Keep the ping/pong frame
-        // frozen for View run; `--resume` waits for Resume workspace remount
-        // or an explicit mobile wake.
-        replayIntoTerminal(session.pane, session.deps.replayingPanesRef, POST_REPLAY_MODE_RESET, {
-          breadcrumbIdentity: {
-            tabId: session.deps.tabId,
-            worktreeId: session.deps.worktreeId,
-            ptyId
-          },
-          shouldRefreshViewportSynchronously: session.shouldRefreshForegroundSynchronously
-        })
+      if (sleepingRecordEntry && noteArmsHibernatedPaneWake(sleepingRecordEntry.record)) {
+        // Why: hibernation killed this pane's PTY while hidden. The frozen TUI
+        // frame still has mouse-tracking/bracketed-paste armed, which silently
+        // eats every click and keystroke against a dead transport — disarm the
+        // modes now and arm the reveal-time wake.
+        session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }
         const pendingWakeMatches =
           session.pendingHibernatedWakeTarget?.ptyId === ptyId &&
@@ -289,11 +276,13 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         if (session.pendingHibernatedWakeTarget && !pendingWakeMatches) {
           session.pendingHibernatedWakeTarget = null
         }
-        if (pendingWakeMatches) {
-          // Why: a mobile wake that raced this kill already ran before the
-          // exit armed the target. Consume it now with forceWake.
+        if (session.deps.isVisibleRef.current || pendingWakeMatches) {
+          // Why: a reveal (or a mobile wake) that raced this kill already ran
+          // before the exit landed, so it saw nothing armed. Consume the wake
+          // now (deferred off the exit handler) so the pane still resumes
+          // without needing a second hide/reveal or wake event.
           queueMicrotask(() => {
-            session.consumeHibernatedAgentWake(undefined, { forceWake: true })
+            session.consumeHibernatedAgentWake()
           })
         }
       } else if (session.pendingHibernatedWakeTarget?.ptyId === ptyId) {

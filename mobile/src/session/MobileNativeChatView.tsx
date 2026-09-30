@@ -11,25 +11,134 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatLiveTurnIndicator,
+  NativeChatSettledTurns
+} from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
+import { mobileNativeChatListFooter } from './mobile-native-chat-list-footer'
 import {
   buildMobileNativeChatTransientData,
-  mobileNativeChatEmptyState
+  mobileNativeChatEmptyState,
+  type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
-import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { MobileNativeChatTurnActivity } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
+import { NO_QUEUED_SLOT, type MobileQueuedSlotProps } from './use-mobile-native-chat-queued-slot'
+import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import type { MobileNativeChatViewProps } from './mobile-native-chat-view-types'
+import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-types'
+/** Why the composer input is locked: the transport is disconnected, or the
+ *  terminal subscription has not acknowledged its input lease yet. */
+export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+
+type Props = MobileQueuedSlotProps & {
+  /** Raw transcript, only for telling "still loading" from "loaded and empty". */
+  messages: NativeChatMessage[]
+  /** `messages` with noise stripped and tool turns folded in, from the overlay. */
+  folded: NativeChatMessage[]
+  status: MobileNativeChatStatus
+  error?: string
+  /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
+  agent?: string | null
+  agentWorking?: boolean
+  canStop?: boolean
+  /** Structured lane: per-turn "Working for N" status plus live tool progress,
+   *  replacing the bridge lane's static three-dot working row (desktop parity). */
+  structuredActivityUi?: boolean
+  /** What labels the live turn's one indicator row (structured lane only). */
+  turnIndicator?: NativeChatLiveTurnIndicator | null
+  /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
+  workingStartedAt?: number | null
+  settledTurns?: NativeChatSettledTurns | null
+  /** Structured lane: the journal that places each row in its turn. */
+  turnJournal?: NativeChatTurnJournal | null
+  /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
+  /** Interrupt a provider turn. */
+  onStop?: () => void
+  /** Live partial assistant text to show as an in-progress bubble, already gated
+   *  by the overlay against the transcript catching up. */
+  streaming: string | null
+  hasMore?: boolean
+  loadingEarlier?: boolean
+  onLoadEarlier?: () => void
+  onSend: (text: string) => Promise<boolean>
+  /** Route identity used to fence accepted sends that settle after a tab/view switch. */
+  sendSurfaceId: string
+  /** Reads the retained route's focus generation for accepted-send fencing. */
+  getSendCompletionGeneration: () => number
+  /** Reads user draft mutations from the route-owned controller. */
+  getComposerEditGeneration: () => number
+  /** Accepted user echoes awaiting transcript replacement, including image previews. */
+  pending: MobileNativeChatPendingItem[]
+  /** Local photo URIs retained when the authoritative transcript replaces an
+   *  optimistic image bubble. */
+  imagePreviewsByMessageId?: Record<string, string[]>
+  /** Controlled composer text (owned by the route so dictation can write to it). */
+  composerText: string
+  onComposerTextChange: (text: string) => void
+  onAttachImage?: () => void
+  /** Pending image attachments shown as composer thumbnails until the next send. */
+  attachments?: PendingNativeChatImage[]
+  onRemoveAttachment?: (id: string) => void
+  isAttaching?: boolean
+  onMicPress?: () => void
+  micActive?: boolean
+  dictationMode?: string
+  onMicPressIn?: () => void
+  onMicPressOut?: () => void
+  inputLockReason?: MobileNativeChatInputLockReason | null
+  /** Route-reported send failure (answer cards, permission replies, stop). Shares the
+   *  inline banner with a rejected composer send, so one failure paints once. The
+   *  route routes these here only while this view is mounted, and falls back to its
+   *  toast otherwise — a deferred failure must not land on an unmounted banner. */
+  sendErrorMessage?: string | null
+  /** Clears `sendErrorMessage` once a later send is accepted. */
+  onClearSendError?: () => void
+  filePaths?: string[]
+  onNeedFiles?: (query: string) => void
+  /** Model/session-option pickers for the composer action row (desktop parity). */
+  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+  /** A pending agent question/permission detected from live status, shown as a
+   *  native card above the composer; answering sends text to the agent. */
+  /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
+   *  the heuristic question card). */
+  ask?: AskPrompt | null
+  /** Stable key for the ask card. Dismissal state lives in the controller (it
+   *  must survive this subtree unmounting on a chat↔terminal toggle). */
+  askKey?: string | null
+  /** Hide the answered/dismissed ask until a different question arrives. */
+  onDismissAsk?: () => void
+  /** Deliver the ask answer as per-question selections; the send hook turns them
+   *  into selector keystrokes (Claude) or pasted label text (other agents). */
+  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  onCancelAsk?: () => Promise<boolean>
+  /** Cancel a structured approval/question with exact item identity when supported. */
+  onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
+  question?: MobileChatQuestion | null
+  onAnswerQuestion?: (text: string) => Promise<boolean>
+  permission?: MobileChatPermission | null
+  onRespondPermission?: (send: string) => Promise<boolean>
+  /** Open a worktree file tapped in agent markdown. */
+  onOpenFile?: (relativePath: string) => void
+  /** Pixels to lift the composer by when the soft keyboard is open. The route
+   *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
+  keyboardInset?: number
+}
 
 export function MobileNativeChatView({
   messages,
@@ -43,6 +152,7 @@ export function MobileNativeChatView({
   turnIndicator = null,
   workingStartedAt,
   settledTurns,
+  turnJournal = null,
   onStop,
   streaming,
   hasMore,
@@ -81,9 +191,10 @@ export function MobileNativeChatView({
   onAnswerQuestion,
   permission,
   onRespondPermission,
+  queuedSlot: { cards: queuedCards, composerInputRef: inputRef } = NO_QUEUED_SLOT,
   onOpenFile,
   keyboardInset = 0
-}: MobileNativeChatViewProps): React.JSX.Element {
+}: Props): React.JSX.Element {
   const insets = useSafeAreaInsets()
   const [toolsExpanded, setToolsExpanded] = useState(false)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
@@ -161,6 +272,7 @@ export function MobileNativeChatView({
     isWorking: agentWorking === true,
     workingStartedAt,
     settledTurns,
+    turnJournal,
     thinking: turnIndicator?.thinking === true,
     activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
@@ -183,13 +295,18 @@ export function MobileNativeChatView({
     [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns]
   )
 
+  const liveStatus =
+    structuredActivityUi && agentWorking && !hasPendingStructuredInteraction && turns.active ? (
+      <MobileNativeChatTurnActivity
+        thinking={turns.active.thinking}
+        activityText={turns.activeActivityText}
+      />
+    ) : null
+
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
-  const commands = structuredActivityUi
-    ? sessionOptions?.controller.conversationCommands
-    : undefined
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
@@ -202,11 +319,10 @@ export function MobileNativeChatView({
           <GestureDetector gesture={pinchGesture}>
             <FlatList
               ref={listRef}
-              data={data}
+              data={turns.listMessages}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
-              windowSize={7}
               // Let link/file taps land while the composer keyboard is up
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
@@ -233,19 +349,11 @@ export function MobileNativeChatView({
                   </Pressable>
                 ) : null
               }
-              ListFooterComponent={
-                structuredActivityUi &&
-                agentWorking &&
-                !hasPendingStructuredInteraction &&
-                turns.active ? (
-                  <MobileNativeChatTurnStatus
-                    startedAt={turns.active.startedAt}
-                    thinking={turns.active.thinking}
-                    workedSeconds={turns.active.workedSeconds}
-                    activityText={turns.activeActivityText}
-                  />
-                ) : null
-              }
+              ListFooterComponent={mobileNativeChatListFooter(
+                liveStatus,
+                turns.waitingRows,
+                renderItem
+              )}
               ListEmptyComponent={
                 emptyState ? (
                   <View style={styles.center}>
@@ -268,6 +376,7 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
+      {queuedCards}
       <MobileNativeChatPromptCard
         ask={ask}
         askKey={askKey}
@@ -319,12 +428,14 @@ export function MobileNativeChatView({
         </View>
       ) : null}
       <MobileNativeChatComposer
-        structuredCommands={commands}
+        structuredCommands={
+          structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
+        }
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}
-        {...{ getSendCompletionGeneration, getComposerEditGeneration }}
+        {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
         agent={agent}
         sessionOptions={sessionOptions}
         onAttachImage={onAttachImage}

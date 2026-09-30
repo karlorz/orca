@@ -27,13 +27,9 @@ export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
 export const MAIN_RELEASE_REPO = 'stablyai/orca'
 export const KARLORZ_FORK_REPO = 'karlorz/orca'
 
-export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
-export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
-export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
-
-/** The canonical fork tag/version identifier pattern (e.g. 1.4.190-4). */
+/** The canonical fork tag/version identifier pattern (e.g. 1.4.217-0). */
 const FORK_CANONICAL_VERSION = /^\d+\.\d+\.\d+-\d+$/
-/** Legacy fork desktop identifier (e.g. 1.4.190-fork.voice.42.1.abcdef1). */
+/** Legacy fork desktop identifier retained for installed builds. */
 const FORK_LEGACY_VERSION = /^\d+\.\d+\.\d+-fork\.voice\./
 
 export function isCanonicalForkDesktopVersion(version: string): boolean {
@@ -45,8 +41,7 @@ export function isLegacyForkDesktopVersion(version: string): boolean {
 }
 
 export function isForkDesktopVersion(version: string): boolean {
-  const normalized = normalizeTagToVersion(version)
-  return isCanonicalForkDesktopVersion(normalized) || isLegacyForkDesktopVersion(normalized)
+  return isCanonicalForkDesktopVersion(version) || isLegacyForkDesktopVersion(version)
 }
 
 /** The dev channels, each published to its own repo rather than the main one. */
@@ -197,18 +192,6 @@ export function isDailyVersion(version: string): boolean {
 
 export function isAdhocVersion(version: string): boolean {
   return ADHOC_VERSION.test(normalizeTagToVersion(version))
-}
-
-export function formatHourlyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${HOURLY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatDailyVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${DAILY_PRERELEASE_IDENTIFIER}.${stamp}`
-}
-
-export function formatAdhocVersion(baseVersion: string, stamp: string): string {
-  return `${baseVersion}-${ADHOC_PRERELEASE_IDENTIFIER}.${stamp}`
 }
 
 /** Returns the build's UTC timestamp, or null when the version isn't hourly. */
