@@ -38,9 +38,13 @@ inventory in `config/fork-features.yml` and adopted upstream's current structure
 mobile chat, terminal document, release, and continuous-integration changes while
 preserving the fork's agent, speech, relay, updater, and workspace-resume behavior.
 
-The next desktop fork release is `v1.4.217-0`. The mobile train already has
-`mobile-android-v0.0.50-8`; a further mobile suffix requires an attended mobile
-release decision.
+Fork sync auto-cut `v1.4.217-0`. Its Linux build exposed a stale mobile-web
+route sweep after the merge: the shipped bundle emitted 74 chunks and 124 assets,
+while the inherited sweep recorded 69 chunks. Commit
+`52ef4429034ccf8227d7f9ff934b069d84f3b59c` re-measured every route prefix through
+the shipped bundler, and the immutable retry tag is `v1.4.217-1`. The mobile train
+already has `mobile-android-v0.0.50-8`; a further mobile suffix requires an
+attended mobile release decision.
 
 ## Tag-to-release lifecycle
 
