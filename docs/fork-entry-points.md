@@ -34,14 +34,15 @@ The 2026-10-01 fork sync studied these published upstream trains:
 `ce818bd5151a02937033752cb22cae2a522ba81b`, whose parents are the previous fork
 head `8b3afe7274de1c2f76326c3a814b24d10dee99ac` and upstream `main`
 `d74388f8a2dad2bd4bbfe3b937aba66e6648258b`. Final sync run
-[`36750251785`](https://github.com/karlorz/orca/actions/runs/36750251785) then merged
-the two newer upstream orchestration fixes through commit
-`c0d5e0452a763e949002630b3e1e5648123f9fbb`, bringing the `main` mirror and the
-upstream parent of `fork-main` to `46d6b76ae87abc39e03b2d5027e6a8d1604d4cdc`.
-Those fixes admit worker reports by exact process identity and retry
-`worker_done` through brief runtime outages. The merges retained the fork feature
-inventory in `config/fork-features.yml` and preserved the fork's agent, speech,
-relay, updater, and workspace-resume behavior.
+[`36752482931`](https://github.com/karlorz/orca/actions/runs/36752482931) completed
+the later upstream orchestration range through merge commit
+`33cfc9a6ba6b7cd4d81bd9c0527fd788c1ca48d2`, bringing the `main` mirror and the
+upstream parent of `fork-main` to `9afd1101ffd2f1c580a2c0873474613f85f511b8`.
+The three later commits admit worker reports by exact process identity, retry
+`worker_done` through brief runtime outages, and remove obsolete dispatch-token
+minting while preserving older-host CLI compatibility. The merges retained the
+fork feature inventory in `config/fork-features.yml` and preserved the fork's
+agent, speech, relay, updater, and workspace-resume behavior.
 
 Fork sync auto-cut `v1.4.217-0`. Its Linux build exposed a stale mobile-web
 route sweep after the merge: the shipped bundle emitted 74 chunks and 124 assets,
