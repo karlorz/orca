@@ -25,26 +25,37 @@ The desktop app remains the CLI version authority.
 
 The 2026-10-01 fork sync studied these published upstream trains:
 
-| Train | Upstream release | Published | Upstream release target |
-| --- | --- | --- | --- |
-| Desktop | [`v1.4.217`](https://github.com/stablyai/orca/releases/tag/v1.4.217) | 2026-09-29 | `11d97896628d90c4990365127812667b00e28c82` |
-| Mobile Android | [`mobile-android-v0.0.50`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50) | 2026-09-18 | `main` (published prerelease) |
+| Train          | Upstream release                                                                                 | Published  | Upstream release target                    |
+| -------------- | ------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------ |
+| Desktop        | [`v1.4.217`](https://github.com/stablyai/orca/releases/tag/v1.4.217)                             | 2026-09-29 | `11d97896628d90c4990365127812667b00e28c82` |
+| Mobile Android | [`mobile-android-v0.0.50`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50) | 2026-09-18 | `main` (published prerelease)              |
 
-`fork-main` now contains the explicit merge commit
+`fork-main` first integrated this release range in explicit merge commit
 `ce818bd5151a02937033752cb22cae2a522ba81b`, whose parents are the previous fork
 head `8b3afe7274de1c2f76326c3a814b24d10dee99ac` and upstream `main`
-`d74388f8a2dad2bd4bbfe3b937aba66e6648258b`. The merge retained the fork feature
-inventory in `config/fork-features.yml` and adopted upstream's current structured
-mobile chat, terminal document, release, and continuous-integration changes while
-preserving the fork's agent, speech, relay, updater, and workspace-resume behavior.
+`d74388f8a2dad2bd4bbfe3b937aba66e6648258b`. Final sync run
+[`36750251785`](https://github.com/karlorz/orca/actions/runs/36750251785) then merged
+the two newer upstream orchestration fixes through commit
+`c0d5e0452a763e949002630b3e1e5648123f9fbb`, bringing the `main` mirror and the
+upstream parent of `fork-main` to `46d6b76ae87abc39e03b2d5027e6a8d1604d4cdc`.
+Those fixes admit worker reports by exact process identity and retry
+`worker_done` through brief runtime outages. The merges retained the fork feature
+inventory in `config/fork-features.yml` and preserved the fork's agent, speech,
+relay, updater, and workspace-resume behavior.
 
 Fork sync auto-cut `v1.4.217-0`. Its Linux build exposed a stale mobile-web
 route sweep after the merge: the shipped bundle emitted 74 chunks and 124 assets,
 while the inherited sweep recorded 69 chunks. Commit
 `52ef4429034ccf8227d7f9ff934b069d84f3b59c` re-measured every route prefix through
-the shipped bundler, and the immutable retry tag is `v1.4.217-1`. The mobile train
-already has `mobile-android-v0.0.50-8`; a further mobile suffix requires an
-attended mobile release decision.
+the shipped bundler, and the immutable retry tag `v1.4.217-1` published
+successfully through [workflow run
+`36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692). The
+release is a non-draft prerelease with `latest=false`; its 17 desktop assets
+include the macOS, Linux, and Windows packages, update manifests, blockmaps, and
+`SHA256SUMS.txt`. All 16 manifest entries match GitHub's SHA-256 asset digests,
+and the release contains no APK. The mobile train already has
+`mobile-android-v0.0.50-8`; a further mobile suffix requires an attended mobile
+release decision.
 
 ## Tag-to-release lifecycle
 
@@ -71,8 +82,9 @@ attended mobile release decision.
    `BUILD-METADATA.json`, `TEST-SUMMARY.md`, and `SHA256SUMS.txt`. Desktop files
    stay off mobile releases, and mobile APK files stay off desktop releases.
 6. Each workflow creates a draft prerelease, verifies the uploaded assets and
-   checksums, then runs `gh release edit <tag> --draft=false --prerelease
-   --latest=false`. After the workflow succeeds, an operator selects the
+   checksums, then runs
+   `gh release edit <tag> --draft=false --prerelease --latest=false`. After the
+   workflow succeeds, an operator selects the
    intended release in GitHub, clears **Pre-release**, and switches **Latest**
    through the GitHub release UI when that release should become the fork's
    current latest desktop or mobile release.
