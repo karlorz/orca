@@ -21,6 +21,58 @@ orca status
 
 The desktop app remains the CLI version authority.
 
+## Current upstream sync and release trains
+
+The 2026-10-01 fork sync studied these published upstream trains:
+
+| Train | Upstream release | Published | Upstream release target |
+| --- | --- | --- | --- |
+| Desktop | [`v1.4.217`](https://github.com/stablyai/orca/releases/tag/v1.4.217) | 2026-09-29 | `11d97896628d90c4990365127812667b00e28c82` |
+| Mobile Android | [`mobile-android-v0.0.50`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50) | 2026-09-18 | `main` (published prerelease) |
+
+`fork-main` now contains the explicit merge commit
+`ce818bd5151a02937033752cb22cae2a522ba81b`, whose parents are the previous fork
+head `8b3afe7274de1c2f76326c3a814b24d10dee99ac` and upstream `main`
+`d74388f8a2dad2bd4bbfe3b937aba66e6648258b`. The merge retained the fork feature
+inventory in `config/fork-features.yml` and adopted upstream's current structured
+mobile chat, terminal document, release, and continuous-integration changes while
+preserving the fork's agent, speech, relay, updater, and workspace-resume behavior.
+
+The next desktop fork release is `v1.4.217-0`. The mobile train already has
+`mobile-android-v0.0.50-8`; a further mobile suffix requires an attended mobile
+release decision.
+
+## Tag-to-release lifecycle
+
+1. The **Sync fork main from upstream** workflow fast-forwards `main` from
+   `stablyai/orca`, merges upstream `main` into `fork-main`, mirrors upstream
+   tags, and auto-cuts `v<base>-0` and `mobile-android-v<train>-0` when a new
+   train has no fork suffix. It runs on the daily schedule or by
+   `workflow_dispatch`.
+2. Desktop tags use `v<base>-N`, such as `v1.4.217-0`. Mobile tags use
+   `mobile-android-v<train>-N`, such as `mobile-android-v0.0.50-8`. The two
+   workflows have separate tag filters and release assets.
+3. An attended desktop cut runs from a clean, pushed `fork-main` with
+   `node config/scripts/fork-next-desktop-tag.mjs --write`; the automatic sync
+   path uses `--auto`. An attended mobile cut uses
+   `node config/scripts/fork-next-mobile-tag.mjs --write`, which advances
+   `mobile/app.json` to the published upstream train and never rewinds
+   `versionCode`.
+4. A desktop tag starts **Fork Desktop Release**. Its verify job checks the
+   `v<x.y.z>-<N>` shape and reachability from `fork-main`. Successful builds
+   publish macOS self-signed DMG/ZIP files, Linux AppImage/deb/rpm packages,
+   Windows unsigned NSIS files, platform update manifests, blockmaps, and
+   `SHA256SUMS.txt`.
+5. A mobile tag starts **Fork Mobile Android Release**. It publishes the APK,
+   `BUILD-METADATA.json`, `TEST-SUMMARY.md`, and `SHA256SUMS.txt`. Desktop files
+   stay off mobile releases, and mobile APK files stay off desktop releases.
+6. Each workflow creates a draft prerelease, verifies the uploaded assets and
+   checksums, then runs `gh release edit <tag> --draft=false --prerelease
+   --latest=false`. After the workflow succeeds, an operator selects the
+   intended release in GitHub, clears **Pre-release**, and switches **Latest**
+   through the GitHub release UI when that release should become the fork's
+   current latest desktop or mobile release.
+
 ## Agent skills
 
 Fork builds install skills from the fork working branch (`fork-main`). The default onboarding cards map to fork-owned skills:

@@ -68,7 +68,7 @@ features:
       - mobile
       - mobile/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
   - id: fork-mobile-android-tags
-    title: Mobile tags stay 0.0.46-N; APK-only fork workflow
+    title: Mobile tags stay on the published upstream train with APK-only fork workflow
     kind: release
     status: landed
     paths:

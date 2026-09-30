@@ -1,6 +1,6 @@
 name: Fork Desktop Release
 
-# Fork desktop tags are v<base>-<N> (e.g. v1.4.190-0, v1.4.190-1).
+# Fork desktop tags are v<base>-<N> (e.g. v1.4.217-0, v1.4.217-1).
 # Base is the newest upstream desktop tag (rc counts, -rc.N dropped).
 # Tags are pushed by config/scripts/fork-next-desktop-tag.mjs --write (attended or fork-sync auto-cut).
 # Tag-triggered only, no schedule.
