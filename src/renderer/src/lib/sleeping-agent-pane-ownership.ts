@@ -28,6 +28,10 @@ export function activationTreatsNoteAsFinished(record: SleepingAgentSessionRecor
   )
 }
 
+export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
+  return activationTreatsNoteAsFinished(record)
+}
+
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {
   const legacy = parseLegacyNumericPaneKey(record.paneKey)
   if (!legacy || (record.tabId && record.tabId !== legacy.tabId)) {

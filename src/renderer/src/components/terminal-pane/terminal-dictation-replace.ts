@@ -74,7 +74,7 @@ export function handleDictationReplaceTextEvent(args: {
       liveSegment
     })
     if (backspaces > 0) {
-      await writeTerminalPastePtyInput(transport, '\x7f'.repeat(backspaces))
+      await writeTerminalPastePtyInput(transport, '\x7f'.repeat(backspaces), 'driving')
     }
     if (!text) {
       return
