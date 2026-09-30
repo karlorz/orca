@@ -20,7 +20,7 @@ type TaskReviewClient = Pick<RuntimeClient, 'call'>
 type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 type ViewSettings = Pick<
   GlobalSettings,
-  'defaultRepoSelection' | 'defaultTaskViewPreset' | 'visibleTaskProviders'
+  'defaultRepoSelection' | 'defaultTaskSource' | 'defaultTaskViewPreset' | 'visibleTaskProviders'
 >
 
 export type TaskReviewRow = {
@@ -55,7 +55,13 @@ export async function listSavedTaskReviewRows(client: TaskReviewClient): Promise
   const settings = settingsResponse.result.settings
   const resume = uiResponse.result.ui.taskResumeState
   const visible = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
-  // Why: switching Tasks to another provider does not erase the saved GitHub Items view.
+  // Why: the desktop chip's provider selection is the source of truth for this command.
+  if (settings.defaultTaskSource !== 'github') {
+    throw new RuntimeClientError(
+      'unsupported_view',
+      `Saved Tasks provider is ${settings.defaultTaskSource}; select GitHub in the desktop Tasks chip first.`
+    )
+  }
   if (!visible.includes('github')) {
     throw new RuntimeClientError('unsupported_view', 'GitHub is hidden from saved Tasks providers.')
   }
