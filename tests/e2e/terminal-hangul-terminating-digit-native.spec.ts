@@ -49,7 +49,8 @@ import {
   focusActiveTerminalInput,
   sendToTerminal,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
 } from './helpers/terminal'
 import {
   disposeTerminalImeBoundaryProbe,
@@ -226,7 +227,7 @@ test.describe('Hangul terminating digit @headful', () => {
 
       for (let index = 0; index < REPETITIONS; index += 1) {
         injectKeys(KEY_TOKENS)
-        await page.waitForTimeout(500)
+        await waitForTerminalOutput(page, `${reader.resultPrefix}:${index + 1}:`, 10_000, 100_000)
       }
       if (INJECTOR === 'nested') {
         captureNestedScreen('nested-after-typing')

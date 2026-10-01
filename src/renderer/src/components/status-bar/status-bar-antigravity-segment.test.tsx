@@ -13,7 +13,7 @@ vi.mock('@/i18n/i18n', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog-icon', () => ({
   AgentIcon: () => null
 }))
 
