@@ -66,10 +66,7 @@ export function useAddRepoLocalFolderFlow({
   ) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
-}): {
-  handleBrowse: () => Promise<void>
-  resetLocalFolderFlow: () => void
-} {
+}) {
   const localAddGenRef = useRef(0)
   const droppedLocalPathHandledRef = useRef<string | null>(null)
 
@@ -310,5 +307,5 @@ export function useAddRepoLocalFolderFlow({
     }
   }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
 
-  return { handleBrowse, resetLocalFolderFlow }
+  return { handleBrowse, handleAddLocalPath, resetLocalFolderFlow }
 }

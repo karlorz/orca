@@ -77,6 +77,11 @@ export type RepositoryApi = {
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
+  browseLocalDirectory: (args: { dirPath: string }) => Promise<{
+    entries: { name: string; isDirectory: boolean; isSymlink: boolean }[]
+    resolvedPath: string
+    pathFlavor: 'posix' | 'win32'
+  }>
   clone: (args: { url: string; destination: string }) => Promise<Repo>
   cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
   createRemote: (args: {

@@ -86,7 +86,9 @@ describe('repos folder pickers', () => {
 
   it('registers the multi-folder picker with handler cleanup', () => {
     expect(handlers.has('repos:pickFolders')).toBe(true)
+    expect(handlers.has('repos:browseLocalDirectory')).toBe(true)
     expect(removeHandlerMock).toHaveBeenCalledWith('repos:pickFolders')
+    expect(removeHandlerMock).toHaveBeenCalledWith('repos:browseLocalDirectory')
   })
 
   it('picks multiple folders for the add-project browse flow', async () => {
@@ -108,6 +110,29 @@ describe('repos folder pickers', () => {
     showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
 
     await expect(callPickFolders()).resolves.toEqual([])
+  })
+
+  it('lists a local directory for the in-app Linux folder picker', async () => {
+    const handler = handlers.get('repos:browseLocalDirectory')
+    if (!handler) {
+      throw new Error('repos:browseLocalDirectory handler was never registered')
+    }
+    const { mkdtemp, mkdir, writeFile, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const root = await mkdtemp(join(tmpdir(), 'orca-picker-browse-'))
+    try {
+      await mkdir(join(root, 'src'))
+      await writeFile(join(root, 'README.md'), 'hi')
+      const result = (await handler(null, { dirPath: root })) as {
+        resolvedPath: string
+        entries: { name: string; isDirectory: boolean }[]
+      }
+      expect(result.resolvedPath).toBe(root)
+      expect(result.entries.map((entry) => entry.name)).toEqual(['src', 'README.md'])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('picks an existing directory without enabling native directory creation', async () => {

@@ -40,6 +40,9 @@ export const reposApi = {
 
   pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
+  browseLocalDirectory: (args: { dirPath: string }) =>
+    ipcRenderer.invoke('repos:browseLocalDirectory', args),
+
   clone: (args) => ipcRenderer.invoke('repos:clone', args),
 
   cloneRemote: (args) => ipcRenderer.invoke('repos:cloneRemote', args),

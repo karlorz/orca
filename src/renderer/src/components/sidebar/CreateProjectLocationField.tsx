@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 type CreateProjectParentBrowserProps = {
   runtimeEnvironmentId?: string | null
   sshTargetId?: string | null
+  local?: boolean
   createParent: string
   onParentChange: (value: string) => void
   onClose: () => void
@@ -17,10 +18,15 @@ type CreateProjectParentBrowserProps = {
 export function CreateProjectParentBrowser({
   runtimeEnvironmentId,
   sshTargetId,
+  local = false,
   createParent,
   onParentChange,
   onClose
 }: CreateProjectParentBrowserProps): React.JSX.Element {
+  const selectPath = (path: string): void => {
+    onParentChange(path)
+    onClose()
+  }
   return (
     <>
       <DialogHeader>
@@ -37,27 +43,14 @@ export function CreateProjectParentBrowser({
           )}
         </DialogDescription>
       </DialogHeader>
-      {sshTargetId ? (
-        <RemoteFileBrowser
-          targetId={sshTargetId}
-          initialPath={createParent || '~'}
-          onSelect={(path) => {
-            onParentChange(path)
-            onClose()
-          }}
-          onCancel={onClose}
-        />
-      ) : (
-        <RemoteFileBrowser
-          runtimeEnvironmentId={runtimeEnvironmentId as string}
-          initialPath={createParent || '~'}
-          onSelect={(path) => {
-            onParentChange(path)
-            onClose()
-          }}
-          onCancel={onClose}
-        />
-      )}
+      <RemoteFileBrowser
+        local={local}
+        targetId={sshTargetId ?? undefined}
+        runtimeEnvironmentId={runtimeEnvironmentId ?? undefined}
+        initialPath={createParent || '~'}
+        onSelect={selectPath}
+        onCancel={onClose}
+      />
     </>
   )
 }
@@ -68,6 +61,7 @@ type CreateProjectLocationFieldProps = {
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
   sshTargetId?: string | null
+  useLocalFilesystemBrowser?: boolean
   onParentChange: (value: string) => void
   onPickParent: () => void
   onBrowseServer: () => void
@@ -79,10 +73,20 @@ export function CreateProjectLocationField({
   manualParentEntry,
   runtimeEnvironmentId,
   sshTargetId,
+  useLocalFilesystemBrowser = false,
   onParentChange,
   onPickParent,
   onBrowseServer
 }: CreateProjectLocationFieldProps): React.JSX.Element {
+  const canBrowseHostFilesystem =
+    Boolean(runtimeEnvironmentId) || Boolean(sshTargetId) || useLocalFilesystemBrowser
+  const handleBrowse = (): void => {
+    if (canBrowseHostFilesystem) {
+      onBrowseServer()
+      return
+    }
+    onPickParent()
+  }
   return (
     <div className="space-y-1">
       <span className="text-[11px] font-medium text-muted-foreground block">
@@ -109,8 +113,8 @@ export function CreateProjectLocationField({
                 variant="outline"
                 size="icon"
                 className="h-11 w-11 shrink-0"
-                onClick={onBrowseServer}
-                disabled={isCreating || (!runtimeEnvironmentId && !sshTargetId)}
+                onClick={handleBrowse}
+                disabled={isCreating}
                 aria-label={translate(
                   'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
                   'Browse host filesystem'
@@ -134,7 +138,7 @@ export function CreateProjectLocationField({
           </span>
           <button
             type="button"
-            onClick={onPickParent}
+            onClick={handleBrowse}
             disabled={isCreating}
             className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-not-allowed"
             aria-label={translate(
@@ -150,7 +154,7 @@ export function CreateProjectLocationField({
         <Button
           type="button"
           variant="outline"
-          onClick={onPickParent}
+          onClick={handleBrowse}
           disabled={isCreating}
           className="w-full h-11 justify-start text-sm text-muted-foreground font-normal gap-2.5"
         >

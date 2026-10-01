@@ -15,6 +15,7 @@ import {
   joinCreateProjectPath,
   type GitAvailability
 } from './create-project-defaults'
+import { shouldUseInAppLocalFolderPicker } from './should-use-in-app-local-folder-picker'
 
 // ── UI helpers ───────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ export function CreateStep({
     'host folder not selected'
   )
   const isRemoteHost = Boolean(runtimeEnvironmentId || sshTargetId)
+  const useLocalFilesystemBrowser = !isRemoteHost && shouldUseInAppLocalFolderPicker()
 
   const summaryParent = useMemo(
     () =>
@@ -111,11 +113,12 @@ export function CreateStep({
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 
-  if (browsingParent && (runtimeEnvironmentId || sshTargetId)) {
+  if (browsingParent && (runtimeEnvironmentId || sshTargetId || useLocalFilesystemBrowser)) {
     return (
       <CreateProjectParentBrowser
         runtimeEnvironmentId={runtimeEnvironmentId}
         sshTargetId={sshTargetId}
+        local={useLocalFilesystemBrowser}
         createParent={createParent}
         onParentChange={onParentChange}
         onClose={() => setBrowsingParent(false)}
@@ -237,9 +240,10 @@ export function CreateStep({
               <CreateProjectLocationField
                 createParent={createParent}
                 isCreating={isCreating}
-                manualParentEntry={manualParentEntry}
+                manualParentEntry={manualParentEntry || useLocalFilesystemBrowser}
                 runtimeEnvironmentId={runtimeEnvironmentId}
                 sshTargetId={sshTargetId}
+                useLocalFilesystemBrowser={useLocalFilesystemBrowser}
                 onParentChange={onParentChange}
                 onPickParent={onPickParent}
                 onBrowseServer={() => setBrowsingParent(true)}

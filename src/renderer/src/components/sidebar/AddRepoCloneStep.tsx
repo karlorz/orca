@@ -4,7 +4,8 @@ import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
-import { RemoteFileBrowser } from './RemoteFileBrowser'
+import { CreateProjectParentBrowser } from './CreateProjectLocationField'
+import { shouldUseInAppLocalFolderPicker } from './should-use-in-app-local-folder-picker'
 
 type CloneStepProps = {
   cloneUrl: string
@@ -40,6 +41,8 @@ export function CloneStep({
   const [browsingDestination, setBrowsingDestination] = useState(false)
   const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
   const canBrowseRemoteDestination = isRemoteClone
+  const useLocalFilesystemBrowser = !isRemoteClone && shouldUseInAppLocalFolderPicker()
+  const canBrowseInAppDestination = canBrowseRemoteDestination || useLocalFilesystemBrowser
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -50,42 +53,16 @@ export function CloneStep({
     }
   }
 
-  if (browsingDestination && (runtimeEnvironmentId || sshTargetId)) {
+  if (browsingDestination && (runtimeEnvironmentId || sshTargetId || useLocalFilesystemBrowser)) {
     return (
-      <>
-        <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.sidebar.AddRepoSteps.a93ef169b5', 'Browse host filesystem')}
-          </DialogTitle>
-          <DialogDescription>
-            {translate(
-              'auto.components.sidebar.AddRepoSteps.fe8e629fe3',
-              'Navigate to a directory and click Select to choose it.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        {sshTargetId ? (
-          <RemoteFileBrowser
-            targetId={sshTargetId}
-            initialPath={cloneDestination || '~'}
-            onSelect={(path) => {
-              onDestChange(path)
-              setBrowsingDestination(false)
-            }}
-            onCancel={() => setBrowsingDestination(false)}
-          />
-        ) : (
-          <RemoteFileBrowser
-            runtimeEnvironmentId={runtimeEnvironmentId as string}
-            initialPath={cloneDestination || '~'}
-            onSelect={(path) => {
-              onDestChange(path)
-              setBrowsingDestination(false)
-            }}
-            onCancel={() => setBrowsingDestination(false)}
-          />
-        )}
-      </>
+      <CreateProjectParentBrowser
+        local={useLocalFilesystemBrowser}
+        runtimeEnvironmentId={runtimeEnvironmentId}
+        sshTargetId={sshTargetId}
+        createParent={cloneDestination}
+        onParentChange={onDestChange}
+        onClose={() => setBrowsingDestination(false)}
+      />
     )
   }
 
@@ -156,15 +133,15 @@ export function CloneStep({
               size="sm"
               className="h-8 px-2 shrink-0"
               onClick={() => {
-                if (canBrowseRemoteDestination) {
+                if (canBrowseInAppDestination) {
                   setBrowsingDestination(true)
                   return
                 }
                 onPickDestination()
               }}
-              disabled={isCloning || (disableDestinationPicker && !canBrowseRemoteDestination)}
+              disabled={isCloning || (disableDestinationPicker && !canBrowseInAppDestination)}
               title={
-                canBrowseRemoteDestination
+                canBrowseInAppDestination
                   ? translate(
                       'auto.components.sidebar.AddRepoSteps.a93ef169b5',
                       'Browse host filesystem'
@@ -172,7 +149,7 @@ export function CloneStep({
                   : translate('auto.components.sidebar.AddRepoSteps.569326d9cc', 'Choose folder')
               }
               aria-label={
-                canBrowseRemoteDestination
+                canBrowseInAppDestination
                   ? translate(
                       'auto.components.sidebar.AddRepoSteps.a93ef169b5',
                       'Browse host filesystem'

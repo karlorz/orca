@@ -10,6 +10,7 @@ export function AddRepoDialogChrome({
   onBack,
   onCloseAutoFocus,
   onOpenChange,
+  overlay,
   step
 }: {
   children: ReactNode
@@ -18,6 +19,7 @@ export function AddRepoDialogChrome({
   onBack: () => void
   onCloseAutoFocus?: (event: Event) => void
   onOpenChange: (open: boolean) => void
+  overlay?: ReactNode
   step: AddRepoDialogStep
 }) {
   return (
@@ -29,7 +31,7 @@ export function AddRepoDialogChrome({
         }`}
       >
         <AddRepoStepIndicator step={step} isAdding={isAdding} onBack={onBack} />
-        {children}
+        {overlay ?? children}
       </DialogContent>
     </Dialog>
   )

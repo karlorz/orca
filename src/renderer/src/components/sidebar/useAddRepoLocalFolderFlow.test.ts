@@ -127,7 +127,34 @@ describe('useAddRepoLocalFolderFlow', () => {
       executionHostId: 'local'
     })
     expect(onGitRepoReady).toHaveBeenCalledTimes(1)
-    expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
+  })
+
+  it('adds a typed or in-app-picked local folder without opening the native picker', async () => {
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleAddLocalPath } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleAddLocalPath('/workspace/code/portfolio-lab', 'local_folder_picker')
+
+    expect(pickFolders).not.toHaveBeenCalled()
+    expect(addRepoPath).toHaveBeenCalledWith('/workspace/code/portfolio-lab', undefined, {
+      runtimeEnvironmentId: null
+    })
+    expect(onGitRepoReady).toHaveBeenCalledWith('portfolio-lab', 'local_folder_picker', 'local')
   })
 
   it('skips nested-review folders in a multi-folder add and continues with git folders', async () => {

@@ -48,6 +48,9 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     pickFolder: () => Promise.resolve(null),
     pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
+    browseLocalDirectory: () => {
+      throw new Error('Local filesystem browsing is unavailable in paired web clients.')
+    },
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(

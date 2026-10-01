@@ -19,6 +19,7 @@ import {
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
+import { useAddRepoLocalFilesystemBrowse } from './add-repo-local-filesystem-browser'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -170,7 +171,7 @@ export default React.memo(function AddRepoDialog({
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
-  const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
+  const { handleBrowse, handleAddLocalPath, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
@@ -185,6 +186,11 @@ export default React.memo(function AddRepoDialog({
     onGitRepoReady: completeGitRepoAdd,
     setIsAdding,
     setAddProjectBusyLabel
+  })
+  const { browseLocal, browsingLocal, panel, stopBrowsingLocal } = useAddRepoLocalFilesystemBrowse({
+    handleBrowse,
+    handleAddLocalPath,
+    initialPath: createDefaultParent || '~'
   })
   const {
     serverPath,
@@ -212,6 +218,7 @@ export default React.memo(function AddRepoDialog({
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
     resetLocalFolderFlow()
+    stopBrowsingLocal()
     setStep('add')
     setIsAdding(false)
     setAddProjectBusyLabel(null)
@@ -230,12 +237,14 @@ export default React.memo(function AddRepoDialog({
     resetServerPathFlow,
     resetNestedImportFlow,
     resetRemoteState,
-    resetCreateState
+    resetCreateState,
+    stopBrowsingLocal
   ])
 
   const resetHostScopedState = useCallback(() => {
     setIsAdding(false)
     setAddProjectBusyLabel(null)
+    stopBrowsingLocal()
     resetLocalFolderFlow()
     resetServerPathFlow()
     resetCloneFlow()
@@ -248,7 +257,8 @@ export default React.memo(function AddRepoDialog({
     resetCreateState,
     resetRemoteState,
     resetLocalFolderFlow,
-    resetServerPathFlow
+    resetServerPathFlow,
+    stopBrowsingLocal
   ])
 
   useAddRepoHostChangeReset({
@@ -283,9 +293,10 @@ export default React.memo(function AddRepoDialog({
       isOpen={isOpen}
       step={step}
       isAdding={isAdding}
-      onBack={handleBack}
+      onBack={browsingLocal ? stopBrowsingLocal : handleBack}
       onCloseAutoFocus={hosted?.onCloseAutoFocus}
       onOpenChange={handleOpenChange}
+      overlay={panel}
     >
       <AddRepoDialogStepContent
         step={step}
@@ -334,7 +345,7 @@ export default React.memo(function AddRepoDialog({
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
         onBrowse={() =>
           routeAddRepoBrowse(hostSelection.selectedParsedHost, {
-            browseLocal: () => void handleBrowse(),
+            browseLocal,
             browseRuntime: () => setStep('server-path'),
             browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
           })

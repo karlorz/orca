@@ -395,3 +395,13 @@ features:
       - src/shared/task-page-source-context.ts
       - src/shared/github-work-item-workspace-attachment.ts
     wiki: projects/orca/work/2026-09-26-tasks-review-interface
+
+  - id: linux-in-app-local-folder-picker
+    title: Linux Add project Browse uses the in-app filesystem browser instead of GTK showOpenDialog
+    kind: product
+    status: landed
+    paths:
+      - src/main/ipc/repos/repo-local-directory-browser.ts
+      - src/renderer/src/components/sidebar/add-repo-local-filesystem-browser.tsx
+      - src/renderer/src/components/sidebar/should-use-in-app-local-folder-picker.ts
+    wiki: raw/transcripts/2026-10-01-bug-linux-add-project-browse-folder-sigabrt.md

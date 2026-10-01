@@ -49,6 +49,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('folderWorkspaces:update')
   ipcMain.removeHandler('folderWorkspaces:delete')
   ipcMain.removeHandler('folderWorkspaces:getPathStatus')
+  ipcMain.removeHandler('repos:browseLocalDirectory')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickFolders')
   ipcMain.removeHandler('repos:pickDirectory')

@@ -1,7 +1,12 @@
 import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
+import { browseLocalDirectory } from './repo-local-directory-browser'
 
 export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): void {
+  ipcMain.handle('repos:browseLocalDirectory', async (_event, args: { dirPath: string }) => {
+    return browseLocalDirectory(args.dirPath)
+  })
+
   ipcMain.handle('repos:pickFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
