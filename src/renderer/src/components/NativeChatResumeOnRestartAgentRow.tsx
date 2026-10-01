@@ -1,5 +1,5 @@
 import { Checkbox } from './ui/checkbox'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { translate } from '@/i18n/i18n'

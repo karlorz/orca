@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'

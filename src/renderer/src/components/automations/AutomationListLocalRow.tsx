@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'

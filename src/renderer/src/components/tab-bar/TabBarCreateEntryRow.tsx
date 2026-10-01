@@ -9,7 +9,7 @@ import {
   Smartphone,
   TerminalSquare
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'

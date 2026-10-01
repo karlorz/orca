@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'

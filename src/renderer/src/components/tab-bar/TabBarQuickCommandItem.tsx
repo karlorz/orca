@@ -5,7 +5,8 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { translate } from '@/i18n/i18n'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'

@@ -1,6 +1,6 @@
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import type { OrchestrationSkillAgentStatus } from '@/lib/orchestration-skill-coverage'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { getOrchestrationSkillAgentStatuses } from '@/lib/orchestration-skill-coverage'
 import { cn } from '@/lib/utils'

@@ -15,7 +15,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import {
   getActionDescriptions,

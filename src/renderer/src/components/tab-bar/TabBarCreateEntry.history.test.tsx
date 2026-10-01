@@ -24,7 +24,8 @@ vi.mock('../quick-open-file-list', () => ({
     truncated: false
   })
 }))
-vi.mock('@/lib/agent-catalog', () => ({ getAgentCatalog: () => [], AgentIcon: () => null }))
+vi.mock('@/lib/agent-catalog', () => ({ getAgentCatalog: () => [] }))
+vi.mock('@/lib/agent-catalog-icon', () => ({ AgentIcon: () => null }))
 
 // `hold` pins deferred rows to the query they were built from, standing in for
 // the hook's useDeferredValue so later keystrokes leave them stale.

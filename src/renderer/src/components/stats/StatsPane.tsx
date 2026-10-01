@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 export { getStatsPaneSearchEntries } from './stats-search'
 

@@ -1,6 +1,6 @@
 import type React from 'react'
 import { FileText, SquareTerminal } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'

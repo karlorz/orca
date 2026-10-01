@@ -1,6 +1,6 @@
 import React from 'react'
 import { MessageSquareText, TerminalSquare } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
