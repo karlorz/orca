@@ -312,6 +312,8 @@ function writeBaseline(root, entries) {
     '# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —',
     '# an unchecked test is one whose type-level pins prove nothing.',
     '# Regenerate/prune: node scripts/check-tests-typecheck-ratchet.mjs --prune',
+    '# Fork adoption correction: merge 17dab63b357765c9a05673afb7024022189a9022 added',
+    '# this upstream ratchet after fork-owned tests existed; these entries preserve that census.',
     ''
   ].join('\n')
   fs.writeFileSync(path.join(root, BASELINE_PATH), `${header}${entries.join('\n')}\n`)
