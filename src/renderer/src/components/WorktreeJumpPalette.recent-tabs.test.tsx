@@ -573,21 +573,22 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   })
 
   it('preserves activity ordering and selection when terminal entities hydrate', async () => {
+    const now = Date.now()
     const hydrated = makeRecentTabState({
       agentStatusByPaneKey: {
-        [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
+        [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', now)
       },
       unifiedTabsByWorktree: {
         'wt-alpha': [
           {
             ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-            lastFocusedAt: Date.now() - 3 * 86400_000
+            lastFocusedAt: now - 3 * 86400_000
           }
         ],
         'wt-beta': [
           {
             ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-            lastFocusedAt: Date.now()
+            lastFocusedAt: now - 60_000
           }
         ]
       }
@@ -783,6 +784,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   })
 
   it('keeps the current tab in recent when its agent needs permission', async () => {
+    const now = Date.now()
     await renderPalette(
       makeRecentTabState({
         activeWorktreeId: 'wt-alpha',
@@ -791,19 +793,19 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
         activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
         agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', now)
         },
         unifiedTabsByWorktree: {
           'wt-alpha': [
             {
               ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
+              lastFocusedAt: now - 3 * 86400_000
             }
           ],
           'wt-beta': [
             {
               ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
+              lastFocusedAt: now - 60_000
             }
           ]
         }
