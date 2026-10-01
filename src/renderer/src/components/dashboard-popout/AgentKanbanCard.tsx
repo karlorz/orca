@@ -7,7 +7,7 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'

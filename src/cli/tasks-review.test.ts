@@ -35,13 +35,13 @@ const repos = [
   }
 ] as const
 
-function item(number: number, repo: 'a' | 'b') {
+function item(number: number, repo: 'a' | 'b', type: 'pr' | 'issue' = 'pr') {
   return {
-    id: `pr:${number}`,
-    type: 'pr',
+    id: `${type}:${number}`,
+    type,
     number,
     title: `Review ${repo} ${number}`,
-    url: `https://github.com/acme/${repo}/pull/${number}`,
+    url: `https://github.com/acme/${repo}/${type === 'pr' ? 'pull' : 'issues'}/${number}`,
     updatedAt: '2026-09-26T00:00:00Z',
     state: 'open'
   }
@@ -50,6 +50,7 @@ function item(number: number, repo: 'a' | 'b') {
 function clientFor(args: {
   selection?: string[] | null
   activeProvider?: 'github' | 'gitlab'
+  visibleTaskProviders?: ('github' | 'gitlab')[]
   items?: Record<string, ReturnType<typeof item>[]>
   failedRepo?: string
   worktrees?: Record<string, unknown>[]
@@ -64,7 +65,7 @@ function clientFor(args: {
               args.selection === undefined ? ['repo-a', 'repo-b'] : args.selection,
             defaultTaskSource: args.activeProvider ?? 'github',
             defaultTaskViewPreset: 'issues',
-            visibleTaskProviders: ['github']
+            visibleTaskProviders: args.visibleTaskProviders ?? ['github']
           }
         }
       }
@@ -168,14 +169,18 @@ describe('tasks-review', () => {
     )
   })
 
-  it('uses the saved GitHub view while another provider is active', async () => {
-    const { client } = clientFor({ activeProvider: 'gitlab' })
-    const result = await listSavedTaskReviewRows(client)
-    expect(result.view.query).toBe('is:pr is:open')
-    expect(result.complete).toBe(true)
+  it('rejects a non-GitHub desktop Tasks chip', async () => {
+    const { client, call } = clientFor({
+      activeProvider: 'gitlab',
+      visibleTaskProviders: ['github', 'gitlab']
+    })
+    await expect(listSavedTaskReviewRows(client)).rejects.toThrow(
+      'Saved Tasks provider is gitlab; select GitHub in the desktop Tasks chip first.'
+    )
+    expect(call).not.toHaveBeenCalledWith('github.listWorkItems', expect.anything())
   })
 
-  it('prints correct PR linkage in dry-run without creating a worktree', async () => {
+  it('prints correct PR linkage, Grok prompt, and no parent in dry-run without creating a worktree', async () => {
     const { client, call } = clientFor({})
     const result = await startTaskReview(client, {
       repo: 'acme/a',
@@ -192,7 +197,33 @@ describe('tasks-review', () => {
       linkedPR: 1,
       noParent: true,
       startupAgent: 'grok',
-      linkedWorkItem: { type: 'pr', url: 'https://github.com/acme/a/pull/1' }
+      linkedWorkItem: { type: 'pr', url: 'https://github.com/acme/a/pull/1' },
+      startupPrompt: expect.stringContaining(
+        'Report concrete findings with file and line evidence, then a next-step plan.'
+      )
+    })
+    expect(call).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+  })
+
+  it('prints correct issue linkage in dry-run without creating a worktree', async () => {
+    const { client, call } = clientFor({ items: { 'repo-a': [item(9, 'a', 'issue')] } })
+    const result = await startTaskReview(client, {
+      repo: 'acme/a',
+      number: 9,
+      type: 'issue',
+      dryRun: true
+    })
+    expect(result.action).toBe('dry-run')
+    if (result.action !== 'dry-run') {
+      return
+    }
+    expect(result.payload).toMatchObject({
+      repo: 'id:repo-a',
+      linkedIssue: 9,
+      noParent: true,
+      startupAgent: 'grok',
+      linkedWorkItem: { type: 'issue', url: 'https://github.com/acme/a/issues/9' },
+      startupPrompt: expect.stringContaining('Review GitHub issue')
     })
     expect(call).not.toHaveBeenCalledWith('worktree.create', expect.anything())
   })

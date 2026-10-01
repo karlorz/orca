@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 // Why: a terminal tab running an agent leads with the provider glyph so the

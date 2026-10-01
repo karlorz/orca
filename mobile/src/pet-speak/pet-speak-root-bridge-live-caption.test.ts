@@ -70,6 +70,7 @@ vi.mock('./pet-speech-preferences', () => ({
 }))
 
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios', Version: 18 },
   View: 'View',
   Text: 'Text',

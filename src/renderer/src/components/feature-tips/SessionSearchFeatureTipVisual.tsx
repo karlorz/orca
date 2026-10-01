@@ -14,7 +14,7 @@ import {
   DEFAULT_AI_VAULT_GROUP,
   DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS
 } from '@/components/right-sidebar/ai-vault-view-defaults'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { translate } from '@/i18n/i18n'
 import {
   getSessionSearchDemoRecentRows,

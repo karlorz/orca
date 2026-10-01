@@ -114,7 +114,10 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   // in-flight hibernation kill runs noteVisibilityResume before onExit arms the
   // wake. Sharing the guarded consume lets both the reveal hook and the
   // arm-time foreground check resume the pane exactly once.
-  session.consumeHibernatedAgentWake = (claimedProviderSessions?: Set<string>): string | null => {
+  session.consumeHibernatedAgentWake = (
+    claimedProviderSessions?: Set<string>,
+    opts?: { forceWake?: boolean }
+  ): string | null => {
     const target = session.hibernatedWakeTarget
     if (!target || session.disposed) {
       return null
@@ -139,6 +142,10 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     if (!session.wakeHibernatedAgentPane) {
+      return null
+    }
+    // Why: View run keeps completed hibernation output frozen; mobile wake is explicit.
+    if (!opts?.forceWake && target.record.origin !== 'live') {
       return null
     }
     const claimKey = getProviderSessionClaimKey(target.record)
@@ -276,11 +283,15 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         if (session.pendingHibernatedWakeTarget && !pendingWakeMatches) {
           session.pendingHibernatedWakeTarget = null
         }
-        if (session.deps.isVisibleRef.current || pendingWakeMatches) {
-          // Why: a reveal (or a mobile wake) that raced this kill already ran
-          // before the exit landed, so it saw nothing armed. Consume the wake
-          // now (deferred off the exit handler) so the pane still resumes
-          // without needing a second hide/reveal or wake event.
+        if (pendingWakeMatches) {
+          // Why: an explicit mobile wake can race the hibernation exit.
+          queueMicrotask(() => {
+            session.consumeHibernatedAgentWake(undefined, { forceWake: true })
+          })
+        } else if (
+          session.deps.isVisibleRef.current &&
+          sleepingRecordEntry.record.origin === 'live'
+        ) {
           queueMicrotask(() => {
             session.consumeHibernatedAgentWake()
           })

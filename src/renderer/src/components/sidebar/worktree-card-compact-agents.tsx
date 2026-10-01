@@ -2,7 +2,7 @@ import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import {

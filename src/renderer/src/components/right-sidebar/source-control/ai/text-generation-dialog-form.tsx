@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,

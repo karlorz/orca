@@ -2,6 +2,10 @@
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # an unchecked test is one whose type-level pins prove nothing.
 # Regenerate/prune: node scripts/check-tests-typecheck-ratchet.mjs --prune
+# Fork adoption correction: merge 17dab63b357765c9a05673afb7024022189a9022 added
+# this upstream ratchet after fork-owned tests existed; these entries preserve that census.
+src/account-usage-settings-route.test.ts
+src/accounts-route-display-provider.test.ts
 src/accounts-route-reset-credit.test.ts
 src/browser/browser-command-reply-schema.test.ts
 src/browser/mobile-browser-frameless-stream.test.tsx
@@ -14,13 +18,17 @@ src/components/MobileMarkdown.file-links.test.ts
 src/components/MobileRichMarkdownEditor.test.tsx
 src/components/NewWorktreeModal.test.tsx
 src/components/PickerModal.accessibility.test.ts
+src/components/VoiceModelList.test.tsx
 src/components/WorktreeAgentList.test.tsx
+src/components/account-usage-state.test.ts
 src/components/agent-monitoring-indicators.test.ts
 src/components/bottom-drawer-close-lifecycle.test.ts
 src/components/bottom-drawer-window-handback.test.ts
 src/components/codex-reset-credit-capability.test.ts
+src/components/home-account-usage-card.test.ts
 src/components/mobile-agent-icon-gradient.test.ts
 src/components/pr-sidebar/PRCommentsSection.test.ts
+src/components/use-visible-usage-providers.test.ts
 src/diagnostics/connection-diagnostics-submission.test.ts
 src/dictation/mobile-dictation-setup.test.ts
 src/files/MobileFileExplorerPanel.test.ts
@@ -38,6 +46,19 @@ src/onboarding/MobileOnboardingPage.test.ts
 src/onboarding/NotificationOnboardingPreview.test.ts
 src/onboarding/legacy-notification-opt-in-route.test.ts
 src/onboarding/mobile-onboarding-screen.test.ts
+src/pet-speak/pet-speak-caption.test.ts
+src/pet-speak/pet-speak-lifecycle-gate.test.ts
+src/pet-speak/pet-speak-observability.test.ts
+src/pet-speak/pet-speak-p3.test.ts
+src/pet-speak/pet-speak-root-bridge-hysteresis.test.ts
+src/pet-speak/pet-speak-root-bridge-live-caption.test.ts
+src/pet-speak/pet-speak-root-bridge.test.ts
+src/pet-speak/pet-speak.test.ts
+src/pet-speak/pet-speech-persist-checklist.test.ts
+src/pet-speak/pet-speech-persist-settings-panel.test.ts
+src/pet-speak/pet-speech-preferences.test.ts
+src/pet-speak/pet-speech-setup-action.test.ts
+src/pet-speech-routes.test.ts
 src/session/MobileMarkdownReader.test.tsx
 src/session/MobileNativeChatComposer.test.ts
 src/session/MobileNativeChatMessage.test.ts
@@ -68,6 +89,7 @@ src/session/use-mobile-structured-agent-session-send.test.tsx
 src/session/use-mobile-structured-agent-session.test.tsx
 src/session/use-mobile-structured-prompt-responses.test.tsx
 src/session/use-mobile-terminal-inventory-recovery.test.ts
+src/settings-route-separation.test.ts
 src/settings/native-notification-delivery-settings.test.tsx
 src/settings/notification-display-test.test.tsx
 src/settings/settings-screen-state.test.tsx
@@ -86,6 +108,7 @@ src/terminal/terminal-caret-rendering-oracle.test.ts
 src/terminal/terminal-live-accessory-raw-send.test.ts
 src/terminal/terminal-live-text-commit.test.ts
 src/terminal/terminal-webview-engine-error.test.ts
+src/terminal/terminal-webview-pending-messages.test.ts
 src/terminal/terminal-webview-query-reply-routing.test.ts
 src/terminal/terminal-webview-wheel-scroll.test.ts
 src/terminal/use-buffered-terminal-drafts.test.tsx

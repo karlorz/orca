@@ -3,6 +3,7 @@ import type { WebSocket } from 'ws'
 import {
   INVITE_MAX_ATTEMPTS,
   INVITE_TOKEN_TTL_MS,
+  type OwnMobileRelayHostControlSender,
   type OwnMobileRelayInviteRecord
 } from './own-mobile-relay-types'
 import type {
@@ -27,10 +28,10 @@ export type OwnMobileRelayControlContext = {
   invites?: Map<string, OwnMobileRelayInviteRecord>
   pendingConns?: Map<string, OwnMobileRelayPendingConnContext>
   auditLog?: OwnMobileRelayAuditLog
-  onActive?: (relayHostId: string, send: (msg: object) => void) => void
+  onActive?: (relayHostId: string, send: OwnMobileRelayHostControlSender) => void
   onClose?: (
     relayHostId: string,
-    sender?: (msg: object) => void,
+    sender?: OwnMobileRelayHostControlSender,
     closeCode?: number,
     reason?: string
   ) => void

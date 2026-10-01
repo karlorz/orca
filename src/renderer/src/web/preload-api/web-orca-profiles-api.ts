@@ -1,4 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
+import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   createDefaultLocalOrcaProfile
@@ -50,7 +51,10 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
       }),
       openPasswordPage: async () => ({
         ok: false as const,
-        error: 'unsupported'
+        error: translate(
+          'auto.web.web.preload.api.passwordPageUnavailable',
+          'Password management is unavailable in the web client.'
+        )
       }),
       refreshAuth: async () => ({
         status: 'unconfigured',

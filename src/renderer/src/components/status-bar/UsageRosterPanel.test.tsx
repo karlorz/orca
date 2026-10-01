@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog-icon', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
 }))
 vi.mock('@/hooks/useResetCountdownClock', () => ({

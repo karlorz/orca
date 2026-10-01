@@ -7,7 +7,7 @@ import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'

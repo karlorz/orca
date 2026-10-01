@@ -3,7 +3,7 @@ import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardA
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'

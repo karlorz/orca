@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
-import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'

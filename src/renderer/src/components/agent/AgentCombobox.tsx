@@ -15,7 +15,8 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import {
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,

@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,

@@ -1,7 +1,7 @@
 import { Check, Terminal } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { SettingsSubsectionHeader } from './SettingsFormControls'

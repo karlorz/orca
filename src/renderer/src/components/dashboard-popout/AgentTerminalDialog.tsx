@@ -1,6 +1,6 @@
 import { useEffect, useId } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'

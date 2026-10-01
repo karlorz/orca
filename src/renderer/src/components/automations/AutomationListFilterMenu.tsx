@@ -16,7 +16,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import { translate } from '@/i18n/i18n'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'

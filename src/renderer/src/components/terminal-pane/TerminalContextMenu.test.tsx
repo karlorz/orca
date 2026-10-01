@@ -41,7 +41,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/lib/agent-catalog-icon', () => ({ AgentIcon: () => null }))
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
 }))

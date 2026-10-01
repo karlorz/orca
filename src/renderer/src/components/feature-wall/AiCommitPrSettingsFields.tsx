@@ -8,7 +8,7 @@ import {
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import type { CommitMessageAiSettings } from '../../../../shared/commit-message-ai-types'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { cn } from '@/lib/utils'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'

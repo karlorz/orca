@@ -1,4 +1,5 @@
 import type { RawData, WebSocket } from 'ws'
+import type { RelayConnectionOpenMessage } from './relay-control-protocol'
 
 export const OWN_RELAY_CONTROL_LEASE_MS = 24 * 60 * 60 * 1000
 export const RESUME_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -58,9 +59,11 @@ export type PendingConnRecord = {
   onPhoneMessage?: (raw: RawData, isBinary: boolean) => void
 }
 
+export type OwnMobileRelayHostControlSender = (message: RelayConnectionOpenMessage) => void
+
 export type OwnMobileRelayRouter = {
   invites: Map<string, OwnMobileRelayInviteRecord>
   pendingConns: Map<string, PendingConnRecord>
   connsByTicket: Map<string, PendingConnRecord>
-  activeHosts: Map<string, (msg: object) => void>
+  activeHosts: Map<string, OwnMobileRelayHostControlSender>
 }

@@ -30,6 +30,7 @@ vi.mock('expo-speech', () => ({
 }))
 
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'ios', Version: 18 },
   View: 'View',
   Text: 'Text',

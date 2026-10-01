@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'

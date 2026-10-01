@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog-icon'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'

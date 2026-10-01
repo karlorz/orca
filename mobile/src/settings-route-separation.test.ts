@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const pushedRoutes: string[] = []
 const backCalled: number[] = []
 
+vi.hoisted(() => {
+  Object.assign(globalThis, { __DEV__: true })
+})
+
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -48,6 +53,10 @@ vi.mock('lucide-react-native', () => {
     Gauge: Icon
   }
 })
+
+vi.mock('../src/settings/settings-app-update-section', () => ({
+  SettingsAppUpdateSection: () => null
+}))
 
 vi.mock('../src/transport/host-credential-cleanup', () => ({
   loadPendingHostCredentialCleanup: vi.fn(async () => ({ ids: [], storageUnreadable: false })),

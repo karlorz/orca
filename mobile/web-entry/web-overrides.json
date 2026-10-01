@@ -6,6 +6,10 @@
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
     },
     {
+      "file": "src/transport/rpc-client-context.web.ts",
+      "reason": "The web build must share the same RpcClientContext instance as client-context.web.tsx after the native context moved into its own module; this sibling preserves that web-specific module resolution without importing native transport behavior."
+    },
+    {
       "file": "packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts",
       "reason": "Vendored with the module, not added for Route A. Nothing on the page reaches it any more: dictation's capture went behind src/platform/dictation-capture.web.ts, which asks the shell for the microphone, so the only importer of @orca/expo-two-way-audio is the native half of that seam. The file stays because it ships with the vendored module, and it answers denied microphone permission and no playback, which is what a browser outside the shell can honestly say."
     },

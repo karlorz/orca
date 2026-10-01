@@ -347,5 +347,3 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 export function getAgentLabel(agent: TuiAgent): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
-
-export { AgentIcon } from './agent-catalog-icon'
