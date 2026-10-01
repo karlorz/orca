@@ -118,7 +118,10 @@ export function AutomationEditorSettingsSidebar({
               />
               <Field
                 className="mt-3"
-                label="Extra args"
+                label={translate(
+                  'auto.components.automations.AutomationEditorSettingsSidebar.extraArgs',
+                  'Extra args'
+                )}
                 labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
               >
                 <Input
@@ -126,7 +129,10 @@ export function AutomationEditorSettingsSidebar({
                   onChange={(event) =>
                     onDraftChange((current) => ({ ...current, extraArgs: event.target.value }))
                   }
-                  placeholder="Optional provider flags"
+                  placeholder={translate(
+                    'auto.components.automations.AutomationEditorSettingsSidebar.optionalProviderFlags',
+                    'Optional provider flags'
+                  )}
                   spellCheck={false}
                   autoComplete="off"
                   className="font-mono text-xs"

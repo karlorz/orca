@@ -302,11 +302,32 @@ export function AutomationDetail({
           }
         />
         <DetailMetric
-          label="Reasoning effort"
-          value={automation.reasoningEffort ?? 'Agent default'}
+          label={translate(
+            'auto.components.automations.AutomationDetail.reasoningEffort',
+            'Reasoning effort'
+          )}
+          value={
+            automation.reasoningEffort ??
+            translate('auto.components.automations.AutomationDetail.4c08827ec8', 'Agent default')
+          }
         />
-        <DetailMetric label="Agent profile" value={automation.agentProfile ?? 'Agent default'} />
-        <DetailMetric label="Extra args" value={automation.extraArgs ?? 'None'} />
+        <DetailMetric
+          label={translate(
+            'auto.components.automations.AutomationDetail.agentProfile',
+            'Agent profile'
+          )}
+          value={
+            automation.agentProfile ??
+            translate('auto.components.automations.AutomationDetail.4c08827ec8', 'Agent default')
+          }
+        />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.extraArgs', 'Extra args')}
+          value={
+            automation.extraArgs ??
+            translate('auto.components.automations.AutomationDetail.none', 'None')
+          }
+        />
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

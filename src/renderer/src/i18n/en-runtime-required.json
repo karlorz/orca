@@ -96,7 +96,8 @@
         "setupHostExistingFolderPlaceholder": "/path/to/project/on/host",
         "setupHostExistingFolderTitle": "Set up {{value0}}",
         "setupKindFolder": "Folder",
-        "setupKindGit": "Git repo"
+        "setupKindGit": "Git repo",
+        "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
       },
       "PullRequestPage": {
         "3450247584": "Comment",
@@ -423,6 +424,16 @@
       },
       "emulator": {
         "pane": {
+          "MobileEmulatorAgentSetupGuide": {
+            "72736b051f": "Set up Orca CLI + skill when you want agents to drive this simulator."
+          },
+          "MobileEmulatorAgentSetupGuideSteps": {
+            "3941719a56": "Checking Orca CLI before opening skill setup.",
+            "3be27641c9": "so emulator commands can run from agent shells.",
+            "3d34423e88": "Registering the Orca CLI",
+            "3d8dc52c93": "Registers the orca command for emulator control in agent shells.",
+            "9b49d892e3": "Enable Orca CLI"
+          },
           "emulator": {
             "device": {
               "frame": {
@@ -433,6 +444,27 @@
               "pane": {
                 "b2c268a0b9": "Mobile Emulator is macOS only",
                 "f630b9ca9f": "Mobile Emulator requires a Mac with Xcode and the iOS Simulator runtime. On Linux or Windows, use a physical device or a remote Mac build host."
+              }
+            }
+          },
+          "use": {
+            "mobile": {
+              "emulator": {
+                "agent": {
+                  "setup": {
+                    "state": {
+                      "15986a1080": "Orca CLI is ready. Install the skill to finish setup.",
+                      "2b519eed94": "Registered the Orca CLI in PATH.",
+                      "4c26913def": "Still not set up. Complete both steps to enable agent control.",
+                      "51074ccb05": "Failed to load CLI status.",
+                      "69fb2c2289": "Enabled",
+                      "7c1b6bdb1e": "Enable",
+                      "9dff3a6338": "Skill is installed. Enable the Orca CLI to finish setup.",
+                      "c6705092ba": "Fix PATH",
+                      "fdcca1ec75": "Registering..."
+                    }
+                  }
+                }
               }
             }
           }
@@ -447,6 +479,9 @@
           }
         },
         "wall": {
+          "AgentCapabilitiesSetupAction": {
+            "c89534cbe9": "Install CLI & Skills"
+          },
           "ComputerUseAnimatedVisual": {
             "1719b28a81": "found \"Approve\"",
             "2adb561b44": "Claude Code session started",
@@ -462,7 +497,11 @@
             "d8401975b1": "approved",
             "f27676a92c": "status:"
           },
+          "FeatureWallBrowserAction": {
+            "c2df599513": "Install CLI & Skill"
+          },
           "FeatureWallSetupChecklist": {
+            "0235b268b2": "Not done yet",
             "b1f1981c5e": "See tasks"
           },
           "ReviewAnimatedVisual": {
@@ -471,6 +510,17 @@
           },
           "TasksAnimatedVisual": {
             "72f9e516a3": "pressing"
+          },
+          "agent": {
+            "capability": {
+              "setup": {
+                "status": {
+                  "21d4f79c93": "click Install CLI & Skills to open macOS access settings",
+                  "4c8e1f92a7": "open Orca Desktop on this Mac",
+                  "aae94eeb52": "Click Install CLI & Skills"
+                }
+              }
+            }
           },
           "agents": {
             "orchestration": {
@@ -492,6 +542,21 @@
                 "coordinatorBeat1": "PR 1/2 ready",
                 "coordinatorBeat2": "PR 2/2 ready",
                 "coordinatorInitial": "Splitting auth rewrite into 2 PRs…"
+              }
+            }
+          },
+          "feature": {
+            "wall": {
+              "setup": {
+                "checklist": {
+                  "localized": {
+                    "copy": {
+                      "7bcb4097fa": "Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.",
+                      "ec0a363633": "Multi-task",
+                      "fee5557b02": "Enable Orca CLI"
+                    }
+                  }
+                }
               }
             }
           },
@@ -655,6 +720,11 @@
         }
       },
       "onboarding": {
+        "AgentStep": {
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
+        },
         "IntegrationsStep": {
           "93f0c49ad1": "not-authenticated",
           "a3bcf13694": "connected",
@@ -662,6 +732,7 @@
         },
         "NotificationStep": {
           "2c47f5465f": "Turn on Allow notifications for Orca in System Settings. This step updates automatically once enabled.",
+          "53aaffe49a": "Notification Sound",
           "8124d085a6": "Open Mac Settings",
           "94562ba367": "macOS is asking for permission. Click Allow in the dialog and this step updates automatically.",
           "aa36281b00": "Open System Settings and make sure Orca is allowed to send notifications.",
@@ -1151,12 +1222,23 @@
           "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
         },
         "BrowserUsePane": {
+          "0289434ed6": "Enabled",
+          "180a9abf3a": "Failed to load CLI status.",
+          "702488a5f7": "Let coding agents drive this browser with your logins. Finish the three steps below.",
+          "721aee31b4": "Registered the Orca CLI in PATH.",
+          "8b3054dac7": "Registering...",
+          "9fca1f7f5d": "Registers the Orca CLI command so agents can orchestrate the browser from their shell.",
+          "ad8cb0ee22": "Fix PATH",
+          "c6065d205d": "Enable Orca CLI",
+          "c79eff0213": "Register the Orca CLI so agents can drive the browser.",
           "de9b2f32f3": "Enable",
-          "e44c5d681e": "From"
+          "e44c5d681e": "From",
+          "e9f3f3b488": "Installed at"
         },
         "CliSection": {
           "4c7e3e4c5f": "install",
           "5d432fe44d": "installed",
+          "6930feda9e": "Use Orca from your terminal to open the app, manage worktrees, and interact with Orca terminals.",
           "8a9b784c60": "stale",
           "8d96213669": "remove",
           "cliSkillTerminalAria": "CLI skill install terminal",
@@ -1318,6 +1400,12 @@
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "Failed to load CLI status.",
+          "2fef055608": "Registers the Orca CLI command so agents can control the active emulator from their shell.",
+          "3941719a56": "Checking Orca CLI before opening skill setup.",
+          "3be27641c9": "so emulator commands can run from agent shells.",
+          "3d34423e88": "Registering the Orca CLI",
+          "4f2205f3b6": "Enable Orca CLI",
+          "aaf62a3dd2": "Installed at",
           "cdeaed9e37": "Registered the Orca CLI in PATH."
         },
         "MobileEmulatorSdkStatus": {
@@ -1410,7 +1498,8 @@
           "8dbe6bedf5": "invalid",
           "925f9e0dc4": "text-foreground",
           "b5e3e77e89": "action",
-          "c90b858573": "text-amber-700 dark:text-amber-300"
+          "c90b858573": "text-amber-700 dark:text-amber-300",
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color"
@@ -1660,6 +1749,21 @@
             }
           }
         },
+        "browser": {
+          "use": {
+            "search": {
+              "034c5e8d7f": "enable",
+              "30c74aaa1f": "path",
+              "3ffafc9b95": "command",
+              "50f0860e18": "Enable Orca CLI",
+              "7e0dcb257a": "shell",
+              "85fab5e12c": "cli",
+              "890ddf943d": "Register the Orca CLI so agents can drive the browser.",
+              "e56c7b55c9": "setup",
+              "ff05cbc344": "orca"
+            }
+          }
+        },
         "computerUseSkillRuntime": {
           "thisDevice": "This device"
         },
@@ -1833,6 +1937,13 @@
           "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
         }
       },
+      "setup": {
+        "guide": {
+          "SetupGuideModal": {
+            "28cf59fcb4": "This will hide the checklist from the sidebar"
+          }
+        }
+      },
       "shared": {
         "useDaemonActions": {
           "28c8e53176": "This force-quits every running terminal pane across all workspaces. Any unsaved work in those sessions is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone.",
@@ -1888,9 +1999,16 @@
           "63f36455cc": "Reconnect"
         },
         "LinearAgentSkillSetupPrompt": {
+          "install": "Install CLI & Skill",
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
+          "missingCli": "Orca CLI is missing.",
+          "missingCliAndSkill": "Orca CLI and Linear agent skill are missing.",
           "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
-          "panelTitle": "Linear agent skill"
+          "panelTitle": "Linear agent skill",
+          "toastInstallCliAndSkillDescription": "Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks.",
+          "toastInstallCliDescription": "Install the Orca CLI to enable your agents to read and edit Linear tasks.",
+          "toastMissingCli": "Orca CLI is missing",
+          "toastMissingCliAndSkill": "Orca CLI and Linear skill are missing"
         },
         "NewExternalWorktreesInboxLine": {
           "5e1b8d3f62": "Hide external worktrees permanently"
@@ -2612,6 +2730,10 @@
     },
     "hooks": {
       "useComposerState": {
+        "attachSkipMissing": "No longer at its original path.",
+        "attachSkipPermissionDenied": "Permission denied.",
+        "attachSkipSymlink": "Symbolic links cannot be attached.",
+        "attachSkipUnsupported": "Unsupported file type.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached."
       },
@@ -2742,9 +2864,6 @@
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
         "workingFor": "Working for {{value0}}"
-      },
-      "subagents": {
-        "unnamed": "Subagent"
       },
       "tool": {
         "countN": "{{value0}} tool calls",

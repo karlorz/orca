@@ -395,7 +395,8 @@
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
             "fb290366b2": "Unavailable on web.",
-            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}",
+            "passwordPageUnavailable": "Password management is unavailable in the web client."
           }
         },
         "runtime": {
@@ -16213,7 +16214,11 @@
           "eaa02014f8": "Enabled",
           "29baf8f4c2": "Source",
           "ebdcb0023c": "Model",
-          "4c08827ec8": "Agent default"
+          "4c08827ec8": "Agent default",
+          "reasoningEffort": "Reasoning effort",
+          "agentProfile": "Agent profile",
+          "extraArgs": "Extra args",
+          "none": "None"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -16709,7 +16714,19 @@
         },
         "AutomationModelField": {
           "0c29384d39": "Model",
-          "d5bfdc61bd": "grok-4.5"
+          "d5bfdc61bd": "grok-4.5",
+          "reasoningEffort": "Reasoning effort",
+          "agentDefault": "Agent default",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "extraHigh": "Extra high",
+          "agentProfile": "Agent profile",
+          "minimal": "Minimal"
+        },
+        "AutomationEditorSettingsSidebar": {
+          "extraArgs": "Extra args",
+          "optionalProviderFlags": "Optional provider flags"
         }
       },
       "agent": {

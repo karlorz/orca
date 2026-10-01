@@ -57,16 +57,37 @@ export function AutomationModelField({
       >
         <SelectTrigger
           className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
-          aria-label="Reasoning effort"
+          aria-label={translate(
+            'auto.components.automations.AutomationModelField.reasoningEffort',
+            'Reasoning effort'
+          )}
         >
-          <SelectValue placeholder="Agent default" />
+          <SelectValue
+            placeholder={translate(
+              'auto.components.automations.AutomationModelField.agentDefault',
+              'Agent default'
+            )}
+          />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="default">Agent default</SelectItem>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="xhigh">Extra high</SelectItem>
+          <SelectItem value="default">
+            {translate(
+              'auto.components.automations.AutomationModelField.agentDefault',
+              'Agent default'
+            )}
+          </SelectItem>
+          <SelectItem value="low">
+            {translate('auto.components.automations.AutomationModelField.low', 'Low')}
+          </SelectItem>
+          <SelectItem value="medium">
+            {translate('auto.components.automations.AutomationModelField.medium', 'Medium')}
+          </SelectItem>
+          <SelectItem value="high">
+            {translate('auto.components.automations.AutomationModelField.high', 'High')}
+          </SelectItem>
+          <SelectItem value="xhigh">
+            {translate('auto.components.automations.AutomationModelField.extraHigh', 'Extra high')}
+          </SelectItem>
         </SelectContent>
       </Select>
       <Select
@@ -80,13 +101,28 @@ export function AutomationModelField({
       >
         <SelectTrigger
           className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
-          aria-label="Agent profile"
+          aria-label={translate(
+            'auto.components.automations.AutomationModelField.agentProfile',
+            'Agent profile'
+          )}
         >
-          <SelectValue placeholder="Agent default" />
+          <SelectValue
+            placeholder={translate(
+              'auto.components.automations.AutomationModelField.agentDefault',
+              'Agent default'
+            )}
+          />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="default">Agent default</SelectItem>
-          <SelectItem value="minimal">Minimal</SelectItem>
+          <SelectItem value="default">
+            {translate(
+              'auto.components.automations.AutomationModelField.agentDefault',
+              'Agent default'
+            )}
+          </SelectItem>
+          <SelectItem value="minimal">
+            {translate('auto.components.automations.AutomationModelField.minimal', 'Minimal')}
+          </SelectItem>
         </SelectContent>
       </Select>
     </Field>
