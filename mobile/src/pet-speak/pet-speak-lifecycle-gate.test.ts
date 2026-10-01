@@ -44,6 +44,7 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 })
 
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   Platform: { OS: 'android', Version: 34 },
   View: 'View',
   Text: 'Text',
