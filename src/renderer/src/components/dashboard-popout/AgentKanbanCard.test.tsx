@@ -12,7 +12,7 @@ import { AgentKanbanCard } from './AgentKanbanCard'
 const agentIconRender = vi.fn()
 const agentStateDotRender = vi.fn()
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog-icon', () => ({
   AgentIcon: () => {
     agentIconRender()
     return <span data-testid="agent-icon" />
