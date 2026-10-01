@@ -2,7 +2,10 @@ import { randomBytes } from 'node:crypto'
 import type { RawData, WebSocket } from 'ws'
 import { computeRelayHostProofAck, createRelayHostChallenge } from './relay-host-proof'
 import type { SecurityStateRelayGrant } from './own-mobile-relay-security-state'
-import { OWN_RELAY_CONTROL_LEASE_MS } from './own-mobile-relay-types'
+import {
+  OWN_RELAY_CONTROL_LEASE_MS,
+  type OwnMobileRelayHostControlSender
+} from './own-mobile-relay-types'
 import {
   handleActiveControlMessage,
   type OwnMobileRelayControlContext
@@ -21,7 +24,7 @@ export function handleOwnMobileRelayHostControlSocket(
   let expectedProof: string | null = null
   let silenceTimer: NodeJS.Timeout | null = null
   let pingTimer: NodeJS.Timeout | null = null
-  let activeSender: ((msg: object) => void) | null = null
+  let activeSender: OwnMobileRelayHostControlSender | null = null
   let messageQueue: Promise<void> = Promise.resolve()
 
   const controlContext: OwnMobileRelayControlContext = {
@@ -212,9 +215,9 @@ export function handleOwnMobileRelayHostControlSocket(
       }, pingIntervalMs)
       pingTimer.unref?.()
 
-      const sender = (outMsg: object): void => {
+      const sender: OwnMobileRelayHostControlSender = (message) => {
         if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify(outMsg))
+          ws.send(JSON.stringify(message))
         }
       }
       activeSender = sender

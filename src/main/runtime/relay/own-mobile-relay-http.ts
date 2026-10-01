@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type {
+  OwnMobileRelayHostControlSender,
   OwnMobileRelayInviteRecord,
   OwnMobileRelayOperatorConfig
 } from './own-mobile-relay-types'
@@ -75,7 +76,7 @@ export async function listenOwnMobileRelay(
     invites: new Map<string, OwnMobileRelayInviteRecord>(),
     pendingConns: new Map<string, PendingConnRecord>(),
     connsByTicket: new Map<string, PendingConnRecord>(),
-    activeHosts: new Map<string, (msg: object) => void>()
+    activeHosts: new Map<string, OwnMobileRelayHostControlSender>()
   }
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 })
