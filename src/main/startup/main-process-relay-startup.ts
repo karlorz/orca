@@ -40,8 +40,14 @@ function tryStartDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): DesktopR
       runtimeRpc,
       onStatus: publishDesktopRelayStatus
     })
+    try {
+      relayService.start()
+    } catch (error) {
+      relayService.fenceAndCloseNow()
+      throw error
+    }
+    // Why: assign only after start so a throw cannot stick an unstarted service.
     state.desktopRelayService = relayService
-    relayService.start()
     clearAttachRetry()
     return relayService
   } catch (error) {

@@ -17,6 +17,7 @@ type RelayStartupFakes = {
   wiring: object | null
   construct: Mock
   start: Mock
+  fenceAndCloseNow: Mock
   ensureLive: Mock
   authMutated: Mock
   demandStateChanged: Mock
@@ -49,12 +50,21 @@ const PAIRING_CONTEXT: MobilePairingConnectionContext = {
   transport: { transport: 'direct' }
 }
 
+const REVOKE_ITEM = {
+  reqId: 'req-1',
+  createdAt: 1,
+  relayHostId: 'host-1',
+  relayDeviceId: 'device-1',
+  ownerIdentityKey: 'owner-1'
+}
+
 const fakes = vi.hoisted((): RelayStartupFakes => ({
   configured: true,
   keypair: null,
   wiring: null,
   construct: vi.fn(),
   start: vi.fn(),
+  fenceAndCloseNow: vi.fn(),
   ensureLive: vi.fn(),
   authMutated: vi.fn(),
   demandStateChanged: vi.fn(),
@@ -88,6 +98,7 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 vi.mock('../runtime/relay/desktop-relay-service', () => ({
   DesktopRelayService: class {
     start = fakes.start
+    fenceAndCloseNow = fakes.fenceAndCloseNow
     ensureLive = fakes.ensureLive
     authMutated = fakes.authMutated
     demandStateChanged = fakes.demandStateChanged
@@ -149,6 +160,7 @@ describe('installDesktopRelayService', () => {
     fakes.wiring = READY_WIRING
     fakes.construct.mockReset()
     fakes.start.mockReset()
+    fakes.fenceAndCloseNow.mockReset()
     fakes.ensureLive.mockReset()
     fakes.authMutated.mockReset()
     fakes.demandStateChanged.mockReset()
@@ -248,5 +260,88 @@ describe('installDesktopRelayService', () => {
     fakes.wiring = READY_WIRING
     vi.advanceTimersByTime(1_000)
     expect(fakes.construct).not.toHaveBeenCalled()
+  })
+
+  it('constructs from demand and revoke when launch missed wiring', () => {
+    fakes.wiring = null
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    const provider = requireProvider(rpc)
+    fakes.wiring = READY_WIRING
+    provider.onDemandStateChanged?.()
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(fakes.demandStateChanged).toHaveBeenCalledOnce()
+    provider.onDeviceRevokeQueued(REVOKE_ITEM)
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(fakes.onDeviceRevokeQueued).toHaveBeenCalledWith(REVOKE_ITEM)
+  })
+
+  it('constructs from resume when launch missed wiring', () => {
+    fakes.wiring = null
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    fakes.wiring = READY_WIRING
+    requireResumeHandler()()
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(fakes.start).toHaveBeenCalledOnce()
+    expect(fakes.ensureLive).toHaveBeenCalledOnce()
+  })
+
+  it('attaches on the 5s retry after the 1s miss', () => {
+    fakes.wiring = null
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    vi.advanceTimersByTime(1_000)
+    expect(fakes.construct).not.toHaveBeenCalled()
+    fakes.wiring = READY_WIRING
+    vi.advanceTimersByTime(5_000)
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(fakes.start).toHaveBeenCalledOnce()
+  })
+
+  it('still constructs from getEndpoints after delayed attach gives up', async () => {
+    fakes.wiring = null
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    vi.advanceTimersByTime(1_000 + 5_000 + 15_000 + 60_000)
+    expect(fakes.construct).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(60_000)
+    expect(fakes.construct).not.toHaveBeenCalled()
+    fakes.wiring = READY_WIRING
+    await expect(requireProvider(rpc).getEndpoints(PAIRING_CONTEXT, {})).resolves.toEqual({
+      v: 1,
+      relay: null
+    })
+    expect(fakes.construct).toHaveBeenCalledOnce()
+  })
+
+  it('retries after a construct throw while wiring is present', () => {
+    fakes.construct.mockImplementationOnce(() => {
+      throw new Error('mobile_runtime_not_ready')
+    })
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(state.desktopRelayService).toBeNull()
+    vi.advanceTimersByTime(1_000)
+    expect(fakes.construct).toHaveBeenCalledTimes(2)
+    expect(fakes.start).toHaveBeenCalledOnce()
+    expect(state.desktopRelayService).toBeTruthy()
+  })
+
+  it('retries when start throws after construct', () => {
+    fakes.start.mockImplementationOnce(() => {
+      throw new Error('start_failed')
+    })
+    const rpc = runtimeRpc()
+    installDesktopRelayService(asRuntimeRpc(rpc))
+    expect(fakes.construct).toHaveBeenCalledOnce()
+    expect(fakes.fenceAndCloseNow).toHaveBeenCalledOnce()
+    expect(state.desktopRelayService).toBeNull()
+    vi.advanceTimersByTime(1_000)
+    expect(fakes.construct).toHaveBeenCalledTimes(2)
+    expect(fakes.start).toHaveBeenCalledTimes(2)
+    expect(fakes.fenceAndCloseNow).toHaveBeenCalledOnce()
+    expect(state.desktopRelayService).toBeTruthy()
   })
 })
