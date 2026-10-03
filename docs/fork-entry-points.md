@@ -23,7 +23,7 @@ The desktop app remains the CLI version authority.
 
 ## Mobile Android APK updates
 
-Fork Android APKs check GitHub Releases on `karlorz/orca` for `mobile-android-v*` tags. This is an APK download check from the home card and the protocol wall, not Expo EAS OTA. Installed `expo.version` is the published train (`0.0.52` today); fork tags carry a suffix (`mobile-android-v0.0.52-0`). The checker offers a newer train only. An attended same-train `-1` is a manual install because the binary still reports the train.
+Fork Android APKs check GitHub Releases on `karlorz/orca` for `mobile-android-v*` tags. This is an APK download check from the home card and the protocol wall, not Expo EAS OTA. Installed `expo.version` is the published train (`0.0.52` today); fork tags carry a suffix (`mobile-android-v0.0.52-3`). The checker offers a newer train only. The published same-train APK is `mobile-android-v0.0.52-3` (versionCode 86). It is a manual install because the binary still reports the train `0.0.52`.
 
 The About source row and Settings Support issues link also use `karlorz/orca`.
 
@@ -34,7 +34,7 @@ As of 2026-10-03 the published upstream trains and fork tags are:
 | Train          | Upstream release                                                                                 | Fork tag                                      | Notes                                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Desktop        | [`v1.4.219`](https://github.com/stablyai/orca/releases/tag/v1.4.219)                             | `v1.4.219-0`                                  | Auto-cut after attended merge `9106b8e404`.                                                                    |
-| Mobile Android | [`mobile-android-v0.0.52`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.52) | `mobile-android-v0.0.52-0` then attended `-1` | Auto-cut `-0` failed verify (pnpm 9 `patchedDependencies` stanza). `-1` is the APK that checks `karlorz/orca`. |
+| Mobile Android | [`mobile-android-v0.0.52`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.52) | `mobile-android-v0.0.52-3` | Published APK, expo `0.0.52`, versionCode 86. `-3` is the APK that checks `karlorz/orca`. Train string stays `0.0.52`. |
 
 The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is historical: merge `ce818bd5151a02937033752cb22cae2a522ba81b`, later run [`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538). Desktop retry `v1.4.217-1` published through [workflow run `36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692) (no APK). Mobile on that train ended at `mobile-android-v0.0.50-8`.
 
