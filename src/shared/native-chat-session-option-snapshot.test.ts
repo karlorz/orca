@@ -237,7 +237,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         '-m',
         'grok-4.5',
         '--reasoning-effort',
-        'high'
+        'medium'
       ])
     })
   })

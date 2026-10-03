@@ -57,7 +57,10 @@ export function resolveAgentSessionOptionLaunch(
         }
         return [[option.id, explicitValue]]
       }
-      return model && includeCatalogDefaults ? [[option.id, option.kind.defaultValue]] : []
+      // Why: grok launch reads the static seed, so discovered ids still need the catalog default.
+      return includeCatalogDefaults && (model || agent === 'grok')
+        ? [[option.id, option.kind.defaultValue]]
+        : []
     })
   )
   const composedModelId = catalog.composeModelValue

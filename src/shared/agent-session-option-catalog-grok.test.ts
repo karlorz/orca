@@ -43,9 +43,9 @@ describe('grok session option catalog', () => {
     // novel id is dropped client-side and rejected on the wire.
     expect(effort.id).toBe('effort')
     expect(effort.category).toBe('thought_level')
-    // `high` is each model's own reported default, so an untouched picker never escalates.
-    expect(effort.kind).toMatchObject({ type: 'select', defaultValue: 'high' })
-    expect(grokEffortOption('grok-4.5').kind).toMatchObject({ defaultValue: 'high' })
+    // Fork launch default: `-m` also sends `--reasoning-effort medium`.
+    expect(effort.kind).toMatchObject({ type: 'select', defaultValue: 'medium' })
+    expect(grokEffortOption('grok-4.5').kind).toMatchObject({ defaultValue: 'medium' })
   })
 
   it('offers each model only the tiers its own grok menu advertises', () => {
@@ -103,29 +103,29 @@ describe('grok launch args', () => {
   })
 
   it('falls back to the seeded effort default when none is stored', () => {
-    // `high`, not the menu's ceiling: xhigh is opt-in, never a silent escalation.
+    // `medium`, not the menu's ceiling: xhigh is opt-in, never a silent escalation.
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.6' }).args).toEqual([
       '-m',
       'grok-4.6',
       '--reasoning-effort',
-      'high'
+      'medium'
     ])
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5' }).args).toEqual([
       '-m',
       'grok-4.5',
       '--reasoning-effort',
-      'high'
+      'medium'
     ])
   })
 
-  it('emits only -m for a persisted model the seed does not carry', () => {
-    // The flag still goes out for a model this host may no longer have, and grok
+  it('emits -m and the effort default for a persisted model the seed does not carry', () => {
+    // The model flag still goes out for a model this host may no longer have, and grok
     // exits fatally on an unknown id. Launch resolves against the static seed, so
     // the guard lives upstream: an authoritative probe retires the persisted id
     // (clearNativeChatSessionOptionModel) before it can reach this call.
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-build' })).toEqual({
-      args: ['-m', 'grok-build'],
-      appliedValues: { model: 'grok-build' }
+      args: ['-m', 'grok-build', '--reasoning-effort', 'medium'],
+      appliedValues: { model: 'grok-build', effort: 'medium' }
     })
   })
 
@@ -163,12 +163,20 @@ describe('grok launch args', () => {
     ).toEqual({ model: 'grok-build' })
   })
 
-  it('still adds no effort default for a model the seed does not carry', () => {
-    // An unseeded id has no verified menu, so only an explicit pick may reach argv.
+  it('adds the effort default for a model the seed does not carry', () => {
     expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-build' }).args).toEqual([
       '-m',
-      'grok-build'
+      'grok-build',
+      '--reasoning-effort',
+      'medium'
     ])
+  })
+
+  it('adds the effort default for a discovered gpt-6.1-sol launch', () => {
+    expect(resolveAgentSessionOptionLaunch('grok', { model: 'gpt-6.1-sol' })).toEqual({
+      args: ['-m', 'gpt-6.1-sol', '--reasoning-effort', 'medium'],
+      appliedValues: { model: 'gpt-6.1-sol', effort: 'medium' }
+    })
   })
 
   it('spawns vanilla when no model was ever picked', () => {

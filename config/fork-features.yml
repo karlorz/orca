@@ -417,3 +417,11 @@ features:
       - src/renderer/src/components/sidebar/add-repo-local-filesystem-browser.tsx
       - src/renderer/src/components/sidebar/should-use-in-app-local-folder-picker.ts
     wiki: raw/transcripts/2026-10-01-bug-linux-add-project-browse-folder-sigabrt.md
+
+  - id: grok-launch-reasoning-effort-medium
+    title: Grok launches pass --reasoning-effort medium with -m, including discovered models
+    kind: product
+    status: landed
+    paths:
+      - src/shared/agent-session-option-catalog-grok.ts
+      - src/shared/agent-session-option-launch.ts

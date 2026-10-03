@@ -53,7 +53,7 @@ describe('automation model launch command', () => {
   })
   it('emits -m <model> for a grok run with a model', () => {
     expect(launchCommandFor('grok', 'deepseek-v4-flash')).toBe(
-      "grok '-m' 'deepseek-v4-flash' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+      "grok '-m' 'deepseek-v4-flash' '--reasoning-effort' 'medium' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 
@@ -91,7 +91,7 @@ describe('automation model launch command', () => {
     // The id rides before grok's `--`, so the prompt stays the only positional
     // argument even when the stored id reads like CLI syntax.
     expect(launchCommandFor('grok', 'help')).toBe(
-      "grok '-m' 'help' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+      "grok '-m' 'help' '--reasoning-effort' 'medium' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 })

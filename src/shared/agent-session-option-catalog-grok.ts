@@ -29,9 +29,8 @@ function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
     kind: {
       type: 'select',
       choices: GROK_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      // Why: every grok model reports `reasoning_effort: "high"` as its own default,
-      // so an untouched picker must not silently escalate past it.
-      defaultValue: 'high'
+      // Why: fork launch default so `-m` also sends `--reasoning-effort medium`.
+      defaultValue: 'medium'
     },
     apply: {
       launchArgs: (value) => ['--reasoning-effort', String(value)],
@@ -72,10 +71,9 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // agent picker…" and never persist a model, so `-m` would never be emitted.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
-  // Why: launch resolves against this static seed, so without it a discovered id the
-  // seed does not carry shows the effort menu but launches with the flag dropped. The
-  // widest menu is the safe guess: grok warns on a tier a model lacks, but a tier the
-  // menu withholds is unreachable.
+  // Why: launch resolves against this static seed, so a discovered id still needs a
+  // menu (and the catalog default) here. The widest menu is the safe guess: grok
+  // warns on a tier a model lacks, but a tier the menu withholds is unreachable.
   unknownModelOptions: [grokEffort('xhigh')],
   // Why: grok's selectable ids retire between releases, so a stale seed entry
   // must be droppable — picking one is a fatal launch, not a warning.
