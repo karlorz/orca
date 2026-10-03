@@ -8,6 +8,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'codebuddy',
   'codex',
   'qoder',
+  'qoder-cn',
+  'qwen-code',
   'gemini',
   'antigravity',
   'opencode',
@@ -20,10 +22,12 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
+  'cursor',
   'kimi',
   'muse',
   'zcode',
-  'dsh'
+  'dsh',
+  'jcode'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -196,6 +200,8 @@ export function extractAgentProviderSession(
     // Native-chat agents: also capture the hook's authoritative transcript_path,
     // since recent Claude Code names the transcript file with a UUID that differs
     // from the hook session_id (so the id-based glob no longer finds it).
+    case 'qoder-cn':
+    case 'qwen-code':
     case 'qoder':
     case 'codebuddy':
     case 'claude':
@@ -253,6 +259,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'jcode': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     // OMP keeps id-based resume while optionally locating its native-chat transcript.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
@@ -264,8 +274,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'cursor': {
+      const id = readSessionId(payload, ['conversation_id'])
+      return id ? { key: 'conversation_id', id } : null
+    }
     case 'amp':
-    case 'cursor':
     case 'command-code':
     case 'hermes':
       return null
@@ -294,4 +307,5 @@ export function providerSessionMetadataForAgentResume(
   return { key: 'session_id', id }
 }
 
+// Re-exported so the 18 existing call sites keep one import path.
 export { getAgentResumeArgv } from './agent-resume-argv'

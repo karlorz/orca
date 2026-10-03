@@ -12,6 +12,7 @@ import { useCompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 import { useAddRepoHostChangeReset } from './use-add-repo-host-change-reset'
 import { AddRepoDialogChrome } from './AddRepoDialogChrome'
+import { useAddRepoDialogChromeHandlers } from './use-add-repo-dialog-chrome-handlers'
 import { AddRepoHostSelectorSlot } from './AddRepoHostSelectorSlot'
 import { useAddRepoNestedReviewController } from './useAddRepoNestedReviewController'
 import {
@@ -268,31 +269,19 @@ export default React.memo(function AddRepoDialog({
     onResetHostScopedState: resetHostScopedState
   })
 
-  const handleBack = useCallback(() => {
-    if (step === 'nested') {
-      trackNestedBackAction()
-    }
-    resetState()
-  }, [resetState, step, trackNestedBackAction])
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        if (step === 'nested' && !isAdding) {
-          trackNestedBackAction()
-        }
-        closeModal()
-        resetState()
-      }
-    },
-    [closeModal, isAdding, resetState, step, trackNestedBackAction]
-  )
-
+  const { handleBack, handleOpenChange } = useAddRepoDialogChromeHandlers({
+    closeModal,
+    isAdding,
+    resetState,
+    step,
+    trackNestedBackAction
+  })
   return (
     <AddRepoDialogChrome
       isOpen={isOpen}
       step={step}
       isAdding={isAdding}
+      isCloning={isCloning}
       onBack={browsingLocal ? stopBrowsingLocal : handleBack}
       onCloseAutoFocus={hosted?.onCloseAutoFocus}
       onOpenChange={handleOpenChange}
