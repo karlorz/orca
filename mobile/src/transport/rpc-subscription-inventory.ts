@@ -79,9 +79,11 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
     coverage: { kind: 'recorded', family: 'notifications.desktop-stream' }
   },
   // Fork pet-speak. Frames drive native TTS / expo-speech, not a JSON observation.
+  // Call site sends pet.speak.unsubscribe from the ready id; not in READY_STREAM_RELEASE_METHODS.
   {
     file: 'src/pet-speak/pet-speak-subscription.ts',
     method: 'pet.speak.subscribe',
+    release: 'params',
     coverage: {
       kind: 'walled',
       wall: 'The stream consumer constructs `PetSpeakHandler`, which defaults to `DefaultTtsAdapter` (`expo-speech`) and Android `getPetSpeechNativeAdapter()`; a substitute that played the utterance would be inventing the device.'
