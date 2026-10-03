@@ -21,44 +21,22 @@ orca status
 
 The desktop app remains the CLI version authority.
 
+## Mobile Android APK updates
+
+Fork Android APKs check GitHub Releases on `karlorz/orca` for `mobile-android-v*` tags. This is an APK download check from the home card and the protocol wall, not Expo EAS OTA. Installed `expo.version` is the published train (`0.0.52` today); fork tags carry a suffix (`mobile-android-v0.0.52-0`). The checker offers a newer train only. An attended same-train `-1` is a manual install because the binary still reports the train.
+
+The About source row and Settings Support issues link also use `karlorz/orca`.
+
 ## Current upstream sync and release trains
 
-The 2026-10-01 fork sync studied these published upstream trains:
+As of 2026-10-03 the published upstream trains and fork tags are:
 
-| Train          | Upstream release                                                                                 | Published  | Upstream release target                    |
-| -------------- | ------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------ |
-| Desktop        | [`v1.4.217`](https://github.com/stablyai/orca/releases/tag/v1.4.217)                             | 2026-09-29 | `11d97896628d90c4990365127812667b00e28c82` |
-| Mobile Android | [`mobile-android-v0.0.50`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50) | 2026-09-18 | `main` (published prerelease)              |
+| Train          | Upstream release                                                                                 | Fork tag                                      | Notes                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Desktop        | [`v1.4.219`](https://github.com/stablyai/orca/releases/tag/v1.4.219)                             | `v1.4.219-0`                                  | Auto-cut after attended merge `9106b8e404`.                                                                    |
+| Mobile Android | [`mobile-android-v0.0.52`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.52) | `mobile-android-v0.0.52-0` then attended `-1` | Auto-cut `-0` failed verify (pnpm 9 `patchedDependencies` stanza). `-1` is the APK that checks `karlorz/orca`. |
 
-`fork-main` first integrated this release range in explicit merge commit
-`ce818bd5151a02937033752cb22cae2a522ba81b`, whose parents are the previous fork
-head `8b3afe7274de1c2f76326c3a814b24d10dee99ac` and upstream `main`
-`d74388f8a2dad2bd4bbfe3b937aba66e6648258b`. Final sync run
-[`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538) completed
-the later upstream range through merge commit
-`3899f6187d3f68515e120904f3438d887ed5b316`, bringing the `main` mirror and the
-upstream parent of `fork-main` to `cfe4c633ebc12719b5eed9d7f6c7e6a39976d2bc`.
-The nine later commits improve worker lifecycle recovery, remove obsolete
-Dispatch-token minting while preserving older-host CLI compatibility, register
-Codex default-mode helpers, make chat restore lease failures recoverable, add
-shell startup dotfile highlighting, remove reasoning blocks from generated
-commit messages, and publish mobile APK size/checksum metadata. The merges
-retained the fork feature inventory in `config/fork-features.yml` and preserved
-the fork's agent, speech, relay, updater, and workspace-resume behavior.
-
-Fork sync auto-cut `v1.4.217-0`. Its Linux build exposed a stale mobile-web
-route sweep after the merge: the shipped bundle emitted 74 chunks and 124 assets,
-while the inherited sweep recorded 69 chunks. Commit
-`52ef4429034ccf8227d7f9ff934b069d84f3b59c` re-measured every route prefix through
-the shipped bundler, and the immutable retry tag `v1.4.217-1` published
-successfully through [workflow run
-`36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692). The
-release is a non-draft prerelease with `latest=false`; its 17 desktop assets
-include the macOS, Linux, and Windows packages, update manifests, blockmaps, and
-`SHA256SUMS.txt`. All 16 manifest entries match GitHub's SHA-256 asset digests,
-and the release contains no APK. The mobile train already has
-`mobile-android-v0.0.50-8`; a further mobile suffix requires an attended mobile
-release decision.
+The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is historical: merge `ce818bd5151a02937033752cb22cae2a522ba81b`, later run [`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538). Desktop retry `v1.4.217-1` published through [workflow run `36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692) (no APK). Mobile on that train ended at `mobile-android-v0.0.50-8`.
 
 ## Tag-to-release lifecycle
 
@@ -67,8 +45,8 @@ release decision.
    tags, and auto-cuts `v<base>-0` and `mobile-android-v<train>-0` when a new
    train has no fork suffix. It runs on the daily schedule or by
    `workflow_dispatch`.
-2. Desktop tags use `v<base>-N`, such as `v1.4.217-0`. Mobile tags use
-   `mobile-android-v<train>-N`, such as `mobile-android-v0.0.50-8`. The two
+2. Desktop tags use `v<base>-N`, such as `v1.4.219-0`. Mobile tags use
+   `mobile-android-v<train>-N`, such as `mobile-android-v0.0.52-1`. The two
    workflows have separate tag filters and release assets.
 3. An attended desktop cut runs from a clean, pushed `fork-main` with
    `node config/scripts/fork-next-desktop-tag.mjs --write`; the automatic sync

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
+import { MOBILE_ANDROID_RELEASES_PAGE } from '../app-update/github-release-update-source'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 const nativeTestState = vi.hoisted(() => {
@@ -35,7 +36,7 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
-const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+const RELEASES_URL = MOBILE_ANDROID_RELEASES_PAGE
 
 let renderer: ReactTestRenderer | null = null
 
@@ -195,7 +196,7 @@ describe('ProtocolBlockScreen', () => {
   describe('with the newest release known', () => {
     const release = {
       version: '0.0.52',
-      url: 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.52'
+      url: 'https://github.com/karlorz/orca/releases/tag/mobile-android-v0.0.52-0'
     }
 
     it.each(['ios', 'android'] as const)('opens that exact release on %s', (os) => {

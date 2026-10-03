@@ -127,9 +127,7 @@ describe('HostProtocolGate', () => {
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
     act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
-    expect(nativeTestState.openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca/releases'
-    )
+    expect(nativeTestState.openUrl).toHaveBeenCalledWith('https://github.com/karlorz/orca/releases')
   })
 
   it('replaces the host UI with the block screen when desktop is too old', async () => {

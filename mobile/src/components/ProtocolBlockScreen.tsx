@@ -1,3 +1,4 @@
+import { MOBILE_ANDROID_RELEASES_PAGE } from '../app-update/github-release-update-source'
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -6,7 +7,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 
-const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+const RELEASES_URL = MOBILE_ANDROID_RELEASES_PAGE
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
 /** Every wall this screen renders: the protocol one and the bundle one. Both are terminal — there

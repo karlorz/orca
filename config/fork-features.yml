@@ -184,6 +184,18 @@ features:
       - src/main/updater-prerelease-feed.ts
       - src/main/updater.ts
       - .github/workflows/fork-desktop-voice-release.yml
+  - id: fork-mobile-apk-update-feed
+    title: Android APK in-app update checks karlorz/orca mobile-android-v* releases
+    kind: ci
+    status: landed
+    paths:
+      - mobile/src/app-update
+      - mobile/src/components/ProtocolBlockScreen.tsx
+      - mobile/src/settings/about-screen.tsx
+      - mobile/src/settings/settings-menu-screen.tsx
+      - config/scripts/fork-mobile-voice-release.test.mjs
+      - docs/fork-entry-points.md
+    wiki: projects/orca/work/2026-10-03-fork-mobile-apk-update-feed
   - id: fork-desktop-self-signed-ci
     title: Stable self-signed macOS identity so Squirrel can apply fork updates
     kind: ci

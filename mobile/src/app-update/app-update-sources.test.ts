@@ -5,6 +5,9 @@ import { isNewerReleaseVersion } from './app-update-source'
 import {
   createGithubReleaseUpdateSource,
   installableReleaseUrl,
+  isNewerMobileAndroidRelease,
+  MOBILE_ANDROID_RELEASE_REPO_API,
+  mobileAndroidTrainVersion,
   parseMobileAndroidTagVersions
 } from './github-release-update-source'
 
@@ -16,10 +19,9 @@ const tagRefs = fixture('github-mobile-android-tag-refs.json')
 const release050 = fixture('github-release-mobile-android-v0.0.50.json')
 const lookup = fixture('itunes-lookup-com.stably.orca.mobile.json')
 
-const REFS_URL =
-  'https://api.github.com/repos/stablyai/orca/git/matching-refs/tags/mobile-android-v'
+const REFS_URL = `${MOBILE_ANDROID_RELEASE_REPO_API}/git/matching-refs/tags/mobile-android-v`
 const releaseUrl = (version: string) =>
-  `https://api.github.com/repos/stablyai/orca/releases/tags/mobile-android-v${version}`
+  `${MOBILE_ANDROID_RELEASE_REPO_API}/releases/tags/mobile-android-v${version}`
 
 function fakeFetch(routes: Record<string, { status: number; body?: unknown }>) {
   const requested: string[] = []
@@ -45,6 +47,16 @@ describe('version compare', () => {
     expect(isNewerReleaseVersion('0.0.47', '0.0.48')).toBe(false)
     expect(isNewerReleaseVersion('0.0.52-rc.1', '0.0.48')).toBe(false)
     expect(isNewerReleaseVersion('latest', '0.0.48')).toBe(false)
+  })
+
+  it('reads a fork suffix tag as its train and treats that train as the installable version', () => {
+    expect(mobileAndroidTrainVersion('0.0.52-0')).toBe('0.0.52')
+    expect(mobileAndroidTrainVersion('0.0.52')).toBe('0.0.52')
+    expect(mobileAndroidTrainVersion('0.0.52-rc.1')).toBeNull()
+    expect(isNewerMobileAndroidRelease('0.0.52-0', '0.0.50')).toBe(true)
+    expect(isNewerMobileAndroidRelease('0.0.52-0', '0.0.52')).toBe(false)
+    expect(isNewerMobileAndroidRelease('0.0.52-1', '0.0.52')).toBe(false)
+    expect(isNewerMobileAndroidRelease('0.0.52-rc.1', '0.0.50')).toBe(false)
   })
 })
 
@@ -77,6 +89,36 @@ describe('GitHub release source (Android sideload)', () => {
       url: 'https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.50'
     })
     expect(requested).toEqual([REFS_URL, releaseUrl('0.0.50')])
+  })
+
+  it('probes a fork suffix tag and offers its train, not the suffix string', async () => {
+    const forkRefs = [{ ref: 'refs/tags/mobile-android-v0.0.52-0' }]
+    const forkRelease = {
+      ...Object(release050),
+      html_url: 'https://github.com/karlorz/orca/releases/tag/mobile-android-v0.0.52-0'
+    }
+    const { fetchImpl, requested } = fakeFetch({
+      [REFS_URL]: { status: 200, body: forkRefs },
+      [releaseUrl('0.0.52-0')]: { status: 200, body: forkRelease }
+    })
+    await expect(
+      createGithubReleaseUpdateSource(fetchImpl).check('0.0.50', signal)
+    ).resolves.toEqual({
+      kind: 'available',
+      version: '0.0.52',
+      url: 'https://github.com/karlorz/orca/releases/tag/mobile-android-v0.0.52-0'
+    })
+    expect(requested).toEqual([REFS_URL, releaseUrl('0.0.52-0')])
+  })
+
+  it('stays current when the newest fork tag is the installed train', async () => {
+    const { fetchImpl, requested } = fakeFetch({
+      [REFS_URL]: { status: 200, body: [{ ref: 'refs/tags/mobile-android-v0.0.52-0' }] }
+    })
+    await expect(
+      createGithubReleaseUpdateSource(fetchImpl).check('0.0.52', signal)
+    ).resolves.toEqual({ kind: 'current' })
+    expect(requested).toEqual([REFS_URL])
   })
 
   it('falls back past a tag whose build never published a release', async () => {

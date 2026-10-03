@@ -73,10 +73,10 @@ export default function AboutScreen({
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
           accessibilityLabel="Orca source code"
-          onPress={() => openLink('https://github.com/stablyai/orca')}
+          onPress={() => openLink('https://github.com/karlorz/orca')}
         >
           <GithubIcon />
-          <Text style={styles.rowValue}>stablyai/orca</Text>
+          <Text style={styles.rowValue}>karlorz/orca</Text>
         </Pressable>
         <View style={styles.separator} />
         <Pressable

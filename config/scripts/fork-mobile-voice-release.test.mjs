@@ -438,7 +438,8 @@ describe('fork mobile voice release workflow safety contract', () => {
     expect(patch).toContain('React.ComponentRef<>')
     const lockfile = readFileSync(join(projectDir, 'mobile/pnpm-lock.yaml'), 'utf8')
     expect(lockfile).toMatch(
-      /'@react-native\/codegen@0\.83\.10':\n    hash: [0-9a-f]{64}\n    path: patches\/@react-native__codegen@0\.83\.10\.patch/
+      /patchedDependencies:\n(?:  .+\n)*  '@react-native\/codegen@0\.83\.10': [0-9a-f]{64}\n/
     )
+    expect(lockfile).toMatch(/'@react-native\/codegen@0\.83\.10\(patch_hash=[0-9a-f]{64}\)/)
   })
 })
