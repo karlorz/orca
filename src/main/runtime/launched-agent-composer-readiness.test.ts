@@ -64,7 +64,8 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   'mistral-vibe': 'tui-idle',
   'qwen-code': 'tui-idle',
   rovo: 'tui-idle',
-  jcode: 'tui-idle'
+  jcode: 'tui-idle',
+  herdr: 'tui-idle'
 }
 
 const FIXTURES = join(__dirname, '__fixtures__')
