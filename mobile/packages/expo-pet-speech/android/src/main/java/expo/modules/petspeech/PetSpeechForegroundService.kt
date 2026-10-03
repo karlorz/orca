@@ -171,9 +171,7 @@ class PetSpeechForegroundService : Service() {
                 }
                 return PetSpeechStartResultDecision.computeStartResult(isHeld = true)
             }
-            stopForegroundPlayback()
-            stopSelf()
-            return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
+            return promoteForegroundThenStop(PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
         }
 
         if (PetSpeechHoldCommandDecision.isHoldOnlyAction(intent.action)) {
@@ -182,9 +180,8 @@ class PetSpeechForegroundService : Service() {
                 intent.action,
                 intent.getStringExtra(PetSpeechHoldCommandDecision.EXTRA_HOLD_SOURCE)
             )
-            if (!PetSpeechPauseLatchDecision.allowsHold(persist.pauseLatched, source)) {
-                return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
-            }
+            val text = intent.getStringExtra(EXTRA_TEXT) ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+            val allowsHold = PetSpeechPauseLatchDecision.allowsHold(persist.pauseLatched, source)
             if (PetSpeechPauseLatchDecision.shouldClearOnHold(source)) {
                 PetSpeechPersistPrefs.write(this, pauseLatched = false)
             }
@@ -197,10 +194,9 @@ class PetSpeechForegroundService : Service() {
                 afterKeepHoldPause = source == PetSpeechHoldCommandDecision.Source.RESUME_CHIP ||
                     source == PetSpeechHoldCommandDecision.Source.MEDIA_PLAY_AFTER_PAUSE
             )
-            if (hold.serviceAction == null || !hold.reacquireHold || hold.startTts) {
-                return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
+            if (PetSpeechForegroundObligation.refusedHoldMustPromoteThenStop(allowsHold, hold)) {
+                return promoteForegroundThenStop(text)
             }
-            val text = intent.getStringExtra(EXTRA_TEXT) ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
             replacementDecisionHandler.holdSession(text)
             updateNotificationContent(text)
             val held = hold.reacquireHold &&
@@ -289,9 +285,10 @@ class PetSpeechForegroundService : Service() {
             )
         ) {
             is PetSpeechStartCommandDecision.Result.StopSelf -> {
-                stopForegroundPlayback()
-                stopSelf()
-                return PetSpeechStartResultDecision.computeStartResult(replacementDecisionHandler.isSessionHeld)
+                return promoteForegroundThenStop(
+                    extraText?.trim()?.ifEmpty { null }
+                        ?: PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT
+                )
             }
             is PetSpeechStartCommandDecision.Result.StartForeground -> {
                 replacementDecisionHandler.onStartCommand(ownerId, decision.trimmedText)
@@ -474,6 +471,12 @@ class PetSpeechForegroundService : Service() {
             @Suppress("DEPRECATION")
             source.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
         }
+    }
+
+    private fun promoteForegroundThenStop(text: String): Int {
+        updateNotificationContent(text)
+        replacementDecisionHandler.releaseSession()
+        return PetSpeechStartResultDecision.computeStartResult(isHeld = false)
     }
 
     private fun applyHeldNotifications() {

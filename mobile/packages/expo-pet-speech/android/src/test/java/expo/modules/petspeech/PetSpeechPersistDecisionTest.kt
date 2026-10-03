@@ -8,6 +8,62 @@ import org.junit.Test
 class PetSpeechPersistDecisionTest {
 
     @Test
+    fun pauseLatchJsHoldMustPromoteThenStopAndMustNotStartForegroundService() {
+        val latched = PetSpeechPersistPrefs.Snapshot(
+            masterEnabled = true,
+            persistEnabled = true,
+            keepWhenNoHost = false,
+            showServiceRow = true,
+            overlayWhileSpeaking = false,
+            pauseLatched = true
+        )
+        assertFalse(
+            PetSpeechForegroundObligation.shouldStartHoldForegroundService(
+                latched,
+                PetSpeechHoldCommandDecision.Source.JS_HOLD
+            )
+        )
+        val hold = PetSpeechHoldCommandDecision.decide(
+            PetSpeechHoldCommandDecision.Source.JS_HOLD,
+            persistEnabled = true,
+            masterEnabled = true
+        )
+        assertTrue(
+            PetSpeechForegroundObligation.refusedHoldMustPromoteThenStop(
+                PetSpeechPauseLatchDecision.allowsHold(
+                    true,
+                    PetSpeechHoldCommandDecision.Source.JS_HOLD
+                ),
+                hold
+            )
+        )
+        assertTrue(
+            PetSpeechForegroundObligation.shouldStartHoldForegroundService(
+                latched.copy(pauseLatched = false),
+                PetSpeechHoldCommandDecision.Source.JS_HOLD
+            )
+        )
+    }
+
+    @Test
+    fun masterOffJsHoldMustPromoteThenStop() {
+        val masterOff = PetSpeechPersistPrefs.Snapshot(
+            masterEnabled = false,
+            persistEnabled = true,
+            keepWhenNoHost = false,
+            showServiceRow = true,
+            overlayWhileSpeaking = false,
+            pauseLatched = false
+        )
+        assertFalse(
+            PetSpeechForegroundObligation.shouldStartHoldForegroundService(
+                masterOff,
+                PetSpeechHoldCommandDecision.Source.JS_HOLD
+            )
+        )
+    }
+
+    @Test
     fun pauseLatchRefusesSpeakUntilResumeChip() {
         assertTrue(
             PetSpeechPauseLatchDecision.shouldLatch(PetSpeechReleaseAftermathDecision.Reason.PAUSE)

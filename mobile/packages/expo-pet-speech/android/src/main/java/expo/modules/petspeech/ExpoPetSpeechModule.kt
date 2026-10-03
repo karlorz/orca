@@ -368,6 +368,15 @@ class ExpoPetSpeechModule : Module() {
             }
 
             try {
+                val persist = PetSpeechPersistPrefs.read(context)
+                if (!PetSpeechForegroundObligation.shouldStartHoldForegroundService(
+                        persist,
+                        PetSpeechHoldCommandDecision.Source.JS_HOLD
+                    )
+                ) {
+                    promise.resolve(mapOf("held" to false))
+                    return@AsyncFunction
+                }
                 val startIntent = Intent(context, PetSpeechForegroundService::class.java).apply {
                     action = PetSpeechForegroundService.ACTION_HOLD_SESSION
                     putExtra(PetSpeechForegroundService.EXTRA_TEXT, PetSpeechForegroundStart.IDLE_NOTIFICATION_TEXT)
