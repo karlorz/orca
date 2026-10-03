@@ -12,9 +12,7 @@ object PetSpeechForegroundObligation {
         persist: PetSpeechPersistPrefs.Snapshot,
         source: PetSpeechHoldCommandDecision.Source
     ): Boolean {
-        if (!PetSpeechPauseLatchDecision.allowsHold(persist.pauseLatched, source)) {
-            return false
-        }
+        val allowsHold = PetSpeechPauseLatchDecision.allowsHold(persist.pauseLatched, source)
         val hold = PetSpeechHoldCommandDecision.decide(
             source,
             persistEnabled = persist.persistEnabled,
@@ -22,6 +20,6 @@ object PetSpeechForegroundObligation {
             keepWhenNoHost = persist.keepWhenNoHost,
             overlayWhileSpeaking = persist.overlayWhileSpeaking
         )
-        return !refusedHoldMustPromoteThenStop(true, hold)
+        return !refusedHoldMustPromoteThenStop(allowsHold, hold)
     }
 }

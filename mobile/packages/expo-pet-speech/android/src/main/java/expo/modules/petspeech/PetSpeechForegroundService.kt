@@ -199,8 +199,7 @@ class PetSpeechForegroundService : Service() {
             }
             replacementDecisionHandler.holdSession(text)
             updateNotificationContent(text)
-            val held = hold.reacquireHold &&
-                PetSpeechHoldHonestyDecision.shouldMarkHeld(isForegroundStarted)
+            val held = PetSpeechHoldHonestyDecision.shouldMarkHeld(isForegroundStarted)
             if (held) {
                 prefs.edit()
                     .putBoolean(KEY_IS_HELD, true)
