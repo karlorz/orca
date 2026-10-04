@@ -46,7 +46,7 @@ describe('bounded process output', () => {
     sink.write(oversized)
     oversized.fill(0)
     expect(sink.buffer()).toEqual(Buffer.from('tail'))
-    expect(sink.buffer().buffer.byteLength).toBeLessThanOrEqual(Buffer.poolSize)
+    expect(sink.buffer().buffer.byteLength).toBe(4)
     expect(sink.truncated()).toBe(true)
   })
 

@@ -1,13 +1,13 @@
 import { spawnSync } from 'node:child_process'
+import { DESKTOP_STABLE_TAG, DESKTOP_RC_TAG } from './release-tag-patterns.mjs'
 
-const DESKTOP_TAG = /^v\d+\.\d+\.\d+(?:-rc\.\d+)?$/
 const MOBILE_TAG = /^mobile-android-v\d+\.\d+\.\d+$/
 
 export function classifyReleaseTrain(tagName) {
   if (typeof tagName !== 'string') {
     return 'ignore'
   }
-  if (DESKTOP_TAG.test(tagName)) {
+  if (DESKTOP_STABLE_TAG.test(tagName) || DESKTOP_RC_TAG.test(tagName)) {
     return 'desktop'
   }
   if (MOBILE_TAG.test(tagName)) {

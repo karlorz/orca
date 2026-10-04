@@ -35,7 +35,8 @@ export class GrowingByteBuffer {
       ? bytes
       : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     if (source.byteLength >= maxBytes) {
-      this.storage = Buffer.from(source.subarray(source.byteLength - maxBytes))
+      this.storage = Buffer.alloc(maxBytes)
+      source.copy(this.storage, 0, source.byteLength - maxBytes)
       this.start = 0
       this.length = maxBytes
       return
@@ -87,7 +88,9 @@ export class GrowingByteBuffer {
   }
 
   toBuffer(): Buffer {
-    return Buffer.from(this.storage.subarray(this.start, this.start + this.length))
+    const snapshot = Buffer.alloc(this.length)
+    this.storage.copy(snapshot, 0, this.start, this.start + this.length)
+    return snapshot
   }
 
   takeString(encoding: BufferEncoding = 'utf8'): string {

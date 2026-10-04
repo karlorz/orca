@@ -7,6 +7,7 @@ describe('GrowingByteBuffer', () => {
     buffer.append(Buffer.from('prefix-tail'))
     buffer.retainSuffix(4)
     const snapshot = buffer.toBuffer()
+    expect(snapshot.buffer.byteLength).toBe(4)
     snapshot.fill(0)
     expect(buffer.toBuffer()).toEqual(Buffer.from('tail'))
     expect(buffer.byteLength).toBe(4)
@@ -69,6 +70,7 @@ describe('GrowingByteBuffer', () => {
 
     expect(buffer.byteLength).toBe(4)
     expect(buffer.toString()).toBe('tail')
+    expect(buffer.takeBuffer().buffer.byteLength).toBe(4)
   })
 
   it('keeps the newest bytes across bounded suffix appends', () => {

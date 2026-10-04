@@ -21,6 +21,9 @@ describe('classifyReleaseTrain', () => {
   it('splits desktop v* from mobile-android-v* and ignores fork mobile suffixes and desktop numeric suffixes', () => {
     expect(classifyReleaseTrain('v1.4.188')).toBe('desktop')
     expect(classifyReleaseTrain('v1.4.184-rc.0')).toBe('desktop')
+    expect(classifyReleaseTrain('v1.4.184-rc.0.preview')).toBe('desktop')
+    expect(classifyReleaseTrain('agent-state-rules-engine-1-stable')).toBe('ignore')
+    expect(classifyReleaseTrain('agent-state-rules-engine-1-next')).toBe('ignore')
     expect(classifyReleaseTrain('v1.4.190-0')).toBe('ignore')
     expect(classifyReleaseTrain('mobile-android-v0.0.44')).toBe('mobile')
     expect(classifyReleaseTrain('mobile-android-v0.0.44-2')).toBe('ignore')
