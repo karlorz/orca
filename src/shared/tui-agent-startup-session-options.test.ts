@@ -193,6 +193,19 @@ describe('tui agent startup session options', () => {
     expect(plan?.launchCommand).not.toContain("'low'")
   })
 
+  it('sends the grok effort default when host launch options override agent arguments', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: 'Check startup',
+      cmdOverrides: {},
+      platform: 'linux',
+      sessionOptions: { model: 'gpt-6.1-sol' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toContain("grok '-m' 'gpt-6.1-sol' '--reasoning-effort' 'medium'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-6.1-sol', effort: 'medium' })
+  })
+
   it('applies explicit session options to resume commands', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
