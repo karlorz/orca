@@ -158,7 +158,9 @@ describe('agent turn send boundary', () => {
         // A real-host test rig the shared scan does not count as a test file.
         'native-chat/agent-session-wire/structured-agent-session-rest-test-rig.ts',
         // An Electron WebContents IPC send, not a chat.
-        'browser/doc-preview-guest-policy.ts'
+        'browser/doc-preview-guest-policy.ts',
+        // A WebSocket relay socket splice forwarding raw socket messages, not an agent chat.
+        'runtime/relay/own-mobile-relay-socket-splice.ts'
       ].sort()
     )
   })
