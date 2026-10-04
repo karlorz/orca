@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-04T16:01:32.766Z",
+  "platform": "darwin",
+  "command": ["grok"],
+  "cols": 130,
+  "rows": 40,
+  "note": "Grok Build 1.0.45, single-select question navigation, local acceptance capture",
+  "exitCode": 0
+}

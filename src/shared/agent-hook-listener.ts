@@ -238,8 +238,11 @@ export function normalizeHookPayload(
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
   })
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
-    eventName === 'session_start' &&
+    (((source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
+      eventName === 'session_start') ||
+      (source === 'grok' &&
+        !readFirstString(hookPayloadRecord, ['subagentType', 'subagent_type']) &&
+        (eventName === 'SessionStart' || eventName === 'session_start'))) &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
@@ -255,6 +258,9 @@ export function normalizeHookPayload(
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
 
   return {
+    ...(source === 'grok' && typeof hookPayloadRecord.timestamp === 'string'
+      ? { grokEventAt: Date.parse(hookPayloadRecord.timestamp) }
+      : {}),
     paneKey,
     source,
     agentPresence,

@@ -496,7 +496,9 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
+import { TerminalAnswerQuestion } from './terminal-question-answer-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
+import { TerminalResolveSession, TerminalSwitchSession } from './terminal-session-navigation-params'
 import {
   TerminalMultiplex,
   TerminalResizeForClient,
@@ -1145,6 +1147,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'status.get': null,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
+  'terminal.answerQuestion': TerminalAnswerQuestion,
   'terminal.clearBuffer': TerminalHandle,
   'terminal.close': TerminalHandle,
   'terminal.closeAll': TerminalCloseAll,
@@ -1167,6 +1170,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.resolveActive': TerminalResolveActive,
   'terminal.resolveIdentity': TerminalHandle,
   'terminal.resolvePane': TerminalResolvePane,
+  'terminal.resolveSession': TerminalResolveSession,
   'terminal.restoreFit': TerminalHandle,
   'terminal.send': TerminalSend,
   'terminal.setAutoRestoreFit': TerminalSetAutoRestoreFit,
@@ -1178,6 +1182,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.stop': TerminalCloseAll,
   'terminal.stopExact': TerminalStopExact,
   'terminal.subscribe': TerminalSubscribe,
+  'terminal.switchSession': TerminalSwitchSession,
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.wait': TerminalWait,

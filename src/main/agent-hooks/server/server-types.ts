@@ -44,6 +44,8 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'observation'
   // Same: a terminal handle is issued by one runtime and means nothing to the next.
   | 'terminalHandle'
+  | 'grokSessionObservation'
+  | 'grokEventAt'
 > & {
   launchTokenHash?: string
 }

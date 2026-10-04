@@ -37,6 +37,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         ptyId,
         activate,
         focus,
+        existingSessionOnly,
         presentation,
         surfaceOwner,
         tabId,
@@ -47,6 +48,36 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
       }) => {
         try {
           const store = useAppStore.getState()
+          if (existingSessionOnly) {
+            if (
+              !requestId ||
+              !ptyId ||
+              !tabId ||
+              !leafId ||
+              command ||
+              resumeProviderSession ||
+              launchConfig
+            ) {
+              throw new Error('terminal_reveal_identity_required')
+            }
+            const identity = verifyTerminalRevealIdentity(store, {
+              worktreeId,
+              tabId,
+              leafId,
+              ptyId
+            })
+            activateTerminalInitiatedWorktree(store, worktreeId)
+            store.setActiveTabType('terminal', worktreeId)
+            store.setActiveTab(tabId)
+            store.revealWorktreeInSidebar(worktreeId)
+            focusTerminalInitiatedTab(tabId, leafId, worktreeId)
+            window.api.ui.replyTerminalCreate({
+              requestId,
+              tabId,
+              identity
+            })
+            return
+          }
           const terminalPresentation = resolveTerminalPresentation({
             presentation,
             activate,

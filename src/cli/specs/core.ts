@@ -232,6 +232,33 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
+  {
+    path: ['terminal', 'resolve-session'],
+    summary: 'Resolve a verified live Grok session without navigating',
+    usage: 'orca terminal resolve-session --provider grok --session <exact-id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'provider', 'session']
+  },
+  {
+    path: ['terminal', 'switch-session'],
+    summary: 'Navigate directly to a verified live Grok session without answering',
+    usage: 'orca terminal switch-session --provider grok --session <exact-id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'provider', 'session']
+  },
+  {
+    path: ['terminal', 'answer-question'],
+    summary: 'Answer a verified pending single-choice Grok question',
+    usage:
+      'orca terminal answer-question --provider grok --session <exact-id> --call <call-id> --choice <1-9> --label-sha256 <hash> [--answers <json>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'provider',
+      'session',
+      'call',
+      'choice',
+      'label-sha256',
+      'answers'
+    ]
+  },
   TERMINAL_CLOSE_COMMAND_SPEC,
   {
     path: ['terminal', 'rename'],

@@ -66,14 +66,29 @@ export type RuntimeNotifier = {
       splitDirection?: 'horizontal' | 'vertical'
       splitTelemetrySource?: TerminalPaneSplitSource
       focus?: boolean
+      existingSessionOnly?: boolean
+      activateHostWindow?: boolean
+      canFocusExistingSession?: () => boolean
       expectedProcessIdentity?: {
         terminalHandle: string
         incarnationId: string
       }
     }
   ):
-    | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
-    | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
+    | Promise<{
+        tabId: string
+        title?: string | null
+        identity?: TerminalRevealIdentity
+        windowFocused?: boolean
+        paneFocused?: boolean
+      }>
+    | {
+        tabId: string
+        title?: string | null
+        identity?: TerminalRevealIdentity
+        windowFocused?: boolean
+        paneFocused?: boolean
+      }
     | void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,

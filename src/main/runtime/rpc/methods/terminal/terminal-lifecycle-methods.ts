@@ -145,13 +145,20 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.focus',
     params: TerminalFocus,
-    handler: async (params, { runtime, clientKind }) => ({
-      focus: await runtime.focusTerminal(params.terminal, {
-        navigateHost: navigationTargetsHost(
-          resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
-        )
-      })
-    })
+    handler: async (params, { runtime, clientKind }) => {
+      const navigateHost = navigationTargetsHost(
+        resolveRuntimeNavigationTarget({ navigation: params.navigation, clientKind })
+      )
+      return {
+        focus: await runtime.focusTerminal(params.terminal, {
+          ...(params.expectedIncarnationId
+            ? { expectedIncarnationId: params.expectedIncarnationId }
+            : {}),
+          navigateHost,
+          activateHostWindow: navigateHost && clientKind === undefined
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.close',

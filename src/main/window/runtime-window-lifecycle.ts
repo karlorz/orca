@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
@@ -17,6 +17,8 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { safelyRevealWindow } from './focus-existing-window'
+import { isBackgroundLaunch } from './foreground-activation-policy'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -107,13 +109,34 @@ export function registerRuntimeWindowLifecycle(
             reject(new Error('terminal_reveal_identity_mismatch'))
             return
           }
+          if (opts.existingSessionOnly && !opts.canFocusExistingSession?.()) {
+            reject(new Error('session_navigation_unverifiable'))
+            return
+          }
+          if (opts.activateHostWindow === true) {
+            if (process.platform === 'darwin' && !isBackgroundLaunch()) {
+              app.focus({ steal: true })
+            }
+            safelyRevealWindow(mainWindow)
+          }
           resolve({
             tabId: reply.tabId!,
             title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {})
+            ...(reply.identity ? { identity: reply.identity } : {}),
+            ...(opts.existingSessionOnly
+              ? { windowFocused: mainWindow.isFocused(), paneFocused: reply.paneFocused }
+              : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
+        if (opts.existingSessionOnly) {
+          if (!opts.canFocusExistingSession?.()) {
+            clearTimeout(timer)
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            reject(new Error('session_navigation_unverifiable'))
+            return
+          }
+        }
         const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
@@ -135,7 +158,8 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {}),
+          ...(opts.existingSessionOnly ? { existingSessionOnly: true } : {})
         })
         if (!sent) {
           clearTimeout(timer)

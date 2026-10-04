@@ -2,8 +2,11 @@ import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { GrokSessionObservation } from '../grok-session-binding'
 
 export type AgentHookEventPayload = {
+  grokEventAt?: number
+  grokSessionObservation?: GrokSessionObservation
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */

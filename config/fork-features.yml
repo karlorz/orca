@@ -425,3 +425,15 @@ features:
     paths:
       - src/shared/agent-session-option-catalog-grok.ts
       - src/shared/agent-session-option-launch.ts
+
+  - id: grok-pet-session-nav-question-answer
+    title: Verified Grok session navigation and pet question-answer from OpenPets
+    kind: product
+    status: landed
+    paths:
+      - src/cli/handlers/terminal-question-answer.ts
+      - src/cli/handlers/terminal-session-navigation.ts
+      - src/main/agent-hooks/grok-session-binding.ts
+      - src/main/runtime/terminal-question-answer.ts
+      - src/main/runtime/terminal-session-navigation.ts
+    wiki: projects/grok-desktop-pet/work/2026-10-05-grok-ask-user-question-delivery

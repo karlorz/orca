@@ -154,6 +154,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  agentHookServer.setSessionTerminalOwnerResolver((paneKey) =>
+    runtime.getSessionTerminalOwner(paneKey)
+  )
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),

@@ -10,5 +10,12 @@ export type TerminalTabCreateReply = {
   tabId?: string
   title?: string
   identity?: TerminalRevealIdentity
+  paneFocused?: boolean
   error?: string
+}
+
+export type TerminalFocusEvidence = {
+  identity?: TerminalRevealIdentity
+  windowFocused?: boolean
+  paneFocused?: boolean
 }

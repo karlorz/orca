@@ -20,6 +20,7 @@ export type TerminalCreateListenerPayload = {
   ptyId?: string
   activate?: boolean
   focus?: boolean
+  existingSessionOnly?: boolean
   presentation?: 'background' | 'focused'
   tabId?: string
   leafId?: string

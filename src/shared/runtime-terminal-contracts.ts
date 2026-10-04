@@ -314,12 +314,7 @@ export type RuntimeTerminalResolvePane = {
   hostPlatform?: NodeJS.Platform
 }
 
-export type RuntimeTerminalFocus = {
-  handle: string
-  tabId: string
-  worktreeId: string
-  navigated?: boolean
-}
+export type { RuntimeTerminalFocus } from './runtime-terminal-focus-contract'
 
 export type RuntimeTerminalClose = {
   handle: string

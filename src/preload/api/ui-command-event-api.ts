@@ -164,6 +164,7 @@ export type UiCommandEventApi = {
       ptyId?: string
       activate?: boolean
       focus?: boolean
+      existingSessionOnly?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
       tabId?: string
