@@ -33,6 +33,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
   herdr: 'Herdr',
+  dsb: 'DeepSeek Build',
   jcode: 'Jcode'
 }
 
