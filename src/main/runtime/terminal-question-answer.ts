@@ -109,9 +109,9 @@ export class TerminalQuestionAnswer {
     await verify(binding.ptyId, screenContent(verified[0]))
     let bytesWritten = 0
     for (const step of keystrokesFor(verified, answers)) {
-      const send = await authority.send(binding, step.text, (ptyId) =>
-        verify(ptyId, screenContent(step.question))
-      )
+      const send = await authority.send(binding, step.text, async (ptyId) => {
+        await verify(ptyId, screenContent(step.question))
+      })
       if (!send.accepted || send.bytesWritten !== 1) {
         throw new Error('question_delivery_unconfirmed')
       }
