@@ -115,7 +115,7 @@ describe('protected Antigravity account snapshots', () => {
         'Protected secret storage'
       )
       expect(() => store.read()).toThrow('Protected secret storage')
-      expect(readFileSync(path)).toEqual(before)
+      expect(readFileSync(path).equals(before)).toBe(true)
     }
   )
 
