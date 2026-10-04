@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
-import type { GrokSessionTerminalOwner } from '../../shared/grok-session-binding'
+import {
+  sameGrokSessionBinding,
+  type GrokSessionBinding,
+  type GrokSessionTerminalOwner
+} from '../../shared/grok-session-binding'
 import { observeGrokSessionBinding } from './grok-session-binding'
 
 const owner: GrokSessionTerminalOwner = {
@@ -127,6 +131,38 @@ describe('live Grok session boundary evidence', () => {
         now + 1
       )?.unverifiable
     ).toBe(true)
+  })
+  it('compares session bindings by field rather than JSON key order', () => {
+    const left: GrokSessionBinding = {
+      provider: 'grok',
+      sessionId: 'session',
+      runtimeId: 'runtime',
+      executionHostId: 'local',
+      handle: 'handle',
+      ptyId: 'pty',
+      incarnationId: 'incarnation',
+      paneKey: 'pane',
+      tabId: 'tab',
+      leafId: 'leaf',
+      worktreeId: 'worktree',
+      boundaryAt: 1000
+    }
+    const right = {
+      boundaryAt: 1000,
+      worktreeId: 'worktree',
+      leafId: 'leaf',
+      tabId: 'tab',
+      paneKey: 'pane',
+      incarnationId: 'incarnation',
+      ptyId: 'pty',
+      handle: 'handle',
+      executionHostId: 'local',
+      runtimeId: 'runtime',
+      sessionId: 'session',
+      provider: 'grok' as const
+    }
+    expect(sameGrokSessionBinding(left, right)).toBe(true)
+    expect(sameGrokSessionBinding(left, { ...right, incarnationId: 'other' })).toBe(false)
   })
   it('revokes the binding on an observed session end', () => {
     const first = observeGrokSessionBinding(event(), undefined, owner, now)

@@ -26,9 +26,20 @@ export type GrokSessionObservation = {
   unverifiable?: true
 }
 
+function sameExactFields<T extends object>(first: T, second: T): boolean {
+  return Object.entries(first).every(([key, value]) => Reflect.get(second, key) === value)
+}
+
 export function sameGrokTerminalOwner(
   first: GrokSessionTerminalOwner,
   second: GrokSessionTerminalOwner
 ): boolean {
-  return Object.entries(first).every(([key, value]) => Reflect.get(second, key) === value)
+  return sameExactFields(first, second)
+}
+
+export function sameGrokSessionBinding(
+  first: GrokSessionBinding,
+  second: GrokSessionBinding
+): boolean {
+  return sameExactFields(first, second)
 }

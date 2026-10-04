@@ -7,6 +7,7 @@ import { verifyGrokQuestionNavigationScreen } from '../../../grok-question-navig
 import { verifyGrokQuestionAnswer } from '../../../grok-question-answer-proof'
 import { TerminalAnswerQuestion } from '../../../../../shared/rpc-contract/terminal-question-answer-params'
 import { resolveGrokChatHistoryPathSync } from '../../../../../shared/grok-session-paths'
+import { sameGrokSessionBinding } from '../../../../../shared/grok-session-binding'
 
 const answers = new TerminalQuestionAnswer()
 
@@ -69,7 +70,7 @@ export const TERMINAL_QUESTION_ANSWER_METHODS = [
                   if (
                     signal?.aborted ||
                     ptyId !== binding.ptyId ||
-                    JSON.stringify(navigation.resolve(params.session)) !== JSON.stringify(binding)
+                    !sameGrokSessionBinding(navigation.resolve(params.session), binding)
                   ) {
                     throw new Error('session_binding_changed')
                   }

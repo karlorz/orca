@@ -1,4 +1,4 @@
-import type { GrokSessionBinding } from '../../shared/grok-session-binding'
+import { sameGrokSessionBinding, type GrokSessionBinding } from '../../shared/grok-session-binding'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
 import {
   normalizeGrokQuestionAnswers,
@@ -93,10 +93,7 @@ export class TerminalQuestionAnswer {
     }
     const verify = async (ptyId: string, content?: QuestionScreenContent) => {
       const questions = await authority.verify(binding, content)
-      if (
-        ptyId !== binding.ptyId ||
-        JSON.stringify(authority.resolve()) !== JSON.stringify(binding)
-      ) {
+      if (ptyId !== binding.ptyId || !sameGrokSessionBinding(authority.resolve(), binding)) {
         throw new Error('session_binding_changed')
       }
       return questions

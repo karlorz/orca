@@ -1,4 +1,5 @@
 import {
+  sameGrokSessionBinding,
   sameGrokTerminalOwner,
   type GrokSessionBinding,
   type GrokSessionObservation,
@@ -48,20 +49,16 @@ export class TerminalSessionNavigation {
     paneFocused?: boolean
   }> {
     const binding = this.resolve(sessionId)
-    const revalidated = this.resolve(sessionId)
-    if (JSON.stringify(binding) !== JSON.stringify(revalidated)) {
-      throw new Error('session_binding_changed')
-    }
     const receipt = await this.authority.reveal(binding, () => {
       try {
-        return JSON.stringify(binding) === JSON.stringify(this.resolve(sessionId))
+        return sameGrokSessionBinding(binding, this.resolve(sessionId))
       } catch {
         return false
       }
     })
     const current = this.resolve(sessionId)
     if (
-      JSON.stringify(binding) !== JSON.stringify(current) ||
+      !sameGrokSessionBinding(binding, current) ||
       !receipt.identity ||
       receipt.identity.ptyId !== binding.ptyId ||
       receipt.identity.tabId !== binding.tabId ||
