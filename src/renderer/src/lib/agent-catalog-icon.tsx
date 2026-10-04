@@ -1,6 +1,6 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, GrokIcon, OpenAIIcon } from '@/components/status-bar/icons'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -17,7 +17,7 @@ export function AgentIcon({
   agent,
   size = 14
 }: {
-  agent: TuiAgent | null | undefined
+  agent: TerminalAgent | null | undefined
   size?: number
 }): React.JSX.Element {
   if (!agent) {
@@ -54,7 +54,8 @@ export function AgentIcon({
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((entry) => entry.id === agent)
-  const iconSrc = catalogEntry?.iconUrl ?? AGENT_FAVICON_ASSETS[agent]
+  const iconSrc =
+    catalogEntry?.iconUrl ?? (agent === 'dsb' ? undefined : AGENT_FAVICON_ASSETS[agent])
   if (iconSrc) {
     return (
       <img
