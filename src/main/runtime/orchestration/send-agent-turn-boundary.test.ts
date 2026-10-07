@@ -203,7 +203,10 @@ describe('agent turn send boundary', () => {
         'runtime/rpc/methods/terminal/terminal-input-delivery.ts',
         // Temporary: `terminal.send` into a terminal with no settled agent prompt, which may still
         // be an agent's message to another agent; moves with the `terminal.send` prompt above.
-        'runtime/rpc/methods/terminal/terminal-send-method.ts'
+        'runtime/rpc/methods/terminal/terminal-send-method.ts',
+        // Intended: grok `terminal.answerQuestion` keystrokes into a waiting permission prompt.
+        // Not an agent-to-agent send.
+        'runtime/rpc/methods/terminal/terminal-question-answer-method.ts'
       ].sort()
     )
   })

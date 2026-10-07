@@ -798,9 +798,7 @@ jobs:
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      # Why x64: ubuntu-24.04-arm preempted shard 2 twice with a runner shutdown
-      # and no test failure. Relay integration already stays on x86.
-      runner: ubuntu-24.04
+      runner: ubuntu-24.04-arm
       shards: ${{ needs.preflight.outputs.shards }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
