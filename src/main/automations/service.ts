@@ -24,6 +24,8 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { createAutomationRunResultCapture } from './automation-run-result-capture'
+import type { AutomationAgentResultSource } from './automation-run-agent-result-source'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
@@ -55,6 +57,7 @@ export class AutomationService {
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
+  private readonly resultCapture: ReturnType<typeof createAutomationRunResultCapture>
   /** Installed by desktop IPC registration, where external probes live; null on
    *  runtime servers. Orca's own automation traffic parks queued external
    *  probes behind this lease, whichever transport carried it. */
@@ -69,6 +72,7 @@ export class AutomationService {
       allowRemoteHostScheduling?: boolean
       headlessDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
+      agentResultSource?: AutomationAgentResultSource
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
   ) {
@@ -80,6 +84,7 @@ export class AutomationService {
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
+    this.resultCapture = createAutomationRunResultCapture(opts.agentResultSource, store, this.runs)
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -133,6 +138,7 @@ export class AutomationService {
     this.stopped = true
     this.dispatchGeneration += 1
     this.completionWatcher?.dispose()
+    this.resultCapture?.dispose()
     if (!this.timer) {
       return
     }
@@ -202,15 +208,17 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
-    const run = await this.runs.updateRun(result)
+    let run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched') {
+        this.resultCapture?.track(run)
         this.completionWatcher?.watch(run)
       }
       return run
     }
     this.completionWatcher?.forget(run.id)
+    run = (await this.resultCapture?.refresh(run)) ?? run
     // Why: the renderer's mark-completed effect can re-fire for the same run
     // before refresh() flips its status snapshot off 'dispatched'. Re-running
     // collectRunUsage advances the attribution window and can rewrite an

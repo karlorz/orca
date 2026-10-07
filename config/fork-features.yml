@@ -446,6 +446,8 @@ features:
       - src/renderer/src/components/automations/automation-run-resume-target.ts
       - src/renderer/src/hooks/automation-dispatch-completion.ts
       - src/renderer/src/hooks/automation-run-session-persistence.ts
+      - src/main/automations/automation-run-result-capture.ts
+      - src/main/automations/automation-run-agent-result-source.ts
       - src/main/automations/runtime-terminal-run-observer.ts
       - src/shared/automation-agent-completion-result.ts
       - src/shared/agent-hook-listener/grok-completed-update-result.ts

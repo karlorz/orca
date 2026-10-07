@@ -101,7 +101,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     discoveryReady = false
   ): void {
     if (
-      original.payload.lastAssistantMessage ||
+      (original.payload.lastAssistantMessage &&
+        original.payload.lastAssistantMessageIsToolOutput !== true) ||
       !hasPendingAgentResultText(source, body) ||
       attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
     ) {
@@ -153,12 +154,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       (requireExactOriginal && current !== original) ||
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
-      current.payload.lastAssistantMessage
+      (current.payload.lastAssistantMessage &&
+        current.payload.lastAssistantMessageIsToolOutput !== true)
     ) {
       return
     }
     const normalized = this.normalizeLocalHookPayload(source, body)
-    if (!normalized.event?.payload.lastAssistantMessage) {
+    if (
+      !normalized.event?.payload.lastAssistantMessage ||
+      normalized.event.payload.lastAssistantMessageIsToolOutput === true
+    ) {
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
       return
     }

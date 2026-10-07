@@ -4,6 +4,7 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headle
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 import { mainProcessState as state } from './main-process-state'
 import { agentHookServer } from '../agent-hooks/server'
+import { createAutomationAgentResultSource } from '../automations/automation-run-agent-result-source'
 
 export function initializeMainProcessAutomations(): AutomationService {
   const store = state.store
@@ -16,6 +17,7 @@ export function initializeMainProcessAutomations(): AutomationService {
   const service = new AutomationService(store, {
     claudeUsage,
     codexUsage,
+    agentResultSource: createAutomationAgentResultSource(agentHookServer),
     terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime, (paneKey) =>
       agentHookServer.getStatusSnapshotForPane(paneKey)
     ),

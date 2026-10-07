@@ -235,7 +235,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     if (
       effectivePayload.payload.state !== 'done' ||
-      effectivePayload.payload.lastAssistantMessage
+      (effectivePayload.payload.lastAssistantMessage &&
+        effectivePayload.payload.lastAssistantMessageIsToolOutput !== true)
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
