@@ -14,6 +14,7 @@ import {
 import { readLastAssistantFromTranscript } from '../transcript-lines'
 import { readLastAssistantFromGrokChatHistory } from '../grok-result-discovery'
 import { isGrokEvent } from '../provider-event-names'
+import { readGrokCompletedUpdateResult } from '../grok-completed-update-result'
 
 export function extractGrokToolFields(
   eventName: unknown,
@@ -74,6 +75,10 @@ export function extractGrokToolFields(
       readString(hookPayload, 'last_assistant_message')
     if (direct) {
       return { lastAssistantMessage: direct }
+    }
+    const fromUpdates = readGrokCompletedUpdateResult(hookPayload, grokHome)
+    if (fromUpdates) {
+      return { lastAssistantMessage: fromUpdates }
     }
     const fromTranscript = readLastAssistantFromTranscript(
       hookPayload.transcriptPath ?? hookPayload.transcript_path

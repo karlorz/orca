@@ -80,11 +80,14 @@ export function createAutomationDispatchCompletion(args: {
     } else if (await args.finalizeTerminalOwnership()) {
       await clearRetiredRunTerminalIdentity()
     }
-    await persistLateProviderSessionId(providerSessionId, result.status)
+    await persistLateProviderSessionId(providerSessionId, result)
   }
   const persistLateProviderSessionId = async (
     alreadyPersisted: string | null,
-    status: 'completed' | 'dispatch_failed' = 'completed'
+    result: ReturnType<typeof automationAgentCompletionResult> = {
+      status: 'completed',
+      error: null
+    }
   ): Promise<void> => {
     const lateId = readProviderSessionId(observedPaneKey)
     if (!lateId || lateId === alreadyPersisted) {
@@ -93,7 +96,7 @@ export function createAutomationDispatchCompletion(args: {
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status,
+        ...result,
         providerSessionId: lateId
       })
     } catch (error) {

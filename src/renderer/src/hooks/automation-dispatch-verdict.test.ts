@@ -104,6 +104,7 @@ describe('automation dispatch recorded verdict', () => {
     expect(persist).toHaveBeenLastCalledWith({
       runId: 'run',
       status: 'dispatch_failed',
+      error: 'Automation agent reported a failed turn.',
       providerSessionId: 'late-session'
     })
     expect(finalize).not.toHaveBeenCalled()

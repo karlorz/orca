@@ -447,4 +447,5 @@ features:
       - src/renderer/src/hooks/automation-dispatch-completion.ts
       - src/main/automations/runtime-terminal-run-observer.ts
       - src/shared/automation-agent-completion-result.ts
+      - src/shared/agent-hook-listener/grok-completed-update-result.ts
     wiki: projects/orca/work/2026-10-07-automation-outcome-reporting

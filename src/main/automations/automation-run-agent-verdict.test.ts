@@ -54,7 +54,7 @@ describe('owning host automation verdict', () => {
   it.each([
     { restoredUnconfirmed: true },
     { providerSessionOnly: true },
-    { sessionBoundary: true },
+    { sessionBoundary: true, mainAgent: { state: 'done', stateStartedAt: Date.now() } },
     { terminalHandle: 'other-handle' },
     { worktreeId: 'other-workspace' },
     { paneKey: 'other-pane', terminalHandle: undefined },
@@ -77,6 +77,13 @@ describe('owning host automation verdict', () => {
         makeRow({ providerSession: { id: 'other-session', key: 'session_id' } })
       ])
     ).toBeUndefined()
+  })
+
+  it('retains a recorded same-turn failure through the shutdown boundary', () => {
+    expect(
+      readAutomationRunAgentCompletion(makeRun(), 'handle', [makeRow({ sessionBoundary: true })])
+        ?.status
+    ).toBe('dispatch_failed')
   })
 
   it('makes satisfied terminal idle fail when the owning host records failure', async () => {

@@ -14,9 +14,10 @@ export function readAutomationRunAgentCompletion(
     hookRows: rows
   })
   const startedAt = run.startedAt ?? run.dispatchedAt ?? run.createdAt
+  const completion = row ? automationAgentCompletionResult(row) : undefined
   if (
     !row ||
-    row.sessionBoundary === true ||
+    (row.sessionBoundary === true && completion?.status !== 'dispatch_failed') ||
     (row.evidenceObservedAt ?? row.receivedAt) < startedAt ||
     (row.mainAgent?.stateStartedAt ?? row.stateStartedAt) < startedAt ||
     (row.mainAgent?.state ?? row.state) !== 'done' ||
@@ -28,5 +29,5 @@ export function readAutomationRunAgentCompletion(
   ) {
     return undefined
   }
-  return automationAgentCompletionResult(row)
+  return completion
 }

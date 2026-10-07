@@ -236,7 +236,7 @@ export function normalizeGrokEvent(
   // Why: an idle prompt or session end restates the same finished turn, so its verdict stands.
   const mainAgentOutcome =
     outcome ??
-    (!isTurnEnd && leadState === 'done' && previousMainAgent?.state === 'done'
+    ((!isTurnEnd || sessionBoundary) && leadState === 'done' && previousMainAgent?.state === 'done'
       ? previousMainAgent.outcome
       : undefined)
   const mainAgent = continueMainAgentStatus(
