@@ -88,6 +88,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'dsh-tui-ready-no-key': 10,
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
+  // Fork grok question-navigation capture: same extra bold bit on dim row-1 glyphs under jitter.
+  'grok-question-navigation': 2,
   // STA-8741 agy/Cline/Prime captures, serializer untouched: the same true-colour background
   // left on restored cells as DSH, plus Prime's cursor row after its alternate-screen repaints.
   'antigravity-1-2-14-busy-thinking': 2,
