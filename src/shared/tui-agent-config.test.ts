@@ -25,6 +25,7 @@ describe('TUI_AGENT_CONFIG', () => {
       'command-code': { launchCmd: 'command-code --trust' },
       hermes: { launchCmd: 'hermes --tui' },
       opencode2: { launchCmd: 'opencode2 --standalone', expectedProcess: 'opencode2' },
+      rovo: { detectCmd: 'acli', launchCmd: 'acli rovodev run', expectedProcess: 'acli' },
       muse: { launchCmd: 'muse --trust-workspace' }
     }
     for (const [agent, expected] of Object.entries(overrides)) {
