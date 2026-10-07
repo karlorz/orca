@@ -94,6 +94,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal split            Split an existing terminal pane',
   '  terminal switch           Bring a terminal tab to the foreground',
   '  terminal focus            Alias for terminal switch',
+  '  terminal switch-origin    Select an existing pane for an exact provider session',
   '  terminal close            Close one terminal, its whole tab with --tab, or all in a worktree',
   '',
   'Orchestration:',

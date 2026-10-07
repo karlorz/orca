@@ -95,6 +95,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'terminal list',
       'terminal resolve-session',
       'terminal switch-session',
+      'terminal switch-origin',
       'terminal answer-question',
       'terminal show',
       'terminal read',

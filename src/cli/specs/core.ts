@@ -245,6 +245,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'provider', 'session']
   },
   {
+    path: ['terminal', 'switch-origin'],
+    summary: 'Select the existing terminal pane for an exact provider session',
+    usage:
+      'orca terminal switch-origin --provider <agent> --session <exact-id> [--workspace <path>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'provider', 'session', 'workspace']
+  },
+  {
     path: ['terminal', 'answer-question'],
     summary: 'Answer a verified pending single-choice Grok question',
     usage:

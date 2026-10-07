@@ -9,6 +9,12 @@ import type {
   GrokSessionBinding,
   GrokSessionTerminalOwner
 } from '../../shared/grok-session-binding'
+import {
+  switchOriginatingPaneWithHost,
+  type OriginatingPaneNavigationReceipt,
+  type OriginatingPaneTarget,
+  type TerminalOriginatingPaneHost
+} from './terminal-originating-pane-navigation'
 
 export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
   getSessionTerminalOwner(paneKey: string): GrokSessionTerminalOwner | null {
@@ -85,6 +91,37 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyRevea
       throw new Error('session_navigation_unverifiable')
     }
     return receipt
+  }
+
+  async switchOriginatingPane(
+    target: OriginatingPaneTarget,
+    options: { activateHostWindow?: boolean } = {}
+  ): Promise<OriginatingPaneNavigationReceipt> {
+    const host: TerminalOriginatingPaneHost = {
+      getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      readObservedAgentStatusPaneIdentity: (paneKey: string) =>
+        this.readObservedAgentStatusPaneIdentityFn(paneKey),
+      getLivePtyForHandle: (handle: string) =>
+        this.getLivePtyForHandle(handle) ?? this.getLivePtyForRetainedHandle(handle),
+      getRendererLeaf: (tabId: string, leafId: string) => {
+        this.assertGraphReady()
+        return this.leaves.get(this.getLeafKey(tabId, leafId)) ?? null
+      },
+      resolveWorktree: async (worktreeId: string) => {
+        try {
+          const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+          return {
+            id: resolved.id,
+            path: resolved.git.path,
+            ...('rootPath' in resolved ? { rootPath: resolved.rootPath } : {})
+          }
+        } catch {
+          return null
+        }
+      },
+      focusTerminal: (handle: string, opts) => this.focusTerminal(handle, opts)
+    }
+    return switchOriginatingPaneWithHost(host, target, options)
   }
 
   async focusTerminal(

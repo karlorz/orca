@@ -495,6 +495,7 @@ import {
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import { TerminalSwitchOrigin } from './terminal-originating-pane-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalAnswerQuestion } from './terminal-question-answer-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
@@ -1182,6 +1183,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.stop': TerminalCloseAll,
   'terminal.stopExact': TerminalStopExact,
   'terminal.subscribe': TerminalSubscribe,
+  'terminal.switchOrigin': TerminalSwitchOrigin,
   'terminal.switchSession': TerminalSwitchSession,
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
