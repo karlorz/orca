@@ -25,7 +25,6 @@ import {
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { createAutomationRunResultCapture } from './automation-run-result-capture'
-import type { AutomationAgentResultSource } from './automation-run-agent-result-source'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
@@ -54,6 +53,8 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
+  releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
@@ -72,7 +73,7 @@ export class AutomationService {
       allowRemoteHostScheduling?: boolean
       headlessDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
-      agentResultSource?: AutomationAgentResultSource
+      agentResultSource?: Parameters<typeof createAutomationRunResultCapture>[0]
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
   ) {

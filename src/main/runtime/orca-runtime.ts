@@ -1,5 +1,5 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -21,8 +21,8 @@ import type { PetSpeakCancelReason } from './pet-speak-observability'
 import { PetSpeechDeviceRegistry, type PetSpeechDeviceStatus } from './pet-speech-status-registry'
 import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 
-class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithResolveWaiter>) {
+class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
     super(...args)
     // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
     registerDetectedWorktreeScanInvalidation()

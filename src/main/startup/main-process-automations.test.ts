@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => {
     service: vi.fn(function (
       _store: unknown,
       _options: { headlessDispatcher?: HeadlessAutomationDispatcher; terminalObserver: unknown }
-    ) {}),
+    ) {
+      return { start: vi.fn(), stop: vi.fn() }
+    }),
     state: { store: {}, runtime, claudeUsage: {}, codexUsage: {}, isServeMode: true }
   }
 })
@@ -57,7 +59,9 @@ describe('automation startup completion ownership', () => {
     async (workspaceMode) => {
       initializeMainProcessAutomations()
       const options = mocks.service.mock.calls[0]![1]
-      expect(options.terminalObserver).toBe(mocks.observer)
+      expect(options.terminalObserver).toMatchObject({
+        observeCompletion: mocks.observer.observeCompletion
+      })
       expect(options.headlessDispatcher).toBeDefined()
       const fixture = buildProfileStateCutoverFixture('/fixture')
       const automation = { ...fixture.automations[0]!, workspaceMode }
@@ -80,6 +84,8 @@ describe('automation startup completion ownership', () => {
     mocks.state.isServeMode = false
     initializeMainProcessAutomations()
     expect(mocks.service.mock.calls[0]![1].headlessDispatcher).toBeUndefined()
-    expect(mocks.service.mock.calls[0]![1].terminalObserver).toBe(mocks.observer)
+    expect(mocks.service.mock.calls[0]![1].terminalObserver).toMatchObject({
+      observeCompletion: mocks.observer.observeCompletion
+    })
   })
 })

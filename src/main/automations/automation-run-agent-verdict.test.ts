@@ -86,26 +86,32 @@ describe('owning host automation verdict', () => {
     ).toBe('dispatch_failed')
   })
 
-  it('makes satisfied terminal idle fail when the owning host records failure', async () => {
-    const waitForTerminal = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockResolvedValueOnce({ satisfied: true })
-    const readStatus = vi.fn(() => [makeRow()])
-    const observer = createRuntimeAutomationRunTerminalObserver(
-      {
-        getTerminalHandleForPaneKey: () => 'handle',
-        waitForTerminal,
-        readTerminal: async () => ({ tail: ['Final provider refusal'] })
-      },
-      readStatus
-    )
-    const result = await observer.observeCompletion('handle', {
-      signal: new AbortController().signal,
-      run: makeRun()
-    })
-    expect(readStatus).toHaveBeenCalledWith('tab:leaf')
-    expect(result.status).toBe('dispatch_failed')
-    expect(result.outputSnapshot?.content).toBe('Final provider refusal')
-  })
+  it.each([false, true])(
+    'makes satisfied terminal idle fail with recorded failure (idle evidence %s)',
+    async (withEvidence) => {
+      const waitForTerminal = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('timeout'))
+        .mockResolvedValueOnce({ satisfied: true })
+      const readStatus = vi.fn(() => [makeRow()])
+      const observer = createRuntimeAutomationRunTerminalObserver(
+        {
+          getTerminalHandleForPaneKey: () => 'handle',
+          waitForTerminal,
+          readTerminal: async () => ({ tail: ['Final provider refusal'] })
+        },
+        withEvidence
+          ? { getAgentStatusRowsForPane: readStatus, agentCommandsForRun: () => ['grok'] }
+          : readStatus,
+        withEvidence ? readStatus : undefined
+      )
+      const result = await observer.observeCompletion('handle', {
+        signal: new AbortController().signal,
+        run: makeRun()
+      })
+      expect(readStatus).toHaveBeenCalledWith('tab:leaf')
+      expect(result.status).toBe('dispatch_failed')
+      expect(result.outputSnapshot?.content).toBe('Final provider refusal')
+    }
+  )
 })
