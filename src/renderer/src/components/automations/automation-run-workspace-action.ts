@@ -20,6 +20,7 @@ import {
 import { getAutomationRunViewState } from './automation-run-view-state'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
 import { launchSleepingAgentSession } from '@/lib/sleeping-agent-session-launch'
+import { findAutomationRunResumeTarget } from './automation-run-resume-target'
 
 function findPreservedRunTerminalTab(run: AutomationRun) {
   const tabId = getAutomationRunOpenTabId(run)
@@ -105,6 +106,15 @@ function reopenClosedRunSessionTab(run: AutomationRun, agent: TuiAgent | undefin
   const sleepingRecord = ensureRunSleepingSession(run, agent)
   if (!run.workspaceId || !sleepingRecord) {
     return null
+  }
+  const state = useAppStore.getState()
+  const existingTarget = findAutomationRunResumeTarget(sleepingRecord, state)
+  if (existingTarget) {
+    const layout = state.terminalLayoutsByTabId[existingTarget.tabId]
+    if (existingTarget.leafId && layout) {
+      state.setTabLayout(existingTarget.tabId, { ...layout, activeLeafId: existingTarget.leafId })
+    }
+    return existingTarget.tabId
   }
   let launchedTabId: string | null = null
   const launched = launchSleepingAgentSession(sleepingRecord, {

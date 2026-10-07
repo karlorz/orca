@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { findQueuedAgentResumeTab } from './queued-agent-resume-tab'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -146,31 +147,7 @@ function activeOrQueuedResumeClaimsProviderSession(
     }
   }
 
-  for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
-    if (
-      worktreeTabIds.has(tabId) &&
-      startup.launchAgent === record.agent &&
-      agentProviderSessionsEqual(
-        record.agent,
-        startup.resumeProviderSession,
-        record.providerSession
-      )
-    ) {
-      return true
-    }
-  }
-
-  for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
-    if (
-      worktreeTabIds.has(tabId) &&
-      claim.worktreeId === record.worktreeId &&
-      claim.launchAgent === record.agent &&
-      agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
-    ) {
-      return true
-    }
-  }
-  return false
+  return findQueuedAgentResumeTab(record, state) !== null
 }
 
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the

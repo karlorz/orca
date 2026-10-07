@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   setState: vi.fn(),
   captureSleepingAgentSessionsByWorktree: vi.fn(),
   agentStatusByPaneKey: {} as Record<string, { providerSession?: { key: string; id: string } }>,
+  pendingStartupByTabId: {},
+  automaticAgentResumeClaimsByTabId: {},
   terminalLayoutsByTabId: {} as Record<string, ReturnType<typeof singlePaneLayoutSnapshot>>,
   ptyIdsByTabId: {} as Record<string, string[]>,
   tabsByWorktree: {} as Record<string, { id: string; worktreeId: string }[]>,
@@ -58,6 +60,8 @@ vi.mock('@/store', () => ({
       createTab: mocks.createTab,
       captureSleepingAgentSessionsByWorktree: mocks.captureSleepingAgentSessionsByWorktree,
       agentStatusByPaneKey: mocks.agentStatusByPaneKey,
+      pendingStartupByTabId: mocks.pendingStartupByTabId,
+      automaticAgentResumeClaimsByTabId: mocks.automaticAgentResumeClaimsByTabId,
       terminalLayoutsByTabId: mocks.terminalLayoutsByTabId,
       ptyIdsByTabId: mocks.ptyIdsByTabId,
       tabsByWorktree: mocks.tabsByWorktree,
@@ -135,6 +139,8 @@ describe('automation run workspace action', () => {
       [paneKey]: makeSleepingRecord()
     }
     mocks.agentStatusByPaneKey = {}
+    mocks.pendingStartupByTabId = {}
+    mocks.automaticAgentResumeClaimsByTabId = {}
     launchSleepingAgentSession.mockImplementation((_, options) => {
       options?.onSessionLaunched?.('tab-2')
       return true
@@ -250,7 +256,7 @@ describe('automation run workspace action', () => {
     expect(mocks.toastMessage).toHaveBeenCalled()
   })
 
-  it('remounts again after the first restore because the sleeping record is kept', () => {
+  it('focuses the queued resume on a second click instead of launching twice', () => {
     mocks.tabsByWorktree = { [worktreeId]: [] }
     const sleepingRecord = makeSleepingRecord()
     sleepingRecord.state = 'done'
@@ -260,10 +266,18 @@ describe('automation run workspace action', () => {
 
     openRun()
     mocks.createTab.mockClear()
-    mocks.tabsByWorktree = { [worktreeId]: [] }
+    mocks.tabsByWorktree = { [worktreeId]: [{ id: 'tab-2', worktreeId }] }
+    mocks.automaticAgentResumeClaimsByTabId = {
+      'tab-2': {
+        worktreeId,
+        launchAgent: 'claude',
+        providerSession: sleepingRecord.providerSession
+      }
+    }
     openRun()
 
-    expect(launchSleepingAgentSession).toHaveBeenCalledTimes(2)
+    expect(launchSleepingAgentSession).toHaveBeenCalledTimes(1)
+    expect(mocks.setActiveTab).toHaveBeenLastCalledWith('tab-2')
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
 
