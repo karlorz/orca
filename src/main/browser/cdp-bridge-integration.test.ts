@@ -425,6 +425,8 @@ describe('Browser automation pipeline (integration)', () => {
   })
 
   it('clears readyState polling timers when navigation times out', async () => {
+    // Why: stop first so bun does not count the runtime's unref'd ownership poll on this clock.
+    await server.stop()
     vi.useFakeTimers()
     try {
       const slowGuestHarness = createMockGuest(6001, 'https://slow.example.com', 'Slow Page', {
@@ -455,8 +457,6 @@ describe('Browser automation pipeline (integration)', () => {
       await vi.advanceTimersByTimeAsync(25_000)
 
       await expect(gotoResult).resolves.toMatchObject({ code: 'browser_timeout' })
-      // Pet voice arms a reconnect timer on the same fake clock; stop the runtime before counting.
-      await server.stop()
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

@@ -950,7 +950,10 @@ jobs:
           # Why blob:none: full history is needed for the merge-base diff, but historical
           # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
           # few this job actually reads on demand.
+          # Why fetch-tags: materializeReleaseCheckout resolves annotated desktop
+          # tags such as v1.4.221; checkout defaults to commits only even at depth 0.
           fetch-depth: 0
+          fetch-tags: true
           filter: blob:none
           persist-credentials: false
 

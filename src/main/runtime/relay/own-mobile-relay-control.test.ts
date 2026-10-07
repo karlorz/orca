@@ -273,6 +273,7 @@ describe('own mobile relay host-control', () => {
 
       await expect(client.connect()).rejects.toThrow()
       expect(client.isLive()).toBe(false)
+      client.closeNow()
     } finally {
       await server.close()
     }
