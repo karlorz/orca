@@ -60,14 +60,10 @@ export function createAutomationDispatchCompletion(args: {
     unsubscribeSessionObserver = (): void => {}
     releaseReuseDispatchTab = (): void => {}
   }
-  const markCompletionResult = async (row?: AgentMainAgentVerdictSource): Promise<void> => {
-    if (completionMarked) {
-      return
-    }
-    completionMarked = true
-    cleanupRunObservers()
-    const providerSessionId = readProviderSessionId()
-    const result = readCompletionResult(row)
+  const persistCompletionResult = async (
+    result: ReturnType<typeof automationAgentCompletionResult>,
+    providerSessionId: string | null
+  ): Promise<void> => {
     try {
       await args.markDispatchResult({
         runId: args.run.id,
@@ -82,6 +78,16 @@ export function createAutomationDispatchCompletion(args: {
       args.releaseTerminalOwnership()
       throw error
     }
+  }
+  const markCompletionResult = async (row?: AgentMainAgentVerdictSource): Promise<void> => {
+    if (completionMarked) {
+      return
+    }
+    completionMarked = true
+    cleanupRunObservers()
+    const providerSessionId = readProviderSessionId()
+    const result = readCompletionResult(row)
+    await persistCompletionResult(result, providerSessionId)
     await waitForAutomationSessionHistoryFlush(observedPaneKey)
     await finishCompletionResult(providerSessionId, result)
   }
@@ -160,20 +166,7 @@ export function createAutomationDispatchCompletion(args: {
             status: 'dispatch_failed' as const,
             error: `Automation process exited with code ${code}.`
           }
-    try {
-      await args.markDispatchResult({
-        runId: args.run.id,
-        ...result,
-        workspaceId: args.worktree.id,
-        workspaceDisplayName: args.worktree.displayName,
-        outputSnapshot: getOutputSnapshot(),
-        precheckResult: args.precheckResult,
-        ...(providerSessionId ? { providerSessionId } : {})
-      })
-    } catch (error) {
-      args.releaseTerminalOwnership()
-      throw error
-    }
+    await persistCompletionResult(result, providerSessionId)
     await finishCompletionResult(providerSessionId, result)
   }
   const settleLateResult = (result: Promise<void>): void => {

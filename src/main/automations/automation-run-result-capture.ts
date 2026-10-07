@@ -77,7 +77,7 @@ export class AutomationRunResultCapture {
         this.bindings.delete(row.paneKey)
         return
       }
-      void this.refresh(current).catch((error) => {
+      void this.refreshCurrent(current, current).catch((error) => {
         console.error('[automations] Failed to capture late agent result:', error)
       })
     })
@@ -120,9 +120,15 @@ export class AutomationRunResultCapture {
   }
 
   async refresh(run: AutomationRun): Promise<AutomationRun> {
+    return this.refreshCurrent(run, this.opts.readRun(run.automationId, run.id))
+  }
+
+  private async refreshCurrent(
+    run: AutomationRun,
+    current: AutomationRun | null
+  ): Promise<AutomationRun> {
     const paneKey = run.terminalPaneKey
     const binding = paneKey ? this.bindings.get(paneKey) : undefined
-    const current = this.opts.readRun(run.automationId, run.id)
     if (this.disposed || !binding || binding.run.id !== run.id || !current) {
       if (!current && paneKey) {
         this.bindings.delete(paneKey)
