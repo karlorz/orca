@@ -5,7 +5,7 @@ import {
   type DeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionSinkBarrier
 } from './structured-agent-session-event-sink'
-import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 import {
   heldProviderChildReader,

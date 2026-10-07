@@ -12,10 +12,8 @@ import {
 } from '../../runtime/agent-session-record-store-test-harness'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
 import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../agent-session-journal/journal-open-failure'
-import {
-  StructuredAgentSessionHost,
-  type StructuredAgentSessionHostDeps
-} from './structured-agent-session-host'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   adapter,
   attach,

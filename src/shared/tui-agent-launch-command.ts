@@ -55,7 +55,11 @@ export function resolveAgentLaunchCommand(args: {
   if (!extraTokens.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${extraTokens.error}` }
   }
-  const trailingWithExtra = insertBeforeTerminator(trailingTokens.tokens, extraTokens.tokens)
+  const trailingWithExtra = insertBeforeTerminator(
+    args.agent,
+    trailingTokens.tokens,
+    extraTokens.tokens
+  )
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,

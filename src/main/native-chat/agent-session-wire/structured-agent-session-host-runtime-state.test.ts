@@ -12,7 +12,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 

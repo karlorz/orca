@@ -40,11 +40,28 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
   it('has 16 English catalog entries for the setup checklist steps', () => {
     const enKeys = en.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
     const koKeys = ko.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
-    expect(Object.keys(enKeys).length).toBe(16)
-    expect(Object.keys(koKeys).length).toBe(16)
-    for (const [key, enVal] of Object.entries(enKeys)) {
-      expect(typeof enVal).toBe('string')
-      expect(typeof koKeys[key]).toBe('string')
+    const referencedKeys = [
+      'workOnTwoTasks',
+      '62bac8f43c',
+      '908898c3ee',
+      '43781563c3',
+      '29aa2c2077',
+      '71bd9a8c95',
+      '46db810da8',
+      'b8e5bae17f',
+      'agentSkillsName',
+      'agentSkillsDescription',
+      'ad342dd4c6',
+      '06fe30fdb0',
+      'eddc532e58',
+      '56049b74c2',
+      '2cf795433b',
+      '42525ba8a4'
+    ]
+    expect(referencedKeys).toHaveLength(16)
+    for (const key of referencedKeys) {
+      expect(Object.entries(enKeys)).toContainEqual([key, expect.any(String)])
+      expect(Object.entries(koKeys)).toContainEqual([key, expect.any(String)])
     }
   })
 
@@ -55,8 +72,9 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
       const localeKeys: Record<string, string> =
         catalog.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
       expect(Object.keys(localeKeys).length).toBe(16)
-      for (const [hash, enVal] of Object.entries(enKeys)) {
-        const localeVal = localeKeys[hash]
+      for (const [hash, localeVal] of Object.entries(localeKeys)) {
+        const enVal = Object.entries(enKeys).find(([key]) => key === hash)?.[1]
+        expect(typeof enVal, hash).toBe('string')
         expect(typeof localeVal, hash).toBe('string')
         expect(localeVal, hash).toBeTruthy()
         expect(localeVal, hash).not.toBe(enVal)

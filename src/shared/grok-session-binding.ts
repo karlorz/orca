@@ -26,20 +26,40 @@ export type GrokSessionObservation = {
   unverifiable?: true
 }
 
-function sameExactFields<T extends object>(first: T, second: T): boolean {
-  return Object.entries(first).every(([key, value]) => Reflect.get(second, key) === value)
-}
-
 export function sameGrokTerminalOwner(
   first: GrokSessionTerminalOwner,
   second: GrokSessionTerminalOwner
 ): boolean {
-  return sameExactFields(first, second)
+  return (
+    first.runtimeId === second.runtimeId &&
+    first.executionHostId === second.executionHostId &&
+    first.handle === second.handle &&
+    first.ptyId === second.ptyId &&
+    first.incarnationId === second.incarnationId &&
+    first.paneKey === second.paneKey &&
+    first.tabId === second.tabId &&
+    first.leafId === second.leafId &&
+    first.worktreeId === second.worktreeId &&
+    first.launchToken === second.launchToken
+  )
 }
 
 export function sameGrokSessionBinding(
   first: GrokSessionBinding,
   second: GrokSessionBinding
 ): boolean {
-  return sameExactFields(first, second)
+  return (
+    first.provider === second.provider &&
+    first.sessionId === second.sessionId &&
+    first.boundaryAt === second.boundaryAt &&
+    first.runtimeId === second.runtimeId &&
+    first.executionHostId === second.executionHostId &&
+    first.handle === second.handle &&
+    first.ptyId === second.ptyId &&
+    first.incarnationId === second.incarnationId &&
+    first.paneKey === second.paneKey &&
+    first.tabId === second.tabId &&
+    first.leafId === second.leafId &&
+    first.worktreeId === second.worktreeId
+  )
 }

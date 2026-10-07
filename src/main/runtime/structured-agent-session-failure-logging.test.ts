@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { StructuredAgentSessionHostRuntimeState } from '../native-chat/agent-session-wire/structured-agent-session-host-runtime-state'
 import {
   StructuredAgentSessionDeliveryLoop,

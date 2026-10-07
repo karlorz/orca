@@ -24,10 +24,8 @@ import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
 import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
-import {
-  StructuredAgentSessionHost,
-  type StructuredAgentSessionHostDeps
-} from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
