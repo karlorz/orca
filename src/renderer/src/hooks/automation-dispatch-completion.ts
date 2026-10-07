@@ -19,6 +19,7 @@ import { waitForAutomationSessionHistoryFlush } from './automation-session-histo
 import { automationAgentCompletionResult } from '../../../shared/automation-agent-completion-result'
 import type { AgentMainAgentVerdictSource } from '../../../shared/agent-main-agent-verdict'
 import { getAgentStateHistoryOverlap } from './automation-agent-state-history-overlap'
+import { createAutomationRunSessionPersistence } from './automation-run-session-persistence'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -39,8 +40,15 @@ export function createAutomationDispatchCompletion(args: {
   let pendingDone = false
   let pendingDoneRow: AgentMainAgentVerdictSource | undefined
   let completionMarked = false
+  let terminalFinalizationStarted = false
   let contactLost = false
   let observedPaneKey = args.run.terminalPaneKey
+  const { readProviderSessionId, persistLateProviderSessionId, clearRetiredRunTerminalIdentity } =
+    createAutomationRunSessionPersistence({
+      runId: args.run.id,
+      getPaneKey: () => observedPaneKey,
+      markDispatchResult: args.markDispatchResult
+    })
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
@@ -58,8 +66,8 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
-    const providerSessionId = readProviderSessionId(observedPaneKey)
-    const result = automationAgentCompletionResult(row)
+    const providerSessionId = readProviderSessionId()
+    const result = readCompletionResult(row)
     try {
       await args.markDispatchResult({
         runId: args.run.id,
@@ -75,47 +83,42 @@ export function createAutomationDispatchCompletion(args: {
       throw error
     }
     await waitForAutomationSessionHistoryFlush(observedPaneKey)
+    await finishCompletionResult(providerSessionId, result)
+  }
+  const readCompletionResult = (
+    row = pendingDoneRow
+  ): ReturnType<typeof automationAgentCompletionResult> =>
+    pendingExitCode !== null && isProvenProcessExit(pendingExitCode) && pendingExitCode !== 0
+      ? {
+          status: 'dispatch_failed',
+          error: `Automation process exited with code ${pendingExitCode}.`
+        }
+      : automationAgentCompletionResult(row)
+  const finishCompletionResult = async (
+    providerSessionId: string | null,
+    result: ReturnType<typeof automationAgentCompletionResult>
+  ): Promise<void> => {
+    const lateResult = readCompletionResult()
+    if (result.status === 'completed' && lateResult.status === 'dispatch_failed') {
+      result = lateResult
+      try {
+        await args.markDispatchResult({
+          runId: args.run.id,
+          ...result,
+          outputSnapshot: getOutputSnapshot()
+        })
+      } catch (error) {
+        args.releaseTerminalOwnership()
+        throw error
+      }
+    }
+    terminalFinalizationStarted = true
     if (result.status === 'dispatch_failed') {
       args.releaseTerminalOwnership()
     } else if (await args.finalizeTerminalOwnership()) {
       await clearRetiredRunTerminalIdentity()
     }
     await persistLateProviderSessionId(providerSessionId, result)
-  }
-  const persistLateProviderSessionId = async (
-    alreadyPersisted: string | null,
-    result: ReturnType<typeof automationAgentCompletionResult> = {
-      status: 'completed',
-      error: null
-    }
-  ): Promise<void> => {
-    const lateId = readProviderSessionId(observedPaneKey)
-    if (!lateId || lateId === alreadyPersisted) {
-      return
-    }
-    try {
-      await args.markDispatchResult({
-        runId: args.run.id,
-        ...result,
-        providerSessionId: lateId
-      })
-    } catch (error) {
-      console.error('[automations] Failed to persist late provider session:', error)
-    }
-  }
-  const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
-    // Why: closeTab already removed the tab. Null only the live PTY so View run
-    // (pane-mounted) is not offered. Keep paneKey/sessionId so Resume can remount
-    // the original leaf and `--resume` the persisted provider session.
-    try {
-      await args.markDispatchResult({
-        runId: args.run.id,
-        status: 'completed',
-        terminalPtyId: null
-      })
-    } catch (error) {
-      console.error('[automations] Failed to clear retired terminal identity:', error)
-    }
   }
   /**
    * A lost PTY is not a result. Record nothing: the run keeps its non-final
@@ -149,30 +152,29 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
-    const providerSessionId = readProviderSessionId(observedPaneKey)
+    const providerSessionId = readProviderSessionId()
+    const result =
+      code === 0
+        ? readCompletionResult()
+        : {
+            status: 'dispatch_failed' as const,
+            error: `Automation process exited with code ${code}.`
+          }
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status: code === 0 ? 'completed' : 'dispatch_failed',
+        ...result,
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: code === 0 ? null : `Automation process exited with code ${code}.`,
         ...(providerSessionId ? { providerSessionId } : {})
       })
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
     }
-    if (code === 0) {
-      if (await args.finalizeTerminalOwnership()) {
-        await clearRetiredRunTerminalIdentity()
-      }
-      await persistLateProviderSessionId(providerSessionId)
-    } else {
-      args.releaseTerminalOwnership()
-    }
+    await finishCompletionResult(providerSessionId, result)
   }
   const settleLateResult = (result: Promise<void>): void => {
     // Why: status/exit callbacks have no awaitable caller; the result
@@ -183,21 +185,30 @@ export function createAutomationDispatchCompletion(args: {
   }
   const handleAgentDone = (row?: AgentMainAgentVerdictSource): void => {
     if (completionMarked) {
+      if (
+        !terminalFinalizationStarted &&
+        automationAgentCompletionResult(row).status === 'dispatch_failed'
+      ) {
+        pendingDoneRow = row
+      }
       return
     }
+    pendingDoneRow = row
     if (!dispatchMarked) {
       pendingDone = true
-      pendingDoneRow = row
       return
     }
     settleLateResult(markCompletionResult(row))
   }
   const handleExit = (code: number): void => {
     if (completionMarked) {
+      if (!terminalFinalizationStarted && isProvenProcessExit(code) && code !== 0) {
+        pendingExitCode = code
+      }
       return
     }
+    pendingExitCode = code
     if (!dispatchMarked) {
-      pendingExitCode = code
       return
     }
     settleLateResult(markExitResult(code))
@@ -296,16 +307,4 @@ export function createAutomationDispatchCompletion(args: {
       }
     }
   }
-}
-
-function readProviderSessionId(paneKey: string | null | undefined): string | null {
-  if (!paneKey) {
-    return null
-  }
-  const state = useAppStore.getState()
-  return (
-    state.agentStatusByPaneKey?.[paneKey]?.providerSession?.id?.trim() ||
-    state.sleepingAgentSessionsByPaneKey?.[paneKey]?.providerSession?.id?.trim() ||
-    null
-  )
 }

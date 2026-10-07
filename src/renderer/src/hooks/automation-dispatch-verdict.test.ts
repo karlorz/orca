@@ -65,6 +65,111 @@ describe('automation dispatch recorded verdict', () => {
     expect(finalize).not.toHaveBeenCalled()
   })
 
+  it('does not close a failed turn when zero exit persistence wins the callback race', async () => {
+    let finishPersistence: () => void = () => {}
+    persist.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPersistence = resolve
+        })
+    )
+    const completion = createCompletion()
+    await completion.settlePendingAfterDispatch()
+    completion.handleExit(0)
+    completion.captureAssistantMessage('Provider refused this request.')
+    completion.handleAgentDone(failedEntry())
+    finishPersistence()
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce())
+    expect(persist).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'dispatch_failed',
+        error: 'Automation agent reported a failed turn.',
+        outputSnapshot: expect.objectContaining({ content: 'Provider refused this request.' })
+      })
+    )
+    expect(finalize).not.toHaveBeenCalled()
+  })
+
+  it('does not let a pending done erase a proven nonzero exit', async () => {
+    const completion = createCompletion()
+    completion.handleAgentDone({ state: 'done' })
+    completion.handleExit(9)
+    await completion.settlePendingAfterDispatch()
+    expect(persist).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'dispatch_failed',
+        error: 'Automation process exited with code 9.'
+      })
+    )
+    expect(finalize).not.toHaveBeenCalled()
+  })
+
+  it('honors a nonzero exit received while done persistence is still pending', async () => {
+    let finishFlush: () => void = () => {}
+    flush.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFlush = resolve
+        })
+    )
+    const completion = createCompletion()
+    await completion.settlePendingAfterDispatch()
+    completion.handleAgentDone({ state: 'done' })
+    await vi.waitFor(() => expect(flush).toHaveBeenCalledOnce())
+    completion.handleExit(9)
+    finishFlush()
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce())
+    expect(persist).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'dispatch_failed',
+        error: 'Automation process exited with code 9.'
+      })
+    )
+    expect(finalize).not.toHaveBeenCalled()
+  })
+
+  it('does not reinterpret contact loss during history flush as a failed exit', async () => {
+    let finishFlush: () => void = () => {}
+    flush.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFlush = resolve
+        })
+    )
+    const completion = createCompletion()
+    await completion.settlePendingAfterDispatch()
+    completion.handleAgentDone({ state: 'done' })
+    await vi.waitFor(() => expect(flush).toHaveBeenCalledOnce())
+    completion.handleExit(-1)
+    finishFlush()
+    await vi.waitFor(() => expect(finalize).toHaveBeenCalledOnce())
+    expect(persist.mock.calls.some(([result]) => result.status === 'dispatch_failed')).toBe(false)
+  })
+
+  it('does not reopen a result for a failure callback after terminal finalization', async () => {
+    const completion = createCompletion()
+    await completion.settlePendingAfterDispatch()
+    completion.handleExit(0)
+    await vi.waitFor(() => expect(finalize).toHaveBeenCalledOnce())
+    const writtenResults = persist.mock.calls.length
+    completion.handleAgentDone(failedEntry())
+    await Promise.resolve()
+    expect(persist).toHaveBeenCalledTimes(writtenResults)
+    expect(release).not.toHaveBeenCalled()
+  })
+
+  it('preserves the terminal if the corrective failure write is rejected', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    persist.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('storage unavailable'))
+    const completion = createCompletion()
+    await completion.settlePendingAfterDispatch()
+    completion.handleExit(0)
+    completion.handleAgentDone(failedEntry())
+    await vi.waitFor(() => expect(release).toHaveBeenCalledOnce())
+    expect(finalize).not.toHaveBeenCalled()
+    errorLog.mockRestore()
+  })
+
   it.each(['current', 'history'] as const)('honors a failed %s store entry', async (source) => {
     const completion = createCompletion()
     await completion.settlePendingAfterDispatch()
