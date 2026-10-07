@@ -12,6 +12,7 @@ import type {
   AutomationDispatchResult
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
+import type { AgentMainAgentVerdictSource } from '../../../shared/agent-main-agent-verdict'
 import {
   prepareAutomationDispatchWorkspace,
   resolveAutomationDispatchWorkspace
@@ -118,13 +119,13 @@ export async function handleAutomationDispatchRequest({
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
+              const handleReusableAgentStatus = (payload: AgentMainAgentVerdictSource): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
                 if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
+                  completion.handleAgentDone(payload)
                 }
               }
               const reuseCompletionStartedAt = Date.now()
@@ -135,7 +136,10 @@ export async function handleAutomationDispatchRequest({
                   runId: run.id,
                   onData: completion.appendOutput,
                   onAgentStatus: (payload) => {
-                    completion.captureAssistantMessage(payload.lastAssistantMessage)
+                    completion.captureAssistantMessage(
+                      payload.lastAssistantMessage,
+                      payload.lastAssistantMessageIsToolOutput
+                    )
                     handleReusableAgentStatus(payload)
                   },
                   onExit: completion.handleExit
@@ -184,12 +188,15 @@ export async function handleAutomationDispatchRequest({
       title: run.title,
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
-        completion.captureAssistantMessage(payload.lastAssistantMessage)
+        completion.captureAssistantMessage(
+          payload.lastAssistantMessage,
+          payload.lastAssistantMessageIsToolOutput
+        )
         // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone()
+        completion.handleAgentDone(payload)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

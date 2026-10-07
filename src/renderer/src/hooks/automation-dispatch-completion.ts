@@ -16,6 +16,9 @@ import {
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 import { waitForAutomationSessionHistoryFlush } from './automation-session-history-flush'
+import { automationAgentCompletionResult } from '../../../shared/automation-agent-completion-result'
+import type { AgentMainAgentVerdictSource } from '../../../shared/agent-main-agent-verdict'
+import { getAgentStateHistoryOverlap } from './automation-agent-state-history-overlap'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -34,6 +37,7 @@ export function createAutomationDispatchCompletion(args: {
   let dispatchMarked = false
   let pendingExitCode: number | null = null
   let pendingDone = false
+  let pendingDoneRow: AgentMainAgentVerdictSource | undefined
   let completionMarked = false
   let contactLost = false
   let observedPaneKey = args.run.terminalPaneKey
@@ -48,22 +52,22 @@ export function createAutomationDispatchCompletion(args: {
     unsubscribeSessionObserver = (): void => {}
     releaseReuseDispatchTab = (): void => {}
   }
-  const markCompletionResult = async (): Promise<void> => {
+  const markCompletionResult = async (row?: AgentMainAgentVerdictSource): Promise<void> => {
     if (completionMarked) {
       return
     }
     completionMarked = true
     cleanupRunObservers()
     const providerSessionId = readProviderSessionId(observedPaneKey)
+    const result = automationAgentCompletionResult(row)
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status: 'completed',
+        ...result,
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: null,
         ...(providerSessionId ? { providerSessionId } : {})
       })
     } catch (error) {
@@ -71,12 +75,17 @@ export function createAutomationDispatchCompletion(args: {
       throw error
     }
     await waitForAutomationSessionHistoryFlush(observedPaneKey)
-    if (await args.finalizeTerminalOwnership()) {
+    if (result.status === 'dispatch_failed') {
+      args.releaseTerminalOwnership()
+    } else if (await args.finalizeTerminalOwnership()) {
       await clearRetiredRunTerminalIdentity()
     }
-    await persistLateProviderSessionId(providerSessionId)
+    await persistLateProviderSessionId(providerSessionId, result.status)
   }
-  const persistLateProviderSessionId = async (alreadyPersisted: string | null): Promise<void> => {
+  const persistLateProviderSessionId = async (
+    alreadyPersisted: string | null,
+    status: 'completed' | 'dispatch_failed' = 'completed'
+  ): Promise<void> => {
     const lateId = readProviderSessionId(observedPaneKey)
     if (!lateId || lateId === alreadyPersisted) {
       return
@@ -84,7 +93,7 @@ export function createAutomationDispatchCompletion(args: {
     try {
       await args.markDispatchResult({
         runId: args.run.id,
-        status: 'completed',
+        status,
         providerSessionId: lateId
       })
     } catch (error) {
@@ -169,15 +178,16 @@ export function createAutomationDispatchCompletion(args: {
       console.error('[automations] Failed to persist late automation result:', error)
     })
   }
-  const handleAgentDone = (): void => {
+  const handleAgentDone = (row?: AgentMainAgentVerdictSource): void => {
     if (completionMarked) {
       return
     }
     if (!dispatchMarked) {
       pendingDone = true
+      pendingDoneRow = row
       return
     }
-    settleLateResult(markCompletionResult())
+    settleLateResult(markCompletionResult(row))
   }
   const handleExit = (code: number): void => {
     if (completionMarked) {
@@ -230,9 +240,8 @@ export function createAutomationDispatchCompletion(args: {
         ) {
           // Why: this `done` already rolled out of the live entry, so its output
           // survives only in the entry-level completed slot.
-          latestAssistantMessage =
-            entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
-          handleAgentDone()
+          latestAssistantMessage = entry.lastCompletedAssistantMessage?.trim() || null
+          handleAgentDone(historicalState)
           return
         }
       }
@@ -248,8 +257,10 @@ export function createAutomationDispatchCompletion(args: {
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
-        latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
-        handleAgentDone()
+        latestAssistantMessage = entry.lastAssistantMessageIsToolOutput
+          ? null
+          : entry.lastAssistantMessage?.trim() || latestAssistantMessage
+        handleAgentDone(entry)
       }
     }
     // Why: Codex/Claude completion normally arrives through the global
@@ -260,8 +271,8 @@ export function createAutomationDispatchCompletion(args: {
 
   return {
     appendOutput: (chunk: string) => outputSnapshotBuffer.append(chunk),
-    captureAssistantMessage: (message: string | null | undefined) => {
-      latestAssistantMessage = message?.trim() || latestAssistantMessage
+    captureAssistantMessage: (message: string | null | undefined, isToolOutput?: boolean) => {
+      latestAssistantMessage = isToolOutput ? null : message?.trim() || latestAssistantMessage
     },
     cleanupRunObservers,
     handleAgentDone,
@@ -276,7 +287,7 @@ export function createAutomationDispatchCompletion(args: {
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
       if (pendingDone) {
-        await markCompletionResult()
+        await markCompletionResult(pendingDoneRow)
       } else if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)
       }
@@ -294,35 +305,4 @@ function readProviderSessionId(paneKey: string | null | undefined): string | nul
     state.sleepingAgentSessionsByPaneKey?.[paneKey]?.providerSession?.id?.trim() ||
     null
   )
-}
-
-function agentStateHistoryEntriesEqual(
-  left: AgentStateHistoryEntry,
-  right: AgentStateHistoryEntry
-): boolean {
-  return (
-    left.state === right.state &&
-    left.prompt === right.prompt &&
-    left.startedAt === right.startedAt &&
-    left.interrupted === right.interrupted
-  )
-}
-
-function getAgentStateHistoryOverlap(
-  previous: AgentStateHistoryEntry[],
-  current: AgentStateHistoryEntry[]
-): number {
-  for (let overlap = Math.min(previous.length, current.length); overlap > 0; overlap -= 1) {
-    const previousOffset = previous.length - overlap
-    if (
-      current
-        .slice(0, overlap)
-        .every((entry, index) =>
-          agentStateHistoryEntriesEqual(entry, previous[previousOffset + index])
-        )
-    ) {
-      return overlap
-    }
-  }
-  return 0
 }

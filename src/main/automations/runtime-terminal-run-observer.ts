@@ -4,6 +4,8 @@ import type {
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { readAutomationRunAgentCompletion } from './automation-run-agent-verdict'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
@@ -117,11 +119,12 @@ async function readTerminalSnapshot(
 async function buildObservation(
   runtime: AutomationRunTerminalHost,
   handle: string,
-  wait: { satisfied: boolean; blockedReason?: string }
+  wait: { satisfied: boolean; blockedReason?: string },
+  completion?: { status: 'completed' | 'dispatch_failed'; error: string | null }
 ): Promise<AutomationRunCompletionObservation> {
   const outputSnapshot = await readTerminalSnapshot(runtime, handle)
   if (wait.satisfied) {
-    return { status: 'completed', outputSnapshot, error: null }
+    return { ...(completion ?? { status: 'completed', error: null }), outputSnapshot }
   }
   return {
     status: 'dispatch_failed',
@@ -146,12 +149,13 @@ async function buildUnobservedObservation(
 }
 
 export function createRuntimeAutomationRunTerminalObserver(
-  runtime: AutomationRunTerminalHost
+  runtime: AutomationRunTerminalHost,
+  readAgentStatus?: (paneKey: string) => readonly AgentStatusIpcPayload[]
 ): AutomationRunTerminalObserver {
   return {
     resolveRunTerminal: (run) =>
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
-    observeCompletion: async (handle, { signal }) => {
+    observeCompletion: async (handle, { signal, run }) => {
       const startedAt = Date.now()
       // Why: tui-idle is level-triggered, so a reused pane still idle from the
       // PREVIOUS run satisfies it before this run's agent has typed a character.
@@ -177,7 +181,14 @@ export function createRuntimeAutomationRunTerminalObserver(
       for (;;) {
         try {
           const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
-          return await buildObservation(runtime, handle, wait)
+          return await buildObservation(
+            runtime,
+            handle,
+            wait,
+            run?.terminalPaneKey && readAgentStatus
+              ? readAutomationRunAgentCompletion(run, handle, readAgentStatus(run.terminalPaneKey))
+              : undefined
+          )
         } catch (error) {
           // Why: tui-idle waits expire on their own schedule; an agent still
           // working past that window is live, so re-arm rather than fail it.

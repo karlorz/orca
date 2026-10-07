@@ -437,3 +437,14 @@ features:
       - src/main/runtime/terminal-question-answer.ts
       - src/main/runtime/terminal-session-navigation.ts
     wiki: projects/grok-desktop-pet/work/2026-10-05-grok-ask-user-question-delivery
+
+  - id: automation-recorded-outcome-and-resume-reuse
+    title: Reuse resumed automation sessions and honor recorded agent failures in run history
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/components/automations/automation-run-resume-target.ts
+      - src/renderer/src/hooks/automation-dispatch-completion.ts
+      - src/main/automations/runtime-terminal-run-observer.ts
+      - src/shared/automation-agent-completion-result.ts
+    wiki: projects/orca/work/2026-10-07-automation-outcome-reporting

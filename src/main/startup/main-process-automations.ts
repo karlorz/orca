@@ -3,6 +3,7 @@ import { buildAutomationModelLaunchPreferences } from '../../shared/automation-m
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 import { mainProcessState as state } from './main-process-state'
+import { agentHookServer } from '../agent-hooks/server'
 
 export function initializeMainProcessAutomations(): AutomationService {
   const store = state.store
@@ -15,7 +16,9 @@ export function initializeMainProcessAutomations(): AutomationService {
   const service = new AutomationService(store, {
     claudeUsage,
     codexUsage,
-    terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime),
+    terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime, (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey)
+    ),
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.
     allowRemoteHostScheduling: state.isServeMode,

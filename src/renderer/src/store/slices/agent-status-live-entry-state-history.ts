@@ -44,7 +44,9 @@ export function resolveAgentStatusLiveEntryStateHistory(
       history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
     }
     if (existing.state === 'done') {
-      lastCompletedAssistantMessage = existing.lastAssistantMessage
+      lastCompletedAssistantMessage = existing.lastAssistantMessageIsToolOutput
+        ? undefined
+        : existing.lastAssistantMessage
     }
   }
   return {
