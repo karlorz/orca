@@ -2000,7 +2000,8 @@
           "cf9d382ca1": "Import"
         },
         "AddRepoSteps": {
-          "04a4c4e84a": "Clone location"
+          "04a4c4e84a": "Clone location",
+          "fe8e629fe3": "Navigate to a directory and click Select to choose it."
         },
         "CacheTimer": {
           "07729cc155": "expired"
@@ -2915,9 +2916,9 @@
         "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
         "hostRestarted": "Orca restarted before this message was sent.",
         "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",
+        "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
         "managedAccountEnvOverride": "This Claude launch sets its own Anthropic sign-in variables. Remove them to use a managed Claude account.",
         "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
-        "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
         "noTurnToStop": "{{agent}} had no turn running to stop.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
@@ -2928,11 +2929,11 @@
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "The provider did not accept this message.",
         "providerRejectedQuoted": "The provider did not accept this message: {{detail}}.",
-        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
-        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
+        "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
-        "providerRetryLastError": "Last error: {{detail}}.",
+        "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
+        "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
@@ -3010,6 +3011,7 @@
         "agentStarting": "The agent is still starting.",
         "answerFirst": "Answer the question or approval first.",
         "backgroundTasksRunning": "Background tasks are still running.",
+        "cannotRunHere": "Orca can't run this agent in a chat here.",
         "capacity": "Orca has received too many requests in the last day.",
         "chatNotFound": "Orca can't find this chat.",
         "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -3024,7 +3026,6 @@
         "messageNotSaved": "Couldn't save your message.",
         "messagesUnsettled": "A message you sent earlier isn't confirmed yet.",
         "notAvailable": "This isn't available in this chat.",
-        "cannotRunHere": "Orca can't run this agent in a chat here.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
