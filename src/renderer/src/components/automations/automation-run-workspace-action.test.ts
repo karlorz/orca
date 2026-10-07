@@ -5,6 +5,16 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { createAutomationRunWorkspaceAction } from './automation-run-workspace-action'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
 
+type LaunchOptions = { onSessionLaunched?: (tabId: string) => void }
+
+const launchSleepingAgentSession = vi.hoisted(() =>
+  vi.fn((_record: SleepingAgentSessionRecord, _options?: LaunchOptions) => true)
+)
+
+vi.mock('@/lib/sleeping-agent-session-launch', () => ({
+  launchSleepingAgentSession
+}))
+
 const leafId = '11111111-1111-4111-8111-111111111111'
 const paneKey = `tab-1:${leafId}`
 const worktreeId = 'wt-downloads'
@@ -125,6 +135,10 @@ describe('automation run workspace action', () => {
       [paneKey]: makeSleepingRecord()
     }
     mocks.agentStatusByPaneKey = {}
+    launchSleepingAgentSession.mockImplementation((_, options) => {
+      options?.onSessionLaunched?.('tab-2')
+      return true
+    })
   })
 
   it('focuses a still-mounted pane after hibernation instead of launching --resume', () => {
@@ -147,7 +161,7 @@ describe('automation run workspace action', () => {
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
 
-  it('remounts the original pane when the Claude tab was closed', () => {
+  it('resumes through a fresh tab when the Claude tab was closed', () => {
     mocks.tabsByWorktree = { [worktreeId]: [] }
     const sleepingRecord = makeSleepingRecord()
     mocks.sleepingAgentSessionsByPaneKey = { [paneKey]: sleepingRecord }
@@ -155,17 +169,15 @@ describe('automation run workspace action', () => {
     openRun()
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktreeId)
-    expect(mocks.createTab).toHaveBeenCalledWith(worktreeId, undefined, undefined, {
-      id: 'tab-1',
-      initialLeafId: leafId,
-      launchAgent: 'claude',
-      activate: true
-    })
-    expect(mocks.setTabLayout).not.toHaveBeenCalled()
-    expect(mocks.createTab.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]
+    expect(launchSleepingAgentSession).toHaveBeenCalledWith(
+      sleepingRecord,
+      expect.objectContaining({ onSessionLaunched: expect.any(Function) })
     )
-    expect(mocks.setActiveTab).toHaveBeenLastCalledWith('tab-1')
+    expect(mocks.createTab).not.toHaveBeenCalled()
+    expect(mocks.setTabLayout).not.toHaveBeenCalled()
+    expect(mocks.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'ping', {
+      recordInteraction: false
+    })
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
 
@@ -185,12 +197,8 @@ describe('automation run workspace action', () => {
 
     openRun(makeRun({ terminalPtyId: 'pty-1', providerSessionId: 'sess-closed' }))
 
-    expect(mocks.createTab).toHaveBeenCalledWith(worktreeId, undefined, undefined, {
-      id: 'tab-1',
-      initialLeafId: leafId,
-      launchAgent: 'claude',
-      activate: true
-    })
+    expect(launchSleepingAgentSession).toHaveBeenCalled()
+    expect(mocks.createTab).not.toHaveBeenCalled()
     expect(mocks.setState).toHaveBeenCalled()
     expect(mocks.toastMessage).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
@@ -219,11 +227,9 @@ describe('automation run workspace action', () => {
         })
       })
     )
-    expect(mocks.createTab).toHaveBeenCalledWith(
-      worktreeId,
-      undefined,
-      undefined,
-      expect.objectContaining({ launchAgent: 'antigravity' })
+    expect(launchSleepingAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'antigravity' }),
+      expect.objectContaining({ onSessionLaunched: expect.any(Function) })
     )
   })
 
@@ -257,7 +263,7 @@ describe('automation run workspace action', () => {
     mocks.tabsByWorktree = { [worktreeId]: [] }
     openRun()
 
-    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(launchSleepingAgentSession).toHaveBeenCalledTimes(2)
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
 

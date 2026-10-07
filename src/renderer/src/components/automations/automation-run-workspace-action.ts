@@ -19,6 +19,7 @@ import {
 } from './automation-run-open-target'
 import { getAutomationRunViewState } from './automation-run-view-state'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
+import { launchSleepingAgentSession } from '@/lib/sleeping-agent-session-launch'
 
 function findPreservedRunTerminalTab(run: AutomationRun) {
   const tabId = getAutomationRunOpenTabId(run)
@@ -99,28 +100,26 @@ function ensureRunSleepingSession(
   return record
 }
 
-/** Remount the run's pane so in-place `--resume` can use its sleeping record. */
+/** Resume a closed run through a fresh pane identity so a retiring owner cannot be reused. */
 function reopenClosedRunSessionTab(run: AutomationRun, agent: TuiAgent | undefined): string | null {
-  const parsed = parsePaneKey(run.terminalPaneKey ?? '')
   const sleepingRecord = ensureRunSleepingSession(run, agent)
-  if (!parsed || !run.workspaceId || !sleepingRecord) {
+  if (!run.workspaceId || !sleepingRecord) {
     return null
   }
-  const state = useAppStore.getState()
-  const tab = state.createTab(run.workspaceId, undefined, undefined, {
-    id: parsed.tabId,
-    initialLeafId: parsed.leafId,
-    launchAgent: sleepingRecord.agent,
-    activate: true
+  let launchedTabId: string | null = null
+  const launched = launchSleepingAgentSession(sleepingRecord, {
+    onSessionLaunched: (tabId) => {
+      launchedTabId = tabId
+    }
   })
-  if (tab.id !== parsed.tabId) {
+  if (!launched || !launchedTabId) {
     return null
   }
   const title = run.title.trim()
   if (title) {
-    state.setTabCustomTitle(tab.id, title, { recordInteraction: false })
+    useAppStore.getState().setTabCustomTitle(launchedTabId, title, { recordInteraction: false })
   }
-  return tab.id
+  return launchedTabId
 }
 
 /** Opens the original run terminal when its host-qualified workspace is alive. */
