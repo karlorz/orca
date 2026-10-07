@@ -81,7 +81,10 @@ describe('Grok hook completion notifications', () => {
     }
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    const { resetAgentHookCompletionNotificationCoordinators } =
+      await import('./agent-hook-completion-notifications')
+    resetAgentHookCompletionNotificationCoordinators()
     vi.useRealTimers()
   })
 
@@ -106,7 +109,8 @@ describe('Grok hook completion notifications', () => {
         { paneKey: PANE_KEY, payload: hook },
         'production'
       )
-      if (!event) {
+      // Why: SessionStart now lands a providerSessionOnly idle placeholder; production snapshots drop it.
+      if (!event || event.providerSessionOnly === true) {
         continue
       }
       if (event.payload.state !== previousState) {

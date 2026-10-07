@@ -1,3 +1,4 @@
+/** The structured agent-session methods a phone may call; spread into the mobile allowlist. */
 export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.createSupport',
   'agentSession.create',
@@ -20,11 +21,10 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.history',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
+  // Every session's status on one stream: the phone's chat reads the host's "Stopping…" from it.
+  'agentSession.subscribeStatus',
   // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the
   // mobile builds that still call them.
   'agentSession.hold',
-  'agentSession.release',
-  'nativeChat.readSession',
-  'nativeChat.subscribe',
-  'nativeChat.unsubscribe'
+  'agentSession.release'
 ] as const

@@ -52,7 +52,7 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
  * fitted to. The spread it shows is 1 to 10: `pr` and `web` add one script each, `session` adds ten.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 74 scripts at 16 routes, the old 15 read 72 on the same head.
+ * swept tree reads 74 scripts at 16 routes.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
@@ -63,11 +63,11 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/accounts.tsx', 9],
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 14],
   ['./h/[hostId]/edit.tsx', 19],
-  ['./h/[hostId]/files/[worktreeId].tsx', 23],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 31],
-  ['./h/[hostId]/history/[worktreeId].tsx', 33],
-  ['./h/[hostId]/index.tsx', 38],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 39],
+  ['./h/[hostId]/files/[worktreeId].tsx', 24],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 32],
+  ['./h/[hostId]/history/[worktreeId].tsx', 34],
+  ['./h/[hostId]/index.tsx', 39],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 40],
   ['./h/[hostId]/review/[worktreeId].tsx', 48],
   ['./h/[hostId]/session/[worktreeId].tsx', 58],
   ['./h/[hostId]/source-control/[worktreeId].tsx', 63],

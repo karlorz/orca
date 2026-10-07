@@ -45,6 +45,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         terminalHandle: _terminalHandle,
         grokSessionObservation: _grokSessionObservation,
         grokEventAt: _grokEventAt,
+        hostTurnRevision: _hostTurnRevision,
         launchToken,
         ...persistedPayload
       } = enrichedPayload
@@ -53,8 +54,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
       // replaced is read at hydrate and never written again.
+      const { claudeTaskWakeupPending: _pendingWakeup, ...persistedStatus } =
+        persistedPayload.payload
       entries[paneKey] = {
         ...persistedPayload,
+        payload: persistedStatus,
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

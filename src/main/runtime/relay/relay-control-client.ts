@@ -81,7 +81,7 @@ export class RelayControlClient {
       }
       this.handleMessage(raw)
     })
-    socket.once('error', (error) => {
+    socket.on('error', (error) => {
       if (this.state === 'opening' || this.state === 'proving') {
         this.connectReject?.(error)
         this.clearConnectPromise()

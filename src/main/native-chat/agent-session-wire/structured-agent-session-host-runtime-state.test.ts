@@ -12,7 +12,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 
@@ -73,7 +73,7 @@ function runtimeState(
     probeOwner,
     logger: createStructuredAgentSessionLogger()
   } as StructuredAgentSessionHostDeps
-  return new StructuredAgentSessionHostRuntimeState(deps)
+  return new StructuredAgentSessionHostRuntimeState(deps, new Map())
 }
 
 function liveRecord(): AgentSessionRecord {
@@ -149,7 +149,7 @@ describe('host runtime-state owner probe', () => {
       probeOwner,
       logger: log.logger
     } as unknown as StructuredAgentSessionHostDeps
-    const state = new StructuredAgentSessionHostRuntimeState(deps, onEventSinkFailure)
+    const state = new StructuredAgentSessionHostRuntimeState(deps, new Map(), onEventSinkFailure)
 
     await (
       state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }

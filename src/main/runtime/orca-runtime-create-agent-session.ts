@@ -17,7 +17,7 @@ import {
 } from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -153,27 +153,24 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const startupArgs = {
-        ...resolveAgentStartupPlanInputs({
-          agent: request.agent,
-          settings,
-          platform: this.getAgentLaunchPlatformForWorkspace(workspace),
-          // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-          // shape must match the PTY route this scope already resolved.
-          isRemote: Boolean(workspace.connectionId),
-          ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
-          sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
-        }),
-        extraArgs: request.launchPreferences?.extraArgs
-      }
-      const startup =
-        request.promptDelivery === 'draft'
-          ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
+      const startupArgs = resolveAgentStartupPlanInputs({
+        agent: request.agent,
+        settings,
+        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
+        // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
+        // shape must match the PTY route this scope already resolved.
+        isRemote: Boolean(workspace.connectionId),
+        ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+        sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
+      })
+      const startup = await buildExecutionHostAgentStartupPlan({
+        inputs: startupArgs,
+        cwd: startupCwd ?? workspace.path,
+        prompt: request.prompt ?? '',
+        promptDelivery: request.promptDelivery,
+        hostIdentity: this.runtimeId,
+        signal: caller.signal
+      })
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
