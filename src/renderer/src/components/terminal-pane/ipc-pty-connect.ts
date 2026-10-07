@@ -88,7 +88,19 @@ export async function connectIpcPty(
     // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
-    const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+    const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId).catch(
+      (error: unknown) => {
+        const detail = readIpcErrorDetail(error) ?? (error instanceof Error ? error.message : '')
+        if (
+          !context.isDestroyed() &&
+          !admittedSessionId &&
+          detail.startsWith('Failed to spawn shell "')
+        ) {
+          context.getCallbacks().onSpawnRejected?.()
+        }
+        throw error
+      }
+    )
     const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return

@@ -18,6 +18,8 @@ import {
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
+import { agentHookResultRetryMatchesTurn } from '../../../shared/agent-hook-result-retry-identity'
+import { recoverGrokHookResult } from '../../../shared/agent-hook-listener/grok-result-retry'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -151,7 +153,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       | undefined
     if (
       !current ||
-      (requireExactOriginal && current !== original) ||
+      ((requireExactOriginal || source === 'grok') &&
+        !agentHookResultRetryMatchesTurn(original, current)) ||
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
       (current.payload.lastAssistantMessage &&
@@ -159,7 +162,10 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    const normalized = this.normalizeLocalHookPayload(source, body)
+    const normalized =
+      source === 'grok'
+        ? { event: recoverGrokHookResult(body, original, current) }
+        : this.normalizeLocalHookPayload(source, body)
     if (
       !normalized.event?.payload.lastAssistantMessage ||
       normalized.event.payload.lastAssistantMessageIsToolOutput === true

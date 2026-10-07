@@ -135,32 +135,47 @@ describe('fresh spawn leaves a local pane unbound', () => {
   })
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(() => mockStoreState, {
+      onQueuedResumeSpawnRejected: () => true,
+      ...overrides
+    })
   }
 
-  it('remounts the pane when the spawn resolves without a PTY id', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    // A spawn that produced nothing: no id returned and nothing bound after it.
-    transport.connect.mockImplementation(async () => null)
-    transportFactoryQueue.push(transport)
-
-    connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-unbound-spawn' }) as never
-    )
-    await flushAsyncTicks(40)
-
-    expect(transport.connect).toHaveBeenCalled()
-    expect(requestTerminalPaneRecovery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: 'tab-unbound-spawn',
-        ptyId: null,
-        reason: 'spawn-left-pane-unbound'
+  it.each([false, true])(
+    'remounts an unbound pane only without definitive Resume rejection (%s)',
+    async (rejected) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      // A spawn that produced nothing: no id returned and nothing bound after it.
+      transport.connect.mockImplementation(async (options) => {
+        if (rejected) {
+          options.callbacks?.onSpawnRejected?.()
+        }
+        return null
       })
-    )
-  })
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ tabId: 'tab-unbound-spawn' }) as never
+      )
+      await flushAsyncTicks(40)
+
+      expect(transport.connect).toHaveBeenCalled()
+      if (rejected) {
+        expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
+        return
+      }
+      expect(requestTerminalPaneRecovery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: 'tab-unbound-spawn',
+          ptyId: null,
+          reason: 'spawn-left-pane-unbound'
+        })
+      )
+    }
+  )
 
   // The direct-SSH ledger runs its own retry; a second remount would race it.
   it('leaves recovery to the direct SSH retry ledger', async () => {

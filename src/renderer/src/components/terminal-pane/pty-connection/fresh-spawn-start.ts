@@ -91,6 +91,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       session.reportError,
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup)
     )
+    let resumeSpawnRejected = false
     const spawnedRaw = session.transport.connect({
       url: '',
       cols: session.cols,
@@ -121,7 +122,21 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
           ?.generation ?? 0) === session.tabGeneration,
-      callbacks: outputCallbacks.callbacks
+      callbacks: {
+        ...outputCallbacks.callbacks,
+        onSpawnRejected: () => {
+          if (
+            !session.disposed &&
+            outputCallbacks.generation === session.transportStreamGeneration &&
+            session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+          ) {
+            resumeSpawnRejected = session.deps.onQueuedResumeSpawnRejected?.() === true
+            if (resumeSpawnRejected) {
+              session.pendingStartupCommand = null
+            }
+          }
+        }
+      }
     })
 
     void Promise.resolve(spawnedRaw)
@@ -300,6 +315,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.transport.getPtyId() ||
           pendingSpawnByPaneKey.has(session.pendingSpawnKey)
         ) {
+          return
+        }
+        if (resumeSpawnRejected) {
+          session.settlePaneAttachAttempt?.(undefined, 'failed')
           return
         }
         settleSpawnThatLeftPaneUnbound(session)

@@ -47,9 +47,9 @@ function makeRow(
     ...overrides
   }
 }
-function setup() {
+function setup(initialRow: Partial<AutomationAgentResultStatus> = {}) {
   let run: AutomationRun | null = makeRun()
-  let row = makeRow()
+  let row = makeRow(initialRow)
   const listeners = new Set<(value: AutomationAgentResultStatus) => void>()
   const clearListeners = new Set<(pane: string) => void>()
   const write = vi.fn(
@@ -189,7 +189,6 @@ describe('same-turn late automation output', () => {
     { lastAssistantMessageIsToolOutput: true },
     { restoredUnconfirmed: true },
     { providerSessionOnly: true },
-    { sessionBoundary: true },
     { turnStartedAt: undefined },
     { evidenceObservedAt: 1 },
     { isReplay: true },
@@ -211,6 +210,24 @@ describe('same-turn late automation output', () => {
     const state = setup()
     state.prune()
     state.publish({ lastAssistantMessage: 'Late report' })
+    await Promise.resolve()
+    expect(state.write).not.toHaveBeenCalled()
+    state.capture.dispose()
+  })
+
+  it('keeps final prose delivered at the original completed turn session boundary', async () => {
+    const state = setup()
+    state.finish()
+    state.publish({ sessionBoundary: true, lastAssistantMessage: 'Final refusal' })
+    await vi.waitFor(() => expect(state.write).toHaveBeenCalledOnce())
+    expect(state.read()).toMatchObject({ status: 'dispatch_failed', error: 'Provider failed' })
+    state.capture.dispose()
+  })
+
+  it('never binds a run from a session-boundary row alone', async () => {
+    const state = setup({ sessionBoundary: true })
+    await state.capture.refresh(state.finish())
+    state.publish({ lastAssistantMessage: 'Unbound boundary output' })
     await Promise.resolve()
     expect(state.write).not.toHaveBeenCalled()
     state.capture.dispose()

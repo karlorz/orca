@@ -141,7 +141,6 @@ export class AutomationRunResultCapture {
     }
     if (
       (row.mainAgent?.state ?? row.state) !== 'done' ||
-      row.sessionBoundary === true ||
       row.lastAssistantMessageIsToolOutput === true ||
       !row.lastAssistantMessage?.trim() ||
       current.workspaceId !== binding.run.workspaceId ||

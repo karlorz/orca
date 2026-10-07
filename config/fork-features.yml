@@ -444,6 +444,10 @@ features:
     status: landed
     paths:
       - src/renderer/src/components/automations/automation-run-resume-target.ts
+      - src/renderer/src/components/terminal-pane/queued-agent-resume-failure.ts
+      - src/shared/agent-hook-result-retry-identity.ts
+      - src/shared/agent-hook-listener/grok-result-retry.ts
+      - src/relay/agent-hook-result-retry-scheduler.ts
       - src/renderer/src/hooks/automation-dispatch-completion.ts
       - src/renderer/src/hooks/automation-run-session-persistence.ts
       - src/main/automations/automation-run-result-capture.ts

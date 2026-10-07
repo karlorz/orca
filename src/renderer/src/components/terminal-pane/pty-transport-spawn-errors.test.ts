@@ -14,6 +14,25 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
+  it.each([
+    ['Failed to spawn shell "/bin/zsh": all fallbacks failed', undefined, true],
+    ['socket disconnected', undefined, false],
+    ['Failed to spawn shell "/bin/zsh": all fallbacks failed', 'existing-pty', false]
+  ])(
+    'reports only definitive fresh-spawn rejection: %s, %s',
+    async (message, sessionId, rejected) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(new Error(message))
+      const onSpawnRejected = vi.fn()
+      await createIpcPtyTransport().connect({
+        url: '',
+        ...(typeof sessionId === 'string' ? { sessionId } : {}),
+        callbacks: { onError: vi.fn(), onSpawnRejected }
+      })
+      expect(onSpawnRejected).toHaveBeenCalledTimes(rejected ? 1 : 0)
+    }
+  )
+
   it('suppresses the error toast when pty:spawn rejects with TerminalKilledError', async () => {
     // Why: a killed-session TerminalKilledError is intended, not a bug, so no toast; string is Electron's IPC-wrapped form to hit the real path.
     const { createIpcPtyTransport } = await import('./pty-transport')

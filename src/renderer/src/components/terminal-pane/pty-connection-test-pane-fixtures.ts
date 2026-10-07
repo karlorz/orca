@@ -19,6 +19,7 @@ export type ConnectCallbacks = {
   ) => void
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onError?: (msg: string) => void
+  onSpawnRejected?: () => void
   onErrorCleared?: (msg: string) => void
   onWriteUnavailable?: () => void
   onOutputPauseChanged?: (paused: boolean, supported: boolean) => void

@@ -30,6 +30,7 @@ import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-co
 import { installTerminalPaneInputHandling } from './terminal-pane-pane-input'
 import { installTerminalPaneLinkHandling } from './terminal-pane-pane-links'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { createQueuedAgentResumeFailureHandler } from './queued-agent-resume-failure'
 
 export type PaneCreatedSetupContext = TerminalPaneManagerOptionsContext
 
@@ -176,6 +177,12 @@ export function createTerminalPaneCreatedHandler(
     const panePtyBinding = connectPanePty(pane, manager, {
       ...ptyDeps,
       ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
+      onQueuedResumeSpawnRejected: createQueuedAgentResumeFailureHandler(
+        deps.tabId,
+        ptyDeps.startup,
+        startupWithSetupSplitWait,
+        startup
+      ),
       ...(effectiveSpawnHints?.cwdPromise
         ? {
             onDeferredCwdSpawnFailed: () => {

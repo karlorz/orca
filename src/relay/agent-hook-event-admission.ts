@@ -58,7 +58,10 @@ export function applyRelayHookEvent(
     host.clearPaneState(event.paneKey)
     return undefined
   }
-  if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
+  if (
+    event.payload.state !== 'done' ||
+    (event.payload.lastAssistantMessage && event.payload.lastAssistantMessageIsToolOutput !== true)
+  ) {
     host.clearAssistantMessageRetry(event.paneKey)
   }
   // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when

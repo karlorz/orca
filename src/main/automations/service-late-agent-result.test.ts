@@ -68,7 +68,9 @@ describe('durable late automation result', () => {
       const discovery = new Promise<void>((resolve) => {
         releaseDiscovery = resolve
       })
-      vi.spyOn(discoveryApi, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
+      vi.spyOn(discoveryApi, 'preparePendingGrokResultDiscovery')
+        .mockReturnValueOnce(discovery)
+        .mockReturnValue(null)
       const publish = vi.fn()
       const server = new AgentHookServer()
       const service = new AutomationService(store, {
@@ -151,6 +153,9 @@ describe('durable late automation result', () => {
           }
         })
         const usage = read().usage
+        await post({ hookEventName: 'SessionEnd', sessionId, promptId: 'p-1', cwd })
+        await post({ hookEventName: 'Stop', reason: 'shutdown', sessionId, promptId: 'p-1', cwd })
+        await new Promise((resolve) => setTimeout(resolve, 300))
         publish.mockClear()
         writeFileSync(
           join(sessionDir, 'chat_history.jsonl'),

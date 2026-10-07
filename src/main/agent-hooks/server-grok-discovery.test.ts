@@ -38,50 +38,81 @@ async function postGrokHook(
 }
 
 describe('AgentHookServer Grok discovery retries', () => {
-  it('waits for delayed discovery beyond the transcript retry window', async () => {
-    let releaseDiscovery!: () => void
-    const discovery = new Promise<void>((resolve) => {
-      releaseDiscovery = resolve
-    })
-    vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
-    const server = new AgentHookServer()
-    const root = mkdtempSync(join(tmpdir(), 'orca-grok-delayed-discovery-'))
-    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf532'
-    const cwd = join(root, 'workspace')
-    const sessionDir = join(root, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
-    mkdirSync(sessionDir, { recursive: true })
-    const history = join(sessionDir, 'chat_history.jsonl')
-    writeFileSync(history, '')
-    vi.stubEnv('HOME', root)
-    vi.stubEnv('USERPROFILE', root)
-    await server.start({ env: 'production' })
-    try {
-      const env = server.buildPtyEnv()
-      const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      await postGrokHook(endpoint, { hookEventName: 'UserPromptSubmit', prompt: 'delayed result' })
-      await postGrokHook(endpoint, { hookEventName: 'Stop', sessionId, cwd })
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      expect(listener.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
-
-      writeFileSync(
-        history,
-        `${JSON.stringify({ type: 'assistant', content: 'Found after discovery.' })}\n`
-      )
-      releaseDiscovery()
-
-      await vi.waitFor(() => {
-        expect(listener.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
-          'Found after discovery.'
-        )
+  it.each(['Stop', 'StopFailure'])(
+    'recovers delayed %s prose across same-turn shutdown',
+    async (eventName) => {
+      let releaseDiscovery!: () => void
+      const discovery = new Promise<void>((resolve) => {
+        releaseDiscovery = resolve
       })
-    } finally {
-      server.stop()
-      rmSync(root, { recursive: true, force: true })
+      vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery')
+        .mockReturnValueOnce(discovery)
+        .mockReturnValue(null)
+      const server = new AgentHookServer()
+      const root = mkdtempSync(join(tmpdir(), 'orca-grok-delayed-discovery-'))
+      const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf532'
+      const cwd = join(root, 'workspace')
+      const sessionDir = join(root, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+      mkdirSync(sessionDir, { recursive: true })
+      const history = join(sessionDir, 'chat_history.jsonl')
+      writeFileSync(history, '')
+      vi.stubEnv('HOME', root)
+      vi.stubEnv('USERPROFILE', root)
+      await server.start({ env: 'production' })
+      try {
+        const env = server.buildPtyEnv()
+        const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
+        const listener = vi.fn()
+        server.setListener(listener)
+
+        await postGrokHook(endpoint, {
+          hookEventName: 'UserPromptSubmit',
+          prompt: 'delayed result',
+          sessionId,
+          promptId: 'prompt-1'
+        })
+        await postGrokHook(endpoint, {
+          hookEventName: 'PostToolUse',
+          sessionId,
+          toolName: 'read_file',
+          toolOutput: 'Missing file'
+        })
+        await postGrokHook(endpoint, {
+          hookEventName: eventName,
+          sessionId,
+          cwd,
+          promptId: 'prompt-1'
+        })
+        await postGrokHook(endpoint, {
+          hookEventName: 'SessionEnd',
+          sessionId,
+          cwd,
+          promptId: 'prompt-1'
+        })
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        expect(listener.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe('Missing file')
+
+        writeFileSync(
+          history,
+          `${JSON.stringify({ type: 'assistant', content: 'Found after discovery.' })}\n`
+        )
+        releaseDiscovery()
+
+        await vi.waitFor(() => {
+          expect(listener.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
+            'Found after discovery.'
+          )
+        })
+        expect(listener.mock.calls.at(-1)?.[0].payload.sessionBoundary).toBe(true)
+        if (eventName === 'StopFailure') {
+          expect(listener.mock.calls.at(-1)?.[0].payload.mainAgent.outcome).toBe('failure')
+        }
+      } finally {
+        server.stop()
+        rmSync(root, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it('does not overwrite a newer same-text prompt when delayed discovery completes', async () => {
     let releaseDiscovery!: () => void

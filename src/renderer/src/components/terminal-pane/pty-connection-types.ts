@@ -99,6 +99,7 @@ export type PtyConnectionDeps = {
    *  delivery: Windows runs an argv-embedded command before this, and a POSIX shell can die
    *  before the shell-ready write. */
   onQueuedStartupSpawned?: () => void
+  onQueuedResumeSpawnRejected?: () => boolean
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
