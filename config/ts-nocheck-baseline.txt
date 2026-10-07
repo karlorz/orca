@@ -47,6 +47,7 @@ src/main/runtime/orca-runtime-get-terminal-interactive-wait.ts
 src/main/runtime/orca-runtime-get-unpersisted-tracked-title-for-pty.ts
 src/main/runtime/orca-runtime-get-worktree-ps.ts
 src/main/runtime/orca-runtime-get-worktree-terminal-provisioning-host.ts
+src/main/runtime/orca-runtime-guarded-pty-reveal.ts
 src/main/runtime/orca-runtime-handle-mobile-subscribe-internal.ts
 src/main/runtime/orca-runtime-handle-mobile-subscribe.ts
 src/main/runtime/orca-runtime-handle-mobile-unsubscribe.ts
