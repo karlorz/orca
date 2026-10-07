@@ -34,6 +34,19 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
   }
 }
 
+function handleLink(
+  thread: string,
+  mintedAtFence: number
+): AgentSessionProviderHandleLink {
+  return {
+    linkId: `link-${thread}`,
+    handle: codexProviderHandle(thread),
+    origin: 'created',
+    mintedAtFence,
+    observedAt: 1
+  }
+}
+
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
   return {
     sessionId: SESSION_ID,
@@ -192,11 +205,10 @@ describe('codex structured launch resolution', () => {
   it('resumes the last thread this session actually proved, not one a caller names', async () => {
     const launch = await resolverFor(
       record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         providerHandleChain: [
-          { handle: codexProviderHandle('thread-old') },
-          { handle: codexProviderHandle('thread-current') }
-        ] as AgentSessionRecord['providerHandleChain']
+          handleLink('thread-old', 1),
+          handleLink('thread-current', 2)
+        ]
       })
     )({ identity: IDENTITY })
 
@@ -304,11 +316,8 @@ describe('codex structured launch resolution', () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
     const launch = await resolverFor(
       record({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only each link's handle, so the link's other fields stay unset.
         launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
-        providerHandleChain: [
-          { handle: codexProviderHandle('thread-current') }
-        ] as AgentSessionRecord['providerHandleChain']
+        providerHandleChain: [handleLink('thread-current', 1)]
       }),
       async (id) => `/repos/${id}`,
       resolveRollout

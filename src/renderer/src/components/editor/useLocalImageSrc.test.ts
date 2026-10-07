@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, createElement, Fragment, useEffect } from 'react'
+import { act, createElement, Fragment, useEffect, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -471,7 +471,10 @@ describe('useLocalImageSrc runtime owner', () => {
     onRender: (displaySrc: string | undefined) => void
     runtimeContext: RuntimeFileOperationArgs
   }): null {
-    onRender(useLocalImageSrc(imageSrc, documentPath, null, runtimeContext))
+    const displaySrc = useLocalImageSrc(imageSrc, documentPath, null, runtimeContext)
+    useLayoutEffect(() => {
+      onRender(displaySrc)
+    }, [displaySrc, onRender])
     return null
   }
 
