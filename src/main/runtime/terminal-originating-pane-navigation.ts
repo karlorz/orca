@@ -1,7 +1,6 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 
 import type {
   OriginatingPaneTarget,
@@ -15,24 +14,23 @@ export type {
   TerminalOriginatingPaneHost
 } from './terminal-originating-pane-navigation-types'
 
+function isFreshTimestamp(value: number, now: number): boolean {
+  return (
+    Number.isFinite(value) && now - value <= AGENT_STATUS_STALE_AFTER_MS && value <= now + 60_000
+  )
+}
+
 function checkRowFreshness(row: AgentStatusIpcPayload, now: number): void {
   const observedAt = Number.isFinite(row.evidenceObservedAt)
     ? row.evidenceObservedAt!
     : row.receivedAt
-  if (
-    !Number.isFinite(observedAt) ||
-    now - observedAt > AGENT_STATUS_STALE_AFTER_MS ||
-    observedAt > now + 60_000
-  ) {
+  if (!isFreshTimestamp(observedAt, now) || !isFreshTimestamp(row.receivedAt, now)) {
     throw new Error('session_binding_unverifiable')
   }
-  if (
-    !Number.isFinite(row.receivedAt) ||
-    now - row.receivedAt > AGENT_STATUS_STALE_AFTER_MS ||
-    row.receivedAt > now + 60_000
-  ) {
-    throw new Error('session_binding_unverifiable')
-  }
+}
+
+function hostNow(host: TerminalOriginatingPaneHost): number {
+  return host.now?.() ?? Date.now()
 }
 
 export async function selectOriginatingPaneCandidate(
@@ -65,7 +63,7 @@ export async function selectOriginatingPaneCandidate(
   ) {
     throw new Error('session_binding_unverifiable')
   }
-  checkRowFreshness(row, host.now ? host.now() : Date.now())
+  checkRowFreshness(row, hostNow(host))
 
   const observed = host.readObservedAgentStatusPaneIdentity(row.paneKey)
   if (!observed || observed.kind !== 'observed') {
@@ -211,7 +209,7 @@ export function verifyOriginatingPaneIdentity(
     return false
   }
   try {
-    checkRowFreshness(statusRow, host.now ? host.now() : Date.now())
+    checkRowFreshness(statusRow, hostNow(host))
   } catch {
     return false
   }
@@ -227,14 +225,7 @@ export async function switchOriginatingPaneWithHost(
   if (!verifyOriginatingPaneIdentity(host, candidate)) {
     throw new Error('session_navigation_unverifiable')
   }
-  let receipt: {
-    navigated: boolean
-    tabId?: string
-    worktreeId?: string
-    identity?: TerminalRevealIdentity
-    windowFocused?: boolean
-    paneFocused?: boolean
-  }
+  let receipt: Awaited<ReturnType<TerminalOriginatingPaneHost['focusTerminal']>>
   try {
     receipt = await host.focusTerminal(candidate.handle, {
       expectedIncarnationId: candidate.incarnationId,
