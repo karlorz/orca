@@ -17,6 +17,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { ownsGlobalSelection } from '../global-selection-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -86,11 +87,13 @@ export function createTerminalTabCreationActions(
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
-        // Why: honor an explicit leaf so a closed automation tab remounts the
-        // same paneKey; otherwise startup delivery pins a fresh leaf.
+        // Why: honor an explicit leaf so a closed automation tab remounts the same paneKey.
+        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+        // Why a bare leaf id too: a host launch lays out its pane before the process it attaches to exists.
         const initialLeafId =
-          requestedInitialLeafId ??
-          (options?.initialPtyId || options?.pendingStartup ? createBrowserUuid() : undefined)
+          options?.initialPtyId || options?.pendingStartup || requestedInitialLeafId
+            ? (requestedInitialLeafId ?? createBrowserUuid())
+            : undefined
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -131,6 +134,7 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+          ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
@@ -249,9 +253,8 @@ export function createTerminalTabCreationActions(
             ...s.layoutByWorktree,
             [worktreeId]: s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
           },
-          // Why: the global selection is the main window's; a tab in another worktree (or the floating workspace) activates only within its own group.
           activeTabId:
-            shouldActivate && s.activeWorktreeId === worktreeId
+            shouldActivate && ownsGlobalSelection(s, worktreeId)
               ? tab.id
               : orphanCleanupPatch.activeTabId,
           activeTabIdByWorktree: {
