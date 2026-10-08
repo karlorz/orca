@@ -39,12 +39,6 @@ export function TerminalPaneHeaderDropSurface({
           paneTransports: destination.paneTransportsRef.current,
           dataTransfer: event.dataTransfer,
           paneLeafId: destination.pane.leafId
-        }).then((result) => {
-          // Why: the title strip names its pane, so a drop there activates that pane even when
-          // the browser does not deliver focusin to xterm (unfocused/headless windows).
-          if (result.status === 'pasted' && destination.managerRef.current === manager) {
-            manager.setActivePane(destination.pane.id, { focus: true })
-          }
         })
       }}
     />
