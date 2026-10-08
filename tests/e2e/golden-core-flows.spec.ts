@@ -209,6 +209,35 @@ async function expectProjectVisible(page: Page, repoPath: string): Promise<void>
   await expect(page.getByText(repoName, { exact: true }).first()).toBeVisible({ timeout: 15_000 })
 }
 
+// Why: this fork browses Add project folders in-app on Linux instead of GTK showOpenDialog,
+// so the native-dialog stub never runs there. Enter the path and select it in that browser.
+async function chooseFolderInAppBrowserIfShown(page: Page, folderPath: string): Promise<void> {
+  const browser = page.getByRole('dialog', { name: /Browse host filesystem/i })
+  const shown = await browser
+    .waitFor({ state: 'visible', timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (!shown) {
+    return
+  }
+  const pathInput = browser.getByPlaceholder(/Type to filter or enter a path/i)
+  const target = folderPath.endsWith('/') ? folderPath : `${folderPath}/`
+  await expect
+    .poll(
+      async () => {
+        if ((await browser.textContent())?.includes(`· ${folderPath}`)) {
+          return true
+        }
+        await pathInput.fill(target)
+        await pathInput.press('Enter')
+        return false
+      },
+      { timeout: 15_000, message: `in-app folder browser did not open ${folderPath}` }
+    )
+    .toBe(true)
+  await browser.getByRole('button', { name: 'Select folder', exact: true }).click()
+}
+
 async function addProjectFromSidebar(
   page: Page,
   electronApp: ElectronApplication,
@@ -219,6 +248,7 @@ async function addProjectFromSidebar(
   const addDialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(addDialog).toBeVisible()
   await addDialog.getByRole('button', { name: /Browse folder/i }).click()
+  await chooseFolderInAppBrowserIfShown(page, repoPath)
 
   const confirmDialog = page.getByRole('dialog', { name: /^Add Project$/i })
   const needsConfirmation = await confirmDialog
