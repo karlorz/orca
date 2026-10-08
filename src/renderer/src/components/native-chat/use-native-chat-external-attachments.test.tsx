@@ -75,6 +75,8 @@ function Probe({
   setNotice: (notice: string | null) => void
   onReady: (api: HookApi) => void
 }): null {
+  // Why: the harness hands the latest hook API to the test on every render.
+  // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
   onReady(
     useNativeChatExternalAttachments({
       terminalTabId: 'tab-1',

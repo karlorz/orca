@@ -59,6 +59,7 @@ export function useNativeChatComposerKeyDown({
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLElement> {
   // Read through a ref: the transcript changes on every streamed frame.
   const recallRef = useRef(recall)
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   recallRef.current = recall
   return useCallback(
     (event) => {
