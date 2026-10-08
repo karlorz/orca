@@ -92,11 +92,7 @@ export function attachMainWindowCoreServices(
         state.isQuitting = true
         stopDesktopRelayStartup()
         state.desktopRelayService?.fenceAndCloseNow()
-        await preserveAgentAuthBeforeRestart({
-          codexRuntimeHome,
-          claudeRuntimeAuth,
-          store
-        })
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
       onOrcaProfileAuthMutation: () => notifyDesktopRelayAuthMutated(state.runtimeRpc),
       // Sign-out is the one fence a paired phone can be told about; quit and
@@ -132,7 +128,7 @@ export function attachMainWindowCoreServices(
       onCodexHomePtySpawned: handleCodexHomePtySpawned,
       onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: async () => {
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
         await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
       },
       onBeforeUpdateQuitFailure: 'abort',
