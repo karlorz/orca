@@ -202,7 +202,7 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  // Why a reverse loop: Hermes lacks Array.prototype.findLast (fork ES2023 ban).
+  // Why a reverse loop: Hermes lacks the ES2023 last-match array helper (fork ES2023 ban).
   const latestAssistantId = useMemo(() => {
     const rows = waiting.listMessages
     for (let i = rows.length - 1; i >= 0; i--) {
