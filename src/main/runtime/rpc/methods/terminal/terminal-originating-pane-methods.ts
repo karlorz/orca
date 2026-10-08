@@ -4,7 +4,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../../shared/runtime-navigation'
-import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
+import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../../../../shared/terminal-navigation-runtime-capabilities'
 
 export const TERMINAL_ORIGINATING_PANE_METHODS = [
   defineMethod({

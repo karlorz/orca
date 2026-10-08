@@ -58,10 +58,8 @@ import {
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
-import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITIES,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from './agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from './agent-launch-runtime-capability'
+import { FORK_TERMINAL_AND_AGENT_LAUNCH_RUNTIME_CAPABILITIES } from './terminal-navigation-runtime-capabilities'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
@@ -139,11 +137,6 @@ export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
-export const TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY =
-  'terminal.originating-pane-navigation.v1' as const
-export const TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY = 'terminal.question-answer.v1' as const
-export const TERMINAL_SESSION_NAVIGATION_RUNTIME_CAPABILITY =
-  'terminal.session-navigation.v1' as const
 // Why: without this, prompt request IDs and waitSubmitMs are stripped and a retry would resend raw input.
 export const TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY = 'terminal.prompt-delivery.v1' as const
 // Why: paired clients may unmount xterm only when the host can return a
@@ -382,9 +375,6 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
-  TERMINAL_SESSION_NAVIGATION_RUNTIME_CAPABILITY,
-  TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY,
-  TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY,
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
@@ -443,7 +433,7 @@ export const RUNTIME_CAPABILITIES = [
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
-  ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
+  ...FORK_TERMINAL_AND_AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

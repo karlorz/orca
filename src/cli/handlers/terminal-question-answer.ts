@@ -2,7 +2,7 @@ import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY } from '../../shared/terminal-navigation-runtime-capabilities'
 
 export const terminalQuestionAnswerHandler: CommandHandler = async ({ flags, client, json }) => {
   const provider = getRequiredStringFlag(flags, 'provider')

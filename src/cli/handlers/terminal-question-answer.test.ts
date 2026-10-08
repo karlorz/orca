@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { terminalQuestionAnswerHandler } from './terminal-question-answer'
 import type { HandlerContext } from '../dispatch'
-import { TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY } from '../../shared/terminal-navigation-runtime-capabilities'
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 
