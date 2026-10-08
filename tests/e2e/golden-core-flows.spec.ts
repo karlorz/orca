@@ -485,6 +485,7 @@ test.describe('New-user golden core flow', () => {
     await orcaPage
       .getByRole('button', { name: /Browse for a folder|Open a folder|Browse folder/i })
       .click()
+    await chooseFolderInAppBrowserIfShown(orcaPage, repoPath)
     await waitForRepoLoaded(orcaPage, repoPath)
     await expectProjectVisible(orcaPage, repoPath)
     await waitForActiveWorktree(orcaPage)
