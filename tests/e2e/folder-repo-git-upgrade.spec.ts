@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { chooseFolderInAppBrowserIfShown } from './helpers/in-app-folder-browser'
 import { runProcess } from '@orca/process-host'
 
 test.use({ seedTestRepo: false })
@@ -29,6 +30,7 @@ test('Add Project opens a folder and preserves its workspace when Git appears', 
   }, folderPath)
   await openSidebarProjectDialog(orcaPage)
   await orcaPage.getByRole('button', { name: /Browse folder/i }).click()
+  await chooseFolderInAppBrowserIfShown(orcaPage, folderPath)
   const dialog = orcaPage.getByRole('dialog', { name: 'Open as Folder' })
   await expect(dialog).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('open-folder.png') })
