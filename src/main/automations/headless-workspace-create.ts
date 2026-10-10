@@ -38,7 +38,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     automation.model,
     automation.reasoningEffort,
     automation.agentProfile,
-    automation.extraArgs
+    automation.agentFlags
   )
   return {
     repoSelector: repo.id,

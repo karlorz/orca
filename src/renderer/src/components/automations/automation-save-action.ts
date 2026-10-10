@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
 import {
+  draftAgentFlagsNeedFreshSession,
   draftExtraAgentArgsNeedFreshSession,
   getDraftExtraAgentArgsError,
   parseDraftTime
@@ -94,6 +95,15 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
         : getDraftExtraAgentArgsError(draft)
       if (extrasError) {
         toast.error(extrasError)
+        return
+      }
+      if (draftAgentFlagsNeedFreshSession(draft)) {
+        toast.error(
+          translate(
+            'auto.components.automations.AutomationEditorSettingsSidebar.agentFlagsNeedFreshSession',
+            'Agent flags require a fresh session for every run. Turn off session reuse or clear the agent flags.'
+          )
+        )
         return
       }
     }

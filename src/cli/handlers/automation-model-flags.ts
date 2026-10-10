@@ -1,6 +1,6 @@
 import {
   normalizeAutomationReasoningEffort,
-  validateAutomationExtraArgs,
+  validateAutomationAgentFlags,
   type AutomationReasoningEffort
 } from '../../shared/automation-model'
 import { getOptionalStringFlag } from '../flags'
@@ -42,20 +42,20 @@ export function getAgentProfileFlag(
   return 'minimal'
 }
 
-export function getExtraArgsFlag(flags: Map<string, string | boolean>): string | null | undefined {
-  if (!flags.has('extra-args')) {
+export function getAgentFlagsFlag(flags: Map<string, string | boolean>): string | null | undefined {
+  if (!flags.has('agent-flags')) {
     return undefined
   }
-  const raw = getOptionalStringFlag(flags, 'extra-args') ?? ''
+  const raw = getOptionalStringFlag(flags, 'agent-flags') ?? ''
   if (!raw) {
     return null
   }
   try {
-    return validateAutomationExtraArgs(raw) ?? null
+    return validateAutomationAgentFlags(raw) ?? null
   } catch (error) {
     throw new RuntimeClientError(
       'invalid_argument',
-      error instanceof Error ? error.message : 'Invalid extra args'
+      error instanceof Error ? error.message : 'Invalid agent flags'
     )
   }
 }

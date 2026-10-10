@@ -79,3 +79,12 @@ export function draftExtraAgentArgsNeedFreshSession(
     draft.reuseSession
   )
 }
+
+/** Fork: agent flags follow the same fresh-session rule as upstream's extras. */
+export function draftAgentFlagsNeedFreshSession(
+  draft: Pick<AutomationDraft, 'agentFlags' | 'reuseSession' | 'workspaceMode'>
+): boolean {
+  return (
+    Boolean(draft.agentFlags.trim()) && draft.workspaceMode === 'existing' && draft.reuseSession
+  )
+}

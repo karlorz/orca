@@ -16,6 +16,7 @@ import type {
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { buildAutomationModelLaunchPreferences } from '../../shared/automation-model'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
@@ -46,6 +47,15 @@ export async function launchHeadlessAutomationAgent(
   const agent = automation.agentId
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
+  // Fork: per-automation model/effort/profile and agent flags. The new-per-run create carries
+  // the same preferences through buildHeadlessAutomationWorktreeCreateArgs.
+  const launchPreferences = buildAutomationModelLaunchPreferences(
+    agent,
+    automation.model,
+    automation.reasoningEffort,
+    automation.agentProfile,
+    automation.agentFlags
+  )
   let workspace: { id: string; displayName: string | null } | undefined
   let terminal: LaunchedTerminal | undefined
   const execution: AgentLaunchSurfaceExecution = {
@@ -105,6 +115,7 @@ export async function launchHeadlessAutomationAgent(
           agent,
           prompt: startupPrompt ?? '',
           title: run.title,
+          ...(launchPreferences ? { launchPreferences } : {}),
           ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
         })
         terminal = launched
