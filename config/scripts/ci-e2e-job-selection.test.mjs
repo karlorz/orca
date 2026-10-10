@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runProcess } from '@orca/process-host'
@@ -157,24 +159,16 @@ it('applies allocation hints only to PRs and retains other callers and full refe
   expect(changed.strategy.matrix.include.map((entry) => entry.shard)).toEqual(['1/3', '2/3', '3/3'])
 })
 
-it('splits general changed specs across timing-balanced shards and leaves dedicated specs out', () => {
+it('splits general changed specs across round-robin shards and leaves dedicated specs out', () => {
   const files = [
     'tests/e2e/future-unclassified.spec.ts',
     'tests/e2e/another-unclassified.spec.ts',
     NODE_NETWORK_E2E_SPEC
   ]
-  const timings = {
-    'tests/e2e/future-unclassified.spec.ts': 100,
-    'tests/e2e/another-unclassified.spec.ts': 20
-  }
-  expect(shardGeneralE2eSpecs(files, '1/2', timings)).toEqual([
-    'tests/e2e/future-unclassified.spec.ts'
-  ])
-  expect(shardGeneralE2eSpecs(files, '2/2', timings)).toEqual([
-    'tests/e2e/another-unclassified.spec.ts'
-  ])
-  expect(shardGeneralE2eSpecs(DEDICATED_E2E_SPECS, '1/3', timings)).toEqual([])
-  expect(shardGeneralE2eSpecs(files, '3/3', timings)).toEqual([])
+  expect(shardGeneralE2eSpecs(files, '1/2')).toEqual(['tests/e2e/another-unclassified.spec.ts'])
+  expect(shardGeneralE2eSpecs(files, '2/2')).toEqual(['tests/e2e/future-unclassified.spec.ts'])
+  expect(shardGeneralE2eSpecs(DEDICATED_E2E_SPECS, '1/3')).toEqual([])
+  expect(shardGeneralE2eSpecs(files, '3/3')).toEqual([])
   expect(() => parseE2eChangedShard('0/3')).toThrow('index')
   expect(() => parseE2eChangedShard('1')).toThrow('Invalid E2E changed shard')
 })
@@ -196,6 +190,26 @@ it('publishes conservative hints for malformed evidence and refuses a malformed 
   })
   expect(hints.code, hints.stderr).toBe(0)
   expect(hints.stdout).toBe('e2e_run_changed=true\ne2e_needs_build=true\n')
+})
+
+it('classifies job outputs from a sparse checkout that only has the selector', async () => {
+  const source = readFileSync('config/scripts/ci-e2e-job-selection.mjs', 'utf8')
+  expect(source).not.toContain('ci-shard-assignment')
+  const directory = mkdtempSync(join(tmpdir(), 'orca-e2e-selector-sparse-'))
+  const program = join(directory, 'ci-e2e-job-selection.mjs')
+  try {
+    copyFileSync('config/scripts/ci-e2e-job-selection.mjs', program)
+    const hints = await runProcess({
+      program: process.execPath,
+      args: [realpathSync(program), '--job-outputs'],
+      input: JSON.stringify([NODE_NETWORK_E2E_SPEC]),
+      timeoutMs: 10000
+    })
+    expect(hints.code, hints.stderr).toBe(0)
+    expect(hints.stdout).toBe('e2e_run_changed=false\ne2e_needs_build=false\n')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 it('prints one changed-e2e shard when E2E_CHANGED_SHARD is set', async () => {

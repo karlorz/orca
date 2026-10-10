@@ -276,7 +276,7 @@ jobs:
     runs-on: ubuntu-latest
     # Why: a full upstream-sync changed list (~80 general specs) cancelled at
     # the previous 45-minute cap after 111 passing tests on one serial worker.
-    # Three timing-balanced shards keep each VM at one Playwright worker.
+    # Three round-robin shards keep each VM at one Playwright worker.
     timeout-minutes: 60
     strategy:
       fail-fast: false
