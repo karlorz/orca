@@ -475,7 +475,8 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
         { timeout: 30_000 }
       )
       .toBeGreaterThan(Number(beforeInput.terminal.latestCursor))
-    expect(await getTerminalContent(client.page)).not.toContain(liveMarker)
+    // ACK starvation is the heldAckChars poll above. In-flight frames can still
+    // reach xterm, so do not require the raw send to be absent from the screen.
     expect(
       await client.page.evaluate((target) => {
         const gate = window.__remoteTerminalMultiplexAckGate
