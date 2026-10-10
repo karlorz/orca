@@ -5,8 +5,9 @@
 // the workspace's own runtime (a WSL distro on a Windows host). Each skew must keep today's answer:
 //
 //  - an old client sends nothing, and a new host answers with its own default as it always did;
-//  - a new client asks an old host only for its default, because the capability is absent — and an
-//    old host that is sent the field anyway (mobile does not gate) discards it rather than refusing.
+//  - a new client names a WSL workspace to an old Windows host and gets the update notice instead
+//    of that host's default list, because the default omits WSL agents; an old host that is sent
+//    the field anyway (mobile does not gate) discards it rather than refusing.
 //
 // The old side's capability list is read from its checkout and the capability removed from it, so
 // this stays exercised after a release ships the capability.
@@ -55,6 +56,10 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
     ...actual,
     runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
       wire.host?.capabilities.includes(capability) ?? false,
+    getRuntimeEnvironmentStatus: async () => ({
+      hostPlatform: 'win32',
+      capabilities: wire.host?.capabilities ?? []
+    }),
     callRuntimeRpc: async (_target: unknown, method: string, params?: unknown) => {
       const hostSaw = wire.host?.parse(method, params)
       wire.sent.push({ method, params, hostSaw })
@@ -132,22 +137,19 @@ beforeEach(() => {
 })
 
 describe('workspace-scoped agent detection across versions', () => {
-  it('a new client asks an old host only for its default list', async () => {
+  it('a new client asks an old Windows host to update instead of using its default list for a WSL workspace', async () => {
     wire.host = oldHost
     const store = createTestStore()
+    const key = getRuntimeAgentInventoryKey('env-1', WORKTREE)
 
     const detected = await store.getState().ensureRuntimeDetectedAgents('env-1', WORKTREE)
     const refreshed = await store.getState().refreshRuntimeDetectedAgents('env-1', WORKTREE)
 
-    expect(wire.sent.map(({ method, params }) => ({ method, params }))).toEqual([
-      { method: 'preflight.detectAgents', params: undefined },
-      { method: 'preflight.refreshAgents', params: undefined }
-    ])
-    expect(detected).toEqual(['claude'])
-    expect(refreshed).toEqual(['claude'])
-    expect(
-      store.getState().runtimeDetectedAgentIds[getRuntimeAgentInventoryKey('env-1', WORKTREE)]
-    ).toEqual(['claude'])
+    expect(wire.sent).toEqual([])
+    expect(detected).toEqual([])
+    expect(refreshed).toEqual([])
+    expect(store.getState().runtimeDetectedAgentIds[key]).toEqual([])
+    expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[key]).toBe(true)
   })
 
   it('an old host discards the field from an ungated client instead of refusing it', () => {
