@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../src/shared/preflight-other-runtime-refusal-capability'
 import {
   loadMobileNewTabAgentOptions,
   MobileWorkspaceOnOtherRuntimeError

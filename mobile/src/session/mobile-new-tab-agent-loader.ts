@@ -1,7 +1,7 @@
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/preflight-other-runtime-refusal-capability'
 import { newTabSettingsRead } from '../transport/settings-read-operations'
 import {
   type MobileRuntimeRepoSummary,
