@@ -13,5 +13,5 @@ it('pins stall-recovery clients to disable auto-recovery so ACK-held assertions 
     'utf8'
   )
   expect(spec).toContain('disableRemoteTerminalStallRecovery: true')
-  expect(spec).toContain('gate?.recover([target])')
+  expect(spec).toContain("Reflect.get(gate, 'recover')")
 })
