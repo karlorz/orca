@@ -464,20 +464,22 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       .toBeGreaterThan(Number(beforeInput.terminal.latestCursor))
     expect(await getTerminalContent(client.page)).not.toContain(liveMarker)
     expect(
-      await client.page.evaluate(
-        ({ target, text }) => {
-          const gate = (
-            window as typeof window & {
-              __remoteTerminalMultiplexAckGate?: {
-                sendInput: (terminal: string, text: string) => number
-              }
+      await client.page.evaluate((target) => {
+        const gate = (
+          window as typeof window & {
+            __remoteTerminalMultiplexAckGate?: {
+              recover: (terminals: string[]) => number
+              release: () => void
+              sendInput: (terminal: string, text: string) => number
             }
-          ).__remoteTerminalMultiplexAckGate
-          return gate?.sendInput(target, text) ?? 0
-        },
-        { target: terminal, text: '\r' }
-      )
-    ).toBe(1)
+          }
+        ).__remoteTerminalMultiplexAckGate
+        const sent = gate?.sendInput(target, '\r') ?? 0
+        gate?.release()
+        const recovered = gate?.recover([target]) ?? 0
+        return { recovered, sent }
+      }, terminal)
+    ).toEqual({ recovered: 1, sent: 1 })
 
     await expect
       .poll(() => getTerminalContent(client.page), { timeout: 30_000 })

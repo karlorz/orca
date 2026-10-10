@@ -8,10 +8,10 @@ it('pins stall-recovery clients to disable auto-recovery so ACK-held assertions 
       disableRemoteTerminalStallRecovery: true
     })
   ).toContain('orcaE2EDisableRemoteTerminalStallRecovery=1')
-  expect(
-    readFileSync(
-      new URL('../paired-remote-terminal-stall-recovery.spec.ts', import.meta.url),
-      'utf8'
-    )
-  ).toContain('disableRemoteTerminalStallRecovery: true')
+  const spec = readFileSync(
+    new URL('../paired-remote-terminal-stall-recovery.spec.ts', import.meta.url),
+    'utf8'
+  )
+  expect(spec).toContain('disableRemoteTerminalStallRecovery: true')
+  expect(spec).toContain('gate?.recover([target])')
 })

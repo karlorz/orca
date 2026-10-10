@@ -163,4 +163,14 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     }
     return sent
   }
+
+  recoverStalledForE2e(terminals: ReadonlySet<string>): number {
+    const matches = Array.from(this.streams.values()).filter((stream) =>
+      terminals.has(stream.terminal)
+    )
+    for (const stream of matches) {
+      this.recoverStalledStream(stream)
+    }
+    return matches.length
+  }
 }
