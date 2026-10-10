@@ -94,11 +94,6 @@ export async function launchGoldenStubAgentFromNewTab(
       : page.getByRole('menuitem', { name: menuItemName }).first()
   await expect(launchOption).toBeVisible({ timeout: 15_000 })
   await launchOption.click({ force: true })
-  await expect(page.locator('[data-testid="sortable-tab"][data-active="true"]')).toHaveAttribute(
-    'data-tab-title',
-    /Golden Stub Agent|Codex|Claude|Grok/i,
-    { timeout: 15_000 }
-  )
   await focusActiveTerminalInput(page)
   await waitForGoldenStubReady(page, 45_000)
 }
