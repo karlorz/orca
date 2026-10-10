@@ -12,9 +12,9 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-sc
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES,
   WORKSPACE_ON_OTHER_RUNTIME
-} from '../../shared/protocol-version'
+} from '../../shared/preflight-other-runtime-refusal-capability'
+import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import {
   resolveWorkspaceAgentDetectionHost,
   type WorkspaceAgentDetectionStore

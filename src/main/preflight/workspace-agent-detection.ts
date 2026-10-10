@@ -1,4 +1,4 @@
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/preflight-other-runtime-refusal-capability'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
