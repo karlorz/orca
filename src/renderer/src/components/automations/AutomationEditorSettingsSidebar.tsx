@@ -22,6 +22,7 @@ import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
 import { AutomationDestinationField } from './AutomationDestinationField'
 import { Input } from '@/components/ui/input'
+import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
@@ -103,9 +104,7 @@ export function AutomationEditorSettingsSidebar({
                 <AgentCombobox
                   agents={visibleAgents}
                   value={draft.agentId}
-                  onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
-                  }
+                  onValueChange={(agentId) => onDraftChange((current) => ({ ...current, agentId }))}
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger
@@ -119,15 +118,15 @@ export function AutomationEditorSettingsSidebar({
               <Field
                 className="mt-3"
                 label={translate(
-                  'auto.components.automations.AutomationEditorSettingsSidebar.extraArgs',
-                  'Extra args'
+                  'auto.components.automations.AutomationEditorSettingsSidebar.agentFlags',
+                  'Agent flags'
                 )}
                 labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
               >
                 <Input
-                  value={draft.extraArgs}
+                  value={draft.agentFlags}
                   onChange={(event) =>
-                    onDraftChange((current) => ({ ...current, extraArgs: event.target.value }))
+                    onDraftChange((current) => ({ ...current, agentFlags: event.target.value }))
                   }
                   placeholder={translate(
                     'auto.components.automations.AutomationEditorSettingsSidebar.optionalProviderFlags',
@@ -138,6 +137,7 @@ export function AutomationEditorSettingsSidebar({
                   className="font-mono text-xs"
                 />
               </Field>
+              <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
             </div>
           </div>
         </div>

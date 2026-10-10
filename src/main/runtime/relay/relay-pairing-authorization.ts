@@ -1,6 +1,7 @@
 import type { MobilePairingConnectionContext } from '../runtime-rpc'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 
+// Derives install authorization only from immutable connection metadata, never from request params.
 export function pairingAuthorizationForContext(
   context: MobilePairingConnectionContext,
   relayHostId: string

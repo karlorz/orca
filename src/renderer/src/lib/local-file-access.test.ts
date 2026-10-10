@@ -96,6 +96,17 @@ describe('editorTabFileAccess', () => {
       'user-file'
     ],
     [
+      'a read-only link to this computer opened in a server workspace backed by SSH',
+      {
+        filePath: '/Users/me/Desktop/review.md',
+        relativePath: '/Users/me/Desktop/review.md',
+        worktreeId: 'repo-ssh::/work/project',
+        runtimeEnvironmentId: null,
+        readOnly: true
+      },
+      'user-file'
+    ],
+    [
       'a project tab, which stays inside its root',
       { filePath: '/Users/me/project/a.ts', relativePath: 'a.ts', worktreeId: localWorktreeId },
       undefined
@@ -208,6 +219,7 @@ const USER_NAMED_ACCESS_IMPORTERS = [
   'components/browser-pane/describe-page/browser-artifact-upload.ts',
   'components/native-chat/use-native-chat-external-attachments.ts',
   'components/sidebar/useSidebarProjectDrop.ts',
+  'components/terminal-pane/terminal-host-workspace-file.ts',
   'hooks/composer-state/attachment-drop-state.ts',
   'lib/local-file-access.ts',
   'lib/user-opened-local-path.ts'
@@ -227,6 +239,7 @@ const DOCUMENT_FOLDER_ACCESS_BUILDERS = [
 
 const USER_NAMED_TAB_OPENERS = [
   'components/browser-pane/navigate/navigate-browser-page-url.ts',
+  'components/editor/editor-dropped-file-open.ts',
   'components/editor/markdown-preview-link-actions.ts',
   'components/floating-terminal/use-floating-terminal-create-actions.ts',
   'components/quick-open-file-navigation.ts',
@@ -236,7 +249,6 @@ const USER_NAMED_TAB_OPENERS = [
   'components/settings/KeybindingsFileActions.tsx',
   'components/tab-bar/tab-create-entry-absolute-file.ts',
   'components/terminal-pane/terminal-file-open-routing.ts',
-  'hooks/useGlobalFileDrop.ts',
   'lib/floating-workspace-tab-creation.ts',
   'lib/open-document-in-floating-workspace.ts',
   'store/slices/editor/actions/markdown-link-action.ts'

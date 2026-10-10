@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import {
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
@@ -44,24 +44,6 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
   })
-}
-
-function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
-  const state = useAppStore.getState()
-  const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-  const editorIds = state.openFiles
-    .filter((file) => file.worktreeId === worktreeId)
-    .map((f) => f.id)
-  const browserIds = (state.browserTabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
-  const base = reconcileTabOrder(
-    state.tabBarOrderByWorktree[worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tabId)
-  order.push(tabId)
-  state.setTabBarOrder(worktreeId, order)
 }
 
 function cannotResumeSession(): false {
@@ -116,7 +98,7 @@ function openResumeTab(args: {
   if (!args.options?.suppressNavigation) {
     state.setActiveTabType('terminal', args.worktreeId)
   }
-  appendTabToWorktreeOrder(args.worktreeId, tab.id)
+  persistAgentLaunchTabOrder(args.worktreeId, tab.id)
   args.options?.onSessionLaunched?.(tab.id)
   return true
 }

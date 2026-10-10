@@ -1,6 +1,7 @@
-import { app, ipcMain, type WebContents } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
+import { quitProcess } from '../startup/process-quit-request'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -39,7 +40,6 @@ import {
   flushActiveProfileBeforeFileMutation,
   flushActiveProfileBeforeRelaunch
 } from '../orca-profiles/profile-persistence-deadline'
-import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
   connectCurrentOrcaProfile,
@@ -53,77 +53,17 @@ import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-se
 import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
 import { transferProjectArgsFromUnknown } from './orca-profile-project-transfer-args'
 import { registerOrcaProfilePasswordPageHandler } from './orca-profile-password-page'
+import {
+  createCloudLinkedProfileArgsFromUnknown,
+  findProjectsByPathArgsFromUnknown,
+  orgIdFromUnknown,
+  profileIdFromArgs
+} from './orca-profile-handler-args'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   onAuthMutation?: () => void
   onBeforeSignOut?: () => void
-}
-
-function profileIdFromArgs(args: unknown): string {
-  const profileId =
-    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
-      ? args.profileId.trim()
-      : ''
-  if (!profileId) {
-    throw new Error('invalid_orca_profile_id')
-  }
-  return profileId
-}
-
-function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjectsByPathArgs {
-  if (!args || typeof args !== 'object') {
-    throw new Error('invalid_orca_profile_project_path')
-  }
-  const candidate = args as FindOrcaProfileProjectsByPathArgs
-  const path = typeof candidate.path === 'string' ? candidate.path.trim() : ''
-  if (!path) {
-    throw new Error('invalid_orca_profile_project_path')
-  }
-  let executionHostId: FindOrcaProfileProjectsByPathArgs['executionHostId'] = null
-  if (candidate.executionHostId !== null && candidate.executionHostId !== undefined) {
-    if (typeof candidate.executionHostId !== 'string') {
-      throw new Error('invalid_orca_profile_project_path')
-    }
-    executionHostId = normalizeExecutionHostId(candidate.executionHostId)
-    if (!executionHostId) {
-      throw new Error('invalid_orca_profile_project_path')
-    }
-  }
-  return {
-    path,
-    connectionId:
-      typeof candidate.connectionId === 'string' ? candidate.connectionId.trim() || null : null,
-    executionHostId,
-    excludeProfileId:
-      typeof candidate.excludeProfileId === 'string'
-        ? candidate.excludeProfileId.trim() || null
-        : null
-  }
-}
-
-function orgIdFromUnknown(args: unknown): string {
-  if (!args || typeof args !== 'object') {
-    throw new Error('invalid_orca_profile_org_selection')
-  }
-  const orgId = (args as SelectOrcaProfileOrgArgs).orgId?.trim()
-  if (!orgId) {
-    throw new Error('invalid_orca_profile_org_selection')
-  }
-  return orgId
-}
-
-function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLinkedOrcaProfileArgs {
-  if (!args || typeof args !== 'object') {
-    return {}
-  }
-  const candidate = args as CreateCloudLinkedOrcaProfileArgs
-  const orgId = typeof candidate.orgId === 'string' ? candidate.orgId.trim() : undefined
-  const name = typeof candidate.name === 'string' ? candidate.name.trim() : undefined
-  return {
-    ...(orgId ? { orgId } : {}),
-    ...(name ? { name } : {})
-  }
 }
 
 async function runBeforeProfileRelaunch(
@@ -150,7 +90,7 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
     // renderer scrollback capture, PTY kill, stats flush, and daemon final
     // checkpoints must not be skipped on a profile switch.
-    app.quit()
+    quitProcess()
   }, 150)
 }
 
