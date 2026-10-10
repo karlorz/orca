@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { resampleToRate } from './stt-audio-resample'
 import type { SttEventSink } from './stt-service'
 

@@ -56,6 +56,7 @@ const PetSpeakCompleteParams = z.object({
 export const PET_SPEAK_METHODS = [
   defineStreamingMethod({
     name: 'pet.speak.subscribe',
+    permission: 'workspace',
     params: PetSpeakSubscribeParams,
     handler: async (params, { runtime, connectionId }, emit) => {
       await new Promise<void>((resolve) => {
@@ -137,6 +138,7 @@ export const PET_SPEAK_METHODS = [
   }),
   defineMethod({
     name: 'pet.speak.unsubscribe',
+    permission: 'workspace',
     params: PetSpeakUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       // Why: client-supplied unsubscribe must not tear down streams owned by other or newer connections.
@@ -149,6 +151,7 @@ export const PET_SPEAK_METHODS = [
   }),
   defineMethod({
     name: 'pet.speak.accepted',
+    permission: 'workspace',
     params: PetSpeakAcceptedParams,
     handler: async (params, { runtime }) => {
       if (params.timestamps) {
@@ -166,6 +169,7 @@ export const PET_SPEAK_METHODS = [
   }),
   defineMethod({
     name: 'pet.speak.complete',
+    permission: 'workspace',
     params: PetSpeakCompleteParams,
     handler: async (params, { runtime }) => {
       if (params.timestamps || params.reason) {
@@ -189,6 +193,7 @@ export const PET_SPEAK_METHODS = [
   }),
   defineMethod({
     name: 'pet.speak.status',
+    permission: 'workspace',
     params: PetSpeakStatusParams,
     handler: async (params, { runtime, connectionId }) => {
       if (runtime.handlePetSpeechStatus) {

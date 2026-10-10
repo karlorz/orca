@@ -99,7 +99,7 @@ describe('orca cli automation model flag', () => {
         'deepseek-v4-flash',
         '--reasoning-effort',
         'xhigh',
-        '--extra-args=--verbose',
+        '--agent-flags=--verbose',
         '--workspace',
         'current',
         '--json'
@@ -125,7 +125,7 @@ describe('orca cli automation model flag', () => {
         agentId: 'grok',
         model: 'deepseek-v4-flash',
         reasoningEffort: 'xhigh',
-        extraArgs: '--verbose'
+        agentFlags: '--verbose'
       })
     )
     expect(callsFor('automation.update').at(-1)?.[1]).toEqual(
@@ -135,7 +135,7 @@ describe('orca cli automation model flag', () => {
     )
   })
 
-  it('rejects protected model flags in --extra-args', async () => {
+  it('rejects protected model flags in --agent-flags', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
@@ -154,7 +154,7 @@ describe('orca cli automation model flag', () => {
         'Run',
         '--provider',
         'codex',
-        '--extra-args=--model sneak',
+        '--agent-flags=--model sneak',
         '--workspace',
         'current',
         '--json'

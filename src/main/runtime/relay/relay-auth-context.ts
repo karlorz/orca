@@ -5,7 +5,7 @@ import {
   readFreshOrcaCloudSession
 } from '../../orca-profiles/profile-cloud-session-refresh'
 import { readOrcaCloudSession } from '../../orca-profiles/profile-cloud-session-store'
-import type { RelayAuthContext } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 
 export type ReadRelayAuthContextOptions = {
   forceRefresh?: boolean

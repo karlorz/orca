@@ -3,7 +3,7 @@ import {
   isAutomationReasoningEffortSupported,
   normalizeAutomationModel,
   normalizeAutomationReasoningEffort,
-  validateAutomationExtraArgs
+  validateAutomationAgentFlags
 } from '../../../shared/automation-model'
 import type {
   Automation,
@@ -12,22 +12,22 @@ import type {
 } from '../../../shared/automations-types'
 
 type LaunchPatch = Partial<
-  Pick<Automation, 'model' | 'reasoningEffort' | 'agentProfile' | 'extraArgs'>
+  Pick<Automation, 'model' | 'reasoningEffort' | 'agentProfile' | 'agentFlags'>
 >
 
 export function launchFieldsForAutomationCreate(
   input: Pick<
     AutomationCreateInput,
-    'agentId' | 'model' | 'reasoningEffort' | 'agentProfile' | 'extraArgs'
+    'agentId' | 'model' | 'reasoningEffort' | 'agentProfile' | 'agentFlags'
   >
 ): LaunchPatch {
   const model = normalizeAutomationModel(input.model)
   const reasoningEffort = normalizeAutomationReasoningEffort(input.reasoningEffort)
   const agentProfile = input.agentProfile === 'minimal' ? 'minimal' : undefined
-  const extraArgs =
-    input.extraArgs == null || input.extraArgs === ''
+  const agentFlags =
+    input.agentFlags == null || input.agentFlags === ''
       ? undefined
-      : validateAutomationExtraArgs(input.extraArgs)
+      : validateAutomationAgentFlags(input.agentFlags)
   if (model && !getAgentSessionOptionCatalog(input.agentId)?.modelApply.launchArgs) {
     throw new Error('The selected agent does not support automation model overrides.')
   }
@@ -45,7 +45,7 @@ export function launchFieldsForAutomationCreate(
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
     ...(agentProfile ? { agentProfile } : {}),
-    ...(extraArgs ? { extraArgs } : {})
+    ...(agentFlags ? { agentFlags } : {})
   }
 }
 
@@ -73,12 +73,15 @@ export function launchFieldUpdatesForAutomation(
   )
     ? { agentProfile: definedUpdates.agentProfile === 'minimal' ? 'minimal' : null }
     : {}
-  const extraArgsUpdate: Pick<Automation, 'extraArgs'> = Object.hasOwn(definedUpdates, 'extraArgs')
+  const agentFlagsUpdate: Pick<Automation, 'agentFlags'> = Object.hasOwn(
+    definedUpdates,
+    'agentFlags'
+  )
     ? {
-        extraArgs:
-          definedUpdates.extraArgs == null || definedUpdates.extraArgs === ''
+        agentFlags:
+          definedUpdates.agentFlags == null || definedUpdates.agentFlags === ''
             ? null
-            : (validateAutomationExtraArgs(definedUpdates.extraArgs) ?? null)
+            : (validateAutomationAgentFlags(definedUpdates.agentFlags) ?? null)
       }
     : {}
   const effectiveModel = Object.hasOwn(definedUpdates, 'model')
@@ -104,6 +107,6 @@ export function launchFieldUpdatesForAutomation(
     ...modelUpdate,
     ...reasoningEffortUpdate,
     ...agentProfileUpdate,
-    ...extraArgsUpdate
+    ...agentFlagsUpdate
   }
 }

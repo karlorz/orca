@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   applyMobileLiveFinish,
   applyMobileLiveSnapshot,
@@ -18,7 +18,10 @@ import {
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
-import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
+import {
+  useMobileNativeChatSendError,
+  mobileNativeChatSendErrorMessage
+} from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
@@ -83,7 +86,20 @@ export function useMobileSessionNativeChatDictation(
     onSendResolved: nativeChatSendError.clear
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  const sendErrorMessage = useMemo(
+    () =>
+      mobileNativeChatSendErrorMessage(
+        { message: nativeChatSendError.message, failure: nativeChatSendError.failure },
+        nativeChatController.nativeChatSession.messages
+      ),
+    [
+      nativeChatSendError.message,
+      nativeChatSendError.failure,
+      nativeChatController.nativeChatSession.messages
+    ]
+  )
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+  nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
   const nativeChatOverlayInputLockReason =
     activeSessionTab?.type === 'agent-session'
       ? connState === 'connected'
@@ -260,7 +276,7 @@ export function useMobileSessionNativeChatDictation(
   }, [diffComments])
   return {
     nativeChatScopeKey,
-    nativeChatSendError,
+    nativeChatSendError: { ...nativeChatSendError, message: sendErrorMessage },
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,

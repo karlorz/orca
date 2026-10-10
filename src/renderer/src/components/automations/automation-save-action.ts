@@ -6,7 +6,12 @@ import {
 } from '../../../../shared/automation-schedule-parsing'
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
-import { parseDraftTime } from './automation-draft-model'
+import {
+  draftAgentFlagsNeedFreshSession,
+  draftExtraAgentArgsNeedFreshSession,
+  getDraftExtraAgentArgsError,
+  parseDraftTime
+} from './automation-draft-model'
 import { saveHermesAutomation } from './automation-hermes-save'
 import { saveOrcaAutomation } from './automation-orca-save'
 import type { AutomationSaveContext } from './automation-save-context'
@@ -80,6 +85,27 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
         )
       )
       return
+    }
+    if (!isHermesSave) {
+      const extrasError = draftExtraAgentArgsNeedFreshSession(draft)
+        ? translate(
+            'auto.components.automations.extraAgentArgs.needsFreshSession',
+            'Extra arguments require a fresh session for every run.'
+          )
+        : getDraftExtraAgentArgsError(draft)
+      if (extrasError) {
+        toast.error(extrasError)
+        return
+      }
+      if (draftAgentFlagsNeedFreshSession(draft)) {
+        toast.error(
+          translate(
+            'auto.components.automations.AutomationEditorSettingsSidebar.agentFlagsNeedFreshSession',
+            'Agent flags require a fresh session for every run. Turn off session reuse or clear the agent flags.'
+          )
+        )
+        return
+      }
     }
     setIsSaving(true)
     try {

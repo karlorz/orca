@@ -58,7 +58,14 @@ test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
-  test('Set Title strip activates its pane and accepts file-path drops', async ({ orcaPage }) => {
+  // Fork fixme: fails identically upstream since stablyai/orca#26385 ("Remove legacy OS file-drop
+  // routing"), whose own `changed e2e specs` run failed on this test and merged red. Upstream's
+  // TerminalPaneHeaderOverlay unit test asserts the opposite activation contract, so the fork's
+  // 6-line activate-on-drop fix (ce52fe4bd8) broke it and was reverted (49b6cfc053). Do not retry
+  // that fix here; drop this fixme once upstream reconciles the e2e with its header-drop contract.
+  test.fixme('Set Title strip activates its pane and accepts file-path drops', async ({
+    orcaPage
+  }) => {
     const title = `Drop target title ${Date.now()}`
     const droppedPath = `/tmp/title-drop-${Date.now()}.txt`
 

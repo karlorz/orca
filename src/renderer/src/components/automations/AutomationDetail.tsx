@@ -322,12 +322,25 @@ export function AutomationDetail({
           }
         />
         <DetailMetric
-          label={translate('auto.components.automations.AutomationDetail.extraArgs', 'Extra args')}
+          label={translate(
+            'auto.components.automations.AutomationDetail.agentFlags',
+            'Agent flags'
+          )}
           value={
-            automation.extraArgs ??
+            automation.agentFlags ??
             translate('auto.components.automations.AutomationDetail.none', 'None')
           }
         />
+        {automation.extraAgentArgs ? (
+          <DetailMetric
+            label={translate(
+              'auto.components.automations.extraAgentArgs.detailLabel',
+              'Extra arguments'
+            )}
+            value={automation.extraAgentArgs}
+            title={automation.extraAgentArgs}
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

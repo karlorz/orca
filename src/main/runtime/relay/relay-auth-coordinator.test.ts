@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RelayHttpError } from './relay-http-client'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 
 function deferred<T>() {
@@ -451,5 +452,58 @@ describe('RelayAuthCoordinator', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('auth-coordinator: 4401 then refresh then reconcile leaves exactly one minted broker with bounded forced reads under concurrent callers', async () => {
+    const firstBroker = { closeNow: vi.fn(), isLive: () => true }
+    const remintedBroker = { closeNow: vi.fn(), isLive: () => true }
+    const reads: ({ forceRefresh?: boolean } | undefined)[] = []
+    const gate = deferred<void>()
+    let gated = false
+    const readContext = vi.fn(async (options?: { forceRefresh?: boolean }) => {
+      reads.push(options)
+      if (gated) {
+        await gate.promise
+      }
+      return context
+    })
+    const openBroker = vi
+      .fn()
+      .mockResolvedValueOnce(firstBroker)
+      .mockResolvedValueOnce(remintedBroker)
+    const coordinator = new RelayAuthCoordinator({ readContext, openBroker, onStatus: vi.fn() })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    expect(openBroker).toHaveBeenCalledTimes(1)
+    reads.length = 0
+
+    // The cell closes 4401; while the forced session refresh is in flight, more
+    // callers pile in: a second 4401 escalation and plain auth/demand reconciles.
+    gated = true
+    coordinator.reconcileAfterBadOuterCredential()
+    coordinator.reconcileAfterBadOuterCredential()
+    coordinator.reconcile()
+    coordinator.reconcile()
+    expect(firstBroker.closeNow).toHaveBeenCalled()
+    gate.resolve()
+    await coordinator.waitForLiveBroker()
+
+    // Exactly one new broker (no double mint), and it is the live one.
+    expect(openBroker).toHaveBeenCalledTimes(2)
+    expect(await coordinator.waitForLiveBroker()).toBe(remintedBroker)
+    expect(remintedBroker.closeNow).not.toHaveBeenCalled()
+    // Every read issued while the rotation was pending was forced (a plain reconcile
+    // superseding the remint must not fall back to the dead session), and the reads
+    // are bounded by the callers: one per reconcile trigger, never a retry storm.
+    expect(reads.length).toBeLessThanOrEqual(4)
+    expect(reads.every((options) => options?.forceRefresh === true)).toBe(true)
+
+    // Once a forced read landed, later reconciles read plain and keep the broker.
+    reads.length = 0
+    gated = false
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    expect(reads).toEqual([undefined])
+    expect(openBroker).toHaveBeenCalledTimes(2)
   })
 })

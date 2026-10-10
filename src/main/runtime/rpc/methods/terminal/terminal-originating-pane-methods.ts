@@ -9,6 +9,7 @@ import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../.
 export const TERMINAL_ORIGINATING_PANE_METHODS = [
   defineMethod({
     name: 'terminal.switchOrigin',
+    permission: 'workspace',
     params: TerminalSwitchOrigin,
     handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
       if (

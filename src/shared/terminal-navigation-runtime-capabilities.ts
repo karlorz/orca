@@ -15,7 +15,12 @@ export const TERMINAL_NAVIGATION_RUNTIME_CAPABILITIES = [
   TERMINAL_QUESTION_ANSWER_RUNTIME_CAPABILITY
 ] as const
 
+// Fork: automation create/update take `agentFlags` (renamed from the fork's `extraArgs`, which now
+// collides in meaning with upstream's allowlisted `extraAgentArgs`). Clients gate the field on this.
+export const AUTOMATION_AGENT_FLAGS_RUNTIME_CAPABILITY = 'automation.agent-flags.v1' as const
+
 export const FORK_TERMINAL_AND_AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   ...TERMINAL_NAVIGATION_RUNTIME_CAPABILITIES,
+  AUTOMATION_AGENT_FLAGS_RUNTIME_CAPABILITY,
   ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
