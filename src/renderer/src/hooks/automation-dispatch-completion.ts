@@ -23,6 +23,12 @@ import { createAutomationRunSessionPersistence } from './automation-run-session-
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
+
+// Why a helper: the persisted run error keeps upstream's untranslated exit text in one place.
+function automationProcessExitError(code: number): string {
+  return `Automation process exited with code ${code}.`
+}
+
 export function createAutomationDispatchCompletion(args: {
   run: AutomationRun
   worktree: Worktree
@@ -97,7 +103,7 @@ export function createAutomationDispatchCompletion(args: {
     pendingExitCode !== null && isProvenProcessExit(pendingExitCode) && pendingExitCode !== 0
       ? {
           status: 'dispatch_failed',
-          error: `Automation process exited with code ${pendingExitCode}.`
+          error: automationProcessExitError(pendingExitCode)
         }
       : automationAgentCompletionResult(row)
   const finishCompletionResult = async (
@@ -164,7 +170,7 @@ export function createAutomationDispatchCompletion(args: {
         ? readCompletionResult()
         : {
             status: 'dispatch_failed' as const,
-            error: `Automation process exited with code ${code}.`
+            error: automationProcessExitError(code)
           }
     await persistCompletionResult(result, providerSessionId)
     await finishCompletionResult(providerSessionId, result)

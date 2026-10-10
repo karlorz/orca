@@ -102,6 +102,32 @@ export function selectGeneralE2eSpecs(specs) {
   return specs.filter((spec) => !dedicatedSpecs.has(spec))
 }
 
+export function parseE2eChangedShard(shard) {
+  const match = /^(\d+)\/(\d+)$/.exec(shard ?? '')
+  if (!match) {
+    throw new Error(`Invalid E2E changed shard: ${shard}`)
+  }
+  const index = Number(match[1])
+  const count = Number(match[2])
+  if (index < 1 || index > count) {
+    throw new Error(`Invalid E2E changed shard index: ${shard}`)
+  }
+  return { index, count }
+}
+
+export function shardGeneralE2eSpecs(specs, shard) {
+  const general = selectGeneralE2eSpecs(specs)
+  if (general.length === 0) {
+    return []
+  }
+  const { index, count } = parseE2eChangedShard(shard)
+  // Round-robin so this selector stays loadable in the PR sparse checkout,
+  // which does not include the timing balancer.
+  return [...general]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .filter((_, offset) => offset % count === index - 1)
+}
+
 function parseSpecs(input) {
   const specs = JSON.parse(input)
   if (!Array.isArray(specs) || specs.some((spec) => typeof spec !== 'string' || !spec)) {
@@ -166,7 +192,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.stdout.write(`${name}=${value}\n`)
     }
   } else {
-    for (const spec of selectGeneralE2eSpecs(parseSpecs(input))) {
+    const shard = process.env.E2E_CHANGED_SHARD
+    const specs = shard
+      ? shardGeneralE2eSpecs(parseSpecs(input), shard)
+      : selectGeneralE2eSpecs(parseSpecs(input))
+    for (const spec of specs) {
       if (/[\r\n]/.test(spec)) {
         throw new Error('E2E spec paths cannot contain newlines')
       }

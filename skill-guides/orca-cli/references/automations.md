@@ -24,7 +24,7 @@ Use `--reasoning-effort` with a level the selected agent catalog accepts. Grok a
 
 Use `--agent-profile minimal` only with `--provider grok`. On edit, pass an empty value to clear it.
 
-Use `--extra-args` to append flags after the model and effort flags. A value that itself starts with `--` must use the equals form, for example `--extra-args=--verbose`. Flags that set model, agent, effort, or permission mode are rejected.
+Use `--agent-flags` to append flags after the model and effort flags. A value that itself starts with `--` must use the equals form, for example `--agent-flags=--verbose`. Flags that set model, agent, effort, or permission mode are rejected.
 
 Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` for an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive. Use `--reuse-session` only for existing-workspace automations; if the previous terminal is gone, Orca falls back to a fresh session. Prefer `--disabled` while testing setup.
 Use `--extra-agent-args="--model opus --effort high --add-dir docs"` to add arguments after the host's default agent Arguments on every fresh run (always pass it with `=`, since the value starts with `--`). Only model and effort options, plus Claude's `--add-dir`, are accepted, for `claude`, `codex`, `codebuddy`, `cursor`, `grok`, and `omp`. Model or effort in the extras replaces the default's. Extras can't be combined with `--reuse-session`. `--extra-agent-args=` on edit clears them.

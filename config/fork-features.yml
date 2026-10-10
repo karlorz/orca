@@ -12,7 +12,7 @@ features:
   - id: linux-home-appimage-install
     title: Home AppImage installer with pinned restore and ensure-managed updater opt-in
     kind: release
-    status: planned
+    status: landed
     paths:
       - config/scripts/install-orca-home-appimage.sh
       - config/scripts/orca-home-launcher.sh

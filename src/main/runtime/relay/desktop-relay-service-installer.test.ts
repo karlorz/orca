@@ -78,6 +78,40 @@ describe('createDesktopRelayServiceInstaller', () => {
     expect(create).toHaveBeenCalledOnce()
   })
 
+  it('installer: a failed start is torn down, not marked installed, and the next attempt is a clean install', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer only calls start() and fenceAndCloseNow() here.
+    const broken = {
+      start: vi.fn(() => {
+        throw new Error('start_failed')
+      }),
+      fenceAndCloseNow: vi.fn()
+    } as unknown as DesktopRelayService
+    const healthy = fakeService()
+    const create = vi
+      .fn<() => DesktopRelayService | null>()
+      .mockReturnValueOnce(broken)
+      .mockReturnValueOnce(healthy)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { installer, runtimeRpc, onInstalled } = installerWith({ create })
+
+    await expect(installer.ensure()).resolves.toBe(false)
+    expect(broken.fenceAndCloseNow).toHaveBeenCalledOnce()
+    expect(onInstalled).not.toHaveBeenCalled()
+    expect(runtimeRpc.setMobileRelayPairingProvider).not.toHaveBeenCalled()
+    await expect(installer.ensure()).resolves.toBe(true)
+    // Clean install: a freshly constructed service, started once, and the only one published.
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(healthy.start).toHaveBeenCalledOnce()
+    expect(onInstalled).toHaveBeenCalledOnce()
+    expect(onInstalled).toHaveBeenCalledWith(healthy)
+    expect(runtimeRpc.setMobileRelayPairingProvider).toHaveBeenCalledOnce()
+    expect(broken.fenceAndCloseNow).toHaveBeenCalledOnce()
+    // Installed now: a later demand neither reconstructs nor restarts.
+    await expect(installer.ensure()).resolves.toBe(true)
+    expect(create).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
+  })
+
   it('never installs once quit or relaunch fenced the host', async () => {
     const create = vi.fn(() => fakeService())
     const { installer } = installerWith({ create, isFenced: () => true })

@@ -202,10 +202,16 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const latestAssistantId = useMemo(
-    () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
-    [waiting.listMessages]
-  )
+  // Why a reverse loop: Hermes lacks the ES2023 last-match array helper (fork ES2023 ban).
+  const latestAssistantId = useMemo(() => {
+    const rows = waiting.listMessages
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].role === 'assistant') {
+        return rows[i].id
+      }
+    }
+    return null
+  }, [waiting.listMessages])
   const resolveRow = useCallback(
     (listIndex: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const index = waiting.indexById?.get(message.id) ?? listIndex

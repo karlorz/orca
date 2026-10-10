@@ -107,6 +107,20 @@ describe('fork-features registry', () => {
     }
   })
 
+  it('records linux-home-appimage-install as a landed release feature', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'linux-home-appimage-install')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('release')
+    expect(entry.status).toBe('landed')
+    expect(entry.paths).toEqual(
+      expect.arrayContaining([
+        'config/scripts/install-orca-home-appimage.sh',
+        'config/scripts/orca-home-launcher.sh'
+      ])
+    )
+  })
+
   it('lists pet-voice FGS hysteresis as a landed product feature', () => {
     const rows = listForkFeatures(featuresPath)
     expect(rows.some((row) => row.includes('pet-voice-fgs-hysteresis'))).toBe(true)

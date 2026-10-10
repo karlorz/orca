@@ -52,10 +52,17 @@ export function createDesktopRelayServiceInstaller(
       if (!service) {
         return false
       }
+      try {
+        service.start()
+      } catch (error) {
+        // Why: fence a service whose start threw so it cannot stick as installed; the next
+        // demand constructs a fresh one (carried over from the fork's 91370184fd fix).
+        service.fenceAndCloseNow()
+        throw error
+      }
       installed = service
       options.onInstalled(service)
       options.runtimeRpc.setMobileRelayPairingProvider(pairingProviderFor(service))
-      service.start()
       return true
     } catch (error) {
       console.warn(

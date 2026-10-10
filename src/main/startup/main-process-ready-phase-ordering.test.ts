@@ -103,7 +103,7 @@ describe('initial proxy application ordering', () => {
     expect(foundation).not.toMatch(/await\s+(?:state\.)?initialProxyApplication/)
   })
 
-  it('awaits the proxy after the window opens and before the desktop relay starts', () => {
+  it('registers the desktop relay installer after the window opens and before the proxy await', () => {
     const launch = readStartupSource('main-process-runtime-launch.ts')
     const desktopStart = launch.indexOf('async function launchDesktopMode(')
     const desktopEnd = launch.indexOf('\nexport async function initializeMainProcessRuntimeLaunch')
@@ -113,11 +113,14 @@ describe('initial proxy application ordering', () => {
 
     const windowIndex = desktop.indexOf('openMainWindow()')
     const proxyIndex = desktop.indexOf('await state.initialProxyApplicationReady')
-    const relayIndex = desktop.indexOf('installDesktopRelayService(runtimeRpc)')
+    const relayIndex = desktop.indexOf('startDesktopRelayService(runtimeRpc)')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
     expect(proxyIndex).toBeGreaterThan(windowIndex)
-    expect(relayIndex).toBeGreaterThan(proxyIndex)
+    // Why: upstream's installer registers before the proxy await and holds its first
+    // request on initialProxyApplicationReady itself (stablyai/orca#27159).
+    expect(relayIndex).toBeGreaterThan(windowIndex)
+    expect(relayIndex).toBeLessThan(proxyIndex)
   })
 
   it('waits for i18n before the only launch-phase dialog that reads a translated string', () => {

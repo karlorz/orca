@@ -11,7 +11,10 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: () => null,
+  getAgentCatalog: () => []
+}))
 vi.mock('@/hooks/useResetCountdownClock', () => ({ useResetCountdownClock: () => 0 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({ DropdownMenuItem: () => null }))
 vi.mock('@/components/settings/SettingsFormControls', () => ({

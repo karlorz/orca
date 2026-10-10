@@ -25,6 +25,7 @@ type E2eRemoteTerminalMultiplexAckGateApi = {
   forceError: (terminals: string[], message: string) => number
   hold: (terminals: string[]) => void
   holdEnd: (terminals: string[]) => void
+  recover: (terminals: string[]) => number
   release: () => void
   sendInput: (terminal: string, text: string) => number
   snapshot: () => E2eRemoteTerminalMultiplexAckGateSnapshot
@@ -37,6 +38,7 @@ type E2eRemoteTerminalMultiplexAckGateWindow = Window & {
 export type RemoteRuntimeTerminalMultiplexerE2eAccess = {
   getStreamsForE2e: () => Iterable<RemoteRuntimeMultiplexedTerminalState>
   forceErrorForE2e: (terminals: ReadonlySet<string>, message: string) => number
+  recoverStalledForE2e: (terminals: ReadonlySet<string>) => number
   releaseHeldAcksForE2e: () => number
   sendInputForE2e: (terminal: string, text: string) => number
 }
@@ -190,6 +192,14 @@ export function exposeE2eRemoteTerminalMultiplexAckGate(
       for (const terminal of terminals) {
         e2eHeldRemoteEndTerminals.add(terminal)
       }
+    },
+    recover: (terminals) => {
+      const targets = new Set(terminals)
+      let recovered = 0
+      for (const multiplexer of multiplexers.values()) {
+        recovered += multiplexer.recoverStalledForE2e(targets)
+      }
+      return recovered
     },
     release: () => {
       releaseE2eRemoteTerminalAcks(multiplexers)
