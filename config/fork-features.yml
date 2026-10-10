@@ -9,6 +9,17 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: linux-home-appimage-install
+    title: Home AppImage installer with pinned restore and ensure-managed updater opt-in
+    kind: release
+    status: planned
+    paths:
+      - config/scripts/install-orca-home-appimage.sh
+      - config/scripts/orca-home-launcher.sh
+      - config/scripts/orca-box-ensure.sh
+      - src/main/linux-home-update-policy.ts
+      - src/main/updater
+      - docs/reference/linux-home-appimage-install.md
   - id: fork-owned-entry-points
     title: Fork-owned skill installs, package metadata, and npm CLI launcher
     kind: release

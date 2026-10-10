@@ -12,6 +12,8 @@ Install a fork desktop release from <https://github.com/karlorz/orca/releases>. 
 
 Enable **Settings → General → Shell command** to register the bundled launcher on `PATH`.
 
+For the persistent Linux box home install, see [Linux home AppImage install](reference/linux-home-appimage-install.md): user-owned AppImage, Fork-5 launcher, version pin, and ensure repair after Update Bot's Computer.
+
 The optional npm launcher exposes the same command and forwards to the installed app:
 
 ```bash

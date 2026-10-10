@@ -14,6 +14,7 @@ import type {
   RemoteServerUpdateSupport
 } from '../../shared/remote-server-update'
 import { getLinuxPackageType } from '../linux-update-package-type'
+import { isEnsureManagedHomeAppImage } from '../linux-home-update-policy'
 import { createUpdaterDiagnosticLogger } from '../linux-package-install-diagnostic'
 import { registerAutoUpdaterHandlers } from '../updater-events'
 import { KARLORZ_FORK_RELEASE_FEED, selectReleaseFeed } from '../updater-prerelease-feed'
@@ -140,6 +141,19 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       return
     }
     if (is.dev) {
+      return
+    }
+
+    this.homeInstallManaged =
+      process.env.ORCA_HOME_INSTALL_MANAGED === '1' &&
+      isEnsureManagedHomeAppImage({
+        platform: process.platform,
+        packageType: getLinuxPackageType(),
+        managed: process.env.ORCA_HOME_INSTALL_MANAGED,
+        appImagePath: process.env.APPIMAGE,
+        homeDirectory: app.getPath('home')
+      })
+    if (this.homeInstallManaged) {
       return
     }
 
