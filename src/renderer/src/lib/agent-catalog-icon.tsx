@@ -54,8 +54,9 @@ export function AgentIcon({
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((entry) => entry.id === agent)
-  const iconSrc =
-    catalogEntry?.iconUrl ?? (agent === 'dsb' ? undefined : AGENT_FAVICON_ASSETS[agent])
+  // Why: recognition-only DSB shares the bundled DeepSeek mark.
+  const iconAgent = agent === 'dsb' ? 'dsh' : agent
+  const iconSrc = catalogEntry?.iconUrl ?? AGENT_FAVICON_ASSETS[iconAgent]
   if (iconSrc) {
     return (
       <img

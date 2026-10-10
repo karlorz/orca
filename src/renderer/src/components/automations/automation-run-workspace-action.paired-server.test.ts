@@ -86,6 +86,7 @@ function storeState(mirrored: boolean): Record<string, unknown> {
         }
       : {},
     ptyIdsByTabId: mirrored ? { [MIRRORED_TAB]: [MIRRORED_PTY] } : {},
+    tabsByWorktree: {},
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
