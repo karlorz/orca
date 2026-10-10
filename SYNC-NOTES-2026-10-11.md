@@ -105,7 +105,21 @@ in `protocol-version.ts`. Fork `automation.agent-flags.v1` lives in
 - `AutomationEditorSettingsSidebar.test.tsx`: restore fork `model` /
   `agentFlags` fixture fields.
 
-## Still local-only
+## Follow-up after the merge commit
 
-Light checks (typecheck + affected unit tests via `heavy-run`) run after
-this merge commit. Push is blocked until PR #15 is `MERGED`.
+Git auto-merged fork-only `automation-model.ts` and launch/CLI helpers from
+`origin/fork-main`, which still used the pre-rename `extraArgs` names. Restored
+the PR #15 `agentFlags` versions in `d284965952` so they match the
+conflict-resolved `automation-params` types.
+
+## Light local checks (this box, via `heavy-run`)
+
+- `tsc --noEmit -p config/tsconfig.tc.cli.json`: clean.
+- vitest `--maxWorkers=1` on 12 related files (agentFlags, run-open-target,
+  editor sidebar, relay-auth-coordinator, relay install retry, desktop
+  installer, session broker, schedule picker, agent-exec-disposal): 104
+  passed.
+- Full `pnpm tc` (node+web, 7+6 GiB heaps) and mobile tests not run locally.
+  Native `node-pty` rebuild skipped (no `c++` on this image); install used
+  `--ignore-scripts`.
+- Push is blocked until PR #15 is `MERGED`.
