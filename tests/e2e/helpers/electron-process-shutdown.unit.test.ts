@@ -1,9 +1,12 @@
 import { EventEmitter } from 'node:events'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E, readDaemonPidFiles } from './electron-process-shutdown'
 
 function exitedAppFixture() {
   const proc = Object.assign(new EventEmitter(), {
@@ -55,5 +58,45 @@ describe('Electron shutdown with inherited pipes', () => {
     for (const stream of proc.stdio) {
       stream.destroy()
     }
+  })
+})
+
+describe('daemon pid cleanup files', () => {
+  const directories: string[] = []
+  afterEach(() => {
+    for (const directory of directories.splice(0)) {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  function profileWithDaemon(entries: Record<string, string>): string {
+    const root = mkdtempSync(join(tmpdir(), 'orca-daemon-pid-'))
+    directories.push(root)
+    mkdirSync(join(root, 'daemon'))
+    for (const [name, body] of Object.entries(entries)) {
+      writeFileSync(join(root, 'daemon', name), body)
+    }
+    return root
+  }
+
+  it('reads JSON and legacy integer pid files and ignores a vanished leftover', () => {
+    const root = profileWithDaemon({
+      'daemon-v44.pid': '{"pid":4242}\n',
+      'daemon-v43.pid': '4243\n',
+      'notes.txt': 'not a pid'
+    })
+    mkdirSync(join(root, 'daemon', 'daemon-v1.pid'))
+    expect(readDaemonPidFiles(root).sort((a, b) => a - b)).toEqual([4242, 4243])
+  })
+
+  it('does not throw when a listed pid file cannot be read', () => {
+    const root = profileWithDaemon({})
+    const listed = join(root, 'daemon', 'daemon-v44.pid')
+    try {
+      symlinkSync(join(root, 'gone.pid'), listed)
+    } catch {
+      mkdirSync(listed)
+    }
+    expect(readDaemonPidFiles(root)).toEqual([])
   })
 })

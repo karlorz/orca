@@ -218,7 +218,31 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
   }
 }
 
-function readDaemonPidFiles(userDataDir: string): number[] {
+function pidFromDaemonFileRaw(raw: string): number | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed === 'number' && Number.isInteger(parsed)) {
+      return parsed
+    }
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'pid' in parsed &&
+      typeof parsed.pid === 'number' &&
+      Number.isInteger(parsed.pid)
+    ) {
+      return parsed.pid
+    }
+  } catch {
+    const pid = Number(raw)
+    if (Number.isInteger(pid)) {
+      return pid
+    }
+  }
+  return undefined
+}
+
+export function readDaemonPidFiles(userDataDir: string): number[] {
   const daemonDir = path.join(userDataDir, 'daemon')
   if (!existsSync(daemonDir)) {
     return []
@@ -229,17 +253,17 @@ function readDaemonPidFiles(userDataDir: string): number[] {
     if (!entry.endsWith('.pid')) {
       continue
     }
+    // Read once: a PID file can vanish between readdir and here, and
+    // re-reading it in the catch path would crash cleanup on a stale file.
+    let raw = ''
     try {
-      const raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
-      const parsed = JSON.parse(raw) as { pid?: unknown }
-      if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
-        pids.push(parsed.pid)
-      }
+      raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
     } catch {
-      const pid = Number(readFileSync(path.join(daemonDir, entry), 'utf8').trim())
-      if (Number.isInteger(pid)) {
-        pids.push(pid)
-      }
+      continue
+    }
+    const pid = pidFromDaemonFileRaw(raw)
+    if (pid !== undefined) {
+      pids.push(pid)
     }
   }
   return pids
