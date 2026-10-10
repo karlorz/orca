@@ -10,7 +10,9 @@ describe.skipIf(process.platform !== 'linux' || process.arch !== 'x64')(
       const catalog = readFileSync(resolve('src/main/startup/cli-command-names.ts'), 'utf8')
       const launcher = readFileSync(resolve('config/scripts/orca-home-launcher.sh'), 'utf8')
       for (const match of catalog.matchAll(/'([a-z-]+)'/g)) {
-        if (match[1] === 'serve') continue
+        if (match[1] === 'serve') {
+          continue
+        }
         expect(launcher).toMatch(new RegExp(`(?:[ |])${match[1]}[|)]`))
       }
     })
