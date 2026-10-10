@@ -9,7 +9,8 @@ export {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+  AUTOMATION_AGENT_FLAGS_RUNTIME_CAPABILITY
 } from './automation-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES } from './structured-agent-session-surface-capabilities'
 export {
@@ -43,6 +44,7 @@ export {
 import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-capability'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
+import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from './preflight-other-runtime-refusal-capability'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
 export {
   AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
@@ -322,6 +324,13 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 // must not read that answer as the workspace's (a WSL project on a Windows host differs).
 export const PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY =
   'preflight.workspace-scoped.v1' as const
+// Hosts without this capability have no workspacePorts.scanHost/killHost; their scan and Stop act
+// only on the endpoint itself, never on a workspace's SSH host.
+export const WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY =
+  'workspace-ports.host-scoped.v1' as const
+// Hosts without this capability ignore a request's expectedRuntimeSource; the CLI's pre-send probe
+// is then the only fence.
+export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1' as const
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
@@ -348,6 +357,7 @@ export const RUNTIME_CAPABILITIES = [
   ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
+  'files.resolve-terminal-path.cross-workspace.v1',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
@@ -428,6 +438,9 @@ export const RUNTIME_CAPABILITIES = [
   ...AUTOMATION_RUNTIME_CAPABILITIES,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
+  PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY,
+  RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   ...FORK_TERMINAL_AND_AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 

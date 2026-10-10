@@ -2,6 +2,7 @@ import {
   openSidebarProjectDialog,
   openSidebarWorkspaceComposer
 } from './helpers/sidebar-project-dialog'
+import { chooseFolderInAppBrowserIfShown } from './helpers/in-app-folder-browser'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -207,35 +208,6 @@ async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
 async function expectProjectVisible(page: Page, repoPath: string): Promise<void> {
   const repoName = path.basename(repoPath)
   await expect(page.getByText(repoName, { exact: true }).first()).toBeVisible({ timeout: 15_000 })
-}
-
-// Why: this fork browses Add project folders in-app on Linux instead of GTK showOpenDialog,
-// so the native-dialog stub never runs there. Enter the path and select it in that browser.
-async function chooseFolderInAppBrowserIfShown(page: Page, folderPath: string): Promise<void> {
-  const browser = page.getByRole('dialog', { name: /Browse host filesystem/i })
-  const shown = await browser
-    .waitFor({ state: 'visible', timeout: 3_000 })
-    .then(() => true)
-    .catch(() => false)
-  if (!shown) {
-    return
-  }
-  const pathInput = browser.getByPlaceholder(/Type to filter or enter a path/i)
-  const target = folderPath.endsWith('/') ? folderPath : `${folderPath}/`
-  await expect
-    .poll(
-      async () => {
-        if ((await browser.textContent())?.includes(`· ${folderPath}`)) {
-          return true
-        }
-        await pathInput.fill(target)
-        await pathInput.press('Enter')
-        return false
-      },
-      { timeout: 15_000, message: `in-app folder browser did not open ${folderPath}` }
-    )
-    .toBe(true)
-  await browser.getByRole('button', { name: 'Select folder', exact: true }).click()
 }
 
 async function addProjectFromSidebar(
