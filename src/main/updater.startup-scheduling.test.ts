@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
@@ -34,6 +34,11 @@ describe('updater', () => {
     vi.useFakeTimers()
   })
 
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
   it('does not load or configure electron-updater during dev setup', async () => {
     isMock.dev = true
     const mainWindow = { webContents: { send: vi.fn() } }
@@ -47,6 +52,33 @@ describe('updater', () => {
     expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves home AppImage updates to the ensure script', async () => {
+    vi.stubEnv('ORCA_HOME_INSTALL_MANAGED', '1')
+    vi.stubEnv('APPIMAGE', '/home/box/.local/opt/orca/orca-linux.AppImage')
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    Object.defineProperty(appMock, 'getPath', {
+      configurable: true,
+      value: vi.fn(() => '/home/box')
+    })
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const updater = await loadUpdaterModule()
+
+    updater.setupAutoUpdater(mainWindow as never)
+    updater.checkForUpdates()
+    updater.checkForUpdatesFromMenu({ localBuild: true })
+    updater.downloadUpdate()
+    updater.quitAndInstall()
+
+    expect(autoUpdaterMock.on).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
+    expect(fetchNudgeMock).not.toHaveBeenCalled()
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', retryable: false })
+    expect(updater.getUpdateStatus()).not.toHaveProperty('recovery')
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {

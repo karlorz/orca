@@ -47,6 +47,7 @@ export abstract class UpdaterState {
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
   protected onBeforeQuitFailure: PreQuitCleanupFailureMode = 'continue'
   protected autoUpdaterInitialized = false
+  protected homeInstallManaged = false
   // Why: modifier-clicking "Check for Updates" targets prerelease manifests; the feed still pins a concrete tag so cancelled prereleases without manifests are skipped.
   protected includePrereleaseActive = false
   protected availableVersion: string | null = null
