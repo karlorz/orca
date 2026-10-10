@@ -13,6 +13,19 @@ import {
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
+type RemoteTerminalAckGate = {
+  recover: (terminals: string[]) => number
+  release: () => void
+  sendInput: (terminal: string, text: string) => number
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    __remoteTerminalMultiplexAckGate?: RemoteTerminalAckGate
+  }
+}
+
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
 const PUBLICATION_DEADLINE_MS = 10_000
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-stalled-stream-'))
@@ -465,23 +478,10 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     expect(await getTerminalContent(client.page)).not.toContain(liveMarker)
     expect(
       await client.page.evaluate((target) => {
-        const gate: unknown = Reflect.get(window, '__remoteTerminalMultiplexAckGate')
-        if (typeof gate !== 'object' || gate === null) {
-          return { recovered: 0, sent: 0 }
-        }
-        const sendInput = Reflect.get(gate, 'sendInput')
-        const release = Reflect.get(gate, 'release')
-        const recover = Reflect.get(gate, 'recover')
-        if (
-          typeof sendInput !== 'function' ||
-          typeof release !== 'function' ||
-          typeof recover !== 'function'
-        ) {
-          return { recovered: 0, sent: 0 }
-        }
-        const sent = sendInput.call(gate, target, '\r')
-        release.call(gate)
-        const recovered = recover.call(gate, [target])
+        const gate = window.__remoteTerminalMultiplexAckGate
+        const sent = gate?.sendInput(target, '\r') ?? 0
+        gate?.release()
+        const recovered = gate?.recover([target]) ?? 0
         return { recovered, sent }
       }, terminal)
     ).toEqual({ recovered: 1, sent: 1 })
