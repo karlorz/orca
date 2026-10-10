@@ -9,7 +9,9 @@ import {
   LOCALHOST_SSH_E2E_SPEC,
   NATIVE_IME_E2E_SPEC,
   NODE_NETWORK_E2E_SPEC,
-  selectGeneralE2eSpecs
+  parseE2eChangedShard,
+  selectGeneralE2eSpecs,
+  shardGeneralE2eSpecs
 } from './ci-e2e-job-selection.mjs'
 import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
 
@@ -147,6 +149,34 @@ it('applies allocation hints only to PRs and retains other callers and full refe
   expect(command).not.toContain('mapfile -t TEST_FILES < <(')
   const fallback = [...command.matchAll(/\. != "([^"]+)"/g)].map((match) => match[1])
   expect(fallback).toEqual(DEDICATED_E2E_SPECS)
+  expect(changed['timeout-minutes']).toBeGreaterThanOrEqual(60)
+  expect(changed.strategy['fail-fast']).toBe(false)
+  expect(changed.steps.find((step) => step.name === 'Run changed E2E specs').env).toMatchObject({
+    E2E_CHANGED_SHARD: '${{ matrix.shard }}'
+  })
+  expect(changed.strategy.matrix.include.map((entry) => entry.shard)).toEqual(['1/3', '2/3', '3/3'])
+})
+
+it('splits general changed specs across timing-balanced shards and leaves dedicated specs out', () => {
+  const files = [
+    'tests/e2e/future-unclassified.spec.ts',
+    'tests/e2e/another-unclassified.spec.ts',
+    NODE_NETWORK_E2E_SPEC
+  ]
+  const timings = {
+    'tests/e2e/future-unclassified.spec.ts': 100,
+    'tests/e2e/another-unclassified.spec.ts': 20
+  }
+  expect(shardGeneralE2eSpecs(files, '1/2', timings)).toEqual([
+    'tests/e2e/future-unclassified.spec.ts'
+  ])
+  expect(shardGeneralE2eSpecs(files, '2/2', timings)).toEqual([
+    'tests/e2e/another-unclassified.spec.ts'
+  ])
+  expect(shardGeneralE2eSpecs(DEDICATED_E2E_SPECS, '1/3', timings)).toEqual([])
+  expect(shardGeneralE2eSpecs(files, '3/3', timings)).toEqual([])
+  expect(() => parseE2eChangedShard('0/3')).toThrow('index')
+  expect(() => parseE2eChangedShard('1')).toThrow('Invalid E2E changed shard')
 })
 
 it('publishes conservative hints for malformed evidence and refuses a malformed consumer list', async () => {
@@ -166,6 +196,52 @@ it('publishes conservative hints for malformed evidence and refuses a malformed 
   })
   expect(hints.code, hints.stderr).toBe(0)
   expect(hints.stdout).toBe('e2e_run_changed=true\ne2e_needs_build=true\n')
+})
+
+it('prints one changed-e2e shard when E2E_CHANGED_SHARD is set', async () => {
+  const program = 'config/scripts/ci-e2e-job-selection.mjs'
+  const specs = [
+    'tests/e2e/future-unclassified.spec.ts',
+    'tests/e2e/another-unclassified.spec.ts',
+    NODE_NETWORK_E2E_SPEC
+  ]
+  const unsharded = await runProcess({
+    program: process.execPath,
+    args: [program],
+    input: JSON.stringify(specs),
+    timeoutMs: 10000
+  })
+  expect(unsharded.code, unsharded.stderr).toBe(0)
+  expect(unsharded.stdout.trim().split('\n')).toEqual([
+    'tests/e2e/future-unclassified.spec.ts',
+    'tests/e2e/another-unclassified.spec.ts'
+  ])
+  const assigned = []
+  for (const shard of ['1/3', '2/3', '3/3']) {
+    const result = await runProcess({
+      program: process.execPath,
+      args: [program],
+      input: JSON.stringify(specs),
+      env: { ...process.env, E2E_CHANGED_SHARD: shard },
+      timeoutMs: 10000
+    })
+    expect(result.code, result.stderr).toBe(0)
+    if (result.stdout.trim()) {
+      assigned.push(...result.stdout.trim().split('\n'))
+    }
+  }
+  expect(assigned.sort()).toEqual([
+    'tests/e2e/another-unclassified.spec.ts',
+    'tests/e2e/future-unclassified.spec.ts'
+  ])
+  const invalid = await runProcess({
+    program: process.execPath,
+    args: [program],
+    input: JSON.stringify(specs),
+    env: { ...process.env, E2E_CHANGED_SHARD: '9/3' },
+    timeoutMs: 10000
+  })
+  expect(invalid.code).not.toBe(0)
 })
 
 it('classifies PR consumers in the existing detector and passes conservative allocation hints', () => {

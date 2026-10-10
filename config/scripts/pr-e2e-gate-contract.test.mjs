@@ -136,7 +136,7 @@ describe('PR E2E gate contract', () => {
     )
 
     // Why: this lane can now pay a Docker image build plus serial SSH specs.
-    expect(e2eWorkflow.jobs['changed-e2e']['timeout-minutes']).toBeGreaterThanOrEqual(45)
+    expect(e2eWorkflow.jobs['changed-e2e']['timeout-minutes']).toBeGreaterThanOrEqual(60)
     const install = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
       step.name.startsWith('Install native build')
     )

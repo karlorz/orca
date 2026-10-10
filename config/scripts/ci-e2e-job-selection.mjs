@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { balanceFiles, readTimingBaseline } from './ci-shard-assignment.mjs'
 
 export const DOCKER_SSH_E2E_SPECS = [
   'tests/e2e/local-ssh-browser-routing.spec.ts',
@@ -102,6 +103,28 @@ export function selectGeneralE2eSpecs(specs) {
   return specs.filter((spec) => !dedicatedSpecs.has(spec))
 }
 
+export function parseE2eChangedShard(shard) {
+  const match = /^(\d+)\/(\d+)$/.exec(shard ?? '')
+  if (!match) {
+    throw new Error(`Invalid E2E changed shard: ${shard}`)
+  }
+  const index = Number(match[1])
+  const count = Number(match[2])
+  if (index < 1 || index > count) {
+    throw new Error(`Invalid E2E changed shard index: ${shard}`)
+  }
+  return { index, count }
+}
+
+export function shardGeneralE2eSpecs(specs, shard, timings = {}) {
+  const general = selectGeneralE2eSpecs(specs)
+  if (general.length === 0) {
+    return []
+  }
+  const { index, count } = parseE2eChangedShard(shard)
+  return balanceFiles(general, count, timings).shards[index - 1].files
+}
+
 function parseSpecs(input) {
   const specs = JSON.parse(input)
   if (!Array.isArray(specs) || specs.some((spec) => typeof spec !== 'string' || !spec)) {
@@ -166,7 +189,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.stdout.write(`${name}=${value}\n`)
     }
   } else {
-    for (const spec of selectGeneralE2eSpecs(parseSpecs(input))) {
+    const shard = process.env.E2E_CHANGED_SHARD
+    const specs = shard
+      ? shardGeneralE2eSpecs(parseSpecs(input), shard, readTimingBaseline('e2e').timings)
+      : selectGeneralE2eSpecs(parseSpecs(input))
+    for (const spec of specs) {
       if (/[\r\n]/.test(spec)) {
         throw new Error('E2E spec paths cannot contain newlines')
       }
