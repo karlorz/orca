@@ -104,11 +104,11 @@ This selects the existing `/opt` install with the same profile. The launcher cle
 
 ## Light verification and smoke (2026-10-10)
 
-- `bash -n` on the four shell scripts and the edited box `ensure.sh`.
+- `bash -n` on the four shell scripts and the edited box `ensure.sh`; `git diff --check`, README local link check, and pinned `oxfmt` check on the changed code/metadata.
 - `ORCA_BACKGROUND_LAUNCH=1 bash config/scripts/test-orca-home-appimage.sh`: mocked release selection, paths with spaces, pinned re-download, offline repeat, bad checksum/marker/download rejection, launcher argument/profile forwarding, retained previous image, and concurrent install lock.
 - Direct Node execution of `linux-home-update-policy.ts`: home opt-in accepted; deb/rpm, unusable markers, other platforms, missing/relative/outside/prefix-collision paths rejected.
 - Downloaded `v1.4.222-1`: SHA256 verified, executable user-owned image, extracted marker `AppImage`. Wrapper `--version` returned `1.4.222-1`.
 - Side-by-side AppImage launch on an isolated Xvfb display, with `ORCA_BACKGROUND_LAUNCH=1`, temporary HOME/config/cache/profile, and Playwright CDP readback: version `1.4.222-1`, updater status `idle`, no `linux-package-install` recovery; install-command request returned `No package install recovery is available`. Renderer screenshot captured for the smoke and removed with the temporary profile.
 - Expected host warnings included missing system D-Bus and a busy live transport port (smoke used an OS-assigned port). The smoke process group was stopped and its temporary data removed. Live `/opt/Orca` retained its original PID/start time.
 
-The smoke validates the published AppImage's startup/classification. A downloaded-update replacement, a platform Update/restore, and the new suppression behavior in a packaged future release remain unverified locally. The CI-discovered Vitest tests cover the shell contracts, policy boundaries, and managed updater actions. Full typecheck/build/regression tests are left to GitHub CI; this worktree has no installed dependencies.
+The smoke validates the published AppImage's startup/classification. A downloaded-update replacement, a platform Update/restore, and the new suppression behavior in a packaged future release remain unverified locally. The CI-discovered Vitest tests cover the shell contracts, policy boundaries, and managed updater actions. Full typecheck/build/regression tests are left to GitHub CI; this worktree has no installed dependencies. PR checks were absent at handoff even though the workflow and repository Actions setting were active; CI verification remains pending.
