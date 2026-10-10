@@ -8,7 +8,9 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
+import { relayIdentityKey } from './relay-auth-identity'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import { RelayUnavailableError } from './relay-readiness'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
@@ -35,6 +37,10 @@ type DesktopRelayServiceOptions = {
 // transient auth read) must not stay dead until the user clicks Retry. The
 // cadence is slow because it is a safety net, not the primary retry path.
 const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
+// How long a demand caller waits through a scheduled reconnect. Phone requests
+// get less than a desktop mint so the reply lands inside the phone's budget.
+const PAIRING_MINT_READINESS_WAIT_MS = 20_000
+const PHONE_REQUEST_READINESS_WAIT_MS = 10_000
 
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
@@ -61,10 +67,7 @@ export class DesktopRelayService {
     const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: (opt) => readRelayAuthContext(options.authConfig, options.userDataPath, opt),
-      hasDemand: ({ identity }) =>
-        this.demandLedger.hasDemand(
-          `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
-        ),
+      hasDemand: ({ identity }) => this.demandLedger.hasDemand(relayIdentityKey(identity)),
       openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
         const broker = await RelaySessionBroker.connect({
           authConfig: options.authConfig,
@@ -121,7 +124,7 @@ export class DesktopRelayService {
     relayDeviceId: string
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }> {
     return await this.withTransientDemand(`pairing:${relayDeviceId}`, async () => {
-      const broker = await this.requireActiveBroker()
+      const broker = await this.requireActiveBroker(PAIRING_MINT_READINESS_WAIT_MS)
       const relay = await broker.createPairingRelay(relayDeviceId)
       return {
         relay,
@@ -159,7 +162,9 @@ export class DesktopRelayService {
       return { v: 1, relay: null }
     }
     return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
-      const broker = await this.activeBrokerForDemand()
+      const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS).catch(
+        () => null
+      )
       if (!broker?.endpoint) {
         return { v: 1, relay: null }
       }
@@ -199,7 +204,7 @@ export class DesktopRelayService {
       throw new Error('relay_disabled_for_device')
     }
     return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
-      const broker = await this.requireActiveBroker()
+      const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS)
       if (!broker.endpoint) {
         throw new Error('relay_control_not_active')
       }
@@ -290,17 +295,14 @@ export class DesktopRelayService {
     }
   }
 
-  private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
-    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
-    return broker instanceof RelaySessionBroker ? broker : null
-  }
-
-  private async requireActiveBroker(): Promise<RelaySessionBroker> {
-    const broker = await this.activeBrokerForDemand()
-    if (!broker) {
-      throw new Error('relay_control_not_active')
+  private async requireActiveBroker(waitMs: number): Promise<RelaySessionBroker> {
+    const readiness = await this.coordinator.waitForReadiness(waitMs)
+    if (readiness.ready && readiness.broker instanceof RelaySessionBroker) {
+      return readiness.broker
     }
-    return broker
+    throw new RelayUnavailableError(
+      readiness.ready ? { reason: 'control_not_active', retryAt: null } : readiness
+    )
   }
 
   private refreshDemand(): void {

@@ -38,7 +38,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     automation.model,
     automation.reasoningEffort,
     automation.agentProfile,
-    automation.extraArgs
+    automation.agentFlags
   )
   return {
     repoSelector: repo.id,
@@ -50,6 +50,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     startupAgent: automation.agentId,
     ...(modelLaunchPreferences ? { startupLaunchPreferences: modelLaunchPreferences } : {}),
     startupPrompt: automation.prompt,
+    ...(automation.extraAgentArgs ? { startupExtraAgentArgs: automation.extraAgentArgs } : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

@@ -13,6 +13,7 @@ import {
 export const TERMINAL_SESSION_NAVIGATION_METHODS = [
   defineMethod({
     name: 'terminal.resolveSession',
+    permission: 'workspace',
     params: TerminalResolveSession,
     handler: async (params, { runtime }) => ({
       binding: new TerminalSessionNavigation({
@@ -24,6 +25,7 @@ export const TERMINAL_SESSION_NAVIGATION_METHODS = [
   }),
   defineMethod({
     name: 'terminal.switchSession',
+    permission: 'workspace',
     params: TerminalSwitchSession,
     handler: async (params, { runtime, clientKind }) => {
       if (

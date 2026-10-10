@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { terminalSwitchOriginHandler } from './terminal-originating-pane'
 import type { HandlerContext } from '../dispatch'
-import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/terminal-navigation-runtime-capabilities'
 import { CORE_COMMAND_SPECS } from '../specs/core'
 import { parseArgs, validateCommandAndFlags } from '../args'
 

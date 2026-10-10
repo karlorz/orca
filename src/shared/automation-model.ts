@@ -21,14 +21,15 @@ export type AutomationLaunchFields = {
   model?: string | null
   reasoningEffort?: AutomationReasoningEffort | null
   agentProfile?: 'minimal' | null
-  extraArgs?: string | null
+  /** Fork: free-form provider flags (model/effort flags rejected); upstream's extraAgentArgs is separate. */
+  agentFlags?: string | null
 }
 
 export type AutomationStoredSession = {
   providerSessionId?: string | null
 }
 
-const FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS = new Set([
+const FORBIDDEN_AUTOMATION_AGENT_FLAGS = new Set([
   '-m',
   '--model',
   '--agent',
@@ -37,7 +38,7 @@ const FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS = new Set([
   '--permission-mode'
 ])
 
-export function normalizeAutomationExtraArgs(value: unknown): string | undefined {
+export function normalizeAutomationAgentFlags(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
@@ -53,8 +54,8 @@ export function normalizeAutomationExtraArgs(value: unknown): string | undefined
     const token = parsed.tokens[index]
     const next = parsed.tokens[index + 1]
     if (
-      FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS.has(token) ||
-      [...FORBIDDEN_AUTOMATION_EXTRA_ARG_FLAGS].some((flag) => token.startsWith(`${flag}=`)) ||
+      FORBIDDEN_AUTOMATION_AGENT_FLAGS.has(token) ||
+      [...FORBIDDEN_AUTOMATION_AGENT_FLAGS].some((flag) => token.startsWith(`${flag}=`)) ||
       ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) ||
       token.startsWith('-cmodel_reasoning_effort=') ||
       token.startsWith('-c=model_reasoning_effort=') ||
@@ -67,18 +68,18 @@ export function normalizeAutomationExtraArgs(value: unknown): string | undefined
   return trimmed
 }
 
-export function validateAutomationExtraArgs(value: unknown): string | undefined {
+export function validateAutomationAgentFlags(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) {
     return undefined
   }
   const trimmed = value.trim()
   const parsed = tokenizeStartupCommand(trimmed, 'posix')
   if (!parsed.ok) {
-    throw new Error(`Invalid extra args: ${parsed.error}`)
+    throw new Error(`Invalid agent flags: ${parsed.error}`)
   }
-  if (normalizeAutomationExtraArgs(trimmed) === undefined) {
+  if (normalizeAutomationAgentFlags(trimmed) === undefined) {
     throw new Error(
-      'Extra args may not override model, agent, effort, reasoning effort, or permission mode.'
+      'Agent flags may not override model, agent, effort, reasoning effort, or permission mode.'
     )
   }
   return trimmed
@@ -141,10 +142,10 @@ export function buildAutomationModelLaunchPreferences(
   model: unknown,
   effort?: unknown,
   agentProfile?: unknown,
-  extraArgs?: unknown
+  agentFlags?: unknown
 ): AgentLaunchPreferences | undefined {
   const modelId = normalizeAutomationModel(model)
-  const normalizedExtraArgs = normalizeAutomationExtraArgs(extraArgs)
+  const normalizedExtraArgs = normalizeAutomationAgentFlags(agentFlags)
   if (!modelId || !getAgentSessionOptionCatalog(agent)?.modelApply.launchArgs) {
     return normalizedExtraArgs ? { extraArgs: normalizedExtraArgs } : undefined
   }
@@ -157,5 +158,18 @@ export function buildAutomationModelLaunchPreferences(
     ...(reasoningEffort ? { effort: reasoningEffort } : {}),
     ...(profile ? { agentProfile: profile } : {}),
     ...(normalizedExtraArgs ? { extraArgs: normalizedExtraArgs } : {})
+  }
+}
+
+export const AGENT_FLAGS_REQUIRE_FRESH_SESSION =
+  'Agent flags require a fresh session for every run. Turn off session reuse or clear the agent flags.'
+
+/** Fork: same rule as upstream's extras — a reused session never sees new launch flags. */
+export function assertAutomationAgentFlags(automation: {
+  agentFlags?: string | null
+  reuseSession?: boolean
+}): void {
+  if (automation.reuseSession && automation.agentFlags?.trim()) {
+    throw new Error(AGENT_FLAGS_REQUIRE_FRESH_SESSION)
   }
 }

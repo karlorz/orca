@@ -17,7 +17,7 @@ import {
 import {
   normalizeAutomationModel,
   normalizeAutomationReasoningEffort,
-  validateAutomationExtraArgs
+  validateAutomationAgentFlags
 } from '../automation-model'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
@@ -95,16 +95,16 @@ const AutomationAgentProfile = OptionalNullablePlainString.transform((value, ctx
   }
   return 'minimal' as const
 })
-const AutomationExtraArgs = OptionalNullablePlainString.transform((value, ctx) => {
+const AutomationAgentFlags = OptionalNullablePlainString.transform((value, ctx) => {
   if (value === undefined || value === null || value === '') {
     return value
   }
   try {
-    return validateAutomationExtraArgs(value) ?? null
+    return validateAutomationAgentFlags(value) ?? null
   } catch (error) {
     ctx.addIssue({
       code: 'custom',
-      message: error instanceof Error ? error.message : 'Invalid extra args'
+      message: error instanceof Error ? error.message : 'Invalid agent flags'
     })
     return z.NEVER
   }
@@ -236,6 +236,9 @@ export const AutomationRuns = z.object({
   cursor: OptionalString
 })
 
+// Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
+const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
   name: requiredString('Missing automation name'),
@@ -245,7 +248,8 @@ export const AutomationCreate = z.object({
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
   agentProfile: AutomationAgentProfile,
-  extraArgs: AutomationExtraArgs,
+  agentFlags: AutomationAgentFlags,
+  extraAgentArgs: ExtraAgentArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -270,7 +274,8 @@ export const AutomationUpdateFields = z.object({
   model: AutomationModel,
   reasoningEffort: AutomationReasoningEffort,
   agentProfile: AutomationAgentProfile,
-  extraArgs: AutomationExtraArgs,
+  agentFlags: AutomationAgentFlags,
+  extraAgentArgs: ExtraAgentArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

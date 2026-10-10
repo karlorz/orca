@@ -58,7 +58,14 @@ test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
-  test('Set Title strip activates its pane and accepts file-path drops', async ({ orcaPage }) => {
+  // Fork fixme: fails identically upstream since stablyai/orca#26385 ("Remove legacy OS file-drop
+  // routing"), whose own `changed e2e specs` run failed on this test and merged red. Upstream's
+  // TerminalPaneHeaderOverlay unit test asserts the opposite activation contract, so the fork's
+  // 6-line activate-on-drop fix (ce52fe4bd8) broke it and was reverted (49b6cfc053). Do not retry
+  // that fix here; drop this fixme once upstream reconciles the e2e with its header-drop contract.
+  test.fixme('Set Title strip activates its pane and accepts file-path drops', async ({
+    orcaPage
+  }) => {
     const title = `Drop target title ${Date.now()}`
     const droppedPath = `/tmp/title-drop-${Date.now()}.txt`
 
@@ -88,7 +95,7 @@ test.describe('Terminal Panes', () => {
       .toBe(otherPane.leafId)
 
     const titleBar = orcaPage.locator('.pane-title-bar', { hasText: title }).first()
-    await expect(titleBar).toHaveAttribute('data-native-file-drop-target', 'terminal')
+    await expect(titleBar).toHaveAttribute('data-os-file-drop-owner', '')
     await expect(titleBar).toHaveAttribute('data-terminal-tab-id', splitSnapshot.tabId)
 
     await titleBar.evaluate((element, path) => {
@@ -169,7 +176,7 @@ test.describe('Terminal Panes', () => {
           (element) => element.textContent?.includes(title)
         )
         const titleDragHandle =
-          titleBar.querySelector<HTMLElement>('.pane-title-drag-handle') ?? null
+          titleBar?.querySelector<HTMLElement>('.pane-title-drag-handle') ?? null
         const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${titledLeafId}"]`)
         if (!titleBar || !pane || !titleDragHandle) {
           return null

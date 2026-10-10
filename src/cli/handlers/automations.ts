@@ -29,7 +29,13 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { resolveAutomationDestination } from '../automation-destination'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
+  hasExtraAgentArgs
+} from '../../shared/automation-extra-agent-args'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -38,7 +44,7 @@ import {
 } from '../worktree-project-target'
 import {
   getAgentProfileFlag,
-  getExtraArgsFlag,
+  getAgentFlagsFlag,
   getReasoningEffortFlag
 } from './automation-model-flags'
 import {
@@ -52,6 +58,7 @@ import {
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
+import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -164,6 +171,20 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
   return runContext
 }
 
+// Why: an older runtime strips the field and would run the automation without it.
+async function assertExtraAgentArgsSupported(
+  client: RuntimeClient,
+  extraAgentArgs: string | undefined
+): Promise<void> {
+  if (!hasExtraAgentArgs(extraAgentArgs)) {
+    return
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
+  }
+}
+
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations list': async ({ client, json }) => {
     const result = await client.call<{ automations: Automation[] }>('automation.list')
@@ -193,7 +214,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       model: getModelFlag(flags),
       reasoningEffort: getReasoningEffortFlag(flags),
       agentProfile: getAgentProfileFlag(flags),
-      extraArgs: getExtraArgsFlag(flags),
+      agentFlags: getAgentFlagsFlag(flags),
+      extraAgentArgs: getExtraAgentArgsFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -206,6 +228,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationCreateParams
+    await assertExtraAgentArgsSupported(client, create.extraAgentArgs)
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.create', {
       ...create,
@@ -227,7 +250,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       model: getModelFlag(flags),
       reasoningEffort: getReasoningEffortFlag(flags),
       agentProfile: getAgentProfileFlag(flags),
-      extraArgs: getExtraArgsFlag(flags),
+      agentFlags: getAgentFlagsFlag(flags),
+      extraAgentArgs: getExtraAgentArgsFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -240,6 +264,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationUpdateParams
+    await assertExtraAgentArgsSupported(client, updates.extraAgentArgs)
     const expectedOwner = await resolveExpectedOwner(client, id)
     // Why: expectedOwner only fences the host the record is leaving; an edit that moves it needs the arrival fenced too.
     const destination = await resolveAutomationDestination(client, target)

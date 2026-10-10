@@ -7,6 +7,7 @@ import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
   getLocalImageCacheKey,
@@ -24,7 +25,10 @@ type VisibilityListener = (isVisible: boolean) => void
 const visibilityListeners = new Map<Element, VisibilityListener>()
 let visibilityObserver: IntersectionObserver | null = null
 
-function observeTranscriptVisibility(element: Element, listener: VisibilityListener): () => void {
+export function observeTranscriptVisibility(
+  element: Element,
+  listener: VisibilityListener
+): () => void {
   if (typeof IntersectionObserver === 'undefined') {
     listener(true)
     return () => {}
@@ -288,8 +292,10 @@ export function NativeChatAgentControls({
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={cn('flex items-center gap-1', className)}>
-      <NativeChatCopyButton text={markdown} />
+    // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
+    <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
+      {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. */}
+      <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
       <button
         type="button"
         onClick={onScrollToTop}
@@ -321,7 +327,9 @@ export function ProviderFrameRow({
   return (
     <details className="group text-xs text-muted-foreground">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <span className="transition-transform group-open:rotate-90">›</span>
+        <span className="transition-transform motion-reduce:transition-none group-open:rotate-90">
+          ›
+        </span>
         <span className="font-medium text-foreground">{frame.provider}</span>
         <span className="truncate">{summary ?? nativeChatProviderFrameSummary(block)}</span>
         {frame.payload.truncated ? (

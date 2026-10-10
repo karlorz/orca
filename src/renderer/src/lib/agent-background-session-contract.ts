@@ -11,6 +11,8 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   /** Launch options that pin per-launch choices, e.g. an automation's model. */
   sessionOptions?: Record<string, SessionOptionValue>
+  /** An automation's saved extras, merged over this host's default Arguments. */
+  extraAgentArgs?: string
   launchSource?: LaunchSource
   title?: string
   onData?: (chunk: string) => void

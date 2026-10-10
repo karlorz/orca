@@ -7,7 +7,11 @@ import { withTimeoutResult } from './runtime-async-boundaries'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from './orca-runtime-postlude'
 import { inferWorktreeIdFromPtyId } from './runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
@@ -70,7 +74,9 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       throw new Error('runtime_unavailable')
     }
     const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(connectionId),
+      this.ptyController.listProcesses(
+        connectionId === undefined ? undefined : getConnectionExecutionHostId(connectionId)
+      ),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {
@@ -153,6 +159,7 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       prompt: string
       title?: string
       launchPreferences?: AgentLaunchPreferences
+      extraAgentArgs?: string
     }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -166,8 +173,14 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, opts.launchPreferences)
-    return await this.createTerminal(`id:${worktree.id}`, {
+    const startup = this.buildStartupForAgent(
+      repo,
+      opts.agent,
+      opts.prompt,
+      opts.launchPreferences,
+      opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : undefined
+    )
+    const terminal = await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
       ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
@@ -176,6 +189,11 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
+    // Why: agents that read the prompt after they start get it typed in, not on argv.
+    if (startup.followup) {
+      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+    }
+    return terminal
   }
 
   // Why: dedupes a worktree.create whose response was lost when a mobile

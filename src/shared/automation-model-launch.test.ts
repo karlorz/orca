@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAutomationModelLaunchPreferences,
-  normalizeAutomationExtraArgs
+  normalizeAutomationAgentFlags
 } from './automation-model'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import type { TuiAgent } from './tui-agent'
@@ -17,14 +17,14 @@ function launchCommandFor(
   model: string | undefined,
   effort?: string,
   agentProfile?: string,
-  extraArgs?: string
+  agentFlags?: string
 ): string | undefined {
   const sessionOptions = buildAutomationModelLaunchPreferences(
     agent,
     model,
     effort,
     agentProfile,
-    extraArgs
+    agentFlags
   )
   return buildAgentStartupPlan({
     agent,
@@ -46,10 +46,10 @@ describe('automation model launch command', () => {
   })
 
   it('rejects protected model flags in extra args', () => {
-    expect(normalizeAutomationExtraArgs('--model sneak')).toBeUndefined()
-    expect(normalizeAutomationExtraArgs('-c model_reasoning_effort=max')).toBeUndefined()
-    expect(normalizeAutomationExtraArgs('--config model_reasoning_effort=max')).toBeUndefined()
-    expect(normalizeAutomationExtraArgs('--verbose')).toBe('--verbose')
+    expect(normalizeAutomationAgentFlags('--model sneak')).toBeUndefined()
+    expect(normalizeAutomationAgentFlags('-c model_reasoning_effort=max')).toBeUndefined()
+    expect(normalizeAutomationAgentFlags('--config model_reasoning_effort=max')).toBeUndefined()
+    expect(normalizeAutomationAgentFlags('--verbose')).toBe('--verbose')
   })
   it('emits -m <model> for a grok run with a model', () => {
     expect(launchCommandFor('grok', 'deepseek-v4-flash')).toBe(
