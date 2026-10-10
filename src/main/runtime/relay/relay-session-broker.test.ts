@@ -92,7 +92,8 @@ vi.mock('../rpc/relay-transport', () => ({
 
 import { RelaySessionBroker, StaleRelayBrokerError } from './relay-session-broker'
 import { RelayHttpError } from './relay-http-client'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
 
 function deferred<T>() {
@@ -604,6 +605,75 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       expect(onBadOuterCredential).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(5 * 60_000)
       expect(fakes.assign).toHaveBeenCalledTimes(2)
+      expect(broker.isLive()).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('origin-pool: a 4401 during an in-flight drain resolution cancels the retry first and fails the revoked request fast', async () => {
+    vi.useFakeTimers()
+    try {
+      const ack: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(ack)
+      let releaseInFlight: (value: unknown) => void = () => {}
+      fakes.assign
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay.example.test',
+          assignmentEpoch: 1,
+          leaseExpiresAt: 1_000_000
+        })
+        .mockRejectedValueOnce(new RelayHttpError('assignment', 503))
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              releaseInFlight = resolve
+            })
+        )
+      const order: string[] = []
+      const onBadOuterCredential = vi.fn(() => order.push('remint'))
+      const broker = await RelaySessionBroker.connect(
+        brokerOptions({ onBadOuterCredential, random: () => 0.5 })
+      )
+      const controlsBefore = fakes.controls.length
+
+      // First drain resolution fails (503) and arms the drain retry; the retry
+      // then starts a second resolution that is still in flight with the token.
+      fakes.controls[0]!.options.onDrain({
+        type: 'drain',
+        graceMs: 0,
+        recovery: 'resolve-director'
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
+
+      // 4401: the owner is told to remint only after the drain retry is cancelled
+      // synchronously in the same turn (nothing is left scheduled to race it).
+      fakes.controls[0]!.options.onClose(4401)
+      order.push('after-close')
+      expect(order).toEqual(['remint', 'after-close'])
+      expect(onBadOuterCredential).toHaveBeenCalledOnce()
+
+      // The in-flight request that carried the revoked token now resolves: it must
+      // not open a new cell or rebind with that token, and nothing retries it.
+      releaseInFlight({
+        cellUrl: 'https://relay-2.example.test',
+        assignmentEpoch: 2,
+        leaseExpiresAt: 1_000_000
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(fakes.controls.length).toBe(controlsBefore)
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
       expect(broker.isLive()).toBe(false)
     } finally {
       vi.useRealTimers()

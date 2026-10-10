@@ -127,3 +127,10 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 
 process.stdout.write('\x1b[?1049h')
 render()
+// Why: a 0-col first paint keeps the OSC title and a blank alt screen until the PTY is sized.
+if (process.stdout.isTTY) {
+  process.stdout.on('resize', render)
+}
+if (process.platform !== 'win32') {
+  process.on('SIGWINCH', render)
+}

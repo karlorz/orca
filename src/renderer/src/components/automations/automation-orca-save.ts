@@ -15,6 +15,7 @@ import {
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
 import { buildDraftPrecheck } from './automation-draft-model'
+import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
 import {
@@ -164,7 +165,11 @@ export async function saveOrcaAutomation(
     model: draft.model.trim() || null,
     reasoningEffort: draft.reasoningEffort || null,
     agentProfile: draft.agentProfile || null,
-    extraArgs: draft.extraArgs.trim() || null,
+    agentFlags: draft.agentFlags.trim() || null,
+    // Sent only when it carries or clears extras, so other edits stay legacy-shaped.
+    ...(hasExtraAgentArgs(draft.extraAgentArgs) || currentAutomation?.extraAgentArgs
+      ? { extraAgentArgs: draft.extraAgentArgs }
+      : {}),
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,
@@ -187,7 +192,8 @@ export async function saveOrcaAutomation(
     model: draft.model.trim() || null,
     reasoningEffort: draft.reasoningEffort || null,
     agentProfile: draft.agentProfile || null,
-    extraArgs: draft.extraArgs.trim() || null,
+    agentFlags: draft.agentFlags.trim() || null,
+    ...(hasExtraAgentArgs(draft.extraAgentArgs) ? { extraAgentArgs: draft.extraAgentArgs } : {}),
     runContext,
     projectId: draft.projectId,
     workspaceMode: draft.workspaceMode,

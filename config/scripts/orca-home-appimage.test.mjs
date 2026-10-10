@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 describe.skipIf(process.platform !== 'linux' || process.arch !== 'x64')(
   'home AppImage installer',
@@ -10,7 +10,9 @@ describe.skipIf(process.platform !== 'linux' || process.arch !== 'x64')(
       const catalog = readFileSync(resolve('src/main/startup/cli-command-names.ts'), 'utf8')
       const launcher = readFileSync(resolve('config/scripts/orca-home-launcher.sh'), 'utf8')
       for (const match of catalog.matchAll(/'([a-z-]+)'/g)) {
-        if (match[1] === 'serve') continue
+        if (match[1] === 'serve') {
+          continue
+        }
         expect(launcher).toMatch(new RegExp(`(?:[ |])${match[1]}[|)]`))
       }
     })

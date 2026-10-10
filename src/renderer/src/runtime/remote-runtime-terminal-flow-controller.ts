@@ -40,11 +40,16 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     return this.streams.get(stream.streamId) === stream
   }
 
-  protected sendInput(stream: RemoteRuntimeMultiplexedTerminalState, text: string): boolean {
+  protected sendInput(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    text: string,
+    inputSeq?: number
+  ): boolean {
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Input,
-      encodeTerminalStreamText(text)
+      encodeTerminalStreamText(text),
+      stream.supportsInputAck ? inputSeq : undefined
     )
     if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)
@@ -56,7 +61,7 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     stream: RemoteRuntimeMultiplexedTerminalState,
     paused: boolean
   ): boolean {
-    if (!stream.supportsOutputPause || this.streams.get(stream.streamId) !== stream) {
+    if (!stream.supportsOutputPause || !this.isRegisteredStream(stream)) {
       return false
     }
     if (stream.outputPaused === paused) {
@@ -157,5 +162,15 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
       }
     }
     return sent
+  }
+
+  recoverStalledForE2e(terminals: ReadonlySet<string>): number {
+    const matches = Array.from(this.streams.values()).filter((stream) =>
+      terminals.has(stream.terminal)
+    )
+    for (const stream of matches) {
+      this.recoverStalledStream(stream)
+    }
+    return matches.length
   }
 }

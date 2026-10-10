@@ -102,6 +102,24 @@ describe('remote terminal stalled stream recovery', () => {
     healthy.close()
   })
 
+  it('restarts a stream from the e2e recover hook without waiting for the watchdog', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const onTransportClose = vi.fn()
+    const multiplexer = getRemoteRuntimeTerminalMultiplexer('windows-test')
+    const stream = await multiplexer.subscribeTerminal({
+      terminal: 'term-e2e-recover',
+      client: { id: 'mac-viewer', type: 'desktop' },
+      callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
+    })
+    sendBinary.mockClear()
+
+    expect(multiplexer.recoverStalledForE2e(new Set(['term-e2e-recover']))).toBe(1)
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
+    expect(multiplexer.recoverStalledForE2e(new Set(['term-e2e-recover']))).toBe(0)
+  })
+
   it('keeps a stream alive once the transport takes the ack for its parsed output', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')

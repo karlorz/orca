@@ -227,8 +227,8 @@ export function MobilePairingConnectionOptions({
                     'Sign in again to refresh Orca Mobile Relay access.'
                   )
                 : translate(
-                    'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                    'Relay only — LAN does not need an account.'
+                    'auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail',
+                    'Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account.'
                   )}
             </p>
             <Button

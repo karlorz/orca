@@ -14,6 +14,7 @@ const answers = new TerminalQuestionAnswer()
 export const TERMINAL_QUESTION_ANSWER_METHODS = [
   defineMethod({
     name: 'terminal.answerQuestion',
+    permission: 'workspace',
     params: TerminalAnswerQuestion,
     handler: async (params, { runtime, signal, clientKind }) => {
       if (clientKind !== undefined) {

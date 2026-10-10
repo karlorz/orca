@@ -1,4 +1,4 @@
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,6 +12,19 @@ import {
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
+
+type RemoteTerminalAckGate = {
+  recover: (terminals: string[]) => number
+  release: () => void
+  sendInput: (terminal: string, text: string) => number
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    __remoteTerminalMultiplexAckGate?: RemoteTerminalAckGate
+  }
+}
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
 const PUBLICATION_DEADLINE_MS = 10_000
@@ -259,8 +272,8 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
   const noClientResources = await getAppResourceProxies(electronApp)
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedWebClient(electronApp, offer, {
-    disableRemoteTerminalStallRecovery:
-      process.env.ORCA_E2E_DISABLE_REMOTE_TERMINAL_STALL_RECOVERY === '1'
+    // Auto-recovery paints the flood/marker before the ACK-held assertion.
+    disableRemoteTerminalStallRecovery: true
   })
   let observer: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
   let terminal: string | null = null
@@ -462,22 +475,17 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
         { timeout: 30_000 }
       )
       .toBeGreaterThan(Number(beforeInput.terminal.latestCursor))
-    expect(await getTerminalContent(client.page)).not.toContain(liveMarker)
+    // ACK starvation is the heldAckChars poll above. In-flight frames can still
+    // reach xterm, so do not require the raw send to be absent from the screen.
     expect(
-      await client.page.evaluate(
-        ({ target, text }) => {
-          const gate = (
-            window as typeof window & {
-              __remoteTerminalMultiplexAckGate?: {
-                sendInput: (terminal: string, text: string) => number
-              }
-            }
-          ).__remoteTerminalMultiplexAckGate
-          return gate?.sendInput(target, text) ?? 0
-        },
-        { target: terminal, text: '\r' }
-      )
-    ).toBe(1)
+      await client.page.evaluate((target) => {
+        const gate = window.__remoteTerminalMultiplexAckGate
+        const sent = gate?.sendInput(target, '\r') ?? 0
+        gate?.release()
+        const recovered = gate?.recover([target]) ?? 0
+        return { recovered, sent }
+      }, terminal)
+    ).toEqual({ recovered: 1, sent: 1 })
 
     await expect
       .poll(() => getTerminalContent(client.page), { timeout: 30_000 })

@@ -33,11 +33,15 @@ import { translate } from '@/i18n/i18n'
 
 type DefaultAgentPreference = TuiAgent | 'blank' | null
 
-type AgentComboboxProps = {
+// Why: Blank Terminal is opt-in so agent-only flows (automations, source-control
+// actions) never offer a choice they cannot run, and never receive null for it.
+type AgentComboboxSelectionProps =
+  | { allowBlankTerminal: true; onValueChange: (agent: TuiAgent | null) => void }
+  | { allowBlankTerminal?: false; onValueChange: (agent: TuiAgent) => void }
+
+type AgentComboboxProps = AgentComboboxSelectionProps & {
   agents: AgentCatalogEntry[]
   value: TuiAgent | null
-  onValueChange: (agent: TuiAgent | null) => void
-  onValueSelected?: (agent: TuiAgent | null) => void
   onOpenManageAgents?: () => void
   /** Current saved default agent preference. Used to render a subtle "default"
    *  indicator in the list and to tell which right-click menu item is the
@@ -52,8 +56,6 @@ type AgentComboboxProps = {
    *  field as the last keyboard-submit step. */
   onTriggerEnter?: () => void
   allowNarrowTrigger?: boolean
-  allowBlankTerminal?: boolean
-  emptyLabel?: string
 }
 
 const BLANK_VALUE = '__none__'
@@ -151,17 +153,15 @@ function renderItem({
 export default function AgentCombobox({
   agents,
   value,
-  onValueChange,
-  onValueSelected,
   onOpenManageAgents,
   defaultAgent,
   onSetDefault,
   triggerClassName,
   onTriggerEnter,
   allowNarrowTrigger = false,
-  allowBlankTerminal = true,
-  emptyLabel
+  ...selection
 }: AgentComboboxProps): React.JSX.Element {
+  const allowBlankTerminal = selection.allowBlankTerminal === true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   // Why: controlled cmdk selection so hovering the footer (which lives outside
@@ -252,15 +252,22 @@ export default function AgentCombobox({
     [cancelFocusFrame, value]
   )
 
-  const handleSelect = useCallback(
-    (nextValue: TuiAgent | null) => {
-      onValueChange(nextValue)
-      setOpen(false)
-      setQuery('')
-      onValueSelected?.(nextValue)
-    },
-    [onValueChange, onValueSelected]
-  )
+  const closePicker = useCallback(() => {
+    setOpen(false)
+    setQuery('')
+  }, [])
+
+  const handleSelectAgent = (nextValue: TuiAgent): void => {
+    selection.onValueChange(nextValue)
+    closePicker()
+  }
+
+  const handleSelectBlank = (): void => {
+    if (selection.allowBlankTerminal) {
+      selection.onValueChange(null)
+    }
+    closePicker()
+  }
 
   // Why: mirror RepoCombobox's trigger-keydown handling — the button-style
   // trigger treats the current value as a confirmed selection. Plain focus does
@@ -345,8 +352,15 @@ export default function AgentCombobox({
                 <AgentIconLabel
                   icon={<Terminal className="size-3.5" />}
                   label={
-                    emptyLabel ??
-                    translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+                    allowBlankTerminal
+                      ? translate(
+                          'auto.components.agent.AgentCombobox.986f946354',
+                          'Blank Terminal'
+                        )
+                      : translate(
+                          'components.agentSessionContinuation.selectAgent',
+                          'Select an Agent'
+                        )
                   }
                 />
               )}
@@ -389,7 +403,7 @@ export default function AgentCombobox({
                     itemValue: BLANK_VALUE,
                     isChecked: value === null,
                     isDefault: defaultAgent === 'blank',
-                    onSelect: () => handleSelect(null),
+                    onSelect: handleSelectBlank,
                     onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
                     icon: <Terminal className="size-3.5" />,
                     label: translate(
@@ -404,7 +418,7 @@ export default function AgentCombobox({
                   itemValue: agent.id,
                   isChecked: value === agent.id,
                   isDefault: defaultAgent === agent.id,
-                  onSelect: () => handleSelect(agent.id),
+                  onSelect: () => handleSelectAgent(agent.id),
                   onSetDefault: onSetDefault ? () => onSetDefault(agent.id) : undefined,
                   icon: <AgentIcon agent={agent.id} />,
                   label: agent.label

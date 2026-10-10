@@ -2,7 +2,7 @@ import type { CommandHandler } from '../dispatch'
 import { getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { TERMINAL_SESSION_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_SESSION_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/terminal-navigation-runtime-capabilities'
 
 function handler(method: string): CommandHandler {
   return async ({ flags, client, json }) => {

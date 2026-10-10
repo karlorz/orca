@@ -177,13 +177,14 @@ export async function handleAutomationDispatchRequest({
       automation.model,
       automation.reasoningEffort,
       automation.agentProfile,
-      automation.extraArgs
+      automation.agentFlags
     )
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
       sessionOptions: modelSessionOptions,
+      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,

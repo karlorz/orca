@@ -2,7 +2,7 @@ import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { TERMINAL_ORIGINATING_PANE_NAVIGATION_RUNTIME_CAPABILITY } from '../../shared/terminal-navigation-runtime-capabilities'
 import { TerminalSwitchOrigin } from '../../shared/rpc-contract/terminal-originating-pane-params'
 
 export const terminalSwitchOriginHandler: CommandHandler = async ({ flags, client, json }) => {
