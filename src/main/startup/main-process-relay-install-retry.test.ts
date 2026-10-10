@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  ensure: vi.fn<() => Promise<boolean>>(),
-  retryScheduleConstructed: vi.fn(),
-  state: {
+const mocks = vi.hoisted(() => {
+  const state: {
+    isQuitting: boolean
+    desktopRelayService: object | null
+    desktopRelayInstaller: object | null
+    initialProxyApplicationReady: Promise<void>
+  } = {
     isQuitting: false,
-    desktopRelayService: null as unknown,
-    desktopRelayInstaller: null as unknown,
+    desktopRelayService: null,
+    desktopRelayInstaller: null,
     initialProxyApplicationReady: Promise.resolve()
   }
-}))
+  return {
+    ensure: vi.fn<() => Promise<boolean>>(),
+    retryScheduleConstructed: vi.fn(),
+    state
+  }
+})
 
 vi.mock('electron', () => ({
   app: { getVersion: () => '0.0.0-test' },

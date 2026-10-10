@@ -1,5 +1,13 @@
 import type { Automation } from '../../../shared/automations-types'
 
+type AutomationWithLegacyExtraArgs = Automation & {
+  extraArgs?: unknown
+}
+
+function hasLegacyExtraArgs(automation: Automation): automation is AutomationWithLegacyExtraArgs {
+  return Object.hasOwn(automation, 'extraArgs')
+}
+
 /**
  * Fork migration: the per-automation free-form provider flags were saved as `extraArgs` before
  * upstream shipped its own allowlisted `extraAgentArgs`. The fork field is now `agentFlags`.
@@ -12,11 +20,11 @@ export function migrateLegacyAutomationAgentFlags(automations: readonly Automati
 } {
   let changed = false
   const migrated = (automations ?? []).map((automation) => {
-    if (!Object.hasOwn(automation, 'extraArgs')) {
+    if (!hasLegacyExtraArgs(automation)) {
       return automation
     }
     changed = true
-    const { extraArgs: legacy, ...rest } = automation as Automation & { extraArgs?: unknown }
+    const { extraArgs: legacy, ...rest } = automation
     const next: Automation = { ...rest }
     const hasAgentFlags = typeof next.agentFlags === 'string' && next.agentFlags.trim() !== ''
     if (!hasAgentFlags && typeof legacy === 'string' && legacy.trim() !== '') {

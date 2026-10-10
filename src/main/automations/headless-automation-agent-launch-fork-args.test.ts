@@ -14,6 +14,12 @@ import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-i
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import type { TuiAgent } from '../../shared/tui-agent'
 
+type LaunchAgentTerminalOpts = {
+  agent: TuiAgent
+  launchPreferences?: Record<string, unknown>
+  extraAgentArgs?: string
+}
+
 function harness() {
   return {
     getClientSettings: () => ({ experimentalNativeChat: true }),
@@ -22,13 +28,15 @@ function harness() {
       worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
       startupTerminal: { handle: 'term_new', tabId: 'tab-new', paneKey: 'tab-new:leaf-1' }
     })),
-    launchAgentTerminal: vi.fn(async (_selector: string, _opts: Record<string, unknown>) => ({
-      handle: 'term_existing',
-      tabId: 'tab-1',
-      paneKey: 'tab-1:leaf-1',
-      ptyId: 'pty-1',
-      worktreeId: 'wt-1'
-    })),
+    launchAgentTerminal: vi.fn(
+      async (_selector: string, _opts: LaunchAgentTerminalOpts) => ({
+        handle: 'term_existing',
+        tabId: 'tab-1',
+        paneKey: 'tab-1:leaf-1',
+        ptyId: 'pty-1',
+        worktreeId: 'wt-1'
+      })
+    ),
     showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
     deliverStartupFollowup: vi.fn(async () => true)
   }
@@ -59,11 +67,7 @@ function launch(runtime: ReturnType<typeof harness>, overrides: Record<string, u
 }
 
 /** The argv a host renders for this launch, as buildWorktreeStartupForAgent would. */
-function spawnedCommand(args: {
-  agent: TuiAgent
-  launchPreferences?: Record<string, unknown>
-  extraAgentArgs?: string
-}): string | undefined {
+function spawnedCommand(args: LaunchAgentTerminalOpts): string | undefined {
   const inputs = resolveAgentStartupPlanInputs({
     agent: args.agent,
     settings: {},
@@ -80,11 +84,11 @@ async function launchedOptions(overrides: Record<string, unknown>) {
   const runtime = harness()
   await launch(runtime, overrides)
   expect(runtime.launchAgentTerminal).toHaveBeenCalledOnce()
-  return runtime.launchAgentTerminal.mock.calls[0]![1] as {
-    agent: TuiAgent
-    launchPreferences?: Record<string, unknown>
-    extraAgentArgs?: string
+  const launched = runtime.launchAgentTerminal.mock.calls[0]
+  if (launched === undefined) {
+    throw new Error('expected launchAgentTerminal to be called')
   }
+  return launched[1]
 }
 
 describe('headless automation launch: fork per-automation args', () => {
