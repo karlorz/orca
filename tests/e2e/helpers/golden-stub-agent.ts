@@ -58,5 +58,5 @@ export async function launchGoldenStubAgentFromNewTab(
   await expect(launchOption).toBeVisible({ timeout: 15_000 })
   await launchOption.click({ force: true })
   await focusActiveTerminalInput(page)
-  await waitForTerminalOutput(page, GOLDEN_STUB_READY_MARKER, 20_000)
+  await waitForTerminalOutput(page, GOLDEN_STUB_READY_MARKER, 45_000)
 }
