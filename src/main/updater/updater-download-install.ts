@@ -34,6 +34,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.finishActiveUpdateCheckAttempt()
     this.clearBackgroundCheckLaunchPending()
     if (
+      !this.isMacStagingDeferredToInstall() &&
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
         this.hasInstallableDownloadedVersion(),
