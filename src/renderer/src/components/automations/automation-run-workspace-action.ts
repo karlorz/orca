@@ -11,11 +11,16 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
+import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
+import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import {
   buildAutomationRunOpenLayout,
   getAutomationRunOpenTabId,
+  getAutomationRunOwnerEnvironmentId,
   isAutomationRunPaneMounted,
-  resolveAutomationRunOpenTarget
+  resolveAutomationRunOpenTarget,
+  resolveAutomationRunTerminalTarget
 } from './automation-run-open-target'
 import { getAutomationRunViewState } from './automation-run-view-state'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
@@ -132,6 +137,32 @@ function reopenClosedRunSessionTab(run: AutomationRun, agent: TuiAgent | undefin
   return launchedTabId
 }
 
+function workspaceUnavailableMessage(): string {
+  return translate(
+    'auto.components.automations.AutomationsPage.e1bf9b1512',
+    'Workspace is not available.'
+  )
+}
+
+async function openRunTerminalOnOwner(
+  worktreeId: string,
+  environmentId: string,
+  paneRef: { tabId: string; leafId: string }
+): Promise<void> {
+  const opened = await activateWebRuntimeSessionTab({
+    worktreeId,
+    tabId: paneRef.tabId,
+    environmentId,
+    leafId: paneRef.leafId,
+    expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
+  })
+  if (!opened) {
+    toast.error(
+      translate('components.automations.runTerminalUnavailable', 'Run terminal is unavailable.')
+    )
+  }
+}
+
 /** Opens the original run terminal when its host-qualified workspace is alive. */
 export function createAutomationRunWorkspaceAction({ store, list }: AutomationsPageActionContext) {
   const { repoForRow, worktreeForRow } = store
@@ -142,6 +173,9 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
         ? (worktreeForRow(selectedRow, repoForRow(selectedRow), run.workspaceId) ?? null)
         : null
     const appStore = useAppStore.getState()
+    const ownerEnvironmentId = runWorktree
+      ? getAutomationRunOwnerEnvironmentId(appStore, run.workspaceId, runWorktree.hostId)
+      : null
     const openTabId = getAutomationRunOpenTabId(run)
     const terminalTabExists = Boolean(findPreservedRunTerminalTab(run))
     const currentLayout = openTabId ? appStore.terminalLayoutsByTabId[openTabId] : null
@@ -151,23 +185,45 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       terminalTabExists,
       currentLayout
     })
-    const terminalTarget = resolveAutomationRunOpenTarget({
+    const localTarget = resolveAutomationRunOpenTarget({
       run,
       terminalTabExists,
       currentLayout,
       livePtyIds
     })
+    const terminalTarget =
+      localTarget ??
+      resolveAutomationRunTerminalTarget(
+        run,
+        {
+          hasTerminalTab: (tabId) => Boolean(appStore.getTab(tabId)),
+          terminalLayoutsByTabId: appStore.terminalLayoutsByTabId,
+          ptyIdsByTabId: appStore.ptyIdsByTabId
+        },
+        ownerEnvironmentId
+      )
     const runViewState = getAutomationRunViewState({
       run,
       workspaceExists: Boolean(runWorktree),
-      terminalTargetExists: paneMounted
+      terminalTargetExists: paneMounted || terminalTarget !== null,
+      terminalOnPairedServer: ownerEnvironmentId !== null
     })
     if (!run.workspaceId || !runWorktree || !runViewState.canOpen) {
       toast.error(runViewState.statusLabel)
       return
     }
+    const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
     if (runViewState.availability === 'terminal' && !terminalTarget) {
-      toast.error(runViewState.statusLabel)
+      if (!ownerEnvironmentId || !paneRef) {
+        toast.error(runViewState.statusLabel)
+        return
+      }
+      if (!activateAndRevealWorktree(run.workspaceId)) {
+        toast.error(workspaceUnavailableMessage())
+        return
+      }
+      // Why: the mirror may not hold the pane yet; the server focuses it when it arrives.
+      void openRunTerminalOnOwner(run.workspaceId, ownerEnvironmentId, paneRef)
       return
     }
     const workspaceId = run.workspaceId
@@ -175,12 +231,7 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       if (activateAndRevealWorktree(workspaceId)) {
         return true
       }
-      toast.error(
-        translate(
-          'auto.components.automations.AutomationsPage.e1bf9b1512',
-          'Workspace is not available.'
-        )
-      )
+      toast.error(workspaceUnavailableMessage())
       return false
     }
     // Why: a still-mounted pane is View run — never launch another --resume into it.
@@ -188,15 +239,29 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
       if (!revealWorkspace()) {
         return
       }
-      if (terminalTarget && currentLayout) {
+      if (terminalTarget && currentLayout && terminalTarget.tabId === openTabId) {
         appStore.setTabLayout(
           terminalTarget.tabId,
           buildAutomationRunOpenLayout({ target: terminalTarget, currentLayout })
         )
         appStore.setActiveTab(terminalTarget.tabId)
         appStore.setActiveTabType('terminal', workspaceId)
+        activateTerminalTabOnOwner(workspaceId, terminalTarget.tabId, terminalTarget.leafId)
       }
       return
+    }
+    if (terminalTarget) {
+      const targetLayout = appStore.terminalLayoutsByTabId[terminalTarget.tabId]
+      if (targetLayout && revealWorkspace()) {
+        appStore.setTabLayout(
+          terminalTarget.tabId,
+          buildAutomationRunOpenLayout({ target: terminalTarget, currentLayout: targetLayout })
+        )
+        appStore.setActiveTab(terminalTarget.tabId)
+        appStore.setActiveTabType('terminal', workspaceId)
+        activateTerminalTabOnOwner(workspaceId, terminalTarget.tabId, terminalTarget.leafId)
+        return
+      }
     }
     // Why: remount first so worktree activation cannot steal another sleeping tab.
     const remountedTabId = reopenClosedRunSessionTab(run, selectedRow?.automation.agentId)

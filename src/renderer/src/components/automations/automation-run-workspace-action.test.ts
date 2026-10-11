@@ -65,6 +65,15 @@ vi.mock('@/store', () => ({
       terminalLayoutsByTabId: mocks.terminalLayoutsByTabId,
       ptyIdsByTabId: mocks.ptyIdsByTabId,
       tabsByWorktree: mocks.tabsByWorktree,
+      getTab: (tabId: string) => {
+        for (const tabs of Object.values(mocks.tabsByWorktree)) {
+          const tab = tabs.find((candidate) => candidate.id === tabId)
+          if (tab) {
+            return tab
+          }
+        }
+        return null
+      },
       sleepingAgentSessionsByPaneKey: mocks.sleepingAgentSessionsByPaneKey
     }),
     setState: (...args: unknown[]) => mocks.setState(...args)

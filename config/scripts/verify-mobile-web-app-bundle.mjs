@@ -38,7 +38,7 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount) {
  * refused asset on a phone. Splitting barely moves it — the same code is emitted in more files —
  * so shrinking this still means cutting code.
  *
- * This head reads 7,686,714 bytes of the 9,437,184 here, 81.5%, leaving 1,750,470. A reading and
+ * This head reads 8,089,292 bytes of the 9,437,184 here, 85.7%, leaving 1,347,892. A reading and
  * not a pin: nothing asserts it, because the number moves with every build. It is here so the
  * generation that spends the rest can see it was already this close.
  */
@@ -52,7 +52,7 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
  * fitted to. The spread it shows is 1 to 10: `pr` and `web` add one script each, `session` adds ten.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
- * swept tree reads 74 scripts at 16 routes.
+ * swept tree reads 79 scripts at 16 routes.
  *
  * This table is the fence's only input, so a route added to the tree stales it and the pins beside
  * the fence fail until it is re-measured. That is the point: the bound is re-derived, never bumped.
@@ -73,7 +73,7 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/source-control/[worktreeId].tsx', 63],
   ['./h/[hostId]/tasks.tsx', 71],
   ['./h/[hostId]/web.tsx', 72],
-  ['./h/_layout.tsx', 74]
+  ['./h/_layout.tsx', 79]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -134,7 +134,7 @@ export function mobileWebAppBundleMaxChunks(routeCount) {
 /**
  * What the browser must parse before the first route can paint: the entry plus every chunk it
  * reaches by static import. This is the budget splitting exists to hold — it was 8.16 MB as one
- * chunk and measures 1,244,312 bytes split on this head, 1.19 of the 3 MiB — so a route
+ * chunk and measures 1,362,150 bytes split on this head, 1.30 of the 3 MiB — so a route
  * re-imported statically, or `splitting` dropped, fails the build here instead of arriving as a
  * slow first open on a phone.
  *
