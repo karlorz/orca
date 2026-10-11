@@ -12,13 +12,13 @@
 
 ## Conflict decisions
 
-| Path | Resolution |
-| --- | --- |
-| `cloud/apps/relay/src/relay-server.ts` | Retain fork `keyExpiryDisabled` credential-store option and upstream dead-cell poll evidence, with upstream stale-key verifier integration. |
-| `config/electron-builder.config.cjs` | Package upstream macOS terminal host before sealing the fork self-signed app. Combine fork signing identity, upstream terminal-host signing exclusions, centralized folder usage descriptions, and fork speech-recognition usage description. |
-| `src/main/runtime/rpc/methods/index.ts` | Register both upstream `AUTOMATIC_WORK_METHODS` and fork `PET_SPEAK_METHODS`. |
-| `src/renderer/src/components/terminal-pane/ipc-pty-connect.ts` | Keep fork definitive queued-resume spawn rejection callback with upstream disposed-spawn cleanup name and host-owned transport flow. |
-| `src/renderer/src/components/terminal-pane/pty-connection/fresh-spawn-start.ts` | Preserve queued-resume rejection and upstream deferred-spawn remount prevention. Use the upstream single-argument settlement signature for both failure paths. |
+| Path                                                                            | Resolution                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cloud/apps/relay/src/relay-server.ts`                                          | Retain fork `keyExpiryDisabled` credential-store option and upstream dead-cell poll evidence, with upstream stale-key verifier integration.                                                                                                   |
+| `config/electron-builder.config.cjs`                                            | Package upstream macOS terminal host before sealing the fork self-signed app. Combine fork signing identity, upstream terminal-host signing exclusions, centralized folder usage descriptions, and fork speech-recognition usage description. |
+| `src/main/runtime/rpc/methods/index.ts`                                         | Register both upstream `AUTOMATIC_WORK_METHODS` and fork `PET_SPEAK_METHODS`.                                                                                                                                                                 |
+| `src/renderer/src/components/terminal-pane/ipc-pty-connect.ts`                  | Keep fork definitive queued-resume spawn rejection callback with upstream disposed-spawn cleanup name and host-owned transport flow.                                                                                                          |
+| `src/renderer/src/components/terminal-pane/pty-connection/fresh-spawn-start.ts` | Preserve queued-resume rejection and upstream deferred-spawn remount prevention. Use the upstream single-argument settlement signature for both failure paths.                                                                                |
 
 ## Fork preservation
 
@@ -61,4 +61,21 @@ Heavy work is serialized using `heavy-run`, with its default 2048 MiB free-memor
 - `node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts --maxWorkers=1` with fork desktop/mobile release, fork sync, protocol guard, macOS usage-description/terminal-host packaging, home installer/updater/policy, Linux home policy, queued-resume/unbound-pane, and spawn-error tests: **13 files passed; 136 tests passed, 12 skipped**.
 - An initial `node --test` invocation failed because these suites import Vitest; the corrected repository-configured Vitest invocation above passes.
 
-Further mobile/shared tests, real Claude CLI tests, code quality and practical type checks will be recorded in normal follow-up commits. Full desktop builds, live installs, and local GUI launches are outside this dispatch; CI provides the broader verification matrix.
+## Follow-up validation
+
+- Mobile frozen install passed. Focused direct framing, v2 downgrade latch, v2 handshake, verified pairing links, RPC direct-v2, runtime capabilities and native-chat session/send suites: **8 files passed; 38 tests passed**.
+- Additional fork signing/queued-resume assertions, deferred-spawn sleep, pet speech routing/replay, shared paired handshake, host spawn admission, and daemon automatic-work guards/resume: **10 files passed; 75 tests passed**. The requested `src/main/updater.test.ts` filter matches no current file; updater suites are split into named files and are tested separately below.
+- Required real Claude CLI suites with `ORCA_REAL_CLAUDE_CLI_TEST=1`: **9 passed, 4 failed**. Failures concern adopted model (`auto-sonnet` versus expected `claude-haiku-4-5-20251001`), provider error result, queued-stop wait, and fold result UUID count. The configured `/home/box/.local/bin/claude` is a Clawgod launcher; it executes the existing wrapper through Bun and points at Claude 2.1.241. Both real test files and their session adapter/launch/connection implementations are unchanged from the fork base. These results limit live provider verification; no account settings or installed launcher were changed.
+- Android versionCode remains **86**, identical to the fork base.
+
+- `ORCA_CODE_QUALITY_BASE=e5c905aecc28678da0709221c740944d10fa43a7 pnpm run check:code-quality:changed`: passed across **938 changed source files**, with zero new code-quality, casting, focused-plugin, type-aware, React Doctor, design-system or SAFETY-rationale findings.
+- Conflict-resolution sources and regression tests formatted with targeted `oxfmt`.
+
+- CLI typecheck (`node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.tc.cli.json`): passed.
+- Initial named updater run inherited `ORCA_HOME_INSTALL_MANAGED=1` from the Orca terminal, reaching `app.getPath` in upstream Electron mocks that omit it: 58 failures, 11 passed, 17 skipped. This is test-process environment contamination. Re-run uses `env -u ORCA_HOME_INSTALL_MANAGED -u APPIMAGE`; the startup-scheduling fixture explicitly exercises managed-home routing with its own isolated environment.
+
+- Corrected named updater and changed Claude effort unit run: **8 files passed, 1 platform-specific file skipped; 79 tests passed, 17 skipped**. Covers fork feeds, prerelease fallback, supervised macOS staging, quit/install failure handling, and managed-home action routing.
+- Added assertions for rejected-resume recovery settlement and for terminal-host packaging/signing order, folder descriptions and speech usage under fork self-signing.
+- PR: <https://github.com/karlorz/orca/pull/22>; sync merge commit: `85a35d1135d3856b0d8982b368a1fc56b38cf768`. The authorized protocol override label is applied. This follow-up normal push lets PR workflows read the label in their event payload.
+
+Full main/web typechecks require larger heaps than the local 2048 MiB cap and remain with CI. Full desktop builds, live installs, and local GUI launches are outside this dispatch; CI provides the broader verification matrix.

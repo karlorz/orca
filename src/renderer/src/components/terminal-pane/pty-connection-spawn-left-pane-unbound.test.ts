@@ -145,6 +145,8 @@ describe('fresh spawn leaves a local pane unbound', () => {
     'remounts an unbound pane only without definitive Resume rejection (%s)',
     async (rejected) => {
       const { connectPanePty } = await import('./pty-connection')
+      const settleTerminalTabRecovery = vi.fn()
+      Object.assign(mockStoreState, { settleTerminalTabRecovery })
       const transport = createMockTransport()
       // A spawn that produced nothing: no id returned and nothing bound after it.
       transport.connect.mockImplementation(async (options) => {
@@ -165,6 +167,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
       expect(transport.connect).toHaveBeenCalled()
       if (rejected) {
         expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
+        expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-unbound-spawn', 0, 'failed')
         return
       }
       expect(requestTerminalPaneRecovery).toHaveBeenCalledWith(

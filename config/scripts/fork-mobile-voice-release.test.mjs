@@ -155,6 +155,18 @@ describe('fork voice electron-builder config gate', () => {
         expect(config.forceCodeSigning).toBe(false)
         expect(config.mac.hardenedRuntime).toBe(false)
         expect(config.mac.notarize).toBe(false)
+        expect(config.mac.signIgnore).toContain('/Contents/Helpers/Orca Terminal Host\\.app(/|$)')
+        expect(config.mac.extendInfo).toMatchObject({
+          NSSpeechRecognitionUsageDescription: 'Orca uses speech recognition for dictation.',
+          NSDesktopFolderUsageDescription: expect.any(String),
+          NSDocumentsFolderUsageDescription: expect.any(String),
+          NSDownloadsFolderUsageDescription: expect.any(String)
+        })
+        const afterPackSource = config.afterPack.toString()
+        expect(afterPackSource.indexOf('packageMacTerminalHost')).toBeGreaterThanOrEqual(0)
+        expect(afterPackSource.indexOf('signForkSelfSignedApp')).toBeGreaterThan(
+          afterPackSource.indexOf('packageMacTerminalHost')
+        )
         expect(config.publish).toEqual({
           provider: 'github',
           owner: 'karlorz',

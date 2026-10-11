@@ -848,7 +848,6 @@ function signForkSelfSignedApp(appOutDir, productFilename) {
   execFileSync('codesign', ['--verify', appPath], { stdio: 'inherit' })
 }
 
-
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
