@@ -16,9 +16,6 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   }
 
   protected scheduleAutomaticUpdateCheck(delayMs: number): void {
-    if (this.homeInstallManaged) {
-      return
-    }
     let effectiveDelayMs = delayMs
     // All retry-cadence callers pass exactly this constant, so keying backoff on it keeps one choke point instead of threading a flag through every schedule site.
     if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {
@@ -50,7 +47,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
     if (this.homeInstallManaged) {
-      return false
+      void this.homeAppImageUpdater?.check()
+      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+      return true
     }
     if (
       this.pendingQuitAndInstallTimer ||

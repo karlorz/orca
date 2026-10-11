@@ -1,0 +1,139 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { HomeAppImageUpdater } from './home-appimage-updater'
+import type { UpdateStatus } from '../shared/update-status-types'
+import { HOME_UPDATE_PROTOCOL_MESSAGE } from './home-appimage-release-policy'
+
+const roots: string[] = []
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+async function fixture(protocol = 44) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'orca-home-updater-'))
+  roots.push(root)
+  const tag = 'v1.4.224-1'
+  const release = {
+    tag_name: tag,
+    draft: false,
+    prerelease: true,
+    assets: ['orca-linux.AppImage', 'SHA256SUMS.txt', 'orca-update-protocol.json'].map((name) => ({
+      name,
+      browser_download_url: `https://github.com/karlorz/orca/releases/download/${tag}/${name}`
+    }))
+  }
+  const statuses: UpdateStatus[] = []
+  const fetch = vi.fn(async (url: string) => {
+    if (url.includes('api.github.com')) {
+      return Response.json([release])
+    }
+    if (url.endsWith('.json')) {
+      return Response.json({ schemaVersion: 1, tag, daemonProtocol: protocol })
+    }
+    return new Response(url.endsWith('.txt') ? 'checksum fixture' : 'AppImage bytes')
+  })
+  let installed = 'v1.4.224-0'
+  const reconcile = vi.fn(async () => ({ tag: installed }))
+  const commit = vi.fn(async (stage: string, next: string) => {
+    expect(await readFile(path.join(stage, 'orca-linux.AppImage'), 'utf8')).toBe('AppImage bytes')
+    installed = next
+  })
+  const unlock = vi.fn(async () => {})
+  const restart = vi.fn(async () => {})
+  const restartAborted = vi.fn()
+  const liveProtocols = vi.fn(async (): Promise<number[] | null> => [44])
+  const updater = new HomeAppImageUpdater({
+    root,
+    runningTag: installed,
+    fetch,
+    liveProtocols,
+    reconcile,
+    commit,
+    lock: async () => unlock,
+    sendStatus: (status) => statuses.push(status),
+    restart,
+    restartAborted,
+    recordCheck: vi.fn()
+  })
+  return {
+    updater,
+    fetch,
+    statuses,
+    commit,
+    restart,
+    restartAborted,
+    liveProtocols,
+    reconcile,
+    unlock
+  }
+}
+
+describe('managed home updater actions', () => {
+  it('checks, stages, commits and waits for an explicit restart action', async () => {
+    const f = await fixture()
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)?.state).toBe('available')
+    await f.updater.download()
+    expect(f.commit).toHaveBeenCalledTimes(1)
+    expect(f.statuses.at(-1)).toEqual({ state: 'downloaded', version: '1.4.224-1' })
+    expect(f.restart).not.toHaveBeenCalled()
+    await f.updater.restart()
+    expect(f.restart).toHaveBeenCalledTimes(1)
+  })
+  it('blocks download and restart on a protocol crossing', async () => {
+    const f = await fixture(45)
+    await f.updater.check(true)
+    await f.updater.download()
+    await f.updater.restart()
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: HOME_UPDATE_PROTOCOL_MESSAGE,
+      retryable: false
+    })
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.restart).not.toHaveBeenCalled()
+    expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+  })
+  it('rechecks live protocol after download and before restart', async () => {
+    const f = await fixture()
+    await f.updater.check()
+    await f.updater.download()
+    f.liveProtocols.mockResolvedValue([45])
+    await f.updater.restart()
+    expect(f.restart).not.toHaveBeenCalled()
+    expect(f.restartAborted).toHaveBeenCalledOnce()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: false })
+  })
+  it('gates a previously committed image at startup before offering restart', async () => {
+    const f = await fixture(45)
+    f.reconcile.mockResolvedValue({ tag: 'v1.4.224-1' })
+    await f.updater.check()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: false })
+    expect(f.statuses.some((status) => status.state === 'downloaded')).toBe(false)
+    expect(f.restart).not.toHaveBeenCalled()
+  })
+  it('deduplicates concurrent checks and downloads', async () => {
+    const f = await fixture()
+    await Promise.all([f.updater.check(), f.updater.check(true)])
+    await Promise.all([f.updater.download(), f.updater.download()])
+    expect(f.commit).toHaveBeenCalledOnce()
+  })
+  it('preserves a newer pin committed by another updater before download', async () => {
+    const f = await fixture()
+    await f.updater.check()
+    f.reconcile.mockResolvedValue({ tag: 'v1.4.224-2' })
+    await f.updater.download()
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+  })
+  it('fails closed when reconciliation cannot establish image identity', async () => {
+    const f = await fixture()
+    f.reconcile.mockRejectedValue(new Error('Saved image identity is unverifiable'))
+    await f.updater.check()
+    expect(f.fetch).not.toHaveBeenCalled()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error' })
+    expect(f.unlock).toHaveBeenCalledOnce()
+  })
+})

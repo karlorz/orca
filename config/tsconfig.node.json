@@ -9,6 +9,8 @@
     "./scripts/vitest-real-agent-home-write-guard.ts",
     "./scripts/vitest-bun-node-builtins.ts",
     "./scripts/vitest-node-runtime-pool.ts",
+    "./scripts/orca-home-appimage-install.ts",
+    "./scripts/orca-home-appimage-verification.ts",
     "../src/main/**/*",
     "../src/renderer/src/lib/skill-freshness-display-status.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
@@ -31,6 +33,8 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["electron-vite/node"]
   }
 }

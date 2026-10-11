@@ -13,11 +13,11 @@ LAUNCHER="$HOME/bin/orca-ide-newbie"
 
 fail() { printf 'orca-home: %s\n' "$*" >&2; exit 1; }
 valid_tag() { [[ "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; }
+CLI="$SCRIPT_DIR/orca-home-appimage-install-cli.mjs"
+shared() { node "$CLI" "$@"; }
 healthy() {
   [[ ! -e "$ROOT/.install-pending" ]] || return 1
-  [[ -f "$IMAGE" && -x "$IMAGE" && -f "$PIN" && -f "$SHA" ]] || return 1
-  valid_tag "$(cat "$PIN")" || return 1
-  (cd "$ROOT" && sha256sum --check --status appimage.sha256)
+  shared check "$ROOT" >/dev/null
 }
 
 case "$MODE" in
@@ -35,14 +35,18 @@ fi
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || fail 'fork AppImage releases currently support Linux x86_64'
 [[ "$(realpath -m -- "$ROOT")" == "$(realpath -- "$HOME")/"* ]] || fail 'install directory must be inside HOME'
 [[ -f "$SCRIPT_DIR/orca-home-launcher.sh" ]] || fail 'orca-home-launcher.sh must be beside the installer'
-for tool in sha256sum flock; do command -v "$tool" >/dev/null || fail "$tool is required"; done
+command -v node >/dev/null || fail 'Node 24 is required'
+[[ -f "$CLI" ]] || fail 'shared installer modules must be beside the shell script'
 mkdir -p "$ROOT" "$HOME/bin"
-exec 9>"$ROOT/.install.lock"
-flock -n 9 || fail 'another home installer is running'
+mkdir "$ROOT/.install-lock" 2>/dev/null || fail 'another home updater holds .install-lock; attended recovery required after a crash'
 
 STAGE=""
-cleanup() { [[ -z "$STAGE" ]] || rm -rf -- "$STAGE"; }
+cleanup() {
+  if [[ -n "$STAGE" && ! -e "$ROOT/.install-pending" ]]; then rm -rf -- "$STAGE"; fi
+  rmdir "$ROOT/.install-lock"
+}
 trap cleanup EXIT
+shared recover "$ROOT"
 
 install_launcher() {
   if [[ -e "$LAUNCHER" && ! -f "$LAUNCHER.pre-appimage" ]]; then
@@ -55,14 +59,28 @@ install_launcher() {
   mv -f -- "$temp" "$LAUNCHER"
 }
 
-if [[ "$MODE" == --ensure ]] && healthy; then
-  install_launcher
-  printf 'orca-home: verified %s (offline)\n' "$(cat "$PIN")"
-  exit 0
-fi
-if [[ "$MODE" == --ensure && -f "$PIN" ]]; then
-  TAG=$(cat "$PIN")
-  valid_tag "$TAG" || fail 'invalid saved release-tag; select a valid tag explicitly'
+if [[ "$MODE" == --ensure ]]; then
+  if shared reconcile "$ROOT" >/dev/null; then
+    install_launcher
+    printf 'orca-home: verified %s (offline)\n' "$(cat "$PIN")"
+    exit 0
+  fi
+  if [[ -f "$ROOT/installed-release.json" ]]; then
+    TAG=$(node - "$ROOT/installed-release.json" <<'NODE'
+const fs = require('node:fs')
+const identity = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+if (!/^v\d+\.\d+\.\d+-\d+$/.test(identity.tag) || !/^[a-f0-9]{64}$/.test(identity.sha256)) {
+  throw new Error('Invalid saved identity; attended repair required')
+}
+process.stdout.write(identity.tag)
+NODE
+    )
+  else
+    [[ ! -e "$IMAGE" ]] || fail 'existing image identity is unverifiable; select a release explicitly'
+    [[ -f "$PIN" ]] || fail 'missing release pin; select a release explicitly with --tag or --latest'
+    TAG=$(cat "$PIN")
+    valid_tag "$TAG" || fail 'invalid saved release-tag; select a valid tag explicitly'
+  fi
 fi
 command -v gh >/dev/null || fail 'gh is required to download fork releases'
 STAGE=$(mktemp -d "$ROOT/.download.XXXXXX")
@@ -91,25 +109,6 @@ fi
 valid_tag "$TAG" || fail 'no valid fork desktop release selected'
 gh release download "$TAG" --repo karlorz/orca --dir "$STAGE" \
   --pattern orca-linux.AppImage --pattern SHA256SUMS.txt
-awk '$2 == "orca-linux.AppImage" && $1 ~ /^[0-9a-fA-F]+$/ && length($1) == 64 {print $1 "  orca-linux.AppImage"; count++} END {if (count != 1) exit 1}' \
-  "$STAGE/SHA256SUMS.txt" >"$STAGE/appimage.sha256" || fail 'missing or ambiguous AppImage checksum'
-(cd "$STAGE" && sha256sum --check --status appimage.sha256) || fail 'AppImage checksum mismatch'
-chmod 755 "$STAGE/orca-linux.AppImage"
-printf '%s\n' "$TAG" >"$STAGE/release-tag"
-
-# Verify the AppImage identity before switching any launcher or saved pin.
-(cd "$STAGE" && ./orca-linux.AppImage --appimage-extract resources/package-type >/dev/null)
-[[ "$(cat "$STAGE/squashfs-root/resources/package-type")" == AppImage ]] || fail 'expected an AppImage package-type marker'
-
-if healthy && ! cmp -s -- "$IMAGE" "$STAGE/orca-linux.AppImage"; then
-  cp -p -- "$IMAGE" "$ROOT/orca-linux.AppImage.previous"
-  [[ ! -f "$PIN" ]] || cp -p -- "$PIN" "$ROOT/release-tag.previous"
-  [[ ! -f "$SHA" ]] || cp -p -- "$SHA" "$ROOT/appimage.sha256.previous"
-fi
-printf '%s\n' "$TAG" >"$ROOT/.install-pending"
-mv -f -- "$STAGE/orca-linux.AppImage" "$IMAGE"
-mv -f -- "$STAGE/appimage.sha256" "$SHA"
-mv -f -- "$STAGE/release-tag" "$PIN"
-rm -f -- "$ROOT/.install-pending"
+shared commit "$ROOT" "$STAGE" "$TAG"
 install_launcher
 printf 'orca-home: installed %s at %s; GUI restart is manual\n' "$TAG" "$IMAGE"

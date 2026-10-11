@@ -1,8 +1,9 @@
 import path from 'node:path'
 
-/** The home ensure script owns updates only for an identified home AppImage. */
+/** Only the managed home image uses the shared pin-preserving updater. */
 export function isEnsureManagedHomeAppImage(input: {
   platform: string
+  architecture?: string
   packageType: string
   managed: string | undefined
   appImagePath: string | undefined
@@ -10,6 +11,7 @@ export function isEnsureManagedHomeAppImage(input: {
 }): boolean {
   if (
     input.platform !== 'linux' ||
+    (input.architecture !== undefined && input.architecture !== 'x64') ||
     input.packageType !== 'non-root' ||
     input.managed !== '1' ||
     !input.appImagePath ||
@@ -20,12 +22,10 @@ export function isEnsureManagedHomeAppImage(input: {
   }
   const relative = path.relative(input.homeDirectory, input.appImagePath)
   return (
+    path.basename(input.appImagePath) === 'orca-linux.AppImage' &&
     relative.length > 0 &&
     relative !== '..' &&
     !relative.startsWith(`..${path.sep}`) &&
     !path.isAbsolute(relative)
   )
 }
-
-export const HOME_APPIMAGE_UPDATE_MESSAGE =
-  'This home installation is pinned by the Orca ensure script. Run install-orca-home-appimage.sh --latest to select a newer release, then restart Orca when your work is saved.'

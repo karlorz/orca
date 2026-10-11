@@ -15,7 +15,8 @@ cat >"$FIXTURES/orca-linux.AppImage" <<'IMAGE'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --appimage-extract ]]; then
-  mkdir -p squashfs-root/resources
+  mkdir -p squashfs-root/resources/orcad-template
+  printf '{}\n' >squashfs-root/resources/orcad-template/orcad-template.json
   printf '%s\n' "${FIXTURE_MARKER:-AppImage}" >squashfs-root/resources/package-type
 else
   printf '%s\n' "$ORCA_USER_DATA_PATH" "$ORCA_HOME_INSTALL_MANAGED" "$APPIMAGE_EXTRACT_AND_RUN" >>"$CALLS"
@@ -49,7 +50,9 @@ cat >"$TEMP/tools/sudo" <<'SUDO'
 exit 99
 SUDO
 chmod +x "$TEMP/tools/gh" "$TEMP/tools/sudo"
-run() { bash "$HERE/install-orca-home-appimage.sh" "$@"; }
+mkdir "$TEMP/installer"
+cp "$HERE"/{install-orca-home-appimage.sh,orca-home-appimage-install-cli.mjs,orca-home-appimage-install.ts,orca-home-appimage-verification.ts,orca-home-launcher.sh} "$TEMP/installer/"
+run() { bash "$TEMP/installer/install-orca-home-appimage.sh" "$@"; }
 expect_failure() { if "$@"; then echo "unexpected success: $*" >&2; exit 1; fi; }
 
 run --latest
@@ -105,11 +108,12 @@ run --tag v1.4.223-1
 [[ "$(cat "$ORCA_HOME_INSTALL_DIR/release-tag.previous")" == v1.4.222-10 ]]
 PREVIOUS=$(sha256sum "$ORCA_HOME_INSTALL_DIR/orca-linux.AppImage.previous")
 
-# An interrupted three-file switch fails health checks and repairs the saved pin.
-printf 'v1.4.224-1\n' >"$ORCA_HOME_INSTALL_DIR/.install-pending"
+# A damaged pin is repaired from the verified installed identity without a download.
+printf 'broken\n' >"$ORCA_HOME_INSTALL_DIR/release-tag"
 expect_failure run --check
+: >"$CALLS"
 run --ensure
-[[ ! -f "$ORCA_HOME_INSTALL_DIR/.install-pending" ]]
+[[ ! -s "$CALLS" ]]
 [[ "$(cat "$ORCA_HOME_INSTALL_DIR/release-tag")" == v1.4.223-1 ]]
 
 # A saved pin requires home repair even when the host still has /opt.
@@ -121,7 +125,7 @@ run --check
 [[ "$PREVIOUS" == "$(sha256sum "$ORCA_HOME_INSTALL_DIR/orca-linux.AppImage.previous")" ]]
 
 # Competing installers fail before a download or launcher replacement.
-flock "$ORCA_HOME_INSTALL_DIR/.install.lock" bash -c '
-  if bash "$1" --ensure; then exit 1; fi
-' _ "$HERE/install-orca-home-appimage.sh"
+mkdir "$ORCA_HOME_INSTALL_DIR/.install-lock"
+expect_failure run --ensure
+rmdir "$ORCA_HOME_INSTALL_DIR/.install-lock"
 printf 'home AppImage install/restore/launcher contracts passed\n'
