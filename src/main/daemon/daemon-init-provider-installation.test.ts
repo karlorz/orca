@@ -31,10 +31,12 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+vi.mock('node:fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
 vi.mock('net', () => moduleFactories.net())
+vi.mock('node:net', () => moduleFactories.net())
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
