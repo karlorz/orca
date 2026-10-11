@@ -65,6 +65,12 @@ The standalone installer copy recipe includes the new module, and the shell cont
 
 Serial `heavy-run` verification passed: unsuppressed focused oxlint, strict project-derived focused typecheck, all 57 Vitest tests, changed-code quality, and main bundle build. Fresh AppImage fixtures completed the full isolated Xvfb journey again with `pass: true`, from `1.4.224-0` through the user-click restart to `1.4.224-1`. Full CI is rerun by the normal follow-up push.
 
+## PR #21 type-aware config follow-up
+
+CI on `ba1d77d1b98` rejected `allowImportingTsExtensions` because the inherited toolkit config leaves emit enabled. The existing typecheck commands pass `--noEmit` on the command line; oxlint validates the saved config without that flag. Adding `noEmit: true` to the main check-only project makes the explicit Node 24 TypeScript imports valid for both consumers. Strictness, unused-symbol checks, composite project membership and lint rules remain active.
+
+The failure reproduced with targeted `oxlint --type-aware --tsconfig config/tsconfig.node.json --config config/oxlint-code-quality-type-aware.json ... --deny-warnings` under `heavy-run` with a 4 GiB admission floor. The same command passed after the config change. All **58 focused tests** passed, including a regression that reads the effective inherited config through TypeScript 7 `--showConfig` and the copied standalone install/restore contracts. A focused TypeScript check inherited `noEmit` successfully without a command-line override. Additional checks used the normal 2 GiB admission floor without force bypass. An optional main-bundle build was stopped when available RAM fell below that floor; full build/typecheck remain CI gates. Installer and updater implementation and the prior Xvfb proof are preserved.
+
 ## Limitations and operator follow-up
 
 The full repository TypeScript run was stopped after pushing MemAvailable below the host guard floor; the coordinator confirmed memory pressure. Full typecheck and cross-platform/regression/build checks remain CI responsibilities. No protocol bump or runtime-launcher change is included. Older releases lacking protocol metadata require an attended installation.
