@@ -7,6 +7,7 @@ import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from '.
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
   enableNativeChatSetting,
+  seedZcodeProviderSession,
   toggleTerminalTabToChatView
 } from './helpers/native-chat-transcript-fixture'
 
@@ -80,8 +81,20 @@ test('ZCode native chat reads ordered visible history and follows new messages',
         )
       )
       .toBe('zcode')
+    // Why: SessionStart resume types a zcode launch into the PTY; re-bind the
+    // live pane after that side effect so chat eligibility still sees the session.
+    const liveDescriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    const [liveTabId] = liveDescriptor.paneKey.split(':')
+    await seedZcodeProviderSession(orcaPage, {
+      paneKey: liveDescriptor.paneKey,
+      worktreeId: liveDescriptor.worktreeId,
+      sessionId: 'zcode-proof'
+    })
     await orcaPage.screenshot({ path: testInfo.outputPath('01-terminal-before-chat.png') })
-    await toggleTerminalTabToChatView(orcaPage, { tabId, worktreeId: descriptor.worktreeId })
+    await toggleTerminalTabToChatView(orcaPage, {
+      tabId: liveTabId,
+      worktreeId: liveDescriptor.worktreeId
+    })
     const chat = orcaPage.locator('[data-native-chat-root="true"]')
     await expect(chat).toBeVisible({ timeout: 15_000 })
     await expect(chat.getByText('Show my saved ZCode conversation.')).toBeVisible({

@@ -2,8 +2,31 @@ import type { Page } from '@stablyai/playwright-test'
 
 export async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    await window.__store?.getState().updateSettings({ experimentalNativeChat: true })
+    const settings = await window.api.settings.set({ experimentalNativeChat: true })
+    const store = window.__store
+    if (!store) {
+      throw new Error('Store unavailable')
+    }
+    store.setState({ settings })
   })
+}
+
+export async function seedZcodeProviderSession(
+  page: Page,
+  args: { paneKey: string; worktreeId: string; sessionId: string }
+): Promise<void> {
+  await page.evaluate(({ paneKey, worktreeId, sessionId }) => {
+    window.__store
+      ?.getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'waiting', prompt: '', agentType: 'zcode' },
+        'ZCode',
+        undefined,
+        { worktreeId },
+        { providerSession: { key: 'session_id', id: sessionId } }
+      )
+  }, args)
 }
 
 export async function seedClaudeProviderSession(
