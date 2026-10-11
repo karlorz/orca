@@ -132,6 +132,7 @@ describe('fork desktop voice release workflow', () => {
     const workflow = readWorkflow(workflowPath)
     expect(workflow.jobs['build-linux']).toBeDefined()
     expect(workflow.jobs['build-linux'].needs).toContain('verify')
+    expect(workflow.jobs['build-linux'].needs).toContain('orcad-template')
     const steps = workflow.jobs['build-linux'].steps
     const packageInputsIndex = steps.findIndex((step) => step.name === 'Build package inputs')
     const projectWebIndex = steps.findIndex(
@@ -162,6 +163,7 @@ describe('fork desktop voice release workflow', () => {
     const workflow = readWorkflow(workflowPath)
     expect(workflow.jobs['build-windows']).toBeDefined()
     expect(workflow.jobs['build-windows'].needs).toContain('verify')
+    expect(workflow.jobs['build-windows'].needs).toContain('orcad-template')
     const rawYaml = readFileSync(workflowPath, 'utf8')
     expect(rawYaml).toContain('build-windows:')
     expect(rawYaml).toContain('windows-2022')
@@ -208,5 +210,42 @@ describe('fork desktop voice release workflow', () => {
     )
     expect(installIndex).toBeGreaterThanOrEqual(0)
     expect(verifyIndex).toBeGreaterThan(installIndex)
+  })
+
+  it('builds the orcad template from the tagged commit and packs it into every desktop OS', () => {
+    const workflow = readWorkflow(workflowPath)
+    const template = workflow.jobs['orcad-template']
+    expect(template.needs).toEqual(['verify'])
+    expect(template.uses).toBe('./.github/workflows/node-server-tests.yml')
+    expect(template.with).toEqual({ ref: '${{ github.sha }}', build_template: true })
+    expect(template.permissions).toEqual({ contents: 'read' })
+    expect(template.secrets).toBeUndefined()
+    expect(template.if).toContain("github.repository == 'karlorz/orca'")
+
+    for (const jobName of ['build-mac', 'build-linux', 'build-windows']) {
+      const job = workflow.jobs[jobName]
+      expect(job.needs).toContain('orcad-template')
+      expect(job.if ?? '').not.toMatch(/always\(\)|!cancelled\(\)/)
+      const download = job.steps.find(
+        (step) => step.name === 'Download the orcad deployment template'
+      )
+      expect(download?.uses).toMatch(/^actions\/download-artifact@/)
+      expect(download?.with).toEqual({
+        name: 'orcad-template',
+        path: 'out/orcad-template'
+      })
+      const pack = job.steps.find(
+        (step) =>
+          typeof step.run === 'string' &&
+          step.run.includes('electron-builder') &&
+          step.env?.ORCA_REQUIRE_ORCAD_TEMPLATE === '1'
+      )
+      expect(pack).toBeDefined()
+      const downloadIndex = job.steps.findIndex(
+        (step) => step.name === 'Download the orcad deployment template'
+      )
+      const packIndex = job.steps.indexOf(pack)
+      expect(packIndex).toBeGreaterThan(downloadIndex)
+    }
   })
 })

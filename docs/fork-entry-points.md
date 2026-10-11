@@ -33,9 +33,9 @@ The About source row and Settings Support issues link also use `karlorz/orca`.
 
 As of 2026-10-03 the published upstream trains and fork tags are:
 
-| Train          | Upstream release                                                                                 | Fork tag                                      | Notes                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Desktop        | [`v1.4.219`](https://github.com/stablyai/orca/releases/tag/v1.4.219)                             | `v1.4.219-0`                                  | Auto-cut after attended merge `9106b8e404`.                                                                    |
+| Train          | Upstream release                                                                                 | Fork tag                   | Notes                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Desktop        | [`v1.4.219`](https://github.com/stablyai/orca/releases/tag/v1.4.219)                             | `v1.4.219-0`               | Auto-cut after attended merge `9106b8e404`.                                                                            |
 | Mobile Android | [`mobile-android-v0.0.52`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.52) | `mobile-android-v0.0.52-3` | Published APK, expo `0.0.52`, versionCode 86. `-3` is the APK that checks `karlorz/orca`. Train string stays `0.0.52`. |
 
 The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is historical: merge `ce818bd5151a02937033752cb22cae2a522ba81b`, later run [`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538). Desktop retry `v1.4.217-1` published through [workflow run `36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692) (no APK). Mobile on that train ended at `mobile-android-v0.0.50-8`.
@@ -57,10 +57,11 @@ The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is h
    `mobile/app.json` to the published upstream train and never rewinds
    `versionCode`.
 4. A desktop tag starts **Fork Desktop Release**. Its verify job checks the
-   `v<x.y.z>-<N>` shape and reachability from `fork-main`. Successful builds
-   publish macOS self-signed DMG/ZIP files, Linux AppImage/deb/rpm packages,
-   Windows unsigned NSIS files, platform update manifests, blockmaps, and
-   `SHA256SUMS.txt`.
+   `v<x.y.z>-<N>` shape and reachability from `fork-main`. It then builds the
+   orcad deployment template (the managed SSH server every host runs) and packs
+   it into each desktop OS. Successful builds publish macOS self-signed DMG/ZIP
+   files, Linux AppImage/deb/rpm packages, Windows unsigned NSIS files, platform
+   update manifests, blockmaps, and `SHA256SUMS.txt`.
 5. A mobile tag starts **Fork Mobile Android Release**. It publishes the APK,
    `BUILD-METADATA.json`, `TEST-SUMMARY.md`, and `SHA256SUMS.txt`. Desktop files
    stay off mobile releases, and mobile APK files stay off desktop releases.

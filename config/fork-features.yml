@@ -96,6 +96,13 @@ features:
       - config/scripts/fork-next-desktop-tag.mjs
       - config/scripts/ci-dependency-download-cache.test.mjs
       - config/scripts/verify-fork-desktop-release-artifacts.mjs
+  - id: fork-desktop-orcad-template
+    title: Fork desktop releases ship the managed SSH orcad template
+    kind: release
+    status: landed
+    paths:
+      - .github/workflows/fork-desktop-voice-release.yml
+      - config/scripts/fork-desktop-voice-release.test.mjs
   - id: pet-voice-fgs-hysteresis
     title: Keep pet-voice FGS through 5-minute Tailscale reconnects
     kind: product
