@@ -1,15 +1,12 @@
 import { vi } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type { DaemonInitMockState } from './daemon-init-test-harness'
+import {
+  pinDaemonInitMocksAfterReset,
+  type DaemonInitPinFactories
+} from './daemon-init-reset-modules-pin'
 
-/** Factories the test file's hoisted `vi.mock` calls already registered; re-applied after resetModules. */
-export type DaemonInitPinFactories = {
-  fs: () => object
-  net: () => object
-  ipcPty: () => object
-  daemonSpawner: () => object
-  daemonPtyAdapter: () => object
-}
+export type { DaemonInitPinFactories }
 
 /** Resets every mock plus the module registry, then re-imports daemon-init so its module-level spawner/adapter/restartInFlight start fresh. */
 export async function importFreshDaemonInit(
@@ -136,17 +133,8 @@ export async function importFreshDaemonInit(
     exit: () => {},
     getAppMetrics: () => []
   } as unknown as AppEnvironment)
-  // bun's first import after resetModules can miss hoisted vi.mock factories (real ipc/pty
-  // barrel loads, setLocalPtyProviderMock stays at 0). Re-pin, then load ipc/pty first.
   if (pinFactories) {
-    vi.doMock('fs', pinFactories.fs)
-    vi.doMock('node:fs', pinFactories.fs)
-    vi.doMock('net', pinFactories.net)
-    vi.doMock('node:net', pinFactories.net)
-    vi.doMock('../ipc/pty', pinFactories.ipcPty)
-    vi.doMock('./daemon-spawner', pinFactories.daemonSpawner)
-    vi.doMock('./daemon-pty-adapter', pinFactories.daemonPtyAdapter)
-    await import('../ipc/pty')
+    await pinDaemonInitMocksAfterReset(pinFactories)
   }
   // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
   const init = await import('./daemon-provider-init')

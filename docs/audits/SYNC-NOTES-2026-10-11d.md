@@ -57,7 +57,9 @@ Verified each auto-merge kept fork deltas and added only the upstream
   finished in ~2.3s with `setLocalPtyProviderMock` at 0 calls. bun's first
   import after `vi.resetModules()` missed the hoisted `../ipc/pty` mock, so
   the real PTY barrel loaded. Re-pin that mock (plus `node:fs` / `node:net`)
-  after reset and load `ipc/pty` before `daemon-provider-init`.
+  after reset and load `ipc/pty` before `daemon-provider-init`. The `vi.doMock`
+  calls live in test-only `daemon-init-reset-modules-pin.ts` (anti-slop
+  `no-module-mocking` is file-scoped off there, like `mock-descendant-sweep.ts`).
 
 ## Light local checks (this box, via `heavy-run`, glibc Node 22)
 
