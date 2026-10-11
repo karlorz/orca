@@ -78,6 +78,12 @@ Kept both:
 - automation-run open/resume/workspace-action (no upstream commits on those
   files in this 105-commit window; auto-merge kept fork)
 
-## Light local checks
+## Light local checks (this box, via `heavy-run`, glibc Node 22)
 
-Recorded after the merge commit.
+- `tsc --noEmit -p config/tsconfig.tc.cli.json`: clean.
+- vitest `--maxWorkers=1`:
+  - `pr-e2e-gate-contract.test.mjs` + `host-operation-ownership.test.ts`: 29 passed
+  - `electron-process-shutdown.unit.test.ts` + `repo.test.ts`: 34 passed
+  - `runtime-ssh-target-management.test.ts`: 13 passed
+  - `use-remote-file-browser-listing.test.ts`: local transform failed to resolve `@/runtime/...` aliases (same class of local alias miss as `AddRepoSteps.default-checkout.test.ts` → `@/i18n/i18n`). Not treated as a merge defect; GitHub CI runs the full vitest config.
+- Full `pnpm tc` (node+web) and electron-builder not run locally.
