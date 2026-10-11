@@ -48,6 +48,8 @@ Observed daemon protocol **44 → 45**, from `src/main/daemon/daemon-protocol-ve
 - `src/main/daemon/daemon-launched-child-spawn.ts`
 - `src/main/daemon/daemon-out-of-process-launcher.ts`
 
+`node config/scripts/check-daemon-protocol-crossing.mjs` passes adoption from published `v1.4.224` (protocol 43), and `--release-ref e5c905aecc28678da0709221c740944d10fa43a7` passes adoption from fork base protocol 44. The guard reports that protocol-45 daemon terminals are unreachable after rollback to those older clients until re-upgrade; this is a release/operator limitation to review at the attended switch.
+
 The unoverridden guard fails as expected. The dispatch explicitly authorizes the sync-only label `allow-runtime-launcher-protocol-bump`. Running the same guard with `ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP=1` succeeds with `OVERRIDDEN`. Apply the label when the PR opens and before the next normal push so CI reads it. Live launcher switching remains attended.
 
 ## Local evidence
@@ -66,6 +68,7 @@ Heavy work is serialized using `heavy-run`, with its default 2048 MiB free-memor
 - Mobile frozen install passed. Focused direct framing, v2 downgrade latch, v2 handshake, verified pairing links, RPC direct-v2, runtime capabilities and native-chat session/send suites: **8 files passed; 38 tests passed**.
 - Additional fork signing/queued-resume assertions, deferred-spawn sleep, pet speech routing/replay, shared paired handshake, host spawn admission, and daemon automatic-work guards/resume: **10 files passed; 75 tests passed**. The requested `src/main/updater.test.ts` filter matches no current file; updater suites are split into named files and are tested separately below.
 - Required real Claude CLI suites with `ORCA_REAL_CLAUDE_CLI_TEST=1`: **9 passed, 4 failed**. Failures concern adopted model (`auto-sonnet` versus expected `claude-haiku-4-5-20251001`), provider error result, queued-stop wait, and fold result UUID count. The configured `/home/box/.local/bin/claude` is a Clawgod launcher; it executes the existing wrapper through Bun and points at Claude 2.1.241. Both real test files and their session adapter/launch/connection implementations are unchanged from the fork base. These results limit live provider verification; no account settings or installed launcher were changed.
+- Test-local selection of the existing native Claude **2.1.241** executable also ran the two required suites: **7 passed, 5 failed, 1 skipped**. It retained the same `auto-sonnet` model/provider error/queued-stop limitations and additionally disagreed with an interruption assertion explicitly written for CLI **2.1.280**. Fold results lacked the expected UUID list. The test-only PATH symlink was removed afterward. These failures remain disclosed; live-provider correctness is unverified in this environment.
 - Android versionCode remains **86**, identical to the fork base.
 
 - `ORCA_CODE_QUALITY_BASE=e5c905aecc28678da0709221c740944d10fa43a7 pnpm run check:code-quality:changed`: passed across **938 changed source files**, with zero new code-quality, casting, focused-plugin, type-aware, React Doctor, design-system or SAFETY-rationale findings.
@@ -75,6 +78,8 @@ Heavy work is serialized using `heavy-run`, with its default 2048 MiB free-memor
 - Initial named updater run inherited `ORCA_HOME_INSTALL_MANAGED=1` from the Orca terminal, reaching `app.getPath` in upstream Electron mocks that omit it: 58 failures, 11 passed, 17 skipped. This is test-process environment contamination. Re-run uses `env -u ORCA_HOME_INSTALL_MANAGED -u APPIMAGE`; the startup-scheduling fixture explicitly exercises managed-home routing with its own isolated environment.
 
 - Corrected named updater and changed Claude effort unit run: **8 files passed, 1 platform-specific file skipped; 79 tests passed, 17 skipped**. Covers fork feeds, prerelease fallback, supervised macOS staging, quit/install failure handling, and managed-home action routing.
+- Cloud frozen install passed with its pinned pnpm **10.34.6** and Node **24.21.0**. Built postgres-schema/relay-contract, then ran credential-store (including disabled key-expiry policy), combined boot, stale-key JWKS, dead-cell poll and configuration suites: **5 files passed; 54 tests passed**. Cloud relay `pnpm typecheck`: passed. Tests use isolated local fixtures; shared relay services were untouched.
+- Retained fork automation model/flags/outcome capture, execution-host run evidence, pet speech replay/status/intent, and fresh-spawn guards: **9 files passed; 101 tests passed**. The historical `agent-session-option-launch.test.ts` filter has no current matching file; model launch behavior is covered by `automation-model-launch.test.ts`.
 - Added assertions for rejected-resume recovery settlement and for terminal-host packaging/signing order, folder descriptions and speech usage under fork self-signing.
 - PR: <https://github.com/karlorz/orca/pull/22>; sync merge commit: `85a35d1135d3856b0d8982b368a1fc56b38cf768`. The authorized protocol override label is applied. This follow-up normal push lets PR workflows read the label in their event payload.
 
