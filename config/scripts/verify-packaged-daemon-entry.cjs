@@ -228,9 +228,13 @@ async function runTerminalHostRoundTrip({
         }
       })
     })
+    let rejectCreate
+    const createFailed = new Promise((_, reject) => {
+      rejectCreate = reject
+    })
     control.onMessage((message) => {
       if (message?.id === 'boot-1' && message.ok === false) {
-        stderr.push(`createOrAttach failed: ${message.error}`)
+        rejectCreate(new Error(`createOrAttach failed: ${message.error}`))
       }
     })
     control.socket.write(
@@ -242,13 +246,15 @@ async function runTerminalHostRoundTrip({
           cols: 80,
           rows: 24,
           cwd: scratch,
+          // Command launches use a ready wrapper; hold stdin until its first prompt.
+          shellReadySupported: true,
           command: TERMINAL_HOST_BOOT_COMMAND
         }
       })}\n`
     )
     try {
       await beforeDeadline(
-        Promise.race([sawOutput, control.broken, stream.broken]),
+        Promise.race([sawOutput, createFailed, control.broken, stream.broken]),
         deadline,
         `"${TERMINAL_HOST_BOOT_OUTPUT}" from the PTY`
       )

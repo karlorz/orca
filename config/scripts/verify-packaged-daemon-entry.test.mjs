@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const {
@@ -81,6 +81,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -125,6 +126,99 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
       scratchDirs: readdirSync(root).filter((name) => name.startsWith('oth-'))
     }
   }
+
+  function commandDaemon(mode) {
+    return fakeDaemon(`(() => {
+      let stream
+      return (socket) => {
+        let buffer = ''
+        socket.on('data', (chunk) => {
+          buffer += chunk
+          let newline
+          while ((newline = buffer.indexOf('\\n')) !== -1) {
+            const message = JSON.parse(buffer.slice(0, newline))
+            buffer = buffer.slice(newline + 1)
+            if (message.type === 'hello') {
+              if (message.role === 'stream') stream = socket
+              socket.write(JSON.stringify({ ok: true }) + '\\n')
+            } else if (message.type === 'createOrAttach') {
+              fs.writeFileSync(${JSON.stringify(join(root, 'request'))}, JSON.stringify(message.payload))
+              if (${JSON.stringify(mode)} === 'rejected') {
+                socket.write(JSON.stringify({ id: message.id, ok: false, error: 'spawn refused' }) + '\\n')
+                continue
+              }
+              socket.write(JSON.stringify({ id: message.id, ok: true }) + '\\n')
+              const emit = (data) => stream.write(JSON.stringify({ type: 'event', event: 'data', payload: { data } }) + '\\n')
+              if (${JSON.stringify(mode)} === 'echo') {
+                emit(message.payload.command + '\\r\\n')
+              } else if (${JSON.stringify(mode)} === 'computed' && message.payload.shellReadySupported === true) {
+                const result = require('node:child_process').spawnSync('/bin/bash', ['--noprofile', '--norc', '-c', message.payload.command], { encoding: 'utf8' })
+                emit(result.stdout.slice(0, 4))
+                emit(result.stdout.slice(4))
+              }
+            }
+          }
+        })
+      }
+    })()`)
+  }
+
+  it('requests ready-gated command delivery and accepts split computed output', async () => {
+    const result = await roundTrip(commandDaemon('computed'), 1_500)
+    expect(result.error).toBeNull()
+    const request = JSON.parse(readFileSync(join(root, 'request'), 'utf8'))
+    expect(request).toMatchObject({
+      command: 'echo "OK $((6*7))" && exit',
+      shellReadySupported: true
+    })
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('executes computed output through the real PTY after a profile reads during startup', async () => {
+    vi.stubEnv('HOME', root)
+    vi.stubEnv('SHELL', '/bin/bash')
+    writeFileSync(join(root, '.bash_profile'), 'IFS= read -r -t 0.5 startup_input || true\n')
+    const entry = join(root, 'real-daemon.cjs')
+    writeFileSync(
+      entry,
+      [
+        `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+        'delete process.env.VITEST',
+        'delete process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK',
+        `require(${JSON.stringify(require.resolve('tsx/cjs'))})`,
+        `require(${JSON.stringify(join(process.cwd(), 'src/main/daemon/daemon-entry.ts'))})`
+      ].join('\n')
+    )
+    const result = await roundTrip(entry, 5_000)
+    expect(result.error).toBeNull()
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('rejects echoed input without computed output and cleans up by the deadline', async () => {
+    const result = await roundTrip(commandDaemon('echo'), 800)
+    expect(result.error?.message).toMatch(/timed out waiting for "OK 42" from the PTY/)
+    expect(result.error?.message).toContain('echo "OK $((6*7))" && exit')
+    expect(result.elapsedMs).toBeLessThan(800 + 5_000)
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('rejects a missing command delivery and cleans up by the deadline', async () => {
+    const result = await roundTrip(commandDaemon('silent'), 800)
+    expect(result.error?.message).toMatch(/timed out waiting for "OK 42" from the PTY; output: $/)
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('rejects create failure immediately and cleans up', async () => {
+    const result = await roundTrip(commandDaemon('rejected'), 5_000)
+    expect(result.error?.message).toMatch(/createOrAttach failed: spawn refused/)
+    expect(result.elapsedMs).toBeLessThan(2_000)
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
 
   it('rejects by the deadline and cleans up when the daemon never answers the hello', async () => {
     const result = await roundTrip(fakeDaemon('() => {}'), 1_500)
