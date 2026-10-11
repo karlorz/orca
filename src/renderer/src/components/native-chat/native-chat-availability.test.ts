@@ -96,6 +96,18 @@ describe('canToggleNativeChat', () => {
     expect(forConnection('runtime-ssh-env-1')).toBe(true)
   })
 
+  it('rejects Model-A SSH zcode but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        contentType: 'terminal',
+        detectedAgent: 'zcode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
   it('lets an existing Model-A SSH Grok chat toggle back to terminal', () => {
     expect(
       canToggleNativeChat({

@@ -1,43 +1,77 @@
-import { describe, expect, it, vi } from 'vitest'
-import type * as ReactModule from 'react'
+// @vitest-environment happy-dom
+import { renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
-  browseRuntimeServerDirectory: vi.fn()
+const mocks = vi.hoisted(() => ({
+  browseRuntimeSshDirectory: vi.fn(),
+  browseRuntimeServerDirectory: vi.fn(),
+  browseDir: vi.fn(),
+  browseLocalDirectory: vi.fn()
 }))
 
-import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
+vi.mock('@/runtime/runtime-ssh-target-management', () => ({
+  browseRuntimeSshDirectory: mocks.browseRuntimeSshDirectory
+}))
+vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+  browseRuntimeServerDirectory: mocks.browseRuntimeServerDirectory
+}))
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof ReactModule>()
-  return {
-    ...actual,
-    useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
-    useRef: <T>(value: T) => ({ current: value })
-  }
-})
+const { useRemoteFileBrowserListing } = await import('./use-remote-file-browser-listing')
 
-describe('useRemoteFileBrowserListing', () => {
-  it('lists a local directory through repos.browseLocalDirectory', async () => {
-    const browseLocalDirectory = vi.fn().mockResolvedValue({
-      resolvedPath: '/workspace/code',
-      pathFlavor: 'posix',
-      entries: [{ name: 'portfolio-lab', isDirectory: true, isSymlink: false }]
-    })
-    vi.stubGlobal('window', {
+const listing = { resolvedPath: '/home/me', entries: [], pathFlavor: 'posix' as const }
+
+describe('remote folder listing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.assign(window, {
       api: {
-        repos: { browseLocalDirectory },
-        ssh: { browseDir: vi.fn() }
+        ssh: { browseDir: mocks.browseDir },
+        repos: { browseLocalDirectory: mocks.browseLocalDirectory }
       }
     })
+    for (const mock of Object.values(mocks)) {
+      mock.mockResolvedValue(listing)
+    }
+  })
 
-    const { fetchListing } = useRemoteFileBrowserListing(undefined, undefined, true)
-    const result = await fetchListing('~')
+  it("asks the server to list its own SSH host's folders", async () => {
+    const { result } = renderHook(() => useRemoteFileBrowserListing('ssh-p8', 'env-1'))
 
-    expect(browseLocalDirectory).toHaveBeenCalledWith({ dirPath: '~' })
-    expect(result).toEqual({
+    await result.current.fetchListing('~')
+
+    expect(mocks.browseRuntimeSshDirectory).toHaveBeenCalledWith('env-1', 'ssh-p8', '~')
+    expect(mocks.browseDir).not.toHaveBeenCalled()
+    expect(mocks.browseRuntimeServerDirectory).not.toHaveBeenCalled()
+  })
+
+  it("lists this client's SSH host and the server's own disk as before", async () => {
+    await renderHook(() =>
+      useRemoteFileBrowserListing('ssh-mine', undefined)
+    ).result.current.fetchListing('~')
+    await renderHook(() =>
+      useRemoteFileBrowserListing(undefined, 'env-1')
+    ).result.current.fetchListing('~')
+
+    expect(mocks.browseDir).toHaveBeenCalledWith({ targetId: 'ssh-mine', dirPath: '~' })
+    expect(mocks.browseRuntimeServerDirectory).toHaveBeenCalledWith('env-1', '~')
+    expect(mocks.browseRuntimeSshDirectory).not.toHaveBeenCalled()
+  })
+
+  it('lists a local directory through repos.browseLocalDirectory', async () => {
+    const localListing = {
       resolvedPath: '/workspace/code',
-      pathFlavor: 'posix',
+      pathFlavor: 'posix' as const,
       entries: [{ name: 'portfolio-lab', isDirectory: true, isSymlink: false }]
-    })
+    }
+    mocks.browseLocalDirectory.mockResolvedValue(localListing)
+
+    const { result } = renderHook(() => useRemoteFileBrowserListing(undefined, undefined, true))
+    const listed = await result.current.fetchListing('~')
+
+    expect(mocks.browseLocalDirectory).toHaveBeenCalledWith({ dirPath: '~' })
+    expect(listed).toEqual(localListing)
+    expect(mocks.browseDir).not.toHaveBeenCalled()
+    expect(mocks.browseRuntimeServerDirectory).not.toHaveBeenCalled()
+    expect(mocks.browseRuntimeSshDirectory).not.toHaveBeenCalled()
   })
 })

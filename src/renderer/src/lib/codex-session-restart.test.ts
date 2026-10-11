@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 
 // Why: these cases model a switch made on the focused host, as the status bar does.
 const markForFocusedHost = (
   args: Omit<Parameters<typeof markLiveCodexSessionsForRestart>[0], 'owner'>
 ): Promise<void> =>
   markLiveCodexSessionsForRestart({
-    owner: getActiveRuntimeTarget(useAppStore.getState().settings),
+    owner: defaultScopeHost(useAppStore.getState().settings),
     ...args
   })
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
@@ -388,14 +388,14 @@ describe('markLiveCodexSessionsForRestart', () => {
     })
   })
 
-  it('inspects remote runtime PTYs through the active runtime environment', async () => {
+  it('inspects remote runtime PTYs on the server their id names', async () => {
     useAppStore.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       tabsByWorktree: {
         wt1: [
           {
             id: 'tab-1',
-            ptyId: 'remote:term-1',
+            ptyId: 'remote:env-1@@term-1',
             worktreeId: 'wt1',
             title: 'orca-1',
             customTitle: null,
@@ -406,7 +406,7 @@ describe('markLiveCodexSessionsForRestart', () => {
         ]
       },
       ptyIdsByTabId: {
-        'tab-1': ['remote:term-1']
+        'tab-1': ['remote:env-1@@term-1']
       }
     })
     runtimeEnvironmentCall.mockResolvedValue({
@@ -434,7 +434,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       params: { terminal: 'term-1' },
       timeoutMs: 15_000
     })
-    expect(useAppStore.getState().codexRestartNoticeByPtyId['remote:term-1']).toEqual({
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['remote:env-1@@term-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })

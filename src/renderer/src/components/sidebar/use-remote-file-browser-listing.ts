@@ -1,5 +1,6 @@
 import { useCallback, useRef, type RefObject } from 'react'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { browseRuntimeSshDirectory } from '@/runtime/runtime-ssh-target-management'
 import type { DirEntry } from './remote-file-browser-helpers'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
@@ -32,19 +33,18 @@ export function useRemoteFileBrowserListing(
       if (cached) {
         return cached
       }
-      const raw = local
+      // Why: with both set, the target is the server's own SSH host and only the server dials it.
+      // `local` is this machine's disk via the in-app picker.
+      const result = local
         ? await window.api.repos.browseLocalDirectory({ dirPath })
-        : targetId
-          ? await window.api.ssh.browseDir({ targetId, dirPath })
-          : await browseRuntimeServerDirectory(
-              requireRuntimeEnvironmentId(runtimeEnvironmentId),
-              dirPath
-            )
-      const result: BrowseResult = {
-        resolvedPath: raw.resolvedPath,
-        pathFlavor: raw.pathFlavor,
-        entries: raw.entries
-      }
+        : targetId && runtimeEnvironmentId
+          ? await browseRuntimeSshDirectory(runtimeEnvironmentId, targetId, dirPath)
+          : targetId
+            ? await window.api.ssh.browseDir({ targetId, dirPath })
+            : await browseRuntimeServerDirectory(
+                requireRuntimeEnvironmentId(runtimeEnvironmentId),
+                dirPath
+              )
       listingCacheRef.current.set(result.resolvedPath, result)
       // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
       if (dirPath !== result.resolvedPath) {
