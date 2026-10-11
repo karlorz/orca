@@ -67,6 +67,7 @@ fi
 cp config/scripts/install-orca-home-appimage.sh \
    config/scripts/orca-home-appimage-install-cli.mjs \
    config/scripts/orca-home-appimage-install.ts \
+   config/scripts/orca-home-appimage-verification.ts \
    config/scripts/orca-home-launcher.sh \
    config/scripts/orca-box-ensure.sh "$persist/"
 chmod +x "$persist"/{install-orca-home-appimage,orca-home-launcher,orca-box-ensure}.sh

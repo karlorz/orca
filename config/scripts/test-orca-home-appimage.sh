@@ -50,7 +50,9 @@ cat >"$TEMP/tools/sudo" <<'SUDO'
 exit 99
 SUDO
 chmod +x "$TEMP/tools/gh" "$TEMP/tools/sudo"
-run() { bash "$HERE/install-orca-home-appimage.sh" "$@"; }
+mkdir "$TEMP/installer"
+cp "$HERE"/{install-orca-home-appimage.sh,orca-home-appimage-install-cli.mjs,orca-home-appimage-install.ts,orca-home-appimage-verification.ts,orca-home-launcher.sh} "$TEMP/installer/"
+run() { bash "$TEMP/installer/install-orca-home-appimage.sh" "$@"; }
 expect_failure() { if "$@"; then echo "unexpected success: $*" >&2; exit 1; fi; }
 
 run --latest

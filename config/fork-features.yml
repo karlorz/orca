@@ -18,6 +18,7 @@ features:
       - config/scripts/orca-home-launcher.sh
       - config/scripts/orca-box-ensure.sh
       - config/scripts/orca-home-appimage-install.ts
+      - config/scripts/orca-home-appimage-verification.ts
       - config/scripts/orca-home-appimage-install-cli.mjs
       - src/main/home-appimage-updater.ts
       - src/main/home-appimage-runtime.ts

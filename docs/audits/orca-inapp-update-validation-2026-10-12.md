@@ -57,6 +57,14 @@ The fixture packager requires a fresh directory under `/tmp`. The result include
 - Changed-lines code-quality gate against `origin/fork-main`, focused oxlint, `bash -n`, and `git diff --check` passed.
 - Protocol metadata generation returned `{"schemaVersion":1,"tag":"v1.4.224-1","daemonProtocol":44}`. Release workflow adds only this asset before the existing SHA256SUMS generation.
 
+## PR #21 line-limit follow-up
+
+CI on `f02b9de25e4` stopped in static analysis because the installer had 312 counted lines. The follow-up moves its checksum, package-marker/template, release-tag and saved-identity verification into `orca-home-appimage-verification.ts`. The transaction and verification function bodies match the earlier head exactly. The installer now has 227 nonblank lines; the verification module has 102. The existing lint rule remains active.
+
+The standalone installer copy recipe includes the new module, and the shell contract test runs the copied files from temporary storage. The no-emit main typecheck lists both modules and accepts explicit TypeScript extensions for Node 24 execution.
+
+Serial `heavy-run` verification passed: unsuppressed focused oxlint, strict project-derived focused typecheck, all 57 Vitest tests, changed-code quality, and main bundle build. Fresh AppImage fixtures completed the full isolated Xvfb journey again with `pass: true`, from `1.4.224-0` through the user-click restart to `1.4.224-1`. Full CI is rerun by the normal follow-up push.
+
 ## Limitations and operator follow-up
 
 The full repository TypeScript run was stopped after pushing MemAvailable below the host guard floor; the coordinator confirmed memory pressure. Full typecheck and cross-platform/regression/build checks remain CI responsibilities. No protocol bump or runtime-launcher change is included. Older releases lacking protocol metadata require an attended installation.
