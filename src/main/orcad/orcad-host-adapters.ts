@@ -6,6 +6,7 @@ import {
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
+import { describeOrcadSecretProtectionGap } from './orcad-secret-protection-gap'
 
 let installedQuitHandlers = (): void => {}
 
@@ -64,8 +65,7 @@ function createNodeSecretStore(): SecretStore {
     decryptString: () => {
       throw new Error('orcad_secret_sealing_unavailable')
     },
-    describeProtectionGap: () =>
-      'This host has no OS keyring, so credentials are stored unencrypted. Pair from a desktop to manage secrets, or install and unlock a keyring.'
+    describeProtectionGap: () => describeOrcadSecretProtectionGap(process.platform)
   }
 }
 
