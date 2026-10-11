@@ -78,6 +78,15 @@ Combined:
 - DeepSeek picker / `agentFlags` launch tests and relay-install retry tests
   were not in the conflict set; auto-merge kept them.
 
+## CI follow-up
+
+- Shard 5/5: `relayed-stream-carriers` census required `pet.speak.subscribe`
+  (`none` carrier). Fixed in `58ffb7e9634`.
+- Shard 5/5 retry: `daemon-init-child-startup-failure` hit bun's `fs`/`node:fs`
+  alias without `constants` (upstream doc-preview reads `O_NOFOLLOW` at import).
+  Add `constants` to the daemon-init `fs` mock.
+- Shard 1/5: cmd-j recent-tabs order failed once; 31/31 locally. Flake.
+
 ## Light local checks (this box, via `heavy-run`, glibc Node 22)
 
 - `pnpm install --ignore-scripts` then `pnpm --filter @orca/process-host build`.
