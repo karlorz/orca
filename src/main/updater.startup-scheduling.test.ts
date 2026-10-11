@@ -26,6 +26,12 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
+const homeUpdaterMock = vi.hoisted(() => ({ check: vi.fn(), download: vi.fn(), restart: vi.fn() }))
+vi.mock('./home-appimage-runtime', () => ({
+  createHomeAppImageUpdater: vi.fn(() => homeUpdaterMock),
+  relaunchHomeAppImage: vi.fn()
+}))
+
 warmUpdaterModule()
 
 describe('updater', () => {
@@ -54,7 +60,7 @@ describe('updater', () => {
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
   })
 
-  it('leaves home AppImage updates to the ensure script', async () => {
+  it('routes managed home actions through the shared pin-preserving updater', async () => {
     vi.stubEnv('ORCA_HOME_INSTALL_MANAGED', '1')
     vi.stubEnv('APPIMAGE', '/home/box/.local/opt/orca/orca-linux.AppImage')
     vi.stubGlobal('process', { ...process, platform: 'linux' })
@@ -66,7 +72,10 @@ describe('updater', () => {
     const updater = await loadUpdaterModule()
 
     updater.setupAutoUpdater(mainWindow as never)
+    await vi.waitFor(() => expect(homeUpdaterMock.check).toHaveBeenCalled())
     updater.checkForUpdates()
+    updater.checkForUpdatesFromMenu()
+    expect(homeUpdaterMock.check).toHaveBeenCalledWith(true)
     updater.checkForUpdatesFromMenu({ localBuild: true })
     updater.downloadUpdate()
     updater.quitAndInstall()
@@ -75,6 +84,8 @@ describe('updater', () => {
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
     expect(autoUpdaterMock.downloadUpdate).not.toHaveBeenCalled()
     expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(homeUpdaterMock.download).toHaveBeenCalledOnce()
+    expect(homeUpdaterMock.restart).toHaveBeenCalledOnce()
     expect(powerMonitorOnMock).not.toHaveBeenCalled()
     expect(fetchNudgeMock).not.toHaveBeenCalled()
     expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', retryable: false })

@@ -4,6 +4,7 @@ import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
 import type { UpdateSource, UpdateStatus } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
+import type { HomeAppImageUpdater } from '../home-appimage-updater'
 
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -48,6 +49,7 @@ export abstract class UpdaterState {
   protected onBeforeQuitFailure: PreQuitCleanupFailureMode = 'continue'
   protected autoUpdaterInitialized = false
   protected homeInstallManaged = false
+  protected homeAppImageUpdater: HomeAppImageUpdater | null = null
   // Why: modifier-clicking "Check for Updates" targets prerelease manifests; the feed still pins a concrete tag so cancelled prereleases without manifests are skipped.
   protected includePrereleaseActive = false
   protected availableVersion: string | null = null

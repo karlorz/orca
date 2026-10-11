@@ -148,12 +148,35 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       process.env.ORCA_HOME_INSTALL_MANAGED === '1' &&
       isEnsureManagedHomeAppImage({
         platform: process.platform,
+        architecture: process.arch,
         packageType: getLinuxPackageType(),
         managed: process.env.ORCA_HOME_INSTALL_MANAGED,
         appImagePath: process.env.APPIMAGE,
         homeDirectory: app.getPath('home')
       })
     if (this.homeInstallManaged) {
+      if (this.homeAppImageUpdater) {
+        return
+      }
+      void import('../home-appimage-runtime')
+        .then(({ createHomeAppImageUpdater, relaunchHomeAppImage }) => {
+          this.homeAppImageUpdater = createHomeAppImageUpdater({
+            sendStatus: (status) => this.sendStatus(status),
+            recordCheck: () => this.recordCompletedUpdateCheck(),
+            restartAborted: () => {
+              this.quittingForUpdate = false
+              this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+            },
+            prepareRestart: async () => {
+              this.quittingForUpdate = true
+              await this.runBeforeUpdateQuitCleanup()
+            },
+            restart: async () => relaunchHomeAppImage()
+          })
+          void this.homeAppImageUpdater.check()
+          this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+        })
+        .catch((error) => this.sendErrorStatus(String(error), true))
       return
     }
 

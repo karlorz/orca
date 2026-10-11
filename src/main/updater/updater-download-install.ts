@@ -14,6 +14,7 @@ import { UpdaterRemoteStatus } from './updater-remote-status'
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   protected quitAndInstall(): void {
     if (this.homeInstallManaged) {
+      void this.homeAppImageUpdater?.restart()
       return
     }
     if (
@@ -54,6 +55,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
 
   protected downloadUpdate(): void {
     if (this.homeInstallManaged) {
+      void this.homeAppImageUpdater?.download()
       return
     }
     if (

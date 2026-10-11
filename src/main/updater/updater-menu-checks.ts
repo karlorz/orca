@@ -4,18 +4,21 @@ import { isMacInstallRequested } from '../updater-mac-install'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import { UpdaterScheduling } from './updater-scheduling'
-import { HOME_APPIMAGE_UPDATE_MESSAGE } from '../linux-home-update-policy'
 
 /** Handles checks initiated from the desktop menu and modifier-key variants. */
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
     if (this.homeInstallManaged) {
-      this.sendStatus({
-        state: 'error',
-        message: HOME_APPIMAGE_UPDATE_MESSAGE,
-        userInitiated: true,
-        retryable: false
-      })
+      if (options?.localBuild || options?.targetTag || options?.channel) {
+        this.sendStatus({
+          state: 'error',
+          retryable: false,
+          userInitiated: true,
+          message: 'Managed home installations update through the fork desktop release feed.'
+        })
+      } else {
+        void this.homeAppImageUpdater?.check(true)
+      }
       return
     }
     if (

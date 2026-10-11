@@ -440,8 +440,11 @@ jobs:
           path: all-desktop-artifacts
 
       - name: Combine checksums and verify all release artifacts
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          node config/scripts/fork-update-protocol-metadata.mjs all-desktop-artifacts/orca-update-protocol.json
           rm -f all-desktop-artifacts/SHA256SUMS.txt
           (cd all-desktop-artifacts && shasum -a 256 * > SHA256SUMS.txt)
           node config/scripts/verify-fork-desktop-release-artifacts.mjs all-desktop-artifacts --platform=all

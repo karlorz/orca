@@ -10,13 +10,18 @@ fork:
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
   - id: linux-home-appimage-install
-    title: Home AppImage installer with pinned restore and ensure-managed updater opt-in
+    title: Home AppImage installer and protocol-gated in-app updater with shared pin-preserving verification
     kind: release
     status: landed
     paths:
       - config/scripts/install-orca-home-appimage.sh
       - config/scripts/orca-home-launcher.sh
       - config/scripts/orca-box-ensure.sh
+      - config/scripts/orca-home-appimage-install.ts
+      - config/scripts/orca-home-appimage-install-cli.mjs
+      - src/main/home-appimage-updater.ts
+      - src/main/home-appimage-runtime.ts
+      - src/main/home-appimage-release-policy.ts
       - src/main/linux-home-update-policy.ts
       - src/main/updater
       - docs/reference/linux-home-appimage-install.md
