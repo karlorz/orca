@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
@@ -33,16 +36,27 @@ vi.mock('./home-appimage-runtime', () => ({
 }))
 
 warmUpdaterModule()
+let managedHome: string | undefined
 
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
+    vi.stubEnv('ORCA_HOME_INSTALL_MANAGED', undefined)
+    vi.stubEnv('APPIMAGE', undefined)
+    homeUpdaterMock.check.mockReset()
+    homeUpdaterMock.download.mockReset()
+    homeUpdaterMock.restart.mockReset()
     vi.useFakeTimers()
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
+    Reflect.deleteProperty(appMock, 'getPath')
+    if (managedHome) {
+      rmSync(managedHome, { recursive: true, force: true })
+      managedHome = undefined
+    }
   })
 
   it('does not load or configure electron-updater during dev setup', async () => {
@@ -62,11 +76,14 @@ describe('updater', () => {
 
   it('routes managed home actions through the shared pin-preserving updater', async () => {
     vi.stubEnv('ORCA_HOME_INSTALL_MANAGED', '1')
-    vi.stubEnv('APPIMAGE', '/home/box/.local/opt/orca/orca-linux.AppImage')
-    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    managedHome = mkdtempSync(path.join(tmpdir(), 'orca-updater-home-'))
+    vi.stubEnv('HOME', managedHome)
+    vi.stubEnv('USERPROFILE', managedHome)
+    vi.stubEnv('APPIMAGE', path.join(managedHome, '.local', 'opt', 'orca', 'orca-linux.AppImage'))
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64' })
     Object.defineProperty(appMock, 'getPath', {
       configurable: true,
-      value: vi.fn(() => '/home/box')
+      value: vi.fn(() => managedHome)
     })
     const mainWindow = { webContents: { send: vi.fn() } }
     const updater = await loadUpdaterModule()

@@ -71,6 +71,14 @@ CI on `ba1d77d1b98` rejected `allowImportingTsExtensions` because the inherited 
 
 The failure reproduced with targeted `oxlint --type-aware --tsconfig config/tsconfig.node.json --config config/oxlint-code-quality-type-aware.json ... --deny-warnings` under `heavy-run` with a 4 GiB admission floor. The same command passed after the config change. All **58 focused tests** passed, including a regression that reads the effective inherited config through TypeScript 7 `--showConfig` and the copied standalone install/restore contracts. A focused TypeScript check inherited `noEmit` successfully without a command-line override. Additional checks used the normal 2 GiB admission floor without force bypass. An optional main-bundle build was stopped when available RAM fell below that floor; full build/typecheck remain CI gates. Installer and updater implementation and the prior Xvfb proof are preserved.
 
+## PR #21 managed-home shard fixture follow-up
+
+The failing node 24 shard on `cbdfca6d798` ran on `ubuntu-24.04-arm`. The managed-home startup test stubbed Linux and left `process.arch` as arm64, so the x64-only production policy rejected the fixture before creating the shared updater. The original test passed under repository-pinned Bun 1.4.2 on x64 with a disposable HOME, establishing that a different HOME alone does not explain the failed `homeUpdaterMock.check` expectation.
+
+The test now explicitly models Linux x64, creates a temporary HOME and matching APPIMAGE/app home paths, resets the managed updater spies, sanitizes inherited managed-install environment variables, and removes the temporary app mock property and HOME after each test. The policy fixture uses portable temporary paths and asserts arm64 rejection. Production path and architecture checks remain unchanged.
+
+Under serial `heavy-run` with a 4 GiB RAM admission floor, all **59 focused tests passed under Bun 1.4.2**, and the startup/policy suites passed **26 tests under Node 24**, both with a disposable process HOME. A shuffled adjacent updater run passed **49 tests across four files** with CI-like managed-install variables cleared at launch; those adjacent unchanged suites assume that clean environment. The initial adjacent run with the box's inherited opt-in failed before that environment was cleared. Focused ordinary/type-aware lint and whitespace checks passed. The full ARM shard remains a GitHub CI gate; local verification used x64 and explicit architecture fixtures.
+
 ## Limitations and operator follow-up
 
 The full repository TypeScript run was stopped after pushing MemAvailable below the host guard floor; the coordinator confirmed memory pressure. Full typecheck and cross-platform/regression/build checks remain CI responsibilities. No protocol bump or runtime-launcher change is included. Older releases lacking protocol metadata require an attended installation.

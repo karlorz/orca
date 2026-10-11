@@ -1,12 +1,16 @@
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isEnsureManagedHomeAppImage } from './linux-home-update-policy'
 
+const homeDirectory = path.join(tmpdir(), 'orca-policy-home')
 const homeImage = {
   platform: 'linux',
+  architecture: 'x64',
   packageType: 'non-root',
   managed: '1',
-  appImagePath: '/home/box/.local/opt/orca/orca-linux.AppImage',
-  homeDirectory: '/home/box'
+  appImagePath: path.join(homeDirectory, '.local', 'opt', 'orca', 'orca-linux.AppImage'),
+  homeDirectory
 }
 
 describe('ensure-managed home AppImage updates', () => {
@@ -22,13 +26,14 @@ describe('ensure-managed home AppImage updates', () => {
     { packageType: 'unusable' },
     { platform: 'darwin' },
     { platform: 'win32' },
+    { architecture: 'arm64' },
     { appImagePath: undefined },
     { appImagePath: 'relative.AppImage' },
-    { appImagePath: '/home/box/orca\0.AppImage' },
-    { appImagePath: '/opt/Orca/orca-linux.AppImage' },
-    { appImagePath: '/home/box-shadow/orca-linux.AppImage' },
-    { appImagePath: '/home/box/../elsewhere/orca-linux.AppImage' },
-    { appImagePath: '/home/box' }
+    { appImagePath: path.join(homeDirectory, 'orca\0.AppImage') },
+    { appImagePath: path.join(tmpdir(), 'outside-policy-home', 'orca-linux.AppImage') },
+    { appImagePath: path.join(`${homeDirectory}-shadow`, 'orca-linux.AppImage') },
+    { appImagePath: path.join(homeDirectory, '..', 'elsewhere', 'orca-linux.AppImage') },
+    { appImagePath: homeDirectory }
   ])('preserves ordinary updater behavior for %o', (override) => {
     expect(isEnsureManagedHomeAppImage({ ...homeImage, ...override })).toBe(false)
   })
