@@ -1,9 +1,18 @@
 import { vi } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import type { DaemonInitMockState } from './daemon-init-test-harness'
+import {
+  pinDaemonInitMocksAfterReset,
+  type DaemonInitPinFactories
+} from './daemon-init-reset-modules-pin'
+
+export type { DaemonInitPinFactories }
 
 /** Resets every mock plus the module registry, then re-imports daemon-init so its module-level spawner/adapter/restartInFlight start fresh. */
-export async function importFreshDaemonInit(state: DaemonInitMockState) {
+export async function importFreshDaemonInit(
+  state: DaemonInitMockState,
+  pinFactories?: DaemonInitPinFactories
+) {
   const {
     getPathMock,
     getAppPathMock,
@@ -124,12 +133,13 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     exit: () => {},
     getAppMetrics: () => []
   } as unknown as AppEnvironment)
+  if (pinFactories) {
+    await pinDaemonInitMocksAfterReset(pinFactories)
+  }
   // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
-  const [init, restart, providerState, cleanup] = await Promise.all([
-    import('./daemon-provider-init'),
-    import('./daemon-provider-restart'),
-    import('./daemon-provider-state'),
-    import('./daemon-protocol-cleanup')
-  ])
+  const init = await import('./daemon-provider-init')
+  const restart = await import('./daemon-provider-restart')
+  const providerState = await import('./daemon-provider-state')
+  const cleanup = await import('./daemon-protocol-cleanup')
   return { ...init, ...restart, ...providerState, ...cleanup }
 }

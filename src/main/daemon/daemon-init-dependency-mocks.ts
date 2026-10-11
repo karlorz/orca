@@ -166,6 +166,10 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
       // Why: bun aliases `fs` to `node:fs`; doc-preview-file-access reads constants at import.
       constants: { O_NOFOLLOW: 0, O_NONBLOCK: 0 },
       mkdirSync: vi.fn<(...args: unknown[]) => void>(),
+      chmodSync: vi.fn<(...args: unknown[]) => void>(),
+      lstatSync: vi.fn(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }),
       existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
       unlinkSync: unlinkSyncMock,
       readFileSync: readFileSyncMock,

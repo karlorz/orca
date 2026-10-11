@@ -59,8 +59,10 @@
     // mock-descendant-sweep.ts (daemon and relay) is a test-only side-effect shim: its whole body
     // is one vi.mock that keeps mock PTY PIDs away from the host process table, and it exists so
     // 60 suites do not each inline the same hoisted factory. It is never imported by product code.
+    // daemon-init-reset-modules-pin.ts re-applies those factories after resetModules so bun does
+    // not load the real ipc/pty barrel; also never imported by product code.
     {
-      "files": ["**/mock-descendant-sweep.ts"],
+      "files": ["**/mock-descendant-sweep.ts", "**/daemon-init-reset-modules-pin.ts"],
       "rules": {
         "anti-slop/no-module-mocking": "off"
       }

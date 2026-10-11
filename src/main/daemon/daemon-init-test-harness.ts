@@ -222,11 +222,19 @@ export function createDaemonInitMocks(): DaemonInitMocks {
     })
   }
 
+  const moduleFactories = createDaemonInitModuleFactories(state)
   return {
     ...state,
     ...createNetConnectStubs(state),
     mockConnectedAdoptionClientOnce,
-    importFresh: () => importFreshDaemonInit(state),
-    moduleFactories: createDaemonInitModuleFactories(state)
+    importFresh: () =>
+      importFreshDaemonInit(state, {
+        fs: moduleFactories.fs,
+        net: moduleFactories.net,
+        ipcPty: moduleFactories.ipcPty,
+        daemonSpawner: moduleFactories.daemonSpawner,
+        daemonPtyAdapter: moduleFactories.daemonPtyAdapter
+      }),
+    moduleFactories
   }
 }
