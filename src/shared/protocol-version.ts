@@ -47,6 +47,7 @@ import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from './preflight-other-runtime-refusal-capability'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
+import { DEVICE_KEY_RUNTIME_CAPABILITY } from './device-key-capability'
 // Why a star: every resume capability is part of the runtime contract this module re-exports.
 export * from './agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
@@ -142,6 +143,8 @@ export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parki
 // Why: terminal.ensureAgentSession params are strict, so an older host rejects `spawnIntent`; a
 // host that advertises this also may answer a declared restore with `terminal_spawn_deferred`.
 export const TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY = 'terminal.spawn-intent.v1' as const
+// Why: clients offer "Resume automatic restores" only on hosts that can clear a recorded pause.
+export const RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY = 'runtime.automatic-work.v1' as const
 // Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
@@ -347,6 +350,7 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
 
 export const RUNTIME_CAPABILITIES = [
   ...ORCAD_RUNTIME_CAPABILITIES,
+  DEVICE_KEY_RUNTIME_CAPABILITY,
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
@@ -386,6 +390,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY,
+  RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
