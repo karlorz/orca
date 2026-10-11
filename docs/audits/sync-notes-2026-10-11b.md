@@ -87,3 +87,10 @@ Kept both:
   - `runtime-ssh-target-management.test.ts`: 13 passed
   - `use-remote-file-browser-listing.test.ts`: local transform failed to resolve `@/runtime/...` aliases (same class of local alias miss as `AddRepoSteps.default-checkout.test.ts` → `@/i18n/i18n`). Not treated as a merge defect; GitHub CI runs the full vitest config.
 - Full `pnpm tc` (node+web) and electron-builder not run locally.
+
+## CI follow-up
+
+`test / tests node 24 5/5` failed on `node-server-change-scope.test.mjs` (7 cases).
+Cause: upstream `#27215` removed `src/relay/` from `CROSS_HOST_PREFIXES` and did not
+move the change-scope fixtures off `src/relay/…`. Pointed those fixtures at
+`src/main/ssh/` (still a cross-host prefix). Local vitest: 98 passed.

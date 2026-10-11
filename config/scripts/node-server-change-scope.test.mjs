@@ -338,7 +338,7 @@ it.each([
 })
 
 const registry = 'config/scripts/vitest-node-runtime-files.mjs'
-const unrelatedRelayUnit = 'src/relay/agent-status-store-relay-context.test.ts'
+const unrelatedRelayUnit = 'src/main/ssh/unrelated-context.test.ts'
 
 function qualificationTree(extra = {}) {
   return moduleTree({
@@ -349,7 +349,7 @@ function qualificationTree(extra = {}) {
   })
 }
 
-it('keeps a Node harness smoke without widening it for an unrelated modified relay unit', async () => {
+it('keeps a Node harness smoke without widening it for an unrelated modified SSH unit', async () => {
   const root = qualificationTree()
   writeFileSync(join(root, registry), 'export const NODE_RUNTIME_INCLUDE = ["new.unit.test.ts"]')
   const changed = [registry, unrelatedRelayUnit]
@@ -387,13 +387,13 @@ it.each([
   expect(nodeServerQualification(diff, s)).toEqual({ qualification, runners })
 })
 
-it('keeps every host when the modified relay production module is an actual consumer', async () => {
-  const relay = 'src/relay/agent-status-store.ts'
+it('keeps every host when the modified SSH production module is an actual consumer', async () => {
+  const sshModule = 'src/main/ssh/agent-status-store.ts'
   const root = qualificationTree({
-    'entry.ts': `import './${registry}'; import './${relay}'; throw Error('never execute')`,
-    [relay]: 'export const store = 1'
+    'entry.ts': `import './${registry}'; import './${sshModule}'; throw Error('never execute')`,
+    [sshModule]: 'export const store = 1'
   })
-  const changed = [registry, relay, unrelatedRelayUnit]
+  const changed = [registry, sshModule, unrelatedRelayUnit]
   const scope = await classifyNodeServerChanges(
     changed,
     () => collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }),
@@ -416,7 +416,7 @@ it.each(['added', 'deleted', 'renamed', 'unknown', 'duplicate', 'foreign'])(
       rmSync(join(root, unrelatedRelayUnit))
     }
     if (status === 'renamed') {
-      const renamed = 'src/relay/renamed-context.test.ts'
+      const renamed = 'src/main/ssh/renamed-context.test.ts'
       writeFileSync(join(root, renamed), 'throw Error("never execute renamed test")')
       changed.push(renamed)
     }
@@ -424,7 +424,7 @@ it.each(['added', 'deleted', 'renamed', 'unknown', 'duplicate', 'foreign'])(
       modifiedFiles = [registry, registry]
     }
     if (status === 'foreign') {
-      modifiedFiles = [registry, 'src/relay/foreign.test.ts']
+      modifiedFiles = [registry, 'src/main/ssh/foreign.test.ts']
     }
     const scope = await classifyNodeServerChanges(
       changed,
