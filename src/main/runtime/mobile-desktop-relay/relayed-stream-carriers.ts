@@ -14,6 +14,7 @@ export const RELAYED_STREAM_CARRIERS: ReadonlyMap<string, RelayedStreamCarrier> 
   ['agentSession.subscribe', 'none'],
   ['agentSession.subscribeStatus', 'none'],
   ['nativeChat.subscribe', 'none'],
+  ['pet.speak.subscribe', 'none'],
   ['session.tabs.subscribe', 'none'],
   ['session.tabs.subscribeAll', 'none']
 ])

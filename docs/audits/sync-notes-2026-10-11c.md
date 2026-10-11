@@ -57,7 +57,9 @@ the fork pet-speech device-registry cleanup already auto-merged after it.
 Took upstream: allowlist is now `new Set(MOBILE_RPC_METHOD_ROUTES.keys())`.
 Added the five fork `pet.speak.*` methods to `EXECUTION_HOST_METHODS` in
 `runtime-rpc-mobile-method-routing.ts` (`pet: 'host'`), so the derived
-allowlist still authorizes the phone pet-speech RPCs.
+allowlist still authorizes the phone pet-speech RPCs. Classified
+`pet.speak.subscribe` as a `'none'` relayed stream carrier (JSON events,
+no host-allocated stream id), next to `nativeChat.subscribe`.
 
 ### `src/renderer/src/components/automations/use-automations-page-store-state.ts`
 
