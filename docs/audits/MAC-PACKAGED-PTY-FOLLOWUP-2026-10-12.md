@@ -50,6 +50,26 @@ All heavy work runs serially through `heavy-run`, memory floor 2048 MiB, explici
 - After adding the explicit Node runtime assignment, verifier and privacy suites reran **19/19 passed**. Runtime-boundary tests passed the exposed-GC ownership check and failed their existing Node >=24 requirement under the brief-required Node 22.19; that CI-runtime contract remains for ordinary CI. A direct source assertion confirmed the diagnostics file is in `NODE_RUNTIME_INCLUDE`.
 - Scoped `oxlint`, `oxfmt`, and `git diff --check`: passed. Changed-code-quality gate against `8778814b8feacf6067a3e45cec7624be3432163b`: passed with zero new findings.
 
+## PR #24 CI repair — closed-peer write race
+
+Initial PR Checks run `38187566151`, attempt 1, job `114613745870` (Node 24 shard 3/5), failed only the closed-peer verifier assertion at `config/scripts/verify-packaged-daemon-entry.test.mjs:292`. The server deliberately destroys the control socket; the OS returned `write EPIPE`, and the report showed cleanup completed in 115 ms. The assertion accepted close and `ECONNRESET` but omitted the legitimate write-side broken-pipe result.
+
+The follow-up changes that assertion to accept the precise `write EPIPE` word-bounded error and updates its one-line comment (`:291–292`). The existing below-deadline, daemon-exited, and scratch-removed assertions stay intact (`:293–295`). Product code, computed-output requirement, deadline, and cleanup are unchanged. A successful old-head retry cannot replace this durable regression correction.
+
+Verification ran serially with the same memory floor/background policy and disclosed installed PTY fixture:
+
+- Verifier plus diagnostics, explicit glibc Node 22.19.0: **five repetitions, 19/19 passed each**.
+- The same suites under available glibc Node 24.21.0: **three repetitions, 19/19 passed each**.
+- Unchanged plugin reconciliation suite under glibc Node 24.21.0: **three repetitions, 11/11 passed each**.
+
+### Shard 5 abort investigation and limits
+
+Initial job `114613745829` ended with a Vitest fork-worker `SIGABRT` while running `src/main/plugins/plugin-service-reconciliation.test.ts`, with 23,580 tests passed and one unhandled worker error. The log supplies no plugin assertion failure, crash backtrace, allocator failure, or causal out-of-memory evidence. The runner was `ubuntu-24.04-arm`, image `20261004.142.1`, Bun `1.4.2+744846f84`, using four workers. Plugin code/tests, shared plugin code, Vitest config, Bun pin, and lockfile are byte-unchanged against both the requested base and the earlier sync head `290db4003dc36db88466ef066893dc3a979cb562`.
+
+Actual baseline evidence: prior full-matrix run `38174442282`, shard-5 job `114574881340`, executed this same plugin suite successfully (**11 tests, 377 ms**) on the same ARM64 image and Bun revision. Local Node24 repetitions also passed, but do not reproduce the ARM64/Bun/full-shard environment. Local Bun is 1.4.0, so it supplies no matching Bun-runtime proof. The abort cause remains unresolved; baseline success or a successful retry alone cannot establish flakiness. No plugin/runtime changes or test exclusions are justified by the available evidence.
+
+The coordinator's existing rerun of old head `f02d19bffe9cd428fe93a04b997791aa090b0902` is attempt 2 of `38187566151`; shard 3 job `114617805345` and shard 5 job `114617805483` were still running at the last pre-push check. This worker issued no CI rerun. New-head CI must pass after the durable assertion repair; parent owns its observation and final review. The separate `orca-mac-validation-go` gate remains **OPEN**.
+
 ## Genuine macOS validation proposal — attended approval required
 
 Ordinary PR CI cannot prove a self-signed packaged helper. Before the next release claim, obtain a successful publication-disabled build of the **reviewed full PR head SHA**, with x64/Rosetta and arm64 computed-output and signature gates. If it fails, use the scoped report to identify the stage before attempting a runtime fix.
