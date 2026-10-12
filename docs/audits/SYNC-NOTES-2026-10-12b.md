@@ -48,7 +48,17 @@ Heavy commands acquire `/tmp/coord-pl-1157-heavy.lock`, then check `MemAvailable
 - Runtime-launcher/protocol ratchet: passed, protocol 45 on both sides.
 - Scoped formatting and `git diff --check`: passed before the merge commit.
 - Changed mobile/shared tests: **25 shared tests passed** (2 files), **133 mobile tests passed** (12 files), including pairing, stream resubscription, keyboard/refit, APK updater and pet speech. Frozen mobile install with lifecycle scripts disabled passed.
-- Code-quality/type checks: pending at initial PR creation; subsequent evidence will be recorded below.
+- CLI typecheck (`node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.tc.cli.json`): passed.
+- Final key merge regressions: **155/155 passed**, 6 files.
+- Changed-code quality root, casting and focused-plugin scans: zero new findings across **1,122 changed code files**. The type-aware scan reached approximately 4 GiB RSS and created memory pressure, so it was stopped; full local changed-code quality is unverified. CI's root/native/type-aware lint steps reported zero errors before its renderer typecheck failed.
+
+## PR and same-branch CI repair
+
+Initial PR: [#27](https://github.com/karlorz/orca/pull/27), merge head `0e0c48fd599f44bbca0bd17c323b743b947a573c`, parents exactly the fork base and upstream pin. The coordinator received PR/head/protocol/conflict/test evidence early.
+
+Initial CI failures in the compiler comparison, PR static/typecheck job and Windows packaged build all report the same renderer error: `SetProjectLocationDialog.tsx:202` still passes `sshTargetId` to the shared `CreateProjectParentBrowser`. The AddRepo flow removed direct SSH placement, while the shared browser retains a separate project-location SSH caller. Restore the optional shared-browser prop and forward `targetId` into the existing listing authority. Preserve Linux local and server-owned SSH branches. Add explicit target-forwarding assertions to both existing-folder and clone journeys.
+
+Repair verification: **16 tests passed**, 4 browser/location suites; scoped root lint and formatting passed. Full renderer typecheck remains assigned to ordinary CI because its measured compiler graph exceeds the practical local memory envelope. This repair uses a normal follow-up commit on the same PR branch.
 
 ## Execution and review boundary
 

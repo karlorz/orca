@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 
 type CreateProjectParentBrowserProps = {
   runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   local?: boolean
   createParent: string
   onParentChange: (value: string) => void
@@ -16,6 +17,7 @@ type CreateProjectParentBrowserProps = {
 
 export function CreateProjectParentBrowser({
   runtimeEnvironmentId,
+  sshTargetId,
   local = false,
   createParent,
   onParentChange,
@@ -43,6 +45,7 @@ export function CreateProjectParentBrowser({
       </DialogHeader>
       <RemoteFileBrowser
         local={local}
+        targetId={sshTargetId ?? undefined}
         runtimeEnvironmentId={runtimeEnvironmentId ?? undefined}
         initialPath={createParent || '~'}
         onSelect={selectPath}
