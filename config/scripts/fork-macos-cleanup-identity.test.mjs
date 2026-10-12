@@ -13,7 +13,7 @@ afterEach(() => {
   }
 })
 
-function fixture() {
+function fixture(importFailure = false) {
   const root = mkdtempSync(join(tmpdir(), 'fork-signing-cleanup-'))
   roots.push(root)
   const bin = join(root, 'bin')
@@ -30,6 +30,7 @@ case "$1" in
       printf '    "/fixture/login.keychain-db"\\n'
     fi ;;
   create-keychain) touch "\u0024{!#}" ;;
+  import) [[ "\u0024{FAIL_IMPORT:-}" != 1 ]] || exit 1 ;;
   delete-keychain)
     [[ "\u0024{FAIL_DELETE:-}" != 1 ]] || exit 1
     rm "$2" ;;
@@ -46,7 +47,16 @@ esac
     CSC_KEY_PASSWORD: 'fixture-password',
     CSC_NAME: 'Orca Fork (karlorz)'
   }
-  execFileSync('bash', [trust.pathname], { env, stdio: 'pipe' })
+  if (importFailure) {
+    expect(() =>
+      execFileSync('bash', [trust.pathname], {
+        env: { ...env, FAIL_IMPORT: '1' },
+        stdio: 'pipe'
+      })
+    ).toThrow()
+  } else {
+    execFileSync('bash', [trust.pathname], { env, stdio: 'pipe' })
+  }
   return { root, env }
 }
 
@@ -76,6 +86,18 @@ describe.skipIf(process.platform === 'win32')(
       ).toThrow()
       expect(readFileSync(join(root, 'operations'), 'utf8')).toContain('delete-keychain')
       expect(() => readFileSync(join(root, 'orca-fork-codesign/identity.p12'))).toThrow()
+    })
+    it('cleans a partial import after keychain creation and p12 decode', () => {
+      const { root, env } = fixture(true)
+      expect(readFileSync(join(root, 'orca-fork-codesign/identity.p12'), 'utf8')).toBe(
+        'fixture-p12'
+      )
+      execFileSync('bash', [cleanup.pathname], { env, stdio: 'pipe' })
+      expect(readFileSync(join(root, 'operations'), 'utf8')).toContain('delete-keychain')
+      expect(() => readFileSync(join(root, 'orca-fork-codesign/identity.p12'))).toThrow()
+      expect(() =>
+        readFileSync(join(root, 'orca-fork-codesign/fork-codesign.keychain-db'))
+      ).toThrow()
     })
     it('reports keychain deletion failure while still removing p12 material', () => {
       const { root, env } = fixture()
