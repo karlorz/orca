@@ -387,7 +387,7 @@ describe('release install targets', () => {
     'daily-mac-build',
     'hourly-mac-build',
     'release-mac-build',
-    'fork-desktop-voice-release'
+    'fork-mac-package'
   ])('%s installs both mac CPU variants for the x64+arm64 package config', (name) => {
     const installs = installCommands(name)
     expect(installs.length).toBeGreaterThan(0)

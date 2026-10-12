@@ -13,6 +13,9 @@ fi
 
 workdir="${RUNNER_TEMP:-/tmp}/orca-fork-codesign"
 mkdir -p "$workdir"
+chmod 700 "$workdir"
+umask 077
+security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//' > "$workdir/original-keychains.txt"
 p12="$workdir/identity.p12"
 
 if ! printf '%s' "$CSC_LINK" | base64 --decode > "$p12" 2>/dev/null; then
