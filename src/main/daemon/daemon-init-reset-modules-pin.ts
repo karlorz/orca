@@ -4,7 +4,8 @@ import { vi } from 'vitest'
 export type DaemonInitPinFactories = {
   fs: () => object
   net: () => object
-  ipcPty: () => object
+  ptyProviderRegistry: () => object
+  ptyListenerLifecycle: () => object
   daemonSpawner: () => object
   daemonPtyAdapter: () => object
 }
@@ -20,8 +21,9 @@ export async function pinDaemonInitMocksAfterReset(
   vi.doMock('node:fs', factories.fs)
   vi.doMock('net', factories.net)
   vi.doMock('node:net', factories.net)
-  vi.doMock('../ipc/pty', factories.ipcPty)
+  vi.doMock('../ipc/pty/provider/registry', factories.ptyProviderRegistry)
+  vi.doMock('../ipc/pty/provider/listener-lifecycle', factories.ptyListenerLifecycle)
   vi.doMock('./daemon-spawner', factories.daemonSpawner)
   vi.doMock('./daemon-pty-adapter', factories.daemonPtyAdapter)
-  await import('../ipc/pty')
+  await import('../ipc/pty/provider/registry')
 }

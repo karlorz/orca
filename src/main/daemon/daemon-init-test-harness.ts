@@ -231,7 +231,8 @@ export function createDaemonInitMocks(): DaemonInitMocks {
       importFreshDaemonInit(state, {
         fs: moduleFactories.fs,
         net: moduleFactories.net,
-        ipcPty: moduleFactories.ipcPty,
+        ptyProviderRegistry: moduleFactories.ptyProviderRegistry,
+        ptyListenerLifecycle: moduleFactories.ptyListenerLifecycle,
         daemonSpawner: moduleFactories.daemonSpawner,
         daemonPtyAdapter: moduleFactories.daemonPtyAdapter
       }),
