@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type * as NodeFs from 'node:fs'
 import { PROTOCOL_VERSION } from './types'
 import type { Mock } from 'vitest'
 import type {
@@ -162,19 +163,21 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
   }
 
   return {
-    fs: () => ({
-      // Why: bun aliases `fs` to `node:fs`; doc-preview-file-access reads constants at import.
-      constants: { O_NOFOLLOW: 0, O_NONBLOCK: 0 },
-      mkdirSync: vi.fn<(...args: unknown[]) => void>(),
-      chmodSync: vi.fn<(...args: unknown[]) => void>(),
-      lstatSync: vi.fn(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }),
-      existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
-      unlinkSync: unlinkSyncMock,
-      readFileSync: readFileSyncMock,
-      writeFileSync: writeFileSyncMock
-    }),
+    fs: async () => {
+      const actual = await vi.importActual<typeof NodeFs>('node:fs')
+      return {
+        constants: actual.constants,
+        chmodSync: vi.fn<(...args: unknown[]) => void>(),
+        lstatSync: vi.fn(() => {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+        }),
+        mkdirSync: vi.fn<(...args: unknown[]) => void>(),
+        existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
+        unlinkSync: unlinkSyncMock,
+        readFileSync: readFileSyncMock,
+        writeFileSync: writeFileSyncMock
+      }
+    },
     net: () => ({
       connect: netConnectMock
     }),

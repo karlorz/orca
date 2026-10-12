@@ -31,7 +31,6 @@ import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
-  worktreeId: string
   cwd?: string
   isActive: boolean
   isVisible: boolean
@@ -65,7 +64,6 @@ function reportRendererPtyVisibility(
 
 export function useTerminalPaneGlobalEffects({
   tabId,
-  worktreeId,
   isActive,
   isVisible,
   isChatViewMode = false,
@@ -80,8 +78,6 @@ export function useTerminalPaneGlobalEffects({
   isVisibleRef,
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
-  const worktreeIdRef = useRef(worktreeId)
-  worktreeIdRef.current = worktreeId
   // Starts true so the first render with isVisible=false triggers a
   // suspendRendering(). Background worktrees that mount hidden would
   // otherwise leak WebGL contexts — openTerminal() unconditionally creates
@@ -248,7 +244,6 @@ export function useTerminalPaneGlobalEffects({
       handleTerminalProgrammaticTextPaste({
         detail,
         tabId,
-        worktreeId: worktreeIdRef.current,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
@@ -259,7 +254,6 @@ export function useTerminalPaneGlobalEffects({
 
   useTerminalDictationEvents({
     tabId,
-    worktreeIdRef,
     isActiveRef,
     managerRef,
     paneTransportsRef

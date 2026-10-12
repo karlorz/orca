@@ -15,7 +15,6 @@ type CloneStepProps = {
   isCloning: boolean
   disableDestinationPicker?: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   cloneTargetLabel?: string | null
   /** No host resolved yet (its server is still coming up): never clone onto this computer. */
   submitDisabled?: boolean
@@ -33,7 +32,6 @@ export function CloneStep({
   isCloning,
   disableDestinationPicker = false,
   runtimeEnvironmentId,
-  sshTargetId,
   cloneTargetLabel,
   onUrlChange,
   onDestChange,
@@ -42,7 +40,7 @@ export function CloneStep({
   submitDisabled = false
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
-  const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
+  const isRemoteClone = Boolean(runtimeEnvironmentId)
   const canBrowseRemoteDestination = isRemoteClone
   const useLocalFilesystemBrowser = !isRemoteClone && shouldUseInAppLocalFolderPicker()
   const canBrowseInAppDestination = canBrowseRemoteDestination || useLocalFilesystemBrowser
@@ -56,12 +54,11 @@ export function CloneStep({
     }
   }
 
-  if (browsingDestination && (runtimeEnvironmentId || sshTargetId || useLocalFilesystemBrowser)) {
+  if (browsingDestination && (runtimeEnvironmentId || useLocalFilesystemBrowser)) {
     return (
       <CreateProjectParentBrowser
         local={useLocalFilesystemBrowser}
         runtimeEnvironmentId={runtimeEnvironmentId}
-        sshTargetId={sshTargetId}
         createParent={cloneDestination}
         onParentChange={onDestChange}
         onClose={() => setBrowsingDestination(false)}
@@ -118,7 +115,7 @@ export function CloneStep({
               onChange={(e) => onDestChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                isRemoteClone
+                runtimeEnvironmentId
                   ? translate(
                       'auto.components.sidebar.AddRepoSteps.remoteCloneParentPlaceholder',
                       '/home/user/projects'

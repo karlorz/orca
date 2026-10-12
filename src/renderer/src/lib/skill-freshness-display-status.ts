@@ -1,4 +1,5 @@
 import {
+  isOrcaSkillLockSource,
   isOutdatedExternalLink,
   isSkillCopyNeedingAttention,
   isSkillScanIssueNeedingAttention,
@@ -17,7 +18,14 @@ export function getSkillFreshnessDisplayStatus(
   skillName: string
 ): SkillFreshnessDisplayStatus {
   if (inventory?.eligibleUpdateNames.includes(skillName)) {
-    return 'update-available'
+    // Why: a same-named copy Orca did not install is offered unselected in the dialog,
+    // but never advertised; "up to date" would be false, so report presence only.
+    return inventory.installations.some(
+      (installation) =>
+        installation.name === skillName && isOrcaSkillLockSource(installation.lockSource)
+    )
+      ? 'update-available'
+      : 'installed'
   }
   const namedInstallations = (inventory?.installations ?? []).filter(
     (installation) => installation.name === skillName
@@ -25,25 +33,14 @@ export function getSkillFreshnessDisplayStatus(
   let hasPlacement = false
   let hasBlockedCopy = false
   for (const installation of namedInstallations) {
-    // Why: a project-owned copy is outside the global updater's reach, so it can neither
-    // stand in as evidence this skill is installed globally nor make the badge amber over
-    // drift Orca has no way to fix. Skipped before `hasPlacement` so a repo-only skill
-    // reports presence, not a freshness claim about a copy Orca does not manage.
     if (!skillPlacementParticipatesInGlobalFreshness(installation)) {
       continue
     }
     hasPlacement = true
-    // Why: 'newer-known' is recognized official content ahead of this build — the
-    // updater's own install or a newer release's bytes. There is nothing to fix and
-    // nothing to update to, so amber would send the user chasing a phantom edit.
     if (isOutdatedExternalLink(installation)) {
       continue
     }
-    if (
-      installation.status !== 'current' &&
-      installation.status !== 'newer-known' &&
-      !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache')
-    ) {
+    if (installation.status !== 'current') {
       hasBlockedCopy = true
     }
   }
@@ -84,8 +81,7 @@ export function hasSkillCopyNeedingAttention(
       Boolean(inventory?.scanIssues.some(isSkillScanIssueNeedingAttention))) ||
     placements.some(
       (installation) =>
-        !isOutdatedExternalLink(installation) &&
-        isSkillCopyNeedingAttention(installation)
+        !isOutdatedExternalLink(installation) && isSkillCopyNeedingAttention(installation)
     )
   )
 }

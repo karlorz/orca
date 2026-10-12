@@ -36,7 +36,6 @@ describe('handleDictationReplaceTextEvent', () => {
     }
     const args = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       getManager: () =>
         ({
           getPanes: () => [pane],
@@ -98,7 +97,6 @@ describe('handleDictationReplaceTextEvent', () => {
     }
     const args = {
       tabId: 'tab-1',
-      worktreeId: 'wt-1',
       getManager: () =>
         ({
           getPanes: () => [pane],

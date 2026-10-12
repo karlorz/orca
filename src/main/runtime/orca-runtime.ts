@@ -15,10 +15,6 @@ import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
-import {
-  shouldWatchLayoutRoundTrip,
-  watchLayoutRoundTrip
-} from './workspace-layout-round-trip-watch'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
@@ -95,9 +91,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
-    if (this.store && shouldWatchLayoutRoundTrip()) {
-      watchLayoutRoundTrip(this.store)
-    }
   }
 
   private petSpeakListeners = new Set<(event: ReplayablePetSpeakEvent) => void>()

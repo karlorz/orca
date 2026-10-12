@@ -60,7 +60,6 @@ type CreateProjectLocationFieldProps = {
   isCreating: boolean
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   useLocalFilesystemBrowser?: boolean
   onParentChange: (value: string) => void
   onPickParent: () => void
@@ -72,14 +71,12 @@ export function CreateProjectLocationField({
   isCreating,
   manualParentEntry,
   runtimeEnvironmentId,
-  sshTargetId,
   useLocalFilesystemBrowser = false,
   onParentChange,
   onPickParent,
   onBrowseServer
 }: CreateProjectLocationFieldProps): React.JSX.Element {
-  const canBrowseHostFilesystem =
-    Boolean(runtimeEnvironmentId) || Boolean(sshTargetId) || useLocalFilesystemBrowser
+  const canBrowseHostFilesystem = Boolean(runtimeEnvironmentId) || useLocalFilesystemBrowser
   const handleBrowse = (): void => {
     if (canBrowseHostFilesystem) {
       onBrowseServer()

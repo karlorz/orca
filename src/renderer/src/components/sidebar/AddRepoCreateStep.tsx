@@ -32,7 +32,6 @@ type CreateStepProps = {
   parentDefaultPending?: boolean
   manualParentEntry?: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   /** No host resolved yet (its server is still coming up): never create on this computer. */
   submitDisabled?: boolean
   onNameChange: (value: string) => void
@@ -52,7 +51,6 @@ export function CreateStep({
   parentDefaultPending = false,
   manualParentEntry = false,
   runtimeEnvironmentId,
-  sshTargetId,
   submitDisabled = false,
   onNameChange,
   onParentChange,
@@ -60,11 +58,11 @@ export function CreateStep({
   onCreate
 }: CreateStepProps): React.JSX.Element {
   const [browsingParent, setBrowsingParent] = useState(false)
-  // Why: SSH hosts need a typed remote path; hiding that field behind the
+  // Why: server hosts need a typed host path; hiding that field behind the
   // collapsed defaults makes the create flow look impossible.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
 
-  // Why: SSH hosts report "unknown"; only a confirmed Git miss should block
+  // Why: a failed probe reports "unknown"; only a confirmed Git miss should block
   // Git-only creation.
   const canSubmit =
     createName.trim().length > 0 &&
@@ -82,7 +80,7 @@ export function CreateStep({
     'auto.components.sidebar.AddRepoCreateStep.6ed14c0281',
     'host folder not selected'
   )
-  const isRemoteHost = Boolean(runtimeEnvironmentId || sshTargetId)
+  const isRemoteHost = Boolean(runtimeEnvironmentId)
   const useLocalFilesystemBrowser = !isRemoteHost && shouldUseInAppLocalFolderPicker()
 
   const summaryParent = useMemo(
@@ -117,11 +115,10 @@ export function CreateStep({
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 
-  if (browsingParent && (runtimeEnvironmentId || sshTargetId || useLocalFilesystemBrowser)) {
+  if (browsingParent && (runtimeEnvironmentId || useLocalFilesystemBrowser)) {
     return (
       <CreateProjectParentBrowser
         runtimeEnvironmentId={runtimeEnvironmentId}
-        sshTargetId={sshTargetId}
         local={useLocalFilesystemBrowser}
         createParent={createParent}
         onParentChange={onParentChange}
@@ -246,7 +243,6 @@ export function CreateStep({
                 isCreating={isCreating}
                 manualParentEntry={manualParentEntry || useLocalFilesystemBrowser}
                 runtimeEnvironmentId={runtimeEnvironmentId}
-                sshTargetId={sshTargetId}
                 useLocalFilesystemBrowser={useLocalFilesystemBrowser}
                 onParentChange={onParentChange}
                 onPickParent={onPickParent}

@@ -95,6 +95,7 @@ describe('SetProjectLocationDialog', () => {
 
     await user.click(screen.getByRole('button', { name: /Browse folder/ }))
     await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
+    expect(screen.getByTestId('remote-file-browser').getAttribute('data-target')).toBe('openclaw')
     await user.click(screen.getByRole('button', { name: 'Select remote folder' }))
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
@@ -115,6 +116,7 @@ describe('SetProjectLocationDialog', () => {
 
     await user.click(screen.getByRole('button', { name: /Clone from URL/ }))
     await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
+    expect(screen.getByTestId('remote-file-browser').getAttribute('data-target')).toBe('openclaw')
     await user.click(screen.getByRole('button', { name: 'Select remote folder' }))
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
