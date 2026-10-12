@@ -94,6 +94,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         "const net = require('node:net'), fs = require('node:fs')",
         'const arg = (name) => process.argv[process.argv.indexOf(name) + 1]',
         `fs.writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+        `fs.writeFileSync(arg('--log-file'), JSON.stringify({ event: 'startup', socketPath: '/private/secret', protocolVersion: 45 }) + '\\n')`,
         `net.createServer(${onConnection}).listen(arg('--socket'), () => fs.writeFileSync(arg('--token'), 'tok'))`
       ].join('\n')
     )
@@ -102,15 +103,24 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
 
   async function roundTrip(entry, timeoutMs) {
     const startedAt = Date.now()
+    let diagnostics
     const error = await runTerminalHostRoundTrip({
       command: [process.execPath],
       entry,
       deadline: startedAt + timeoutMs,
-      stderr: [],
       scratchPrefix: join(root, 'oth-')
     }).then(
-      () => null,
-      (rejection) => rejection
+      (result) => {
+        diagnostics = result
+        return null
+      },
+      (rejection) => {
+        const marker = '; diagnostics: '
+        diagnostics = JSON.parse(
+          rejection.message.slice(rejection.message.lastIndexOf(marker) + marker.length)
+        )
+        return rejection
+      }
     )
     const pid = Number(readFileSync(join(root, 'pid'), 'utf8'))
     let daemonAlive = true
@@ -121,6 +131,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
     }
     return {
       error,
+      diagnostics,
       elapsedMs: Date.now() - startedAt,
       daemonAlive,
       scratchDirs: readdirSync(root).filter((name) => name.startsWith('oth-'))
@@ -143,11 +154,20 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
               socket.write(JSON.stringify({ ok: true }) + '\\n')
             } else if (message.type === 'createOrAttach') {
               fs.writeFileSync(${JSON.stringify(join(root, 'request'))}, JSON.stringify(message.payload))
+              if (${JSON.stringify(mode)} === 'capture-unavailable') {
+                fs.unlinkSync(arg('--log-file'))
+                fs.mkdirSync(arg('--log-file'))
+                socket.write(JSON.stringify({ id: message.id, ok: false, error: 'private original rejection' }) + '\\n')
+                continue
+              }
               if (${JSON.stringify(mode)} === 'rejected') {
                 socket.write(JSON.stringify({ id: message.id, ok: false, error: 'spawn refused' }) + '\\n')
                 continue
               }
-              socket.write(JSON.stringify({ id: message.id, ok: true }) + '\\n')
+              if (${JSON.stringify(mode)} === 'unacknowledged') continue
+              socket.write(JSON.stringify({ id: message.id, ok: true, payload: { shellState: 'pending' } }) + '\\n')
+              fs.appendFileSync(arg('--log-file'), JSON.stringify({ event: 'startup-command-delivery', queuedByShellReadyBarrier: true, command: 'private-command' }) + '\\n')
+              if (${JSON.stringify(mode)} === 'silent') fs.appendFileSync(arg('--log-file'), JSON.stringify({ event: 'shell-ready-timeout', shell: 'bash', timeoutMs: 15000 }) + '\\n')
               const emit = (data) => stream.write(JSON.stringify({ type: 'event', event: 'data', payload: { data } }) + '\\n')
               if (${JSON.stringify(mode)} === 'echo') {
                 emit(message.payload.command + '\\r\\n')
@@ -166,6 +186,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   it('requests ready-gated command delivery and accepts split computed output', async () => {
     const result = await roundTrip(commandDaemon('computed'), 1_500)
     expect(result.error).toBeNull()
+    expect(result.diagnostics).toMatchObject({ createAck: 'accepted', streamBytes: 6 })
     const request = JSON.parse(readFileSync(join(root, 'request'), 'utf8'))
     expect(request).toMatchObject({
       command: 'echo "OK $((6*7))" && exit',
@@ -192,6 +213,11 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
     )
     const result = await roundTrip(entry, 5_000)
     expect(result.error).toBeNull()
+    expect(result.diagnostics.createAck).toBe('accepted')
+    expect(result.diagnostics.shellState).toBe('pending')
+    expect(result.diagnostics.daemonLog.events).toContainEqual(
+      expect.objectContaining({ event: 'session-created' })
+    )
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
   })
@@ -199,7 +225,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   it('rejects echoed input without computed output and cleans up by the deadline', async () => {
     const result = await roundTrip(commandDaemon('echo'), 800)
     expect(result.error?.message).toMatch(/timed out waiting for "OK 42" from the PTY/)
-    expect(result.error?.message).toContain('echo "OK $((6*7))" && exit')
+    expect(result.diagnostics.streamBytes).toBeGreaterThan(0)
     expect(result.elapsedMs).toBeLessThan(800 + 5_000)
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
@@ -207,15 +233,47 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
 
   it('rejects a missing command delivery and cleans up by the deadline', async () => {
     const result = await roundTrip(commandDaemon('silent'), 800)
-    expect(result.error?.message).toMatch(/timed out waiting for "OK 42" from the PTY; output: $/)
+    expect(result.error?.message).toMatch(
+      /timed out waiting for "OK 42" from the PTY; output: empty; diagnostics:/
+    )
+    expect(result.diagnostics).toMatchObject({
+      createAck: 'accepted',
+      shellState: 'pending',
+      streamBytes: 0
+    })
+    expect(result.diagnostics.daemonLog.events).toContainEqual({
+      event: 'shell-ready-timeout',
+      shell: 'bash',
+      timeoutMs: 15000
+    })
+    expect(result.error.message).not.toContain('private-command')
+    expect(result.error.message).not.toContain('/private/secret')
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('distinguishes a missing create acknowledgement from an acknowledged empty PTY', async () => {
+    const result = await roundTrip(commandDaemon('unacknowledged'), 800)
+    expect(result.diagnostics).toMatchObject({ createAck: 'missing', streamBytes: 0 })
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
   })
 
   it('rejects create failure immediately and cleans up', async () => {
     const result = await roundTrip(commandDaemon('rejected'), 5_000)
-    expect(result.error?.message).toMatch(/createOrAttach failed: spawn refused/)
+    expect(result.error?.message).toMatch(/createOrAttach failed/)
+    expect(result.diagnostics.createAck).toBe('rejected')
     expect(result.elapsedMs).toBeLessThan(2_000)
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('preserves create rejection and cleanup when diagnostic log capture fails', async () => {
+    const result = await roundTrip(commandDaemon('capture-unavailable'), 5_000)
+    expect(result.error.message).toContain('createOrAttach failed')
+    expect(result.error.message).not.toContain('private original rejection')
+    expect(result.diagnostics.daemonLog).toEqual({ status: 'unavailable' })
+    expect(result.diagnostics.createAck).toBe('rejected')
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
   })
@@ -230,8 +288,8 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
 
   it('rejects at once and cleans up when the daemon closes the connection', async () => {
     const result = await roundTrip(fakeDaemon('(socket) => socket.destroy()'), 10_000)
-    // A destroyed socket with unread input may surface as a reset instead of a clean close.
-    expect(result.error?.message).toMatch(/closed the control connection|ECONNRESET/)
+    // Peer closure can surface as close, read reset, or a broken write pipe.
+    expect(result.error?.message).toMatch(/closed the control connection|ECONNRESET|write EPIPE\b/)
     expect(result.elapsedMs).toBeLessThan(10_000)
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
@@ -239,7 +297,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
 
   it('rejects and cleans up when the daemon replies with malformed JSON', async () => {
     const result = await roundTrip(fakeDaemon("(socket) => socket.write('{not json\\n')"), 10_000)
-    expect(result.error?.message).toMatch(/non-JSON control line: \{not json/)
+    expect(result.error?.message).toMatch(/non-JSON control line/)
     expect(result.elapsedMs).toBeLessThan(10_000)
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])

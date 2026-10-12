@@ -6,6 +6,7 @@ const { tmpdir } = require('node:os')
 const { join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const { macTerminalHostPaths } = require('./macos-terminal-host-bundle.cjs')
+const { createTerminalHostSmokeDiagnostics } = require('./terminal-host-smoke-diagnostics.cjs')
 const {
   daemonProtocolVersion
 } = require('../../src/shared/local-build-compatibility-contract.json')
@@ -126,7 +127,7 @@ function openDaemonConnection(socketPath, hello) {
       try {
         message = JSON.parse(line)
       } catch {
-        fail(new Error(`the daemon sent a non-JSON ${hello.role} line: ${line.slice(0, 200)}`))
+        fail(new Error(`the daemon sent a non-JSON ${hello.role} line (content withheld)`))
         return
       }
       if (!isGreeted) {
@@ -134,7 +135,7 @@ function openDaemonConnection(socketPath, hello) {
         if (message?.ok) {
           greet()
         } else {
-          fail(new Error(`daemon rejected ${hello.role} hello: ${message?.error}`))
+          fail(new Error(`daemon rejected ${hello.role} hello (details withheld)`))
         }
         continue
       }
@@ -167,34 +168,43 @@ async function stopDaemon(daemon, isExited) {
   }
 }
 
-async function runTerminalHostRoundTrip({
-  command,
-  entry,
-  deadline,
-  stderr,
-  scratchPrefix = '/tmp/oth-'
-}) {
+async function runTerminalHostRoundTrip({ command, entry, deadline, scratchPrefix = '/tmp/oth-' }) {
   // A short path: the socket must fit sun_path.
   const scratch = mkdtempSync(scratchPrefix)
   const socketPath = join(scratch, 'd.sock')
   const tokenPath = join(scratch, 'token')
+  const logFilePath = join(scratch, 'daemon.log')
+  const diagnostics = createTerminalHostSmokeDiagnostics(logFilePath, process.env.SHELL)
   const env = { ...process.env, ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
   delete env.ELECTRON_RUN_AS_NODE
+  diagnostics.stage('spawn-requested')
   const daemon = spawn(
     command[0],
-    [...command.slice(1), entry, '--socket', socketPath, '--token', tokenPath],
+    [
+      ...command.slice(1),
+      entry,
+      '--socket',
+      socketPath,
+      '--token',
+      tokenPath,
+      '--log-file',
+      logFilePath
+    ],
     { env, stdio: ['ignore', 'ignore', 'pipe'] }
   )
   let exited = false
-  daemon.on('exit', () => {
+  daemon.on('exit', (code, signal) => {
     exited = true
+    diagnostics.exit(code, signal)
   })
   daemon.on('error', (error) => {
     exited = true
-    stderr.push(error.message)
+    diagnostics.stderr(error.message)
   })
   daemon.stderr.setEncoding('utf8')
-  daemon.stderr.on('data', (chunk) => stderr.push(chunk))
+  daemon.stderr.on('data', (chunk) => {
+    diagnostics.stderr(chunk)
+  })
   // If something exits the process mid-check, still leave no daemon or scratch dir behind.
   const cleanupOnExit = () => {
     daemon.kill('SIGKILL')
@@ -202,30 +212,41 @@ async function runTerminalHostRoundTrip({
   }
   process.once('exit', cleanupOnExit)
   const connections = []
+  let failure
+  let report
   try {
     // The first exec of a freshly signed binary can be slow while the system assesses it.
+    diagnostics.stage('waiting-for-endpoint')
     while (!(existsSync(socketPath) && existsSync(tokenPath) && statSync(tokenPath).size > 0)) {
       if (exited || Date.now() > deadline) {
         throw new Error(exited ? 'the daemon exited before it was ready' : 'no daemon token')
       }
       await delay(100)
     }
+    diagnostics.stage('endpoint-ready')
     const token = readFileSync(tokenPath, 'utf8').trim()
     const clientId = randomUUID()
     const hello = { version: daemonProtocolVersion, token, clientId }
     const control = openDaemonConnection(socketPath, { ...hello, role: 'control' })
     connections.push(control)
     await beforeDeadline(control.ready, deadline, 'the control hello reply')
+    diagnostics.stage('control-hello-ready')
     const stream = openDaemonConnection(socketPath, { ...hello, role: 'stream' })
     connections.push(stream)
     await beforeDeadline(stream.ready, deadline, 'the stream hello reply')
+    diagnostics.stage('stream-hello-ready')
     let output = ''
     const sawOutput = new Promise((resolve) => {
       stream.onMessage((message) => {
-        output += message?.payload?.data ?? ''
-        if (output.includes(TERMINAL_HOST_BOOT_OUTPUT)) {
+        diagnostics.stream(message)
+        if (message?.event !== 'data' || typeof message.payload?.data !== 'string') {
+          return
+        }
+        const combined = output + message.payload.data
+        if (combined.includes(TERMINAL_HOST_BOOT_OUTPUT)) {
           resolve()
         }
+        output = combined.slice(-400)
       })
     })
     let rejectCreate
@@ -233,10 +254,14 @@ async function runTerminalHostRoundTrip({
       rejectCreate = reject
     })
     control.onMessage((message) => {
-      if (message?.id === 'boot-1' && message.ok === false) {
-        rejectCreate(new Error(`createOrAttach failed: ${message.error}`))
+      if (message?.id === 'boot-1') {
+        diagnostics.ack(message)
+        if (message.ok === false) {
+          rejectCreate(new Error('createOrAttach failed (details withheld)'))
+        }
       }
     })
+    diagnostics.stage('create-request-sent')
     control.socket.write(
       `${JSON.stringify({
         id: 'boot-1',
@@ -258,17 +283,41 @@ async function runTerminalHostRoundTrip({
         deadline,
         `"${TERMINAL_HOST_BOOT_OUTPUT}" from the PTY`
       )
+      diagnostics.stage('computed-output-received')
     } catch (error) {
-      throw new Error(`${error.message}; output: ${output.slice(-400)}`)
+      const outputKind = output.length === 0 ? 'empty' : 'captured (content withheld)'
+      throw new Error(`${error.message}; output: ${outputKind}`)
     }
+  } catch (error) {
+    failure = error
   } finally {
     for (const connection of connections) {
       connection.socket.destroy()
     }
-    await stopDaemon(daemon, () => exited)
-    process.removeListener('exit', cleanupOnExit)
-    rmSync(scratch, { recursive: true, force: true })
+    try {
+      await stopDaemon(daemon, () => exited)
+    } catch (error) {
+      failure ??= error
+    } finally {
+      diagnostics.stage('daemon-stop-finished')
+      try {
+        report = diagnostics.snapshot()
+      } catch {
+        report = JSON.stringify({ status: 'diagnostics-unavailable' })
+      }
+      process.removeListener('exit', cleanupOnExit)
+      try {
+        rmSync(scratch, { recursive: true, force: true })
+      } catch (error) {
+        failure ??= error
+      }
+    }
   }
+  if (failure) {
+    failure.message += `; diagnostics: ${report}`
+    throw failure
+  }
+  return JSON.parse(report)
 }
 
 // Why: the helper's own Node must load node-pty and serve a PTY; a `Usage:` boot never loads
@@ -285,7 +334,6 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
     console.log(`[verify-packaged-daemon-entry] skipped ${message}`)
     return
   }
-  const stderr = []
   // Boot a clone outside the build tree, as installs do, so no ancestor node_modules can
   // satisfy a require the helper lacks.
   const isolated = mkdtempSync(join(tmpdir(), 'orca-terminal-host-boot-'))
@@ -298,12 +346,11 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
     await runTerminalHostRoundTrip({
       command: [...prefix, join(clone, relative(paths.bundle, paths.executable))],
       entry: join(clone, relative(paths.bundle, paths.entry)),
-      deadline: Date.now() + TERMINAL_HOST_BOOT_TIMEOUT_MS,
-      stderr
+      deadline: Date.now() + TERMINAL_HOST_BOOT_TIMEOUT_MS
     })
   } catch (error) {
     throw new Error(
-      `[verify-packaged-daemon-entry] the ${arch} terminal host did not serve a PTY: ${error.message}\n${stderr.join('').slice(-2000)}`
+      `[verify-packaged-daemon-entry] the ${arch} terminal host did not serve a PTY: ${error.message}`
     )
   } finally {
     rmSync(isolated, { recursive: true, force: true })
