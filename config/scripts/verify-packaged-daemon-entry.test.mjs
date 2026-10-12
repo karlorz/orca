@@ -183,6 +183,101 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
     })()`)
   }
 
+  it.each(['socket-only', 'token-only', 'empty-token', 'neither'])(
+    'reports %s bootstrap state before cleanup without attributing cleanup SIGTERM to startup',
+    async (mode) => {
+      const entry = join(root, 'blocked-daemon.cjs')
+      writeFileSync(
+        entry,
+        [
+          "const net = require('node:net'), fs = require('node:fs')",
+          'const arg = (name) => process.argv[process.argv.indexOf(name) + 1]',
+          `fs.writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+          `if (${JSON.stringify(mode)} === 'socket-only') net.createServer().listen(arg('--socket'))`,
+          `if (${JSON.stringify(mode)} === 'token-only') fs.writeFileSync(arg('--token'), 'private-token')`,
+          `if (${JSON.stringify(mode)} === 'empty-token') fs.writeFileSync(arg('--token'), '')`,
+          "console.error('private stderr /private/profile token=secret')",
+          'setInterval(() => {}, 1000)'
+        ].join('\n')
+      )
+      const result = await roundTrip(entry, 800)
+      expect(result.error.message).toContain('endpoint not ready')
+      expect(result.diagnostics.bootstrap).toEqual({
+        status: 'captured',
+        runtimeArch: process.arch
+      })
+      expect(result.diagnostics.endpoint).toEqual({
+        socket: mode === 'socket-only' ? 'socket' : 'missing',
+        token:
+          mode === 'token-only'
+            ? 'nonempty-file'
+            : mode === 'empty-token'
+              ? 'empty-file'
+              : 'missing'
+      })
+      expect(result.diagnostics.lifecycle).toEqual({
+        exitedBeforeCleanup: false,
+        stopRequested: true
+      })
+      expect(result.error.message).not.toMatch(/private stderr|private-token|profile|token=secret/)
+      expect(result.daemonAlive).toBe(false)
+      expect(result.scratchDirs).toEqual([])
+    }
+  )
+
+  it('marks Node entry even when the module stalls before creating its daemon log', async () => {
+    const entry = join(root, 'stalled-daemon.cjs')
+    writeFileSync(
+      entry,
+      `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))\n` +
+        'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)'
+    )
+    const result = await roundTrip(entry, 800)
+    expect(result.diagnostics.bootstrap).toEqual({ status: 'captured', runtimeArch: process.arch })
+    expect(result.diagnostics.daemonLog).toEqual({ status: 'unavailable' })
+    expect(result.diagnostics.endpoint).toEqual({ socket: 'missing', token: 'missing' })
+    expect(result.diagnostics.lifecycle).toEqual({
+      exitedBeforeCleanup: false,
+      stopRequested: true
+    })
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('distinguishes a spontaneous bootstrap exit from verifier cleanup', async () => {
+    const entry = join(root, 'exited-daemon.cjs')
+    writeFileSync(
+      entry,
+      `require('node:fs').writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))\nprocess.exit(7)`
+    )
+    const result = await roundTrip(entry, 1_500)
+    expect(result.error.message).toContain('the daemon exited before it was ready')
+    expect(result.diagnostics.lifecycle).toEqual({
+      exitedBeforeCleanup: true,
+      stopRequested: false
+    })
+    expect(result.diagnostics.daemonExit).toEqual({ code: 7, signal: null })
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
+  it('preserves direct entry argv and main-module semantics with the bootstrap probe', async () => {
+    const entry = commandDaemon('computed')
+    writeFileSync(
+      entry,
+      `${readFileSync(entry, 'utf8')}\nfs.writeFileSync(${JSON.stringify(join(root, 'entry-state'))}, JSON.stringify({ main: require.main === module, entry: process.argv[1] }))`
+    )
+    const result = await roundTrip(entry, 1_500)
+    expect(result.error).toBeNull()
+    expect(result.diagnostics.bootstrap).toEqual({ status: 'captured', runtimeArch: process.arch })
+    expect(JSON.parse(readFileSync(join(root, 'entry-state'), 'utf8'))).toEqual({
+      main: true,
+      entry
+    })
+    expect(result.daemonAlive).toBe(false)
+    expect(result.scratchDirs).toEqual([])
+  })
+
   it('requests ready-gated command delivery and accepts split computed output', async () => {
     const result = await roundTrip(commandDaemon('computed'), 1_500)
     expect(result.error).toBeNull()
