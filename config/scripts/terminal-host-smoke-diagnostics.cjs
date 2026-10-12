@@ -1,4 +1,4 @@
-const { openSync, closeSync, fstatSync, readSync, constants } = require('node:fs')
+const { openSync, closeSync, fstatSync, lstatSync, readSync, constants } = require('node:fs')
 const { basename } = require('node:path')
 
 const MAX_TAIL_BYTES = 16 * 1024
@@ -105,7 +105,49 @@ function readLogTail(path) {
   }
 }
 
-function createTerminalHostSmokeDiagnostics(logPath, requestedShell) {
+function readBootstrapProbe(path) {
+  let fd
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW)
+    const stat = fstatSync(fd)
+    if (!stat.isFile() || stat.size > 16) {
+      return { status: 'unavailable' }
+    }
+    const bytes = Buffer.alloc(16)
+    const count = readSync(fd, bytes, 0, bytes.length, 0)
+    const runtimeArch = bytes.subarray(0, count).toString('utf8').trim()
+    return ['x64', 'arm64'].includes(runtimeArch)
+      ? { status: 'captured', runtimeArch }
+      : { status: 'unavailable' }
+  } catch {
+    return { status: 'unavailable' }
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* Diagnostics are best-effort. */
+      }
+    }
+  }
+}
+
+function readTerminalHostEndpointState(socketPath, tokenPath) {
+  const inspect = (path, socket) => {
+    try {
+      const stat = lstatSync(path)
+      if (socket) {
+        return stat.isSocket() ? 'socket' : 'other'
+      }
+      return stat.isFile() ? (stat.size > 0 ? 'nonempty-file' : 'empty-file') : 'other'
+    } catch (error) {
+      return error.code === 'ENOENT' ? 'missing' : 'unverifiable'
+    }
+  }
+  return { socket: inspect(socketPath, true), token: inspect(tokenPath, false) }
+}
+
+function createTerminalHostSmokeDiagnostics(logPath, requestedShell, bootstrapPath) {
   const startedAt = Date.now()
   const stages = []
   let stderrBytes = 0
@@ -116,6 +158,9 @@ function createTerminalHostSmokeDiagnostics(logPath, requestedShell) {
   let shellState = 'unknown'
   let daemonExit = null
   let ptyExit = null
+  let bootstrap = { status: 'unavailable' }
+  let endpoint = { socket: 'unverifiable', token: 'unverifiable' }
+  let lifecycle = { exitedBeforeCleanup: false, stopRequested: false }
   const shell = basename(requestedShell || '/bin/zsh')
   return {
     stage(name) {
@@ -156,6 +201,11 @@ function createTerminalHostSmokeDiagnostics(logPath, requestedShell) {
         signal: SAFE_WORDS.has(signal) ? signal : null
       }
     },
+    beforeCleanup(socketPath, tokenPath, exited) {
+      bootstrap = readBootstrapProbe(bootstrapPath)
+      endpoint = readTerminalHostEndpointState(socketPath, tokenPath)
+      lifecycle = { exitedBeforeCleanup: exited, stopRequested: !exited }
+    },
     snapshot() {
       return JSON.stringify({
         requestedShell: SAFE_WORDS.has(shell) ? shell : 'custom',
@@ -165,6 +215,9 @@ function createTerminalHostSmokeDiagnostics(logPath, requestedShell) {
         shellState,
         streamEvents,
         streamBytes,
+        bootstrap,
+        endpoint,
+        lifecycle,
         daemonExit,
         ptyExit,
         stderr: {
@@ -179,4 +232,4 @@ function createTerminalHostSmokeDiagnostics(logPath, requestedShell) {
   }
 }
 
-module.exports = { createTerminalHostSmokeDiagnostics }
+module.exports = { createTerminalHostSmokeDiagnostics, readTerminalHostEndpointState }

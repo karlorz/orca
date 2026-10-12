@@ -1,4 +1,4 @@
-const { existsSync, mkdtempSync, readFileSync, rmSync, statSync } = require('node:fs')
+const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
 const { spawn, spawnSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const { connect } = require('node:net')
@@ -6,7 +6,10 @@ const { tmpdir } = require('node:os')
 const { join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const { macTerminalHostPaths } = require('./macos-terminal-host-bundle.cjs')
-const { createTerminalHostSmokeDiagnostics } = require('./terminal-host-smoke-diagnostics.cjs')
+const {
+  createTerminalHostSmokeDiagnostics,
+  readTerminalHostEndpointState
+} = require('./terminal-host-smoke-diagnostics.cjs')
 const {
   daemonProtocolVersion
 } = require('../../src/shared/local-build-compatibility-contract.json')
@@ -174,7 +177,24 @@ async function runTerminalHostRoundTrip({ command, entry, deadline, scratchPrefi
   const socketPath = join(scratch, 'd.sock')
   const tokenPath = join(scratch, 'token')
   const logFilePath = join(scratch, 'daemon.log')
-  const diagnostics = createTerminalHostSmokeDiagnostics(logFilePath, process.env.SHELL)
+  const bootstrapPath = join(scratch, 'bootstrap')
+  const preloadPath = join(scratch, 'probe.cjs')
+  // A builtin-only preload marks Node entry before the packaged module graph loads.
+  try {
+    writeFileSync(
+      preloadPath,
+      `try { require('node:fs').writeFileSync(${JSON.stringify(bootstrapPath)}, process.arch) } catch {}`,
+      { mode: 0o600 }
+    )
+  } catch {
+    rmSync(scratch, { recursive: true, force: true })
+    throw new Error('could not prepare the bootstrap probe (details withheld)')
+  }
+  const diagnostics = createTerminalHostSmokeDiagnostics(
+    logFilePath,
+    process.env.SHELL,
+    bootstrapPath
+  )
   const env = { ...process.env, ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
   delete env.ELECTRON_RUN_AS_NODE
   diagnostics.stage('spawn-requested')
@@ -182,6 +202,8 @@ async function runTerminalHostRoundTrip({ command, entry, deadline, scratchPrefi
     command[0],
     [
       ...command.slice(1),
+      '--require',
+      preloadPath,
       entry,
       '--socket',
       socketPath,
@@ -217,9 +239,13 @@ async function runTerminalHostRoundTrip({ command, entry, deadline, scratchPrefi
   try {
     // The first exec of a freshly signed binary can be slow while the system assesses it.
     diagnostics.stage('waiting-for-endpoint')
-    while (!(existsSync(socketPath) && existsSync(tokenPath) && statSync(tokenPath).size > 0)) {
+    while (true) {
+      const endpoint = readTerminalHostEndpointState(socketPath, tokenPath)
+      if (endpoint.socket === 'socket' && endpoint.token === 'nonempty-file') {
+        break
+      }
       if (exited || Date.now() > deadline) {
-        throw new Error(exited ? 'the daemon exited before it was ready' : 'no daemon token')
+        throw new Error(exited ? 'the daemon exited before it was ready' : 'endpoint not ready')
       }
       await delay(100)
     }
@@ -294,6 +320,7 @@ async function runTerminalHostRoundTrip({ command, entry, deadline, scratchPrefi
     for (const connection of connections) {
       connection.socket.destroy()
     }
+    diagnostics.beforeCleanup(socketPath, tokenPath, exited)
     try {
       await stopDaemon(daemon, () => exited)
     } catch (error) {

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -82,6 +82,46 @@ describe('terminal-host smoke diagnostics', () => {
       stderr: { wrapperWriteFailure: true }
     })
   })
+
+  it.each(['x64', 'arm64', 'private-arch', 'x'.repeat(100_000)])(
+    'accepts only bounded architecture evidence before cleanup',
+    (arch) => {
+      const root = mkdtempSync(join(tmpdir(), 'terminal-host-diagnostics-'))
+      roots.push(root)
+      const probe = join(root, 'bootstrap')
+      writeFileSync(probe, arch)
+      const diagnostics = createTerminalHostSmokeDiagnostics(join(root, 'log'), '/bin/bash', probe)
+      diagnostics.beforeCleanup(join(root, 'socket'), join(root, 'token'), false)
+      const report = JSON.parse(diagnostics.snapshot())
+      expect(report.bootstrap).toEqual(
+        ['x64', 'arm64'].includes(arch)
+          ? { status: 'captured', runtimeArch: arch }
+          : { status: 'unavailable' }
+      )
+      expect(diagnostics.snapshot()).not.toContain('private-arch')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'withholds symlinked bootstrap evidence and never reads token contents',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'terminal-host-diagnostics-'))
+      roots.push(root)
+      const target = join(root, 'private')
+      const probe = join(root, 'bootstrap')
+      const token = join(root, 'token')
+      writeFileSync(target, 'x64')
+      symlinkSync(target, probe)
+      symlinkSync(target, token)
+      const diagnostics = createTerminalHostSmokeDiagnostics(join(root, 'log'), '/bin/bash', probe)
+      diagnostics.beforeCleanup(join(root, 'socket'), token, false)
+      expect(JSON.parse(diagnostics.snapshot())).toMatchObject({
+        bootstrap: { status: 'unavailable' },
+        endpoint: { socket: 'missing', token: 'other' }
+      })
+      expect(diagnostics.snapshot()).not.toContain(root)
+    }
+  )
 
   it('keeps log evidence bounded and unavailable logs fail open', () => {
     const root = mkdtempSync(join(tmpdir(), 'terminal-host-diagnostics-'))
