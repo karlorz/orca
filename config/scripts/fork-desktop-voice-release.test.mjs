@@ -5,6 +5,10 @@ import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const workflowPath = join(projectDir, '.github/workflows/fork-desktop-voice-release.yml')
+const sharedWorkflowPath = join(projectDir, '.github/workflows/fork-mac-package.yml')
+const releaseSource = () =>
+  readFileSync(workflowPath, 'utf8') + readFileSync(sharedWorkflowPath, 'utf8')
+
 const mobileWorkflowPath = join(projectDir, '.github/workflows/fork-mobile-voice-release.yml')
 
 const readWorkflow = (path) => {
@@ -18,7 +22,7 @@ describe('fork desktop voice release workflow', () => {
   it('exists, is fenced to karlorz/orca, and triggers only on v*.*.*-[0-9]* tags', () => {
     const workflow = readWorkflow(workflowPath)
     expect(workflow.on.push.tags).toEqual(['v*.*.*-[0-9]*'])
-    const scripts = JSON.stringify(workflow)
+    const scripts = JSON.stringify(workflow) + JSON.stringify(readWorkflow(sharedWorkflowPath))
     expect(scripts).toContain("github.repository == 'karlorz/orca'")
     expect(scripts).not.toContain('stablyai/orca')
     expect(scripts).toContain('ORCA_FORK_VOICE_BUILD')
@@ -32,18 +36,18 @@ describe('fork desktop voice release workflow', () => {
   })
 
   it('verifies tag matches v<x.y.z>-<N> shape and checks fork-main ancestry', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+$')
     expect(rawYaml).toContain('merge-base --is-ancestor')
   })
 
   it('passes generated canonical version from fork-desktop-build-version to electron-builder', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}')
   })
 
   it('builds both macOS architectures (x64 and arm64)', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).not.toMatch(/electron-builder[^\n]*--mac[^\n]*--arm64/)
     expect(rawYaml).toMatch(/electron-builder[^\n]*--mac[^\n]*--publish never/)
   })
@@ -54,7 +58,7 @@ describe('fork desktop voice release workflow', () => {
       typeof step.run === 'string' &&
       step.run.includes('pnpm install') &&
       step.run.includes('--cpu=current,x64,arm64')
-    const macSteps = workflow.jobs['build-mac'].steps
+    const macSteps = readWorkflow(sharedWorkflowPath).jobs.package.steps
     const installIndex = macSteps.findIndex(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
@@ -66,7 +70,7 @@ describe('fork desktop voice release workflow', () => {
   })
 
   it('stages all four archives, latest-mac.yml, blockmaps, and SHA256SUMS in desktop-artifacts', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('orca-macos-x64.dmg')
     expect(rawYaml).toContain('orca-macos-arm64.dmg')
     expect(rawYaml).toContain('orca-macos-x64.zip')
@@ -77,7 +81,7 @@ describe('fork desktop voice release workflow', () => {
   })
 
   it('runs verify-fork-desktop-release-artifacts before artifact upload to fail closed on missing manifest references', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('verify-fork-desktop-release-artifacts.mjs')
   })
 
@@ -89,7 +93,7 @@ describe('fork desktop voice release workflow', () => {
   })
 
   it('fails closed without fork self-signed secrets and imports that identity before electron-builder', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     const trustScript = join(projectDir, 'config/scripts/fork-macos-trust-self-signed-identity.sh')
     expect(existsSync(trustScript)).toBe(true)
     const trustSource = readFileSync(trustScript, 'utf8')
@@ -107,25 +111,31 @@ describe('fork desktop voice release workflow', () => {
   })
 
   it('verifies the packed app is self-signed, not ad-hoc, and does not call the release unsigned', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
-    expect(rawYaml).toContain('codesign -dv --verbose=2')
-    expect(rawYaml).toContain('Authority=Orca Fork (karlorz)')
-    expect(rawYaml).toContain('flags=0x2(adhoc)')
+    const rawYaml = releaseSource()
+    const verifier = readFileSync(
+      join(projectDir, 'config/scripts/verify-fork-mac-package.mjs'),
+      'utf8'
+    )
+    expect(verifier).toContain("['-dv', '--verbose=2', app]")
+    expect(verifier).toContain('Authority=Orca Fork (karlorz)')
+    expect(verifier).toContain('flags=0x2(adhoc)')
     expect(rawYaml).not.toContain('unsigned / ad-hoc')
     expect(rawYaml).toContain('self-signed')
   })
 
   it('builds orca-speech before electron-builder and fails closed if packed Orca.app lacks Contents/MacOS/orca-speech', () => {
-    const rawYaml = readFileSync(workflowPath, 'utf8')
-    const notifBuildIdx = rawYaml.indexOf('pnpm run build:notification-status-macos')
-    const speechBuildIdx = rawYaml.indexOf('pnpm run build:speech-macos')
-    const ensureIdx = rawYaml.indexOf('pnpm run ensure:electron-runtime')
-    const electronBuilderIdx = rawYaml.indexOf('pnpm exec electron-builder')
+    const macYaml = readFileSync(sharedWorkflowPath, 'utf8')
+    const notifBuildIdx = macYaml.indexOf('pnpm run build:notification-status-macos')
+    const speechBuildIdx = macYaml.indexOf('pnpm run build:speech-macos')
+    const ensureIdx = macYaml.indexOf('pnpm run ensure:electron-runtime')
+    const electronBuilderIdx = macYaml.indexOf('pnpm exec electron-builder')
     expect(notifBuildIdx).toBeGreaterThan(-1)
     expect(speechBuildIdx).toBeGreaterThan(notifBuildIdx)
     expect(ensureIdx).toBeGreaterThan(speechBuildIdx)
     expect(electronBuilderIdx).toBeGreaterThan(ensureIdx)
-    expect(rawYaml).toMatch(/\[\[\s*!\s*-x\s*"\$app\/Contents\/MacOS\/orca-speech"\s*\]\]/)
+    expect(
+      readFileSync(join(projectDir, 'config/scripts/verify-fork-mac-package.mjs'), 'utf8')
+    ).toContain('Contents/MacOS/orca-speech')
   })
 
   it('includes build-linux job that builds Linux packages and verifies artifacts', () => {
@@ -147,7 +157,7 @@ describe('fork desktop voice release workflow', () => {
     expect(steps[mobileWebIndex]?.run).toBe('pnpm run build:mobile-web')
     expect(nativeIndex).toBeGreaterThan(mobileWebIndex)
     expect(packageIndex).toBeGreaterThan(nativeIndex)
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('build-linux:')
     expect(rawYaml).toContain('ubuntu-latest')
     expect(rawYaml).toMatch(
@@ -164,7 +174,7 @@ describe('fork desktop voice release workflow', () => {
     expect(workflow.jobs['build-windows']).toBeDefined()
     expect(workflow.jobs['build-windows'].needs).toContain('verify')
     expect(workflow.jobs['build-windows'].needs).toContain('orcad-template')
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('build-windows:')
     expect(rawYaml).toContain('windows-2022')
     expect(rawYaml).toContain('build-windows-cli-launcher.mjs')
@@ -184,7 +194,7 @@ describe('fork desktop voice release workflow', () => {
     expect(pub.needs).toContain('build-linux')
     expect(pub.needs).toContain('build-windows')
 
-    const rawYaml = readFileSync(workflowPath, 'utf8')
+    const rawYaml = releaseSource()
     expect(rawYaml).toContain('desktop-artifacts-mac')
     expect(rawYaml).toContain('desktop-artifacts-linux')
     expect(rawYaml).toContain('desktop-artifacts-windows')
@@ -226,25 +236,25 @@ describe('fork desktop voice release workflow', () => {
       const job = workflow.jobs[jobName]
       expect(job.needs).toContain('orcad-template')
       expect(job.if ?? '').not.toMatch(/always\(\)|!cancelled\(\)/)
-      const download = job.steps.find(
-        (step) => step.name === 'Download the orcad deployment template'
-      )
+      const steps =
+        jobName === 'build-mac' ? readWorkflow(sharedWorkflowPath).jobs.package.steps : job.steps
+      const download = steps.find((step) => step.name === 'Download the orcad deployment template')
       expect(download?.uses).toMatch(/^actions\/download-artifact@/)
       expect(download?.with).toEqual({
         name: 'orcad-template',
         path: 'out/orcad-template'
       })
-      const pack = job.steps.find(
+      const pack = steps.find(
         (step) =>
           typeof step.run === 'string' &&
           step.run.includes('electron-builder') &&
           step.env?.ORCA_REQUIRE_ORCAD_TEMPLATE === '1'
       )
       expect(pack).toBeDefined()
-      const downloadIndex = job.steps.findIndex(
+      const downloadIndex = steps.findIndex(
         (step) => step.name === 'Download the orcad deployment template'
       )
-      const packIndex = job.steps.indexOf(pack)
+      const packIndex = steps.indexOf(pack)
       expect(packIndex).toBeGreaterThan(downloadIndex)
     }
   })

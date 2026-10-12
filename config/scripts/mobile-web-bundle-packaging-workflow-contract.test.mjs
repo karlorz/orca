@@ -91,7 +91,7 @@ const EXPECTED_PACKAGING_JOBS = [
   'daily-mac-build.yml build-daily-mac',
   'dev-channel-win-build.yml build-win',
   'fork-desktop-voice-release.yml build-linux',
-  'fork-desktop-voice-release.yml build-mac',
+  'fork-mac-package.yml package',
   'fork-desktop-voice-release.yml build-windows',
   'hourly-mac-build.yml build-hourly-mac',
   'pr.yml package',

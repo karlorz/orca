@@ -1,0 +1,90 @@
+name: Publication-disabled exact-head Mac validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character parent-reviewed source SHA; fresh signing approval required
+        type: string
+        required: true
+      workflow_sha:
+        description: Full 40-character reviewed trusted workflow revision selected with --ref
+        type: string
+        required: true
+      source_pr:
+        description: Open same-repository PR targeting fork-main, or 0 for merged fork-main
+        type: string
+        required: true
+      source_branch:
+        description: Exact reviewed PR branch, or fork-main with source_pr 0
+        type: string
+        required: true
+      build_label:
+        description: Isolated local build label only; creates no tag or release
+        type: string
+        required: true
+        default: v1.4.224-3
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-mac-validation-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  admit:
+    if: github.repository == 'karlorz/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      source_sha: ${{ steps.admission.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify reviewed source and trusted workflow
+        id: admission
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          REVIEWED_WORKFLOW_SHA: ${{ inputs.workflow_sha }}
+          BUILD_LABEL: ${{ inputs.build_label }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: node config/scripts/fork-mac-validation-admission.mjs
+
+  orcad-template:
+    needs: admit
+    if: github.repository == 'karlorz/orca'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/node-server-tests.yml
+    with:
+      ref: ${{ needs.admit.outputs.source_sha }}
+      build_template: true
+      validation_source_sha: ${{ needs.admit.outputs.source_sha }}
+
+  validate-mac:
+    needs: [admit, orcad-template]
+    if: github.repository == 'karlorz/orca'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/fork-mac-package.yml
+    with:
+      source_sha: ${{ needs.admit.outputs.source_sha }}
+      build_label: ${{ inputs.build_label }}
+      validation: true
+      workflow_sha: ${{ inputs.workflow_sha }}
+      source_pr: ${{ inputs.source_pr }}
+      source_branch: ${{ inputs.source_branch }}
+    secrets:
+      ORCA_FORK_CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+      ORCA_FORK_CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}

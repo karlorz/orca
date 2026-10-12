@@ -59,6 +59,10 @@ on:
         description: Upload each lane's release slot and merge them into the orcad-template artifact
         type: boolean
         default: false
+      validation_source_sha:
+        description: Optional admitted source identity for same-run Mac validation evidence
+        type: string
+        default: ''
   schedule:
     - cron: '30 11 * * *'
 
@@ -498,6 +502,11 @@ jobs:
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
       - run: pnpm build:orcad-template
+      - name: Bind validation template to exact source and run
+        if: inputs.validation_source_sha != ''
+        env:
+          SOURCE_SHA: ${{ inputs.validation_source_sha }}
+        run: node config/scripts/fork-mac-template-provenance.mjs write out/orcad-template/validation-provenance.json
       - name: Report the template size
         shell: bash
         run: |

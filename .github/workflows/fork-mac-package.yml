@@ -1,0 +1,223 @@
+name: Shared fork macOS packaging
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      build_label:
+        type: string
+        required: true
+      validation:
+        type: boolean
+        default: false
+      workflow_sha:
+        type: string
+        default: ''
+      source_pr:
+        type: string
+        default: ''
+      source_branch:
+        type: string
+        default: ''
+    secrets:
+      ORCA_FORK_CSC_LINK:
+        required: true
+      ORCA_FORK_CSC_KEY_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: >-
+      github.repository == 'karlorz/orca' &&
+      ((!inputs.validation && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (inputs.validation && github.event_name == 'workflow_dispatch'))
+    # macos-15: computer-use-macos needs Swift tools 6.0 (macos-14 ships 5.10).
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      CI: 'true'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BUILD_LABEL: ${{ inputs.build_label }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BUILD_LABEL" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Checkout trusted admission code
+        if: inputs.validation
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.workflow_sha }}
+          path: .validation-host
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      # macos-15 is arm64; beforePack needs darwin/x64 natives too (same flag as
+      # official mac packaging). Keep the composite host-only for Linux/Windows.
+      - name: Widen CPU variants for mac x64 and arm64
+        run: pnpm install --frozen-lockfile --ignore-scripts --cpu=current,x64,arm64
+
+      - name: Resolve fork build version
+        id: version
+        env:
+          FORK_DESKTOP_TAG: ${{ inputs.build_label }}
+          GITHUB_SHA: ${{ inputs.source_sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: node config/scripts/fork-desktop-build-version.mjs
+
+      - name: Build app inputs
+        env:
+          ORCA_FORK_VOICE_BUILD: '1'
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          pnpm run build:desktop
+          pnpm run build:computer-macos
+          pnpm run build:keyboard-layout-macos
+          pnpm run build:notification-status-macos
+          pnpm run build:speech-macos
+          pnpm run ensure:electron-runtime
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
+
+      - name: Verify same-run template provenance
+        if: inputs.validation
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          node .validation-host/config/scripts/fork-mac-template-provenance.mjs verify out/orcad-template/validation-provenance.json
+          rm out/orcad-template/validation-provenance.json
+
+      - name: Recheck source and trusted workflow before signing
+        if: inputs.validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_PR: ${{ inputs.source_pr }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          REVIEWED_WORKFLOW_SHA: ${{ inputs.workflow_sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+          BUILD_LABEL: ${{ inputs.build_label }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          node .validation-host/config/scripts/fork-mac-validation-admission.mjs
+
+      - name: Require fork self-signed identity
+        env:
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CSC_LINK:-}" || -z "${CSC_KEY_PASSWORD:-}" ]]; then
+            echo "Missing GitHub secrets ORCA_FORK_CSC_LINK and/or ORCA_FORK_CSC_KEY_PASSWORD" >&2
+            exit 1
+          fi
+
+      - name: Trust fork self-signed identity
+        timeout-minutes: 2
+        env:
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+          CSC_NAME: Orca Fork (karlorz)
+        run: bash config/scripts/fork-macos-trust-self-signed-identity.sh
+
+      - name: Package self-signed macOS
+        id: package
+        env:
+          ORCA_FORK_VOICE_BUILD: '1'
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ inputs.source_sha }}
+          CSC_LINK: ${{ secrets.ORCA_FORK_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.ORCA_FORK_CSC_KEY_PASSWORD }}
+          CSC_NAME: Orca Fork (karlorz)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+          # beforePack and afterPack fail the package when the template is absent.
+          ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
+        run: |
+          set -euo pipefail
+          # --publish never: tag pushes default to onTagOrDraft and demand GH_TOKEN;
+          # our publish-release job owns release creation.
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish never 2>&1 | tee "$RUNNER_TEMP/fork-mac-package.log"
+          node config/scripts/verify-fork-mac-package.mjs "$RUNNER_TEMP/fork-mac-package.log"
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs dist --platform=mac
+
+      - name: Remove temporary signing identity
+        if: always()
+        id: cleanup
+        run: bash config/scripts/fork-macos-cleanup-identity.sh
+
+      - name: Record public-safe validation result
+        if: always() && inputs.validation
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SHA: ${{ inputs.workflow_sha }}
+          PACKAGE_RESULT: ${{ steps.package.outcome }}
+          CLEANUP_RESULT: ${{ steps.cleanup.outcome }}
+        run: |
+          {
+            echo '### Publication-disabled macOS validation'
+            echo "Workflow SHA: $WORKFLOW_SHA"
+            echo "Source SHA: $SOURCE_SHA"
+            echo "Run: $GITHUB_RUN_ID / attempt $GITHUB_RUN_ATTEMPT"
+            echo "Packaging and both-slice evidence: $PACKAGE_RESULT"
+            echo "Temporary identity cleanup: $CLEANUP_RESULT"
+            echo 'Success requires computed OK 42 on x64/Rosetta and arm64, helper signatures, both app authorities, and archive verification.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stage mac artifacts
+        if: ${{ !inputs.validation }}
+        run: |
+          set -euo pipefail
+          mkdir -p desktop-artifacts-mac
+          shopt -s nullglob
+          for archive in orca-macos-x64.dmg orca-macos-arm64.dmg orca-macos-x64.zip orca-macos-arm64.zip latest-mac.yml; do
+            if [[ ! -f "dist/$archive" ]]; then
+              echo "Expected dist/$archive" >&2
+              ls -la dist || true
+              exit 1
+            fi
+            cp "dist/$archive" desktop-artifacts-mac/
+          done
+          for blockmap in dist/*.blockmap; do
+            cp "$blockmap" desktop-artifacts-mac/
+          done
+          node config/scripts/verify-fork-desktop-release-artifacts.mjs desktop-artifacts-mac --platform=mac
+
+      - name: Upload mac artifacts
+        if: ${{ !inputs.validation }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-artifacts-mac
+          path: desktop-artifacts-mac/*
+          if-no-files-found: error
