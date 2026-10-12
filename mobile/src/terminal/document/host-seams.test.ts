@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { handleMsg } from './host-message-router'
@@ -112,12 +112,18 @@ function terminalDouble() {
   return terminal
 }
 
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
 afterEach(() => {
   // Before the globals go back: a stop reads the scope's own seams, and one of them is a window
   // read a case may have stubbed.
   while (startedScopes.length > 0) {
     stopTerminalDocument(startedScopes.pop()!)
   }
+  vi.clearAllTimers()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -132,8 +138,25 @@ describe('the document host seams, by default', () => {
     expect(postMessage.mock.calls).toEqual([['{"type":"ready","cols":80,"rows":24}']])
   })
 
-  it('posts nothing when there is no bridge, which is the guard the document carried', () => {
-    expect(() => createTerminalDocumentScope().postToHost({ type: 'ready' })).not.toThrow()
+  it('bounds retries when the bridge stays unavailable', () => {
+    createTerminalDocumentScope().postToHost({ type: 'ready' })
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(50 * 98)
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(50)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('delivers once when the bridge appears during a retry', () => {
+    const postMessage = vi.fn<(data: string) => void>()
+    createTerminalDocumentScope().postToHost({ type: 'ready' })
+    vi.advanceTimersByTime(50)
+    vi.stubGlobal('ReactNativeWebView', { postMessage })
+    vi.advanceTimersByTime(50)
+    expect(postMessage.mock.calls).toEqual([['{"type":"ready"}']])
+    expect(vi.getTimerCount()).toBe(0)
+    vi.advanceTimersByTime(5000)
+    expect(postMessage).toHaveBeenCalledOnce()
   })
 
   it('builds the terminal from the engine bundle global', () => {
