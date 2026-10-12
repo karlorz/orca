@@ -38,7 +38,7 @@ function placement(
     topology: 'canonical-copy',
     status: 'outdated',
     currentPackageDigest: 'current',
-    lockSource: 'stablyai/orca',
+    lockSource: 'karlorz/orca',
     errorCategory: null,
     ...overrides
   }
@@ -174,15 +174,18 @@ describe('SkillFreshnessNudge', () => {
     expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-cli so')
   })
 
-  it('raises no nudge when every outdated copy came from somewhere else', async () => {
-    mocks.inventory = {
-      ...eligibleInventory(),
-      installations: [placement({ lockSource: 'acme/agent-skills' })]
-    }
-    await renderNudge()
+  it.each(['acme/agent-skills', 'stablyai/orca'])(
+    'raises no nudge for an outdated copy from %s',
+    async (lockSource) => {
+      mocks.inventory = {
+        ...eligibleInventory(),
+        installations: [placement({ lockSource })]
+      }
+      await renderNudge()
 
-    expect(mocks.toastInfo).not.toHaveBeenCalled()
-  })
+      expect(mocks.toastInfo).not.toHaveBeenCalled()
+    }
+  )
 
   it('opens the update dialog on action click without persisting a dismissal', async () => {
     await renderNudge()

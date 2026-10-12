@@ -80,7 +80,7 @@ describe('getSkillFreshnessDisplayStatus', () => {
     ).toBe('update-available')
   })
 
-  it.each([null, 'acme/agent-skills'])(
+  it.each([null, 'acme/agent-skills', 'stablyai/orca'])(
     'reports presence only for an update to a copy Orca did not install (%s)',
     (lockSource) => {
       // Why: such a copy is offered unselected in the dialog, never advertised.
