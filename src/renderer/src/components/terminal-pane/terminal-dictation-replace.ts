@@ -34,11 +34,10 @@ function enqueueDictationReplace(key: string, job: () => Promise<void>): void {
 export function handleDictationReplaceTextEvent(args: {
   detail: DictationReplaceTextDetail | undefined
   tabId: string
-  worktreeId: string
   getManager: () => PaneManager | null
   getPaneTransports: () => Map<number, PtyTransport>
 }): void {
-  const { detail, tabId, worktreeId, getManager, getPaneTransports } = args
+  const { detail, tabId, getManager, getPaneTransports } = args
   if (!detail || detail.tabId !== tabId) {
     return
   }
@@ -82,7 +81,6 @@ export function handleDictationReplaceTextEvent(args: {
     await handleTerminalProgrammaticTextPaste({
       detail: { tabId, text, paneId: livePane.id },
       tabId,
-      worktreeId,
       getManager,
       getPaneTransports
     })

@@ -6,12 +6,11 @@ import { handleDictationReplaceTextEvent } from './terminal-dictation-replace'
 
 export function useTerminalDictationEvents(args: {
   tabId: string
-  worktreeIdRef: MutableRefObject<string>
   isActiveRef: MutableRefObject<boolean>
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: MutableRefObject<Map<number, PtyTransport>>
 }): void {
-  const { tabId, worktreeIdRef, isActiveRef, managerRef, paneTransportsRef } = args
+  const { tabId, isActiveRef, managerRef, paneTransportsRef } = args
   useEffect(() => {
     if (typeof document === 'undefined') {
       return
@@ -38,7 +37,6 @@ export function useTerminalDictationEvents(args: {
           ...(typeof requestedPaneId === 'number' ? { paneId: requestedPaneId } : {})
         },
         tabId,
-        worktreeId: worktreeIdRef.current,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
@@ -58,7 +56,6 @@ export function useTerminalDictationEvents(args: {
           }>
         ).detail,
         tabId,
-        worktreeId: worktreeIdRef.current,
         getManager: () => managerRef.current,
         getPaneTransports: () => paneTransportsRef.current
       })
@@ -69,5 +66,5 @@ export function useTerminalDictationEvents(args: {
       document.removeEventListener('dictation:insertText', onDictationInsert)
       document.removeEventListener('dictation:replaceText', onDictationReplace)
     }
-  }, [isActiveRef, managerRef, paneTransportsRef, tabId, worktreeIdRef])
+  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
 }

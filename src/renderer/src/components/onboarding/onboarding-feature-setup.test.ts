@@ -17,7 +17,6 @@ import {
 } from '@/lib/orchestration-setup-state'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
-  ONBOARDING_FEATURE_SKILL_NAMES,
   buildOnboardingFeatureSetupClipboardText,
   onboardingFeatureSetupRunTelemetry,
   onboardingFeatureSetupTelemetryFeature,
@@ -27,6 +26,7 @@ import {
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import { getOnboardingFeatureSetupAgentRuntime } from './onboarding-feature-setup-runtime'
+import { SKILLS_CLI_VERSION } from '../../../../shared/agent-feature-install-commands'
 
 const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
@@ -101,24 +101,6 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('maps onboarding feature items to fork-owned skill names', () => {
-    expect(ONBOARDING_FEATURE_SKILL_NAMES).toEqual({
-      browserUse: 'orca-cli',
-      computerUse: 'computer-use',
-      orchestration: 'orchestration',
-      linearTickets: 'orca-linear'
-    })
-    expect(ONBOARDING_FEATURE_SKILL_NAMES.browserUse).toBe(ORCA_CLI_SKILL_NAME)
-  })
-
-  it('builds the documented three-skill command for the default onboarding selection', () => {
-    expect(
-      buildOnboardingFeatureSetupClipboardText(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
-    ).toBe(
-      'npx skills add https://github.com/karlorz/orca/tree/fork-main --skill orca-cli --skill computer-use --skill orchestration --global'
-    )
-  })
-
   it('builds one skill command for selected onboarding feature setup skills', () => {
     const text = buildOnboardingFeatureSetupClipboardText({
       browserUse: true,
@@ -129,7 +111,7 @@ describe('onboarding feature setup runner', () => {
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/karlorz/orca/tree/fork-main --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global'
+      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/karlorz/orca/tree/${ORCA_BUILD_COMMIT} --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global`
     )
   })
 

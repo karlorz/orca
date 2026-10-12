@@ -8,7 +8,6 @@ import { translate } from '@/i18n/i18n'
 
 type CreateProjectParentBrowserProps = {
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   local?: boolean
   createParent: string
   onParentChange: (value: string) => void
@@ -17,7 +16,6 @@ type CreateProjectParentBrowserProps = {
 
 export function CreateProjectParentBrowser({
   runtimeEnvironmentId,
-  sshTargetId,
   local = false,
   createParent,
   onParentChange,
@@ -45,7 +43,6 @@ export function CreateProjectParentBrowser({
       </DialogHeader>
       <RemoteFileBrowser
         local={local}
-        targetId={sshTargetId ?? undefined}
         runtimeEnvironmentId={runtimeEnvironmentId ?? undefined}
         initialPath={createParent || '~'}
         onSelect={selectPath}
@@ -60,7 +57,6 @@ type CreateProjectLocationFieldProps = {
   isCreating: boolean
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
-  sshTargetId?: string | null
   useLocalFilesystemBrowser?: boolean
   onParentChange: (value: string) => void
   onPickParent: () => void
@@ -72,14 +68,12 @@ export function CreateProjectLocationField({
   isCreating,
   manualParentEntry,
   runtimeEnvironmentId,
-  sshTargetId,
   useLocalFilesystemBrowser = false,
   onParentChange,
   onPickParent,
   onBrowseServer
 }: CreateProjectLocationFieldProps): React.JSX.Element {
-  const canBrowseHostFilesystem =
-    Boolean(runtimeEnvironmentId) || Boolean(sshTargetId) || useLocalFilesystemBrowser
+  const canBrowseHostFilesystem = Boolean(runtimeEnvironmentId) || useLocalFilesystemBrowser
   const handleBrowse = (): void => {
     if (canBrowseHostFilesystem) {
       onBrowseServer()
