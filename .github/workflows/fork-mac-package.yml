@@ -112,7 +112,10 @@ jobs:
         if: inputs.validation
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-        run: node .validation-host/config/scripts/fork-mac-template-provenance.mjs verify out/orcad-template/validation-provenance.json
+        run: |
+          set -euo pipefail
+          node .validation-host/config/scripts/fork-mac-template-provenance.mjs verify out/orcad-template/validation-provenance.json
+          rm out/orcad-template/validation-provenance.json
 
       - name: Recheck source and trusted workflow before signing
         if: inputs.validation
@@ -125,7 +128,10 @@ jobs:
           GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
           GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
           BUILD_LABEL: ${{ inputs.build_label }}
-        run: node .validation-host/config/scripts/fork-mac-validation-admission.mjs
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          node .validation-host/config/scripts/fork-mac-validation-admission.mjs
 
       - name: Require fork self-signed identity
         env:

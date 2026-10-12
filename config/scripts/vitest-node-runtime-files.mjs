@@ -7,6 +7,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'config/scripts/skill-recipe-shell.test.mjs',
   'config/scripts/verify-packaged-daemon-entry.test.mjs',
   'config/scripts/terminal-host-smoke-diagnostics.test.mjs',
+  'config/scripts/fork-macos-cleanup-identity.test.mjs',
   'src/main/ssh/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
