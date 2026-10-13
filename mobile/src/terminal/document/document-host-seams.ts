@@ -1,3 +1,4 @@
+import type { TerminalDocumentScope } from './document-scope'
 import type {
   TerminalDocumentTerminal,
   TerminalDocumentWebglAddon
@@ -190,7 +191,7 @@ export function createCancellablePostToReactNativeWebView(
 }
 
 /** Clears every pending bridge-post retry for this document and refuses further posts. */
-export function stopPostToReactNativeWebView(scope: TerminalDocumentHostPostRetries) {
+export function stopPostToReactNativeWebView(scope: TerminalDocumentScope) {
   scope.hostPostStopped = true
   for (const timer of scope.hostPostRetryTimers) {
     clearTimeout(timer)
