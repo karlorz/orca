@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Alert } from 'react-native'
+import type * as ReactNative from 'react-native'
 import { RpcClientProvider } from '../transport/client-context.web'
 import {
   createFakeBridgePortPair,
@@ -11,7 +12,7 @@ import {
 import { MobileSourceCopyButton } from './MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('../platform/clipboard', () => import('../platform/clipboard.web'))
 vi.mock('lucide-react-native', () => ({
   Copy: ({ size, color }: { size: number; color: string }) =>

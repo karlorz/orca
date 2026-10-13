@@ -128,7 +128,7 @@ describe('iOS whole-message copy', () => {
       expect(nodes('MessageActionsSheet')).toHaveLength(0)
       expect(copyButton()).toBeDefined()
       await act(async () => copy.props.onPress())
-      expect(writeText.mock.calls).toEqual([[first + '\n\n' + last]])
+      expect(writeText.mock.calls).toEqual([[`${first}\n\n${last}`]])
       expect(nodes('MessageActionsSheet')).toHaveLength(0)
       expect(nodes('Check')).toHaveLength(1)
       expect(nodes('Check')[0]?.props).toMatchObject({ size: 14, color: colors.statusGreen })
