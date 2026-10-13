@@ -7,6 +7,7 @@ import {
   installWindowErrorReporter,
   installWindowHostTransport,
   paintWindowDocumentBackground,
+  createCancellablePostToReactNativeWebView,
   postToReactNativeWebView,
   windowCapturedEngineErrors,
   windowHasEngine,
@@ -203,6 +204,10 @@ export type TerminalDocumentState = {
   scheduledFrames: number[]
   /** Whether the document has been stopped, and so asks for no more frames. */
   framesStopped: boolean
+  /** `host-notify` / bridge post: pending ReactNativeWebView delivery retries. */
+  hostPostRetryTimers: Set<ReturnType<typeof setTimeout>>
+  /** `host-notify` / bridge post: true after stop; further posts and retries no-op. */
+  hostPostStopped: boolean
 }
 
 /** The document's whole scope: its state, and the seams to whatever is hosting it. */
@@ -332,6 +337,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     },
     scheduledFrames: [],
     framesStopped: false,
+    hostPostRetryTimers: new Set(),
+    hostPostStopped: false,
     touchGesture: {
       lastX: 0,
       lastY: 0,
@@ -371,5 +378,14 @@ export function createTerminalDocumentScope(
   host: TerminalDocumentHost = {}
 ): TerminalDocumentScope {
   const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== undefined))
-  return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams(), ...named }
+  const scope: TerminalDocumentScope = {
+    ...createTerminalDocumentState(),
+    ...createTerminalDocumentHostSeams(),
+    ...named
+  }
+  // Default bridge post must be per-scope so stop can cancel only this document's retries.
+  if (!Object.prototype.hasOwnProperty.call(named, 'postToHost')) {
+    scope.postToHost = createCancellablePostToReactNativeWebView(scope)
+  }
+  return scope
 }
