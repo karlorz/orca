@@ -1,3 +1,4 @@
+import type { TerminalDocumentScope } from './document-scope'
 import type {
   TerminalDocumentTerminal,
   TerminalDocumentWebglAddon
@@ -144,11 +145,69 @@ declare global {
   const Terminal: new (options: Record<string, unknown>) => TerminalDocumentTerminal
 }
 
+/**
+ * Pending React Native bridge deliveries for one document: retries stop with the document so a
+ * torn-down page (or a test that drops `window`) never sees a late `send` throw.
+ */
+export type TerminalDocumentHostPostRetries = {
+  hostPostRetryTimers: Set<ReturnType<typeof setTimeout>>
+  hostPostStopped: boolean
+}
+
+/**
+ * The WebView bridge post, with bounded retry — and cancelable when its document stops.
+ *
+ * Each scope gets its own closure so one document's stop cannot clear another's timers, and a post
+ * after stop is a no-op rather than scheduling work nobody will own.
+ */
+export function createCancellablePostToReactNativeWebView(
+  scope: TerminalDocumentHostPostRetries
+): (message: Record<string, unknown>) => void {
+  return function postToHost(message: Record<string, unknown>) {
+    if (scope.hostPostStopped) {
+      return
+    }
+    const payload = JSON.stringify(message)
+    let attempts = 0
+    function send() {
+      if (scope.hostPostStopped) {
+        return
+      }
+      if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(payload)
+        return
+      }
+      attempts++
+      if (attempts < 100) {
+        const timer = setTimeout(() => {
+          scope.hostPostRetryTimers.delete(timer)
+          send()
+        }, 50)
+        scope.hostPostRetryTimers.add(timer)
+      }
+    }
+    send()
+  }
+}
+
+/** Clears every pending bridge-post retry for this document and refuses further posts. */
+export function stopPostToReactNativeWebView(scope: TerminalDocumentScope) {
+  scope.hostPostStopped = true
+  for (const timer of scope.hostPostRetryTimers) {
+    clearTimeout(timer)
+  }
+  scope.hostPostRetryTimers.clear()
+}
+
+/**
+ * Default window read without a scope: still used as the seam placeholder before a scope binds its
+ * cancellable post. Guards `window` so a stray retry after environment teardown cannot throw.
+ */
 export function postToReactNativeWebView(message: Record<string, unknown>) {
   const payload = JSON.stringify(message)
   let attempts = 0
   function send() {
-    if (window.ReactNativeWebView) {
+    if (typeof window !== 'undefined' && window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(payload)
       return
     }

@@ -159,6 +159,45 @@ describe('the document host seams, by default', () => {
     expect(postMessage).toHaveBeenCalledOnce()
   })
 
+  it('cancels pending bridge messages when its document stops', () => {
+    const scope = createTerminalDocumentScope()
+    scope.postToHost({ type: 'ready' })
+    scope.postToHost({ type: 'pong', pingId: 7 })
+    expect(vi.getTimerCount()).toBe(2)
+    stopTerminalDocument(scope)
+    expect(vi.getTimerCount()).toBe(0)
+    const postMessage = vi.fn<(data: string) => void>()
+    vi.stubGlobal('ReactNativeWebView', { postMessage })
+    vi.advanceTimersByTime(5000)
+    scope.postToHost({ type: 'late' })
+    expect(postMessage).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("keeps another document's pending bridge message when one stops", () => {
+    const first = createTerminalDocumentScope()
+    const second = createTerminalDocumentScope()
+    first.postToHost({ type: 'first' })
+    second.postToHost({ type: 'second' })
+    stopTerminalDocument(first)
+    expect(vi.getTimerCount()).toBe(1)
+    const postMessage = vi.fn<(data: string) => void>()
+    vi.stubGlobal('ReactNativeWebView', { postMessage })
+    vi.advanceTimersByTime(50)
+    expect(postMessage.mock.calls).toEqual([['{"type":"second"}']])
+    expect(vi.getTimerCount()).toBe(0)
+    stopTerminalDocument(second)
+  })
+
+  it('leaves no callback after stopping before its window disappears', () => {
+    const scope = createTerminalDocumentScope()
+    scope.postToHost({ type: 'ready' })
+    stopTerminalDocument(scope)
+    vi.stubGlobal('window', undefined)
+    expect(() => vi.advanceTimersByTime(50)).not.toThrow()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('builds the terminal from the engine bundle global', () => {
     const constructed: Record<string, unknown>[] = []
     function TerminalStub(this: unknown, options: Record<string, unknown>) {

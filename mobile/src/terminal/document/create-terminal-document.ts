@@ -16,7 +16,11 @@ import { startTextScaling } from './text-scaling'
 import { stopViewportTransform } from './viewport-transform'
 import { startWebglRecovery, stopWebglRecovery } from './webgl-recovery'
 import type { TerminalDocumentScope } from './document-scope'
-import type { TerminalDocument, TerminalDocumentHost } from './document-host-seams'
+import {
+  stopPostToReactNativeWebView,
+  type TerminalDocument,
+  type TerminalDocumentHost
+} from './document-host-seams'
 
 /**
  * One terminal document, started.
@@ -76,6 +80,7 @@ export function startTerminalDocument(scope: TerminalDocumentScope) {
 
 /** The undo, in reverse, with the frames the document is still owed taken back last (ruling 21). */
 export function stopTerminalDocument(scope: TerminalDocumentScope) {
+  stopPostToReactNativeWebView(scope)
   stopMessageBridge(scope)
   stopSurfaceTouchGestures(scope)
   stopTapDispatch(scope)
