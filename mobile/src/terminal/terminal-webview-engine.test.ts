@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { Script } from 'node:vm'
-
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
@@ -91,7 +90,6 @@ describe('terminal WebView bundled engine', () => {
   it('parses the bundled engine at the Chrome 74 syntax floor', () => {
     expect(() => parse(XTERM_ENGINE_JS, { ecmaVersion: 2019 })).not.toThrow()
   })
-
 
   it('answers the mode query OpenCode sends during startup', async () => {
     vi.useFakeTimers()
