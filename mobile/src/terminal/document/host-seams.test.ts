@@ -174,7 +174,7 @@ describe('the document host seams, by default', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps another document\'s pending bridge message when one stops', () => {
+  it("keeps another document's pending bridge message when one stops", () => {
     const first = createTerminalDocumentScope()
     const second = createTerminalDocumentScope()
     first.postToHost({ type: 'first' })
