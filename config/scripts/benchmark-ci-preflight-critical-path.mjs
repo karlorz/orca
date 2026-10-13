@@ -37,10 +37,17 @@ const save = () =>
 
 function baselineSource(file) {
   const result = runProcessSync({ program: 'git', args: ['show', `HEAD^1:${file}`], cwd: root })
-  if (result.code !== 0 || result.outputTruncated) {
+  if (result.code === 0 && !result.outputTruncated) {
+    return result.stdout
+  }
+  // Merge commits that introduce a new critical-path script have no first-parent
+  // copy (fork-main never saw it). Fall back to HEAD so first-intro parity is a
+  // tautology instead of failing the compare job.
+  const fallback = runProcessSync({ program: 'git', args: ['show', `HEAD:${file}`], cwd: root })
+  if (fallback.code !== 0 || fallback.outputTruncated) {
     throw new Error(`Cannot read baseline ${file}`)
   }
-  return result.stdout
+  return fallback.stdout
 }
 async function command(program, args, label) {
   const result = await measurePreflightCommand({ program, args, label, root, output, env })
