@@ -102,6 +102,33 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     ).toBeNull()
   })
 
+  it('keeps the same leased pane when conversion replaces its local tab id with a mirror', () => {
+    const leafId = '00000000-0000-4000-8000-000000000001'
+    publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'relay-tab', leafId, state: 'live' }])
+    expect(legacyRelayBridgePtyIdForPane({ tabId: 'relay-tab', leafId, boundPtyId: PTY })).toBe(PTY)
+    expect(
+      legacyRelayBridgePtyIdForPane({
+        tabId: 'web-terminal-relay-tab',
+        leafId,
+        boundPtyId: null
+      })
+    ).toBe(PTY)
+    expect(
+      legacyRelayBridgePtyIdForPane({
+        tabId: `web-terminal-${encodeURIComponent(`relay-tab::${leafId}`)}`,
+        leafId: 'client-leaf',
+        boundPtyId: null
+      })
+    ).toBe(PTY)
+    expect(
+      legacyRelayBridgePtyIdForPane({
+        tabId: 'web-terminal-relay-tab',
+        leafId: 'sibling-leaf',
+        boundPtyId: PTY
+      })
+    ).toBeNull()
+  })
+
   it('never lets a second pane, such as a later split, drive the same old shell', () => {
     publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-7', state: 'live' }])
     const mirrored = `web-terminal-${encodeURIComponent('tab-7::leaf-a')}`

@@ -99,13 +99,18 @@ export function legacyRelayBridgePtyIdForPane(args: {
   if (!window.api?.legacyRelayBridge) {
     return null
   }
+  const served = bridgedPaneFor(args.tabId, args.leafId)
   const candidate =
-    bridgedPaneFor(args.tabId, args.leafId)?.ptyId ??
-    (args.boundPtyId && parseAppSshPtyId(args.boundPtyId) ? args.boundPtyId : null)
+    served?.ptyId ?? (args.boundPtyId && parseAppSshPtyId(args.boundPtyId) ? args.boundPtyId : null)
   if (!candidate) {
     return null
   }
-  const claimant = `${args.tabId}\u0000${args.leafId ?? ''}`
+  // Conversion mirrors the same leased pane under a new local tab id.
+  const [hostTabId, hostLeafId] = toHostSessionTabId(args.tabId).split(
+    HOST_TERMINAL_SURFACE_SEPARATOR
+  )
+  const claimLeafId = served?.leafId ? (hostLeafId ?? args.leafId) : args.leafId
+  const claimant = `${hostTabId}\u0000${claimLeafId ?? ''}`
   const holder = claims.get(candidate)
   if (holder && holder !== claimant) {
     return null
