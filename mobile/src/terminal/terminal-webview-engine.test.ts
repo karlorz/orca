@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { Script } from 'node:vm'
+
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
