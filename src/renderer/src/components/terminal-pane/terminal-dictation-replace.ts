@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {

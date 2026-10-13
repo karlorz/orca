@@ -16,6 +16,8 @@
   },
   "settings": {
     "chat": {
+      "permissionsTitle": "Permisos para chats nuevos",
+      "permissionsDescription": "Se aplica solo a chats nuevos. Los agentes que abres en una terminal usan Configuración → Agentes → Permisos de agentes.",
       "description": "Elige cómo se ven y se nombran los chats.",
       "names": {
         "title": "Nombres de chats",
@@ -3012,7 +3014,8 @@
           }
         },
         "dialog": {
-          "f26c4baeda": "Cerrar"
+          "f26c4baeda": "Cerrar",
+          "minimize": "Minimizar"
         },
         "repo": {
           "multi": {
@@ -4067,7 +4070,12 @@
             "ariaLabel": "{{value0}} chats disponibles para reanudar",
             "tooltip": "Abrir chats interrumpidos disponibles para reanudar",
             "resumingProgressLabel": "Reanudando chats {{value0}}/{{value1}}",
-            "resumingProgressAria": "Reanudando chats, {{value0}} de {{value1}} listos. Haz clic para ver los detalles."
+            "resumingProgressAria": "Reanudando chats, {{value0}} de {{value1}} listos. Haz clic para ver los detalles.",
+            "resumedLabelOne": "1 chat reanudado",
+            "resumedLabel": "{{value0}} chats reanudados",
+            "resumedAriaOne": "1 chat reanudado. Haz clic para verlo.",
+            "resumedAria": "{{value0}} chats reanudados. Haz clic para verlos.",
+            "resumedTooltip": "Chats que Orca reanudó tras el reinicio. Haz clic para verlos."
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "La conexión anterior cerrada.",
@@ -17811,6 +17819,7 @@
         "couldNotStart": "{{agent}} no pudo iniciarse.",
         "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
+        "codexCliTooOld": "Codex {{installedVersion}} es demasiado antiguo para los chats. Actualiza a {{minimumVersion}} o una versión posterior.",
         "notSignedIn": "{{agent}} no ha iniciado sesión.",
         "claudeSystemNotSignedIn": "Claude no ha iniciado sesión. Ejecuta `{{loginCommand}}` o elige una cuenta en los ajustes de Cuentas de Claude.",
         "claudeManagedNotSignedIn": "Esta cuenta de Claude no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Claude.",
@@ -17834,8 +17843,8 @@
         "chooseClaudeAccountThenSend": "Elija o agregue una en la configuración de Cuentas de Claude y vuelva a enviar su mensaje.",
         "providerExitedRow": "{{agent}} se detuvo mientras esta respuesta estaba en curso. Puede continuar en esta conversación.",
         "providerExitedRejection": "{{agent}} se detuvo antes de que se enviara este mensaje.",
-        "providerRejected": "El proveedor no aceptó este mensaje.",
-        "providerRejectedQuoted": "El proveedor no aceptó este mensaje: {{detail}}.",
+        "providerRejected": "{{agent}} no aceptó este mensaje.",
+        "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
         "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
         "attachmentTooLarge": "Una imagen de este mensaje es demasiado grande, así que el mensaje no se envió.",
         "attachmentLargerThan": "Una imagen de este mensaje supera los {{size}} MB, así que el mensaje no se envió.",
@@ -18044,6 +18053,19 @@
         "attachmentOwnerChanged": "Este espacio de trabajo cambió de host durante la conexión; vuelve a soltar los archivos.",
         "attachmentUnreadable": "No se pudieron leer los archivos soltados.",
         "tooManyAttachments": "Adjunta {{value0}} archivos o menos a la vez.",
+        "permissions": "Permisos",
+        "permissionAsk": "Pedir aprobación",
+        "permissionAskDescription": "Pregunta antes de ediciones y comandos que tu configuración no permite",
+        "permissionAskCodexDescription": "Edita archivos y ejecuta comandos en este espacio de trabajo; pregunta antes de cualquier otra cosa",
+        "permissionAskSharedDescription": "Pregunta antes de ediciones o comandos que aún no tiene permitidos",
+        "permissionAcceptEdits": "Aceptar ediciones",
+        "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",
+        "permissionAuto": "Aprobar por mí",
+        "permissionAutoDescription": "Revisa las solicitudes de aprobación por ti",
+        "permissionFullAccess": "Acceso total",
+        "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos",
+        "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",
+        "permissionFullAccessSharedDescription": "Nunca pregunta antes de ediciones o comandos",
         "pasteFailed": "Error al pegar.",
         "commandAttachmentsUnsupported": "Quita los archivos adjuntos antes de usar un comando de la sesión de chat."
       },
@@ -18164,8 +18186,11 @@
       },
       "transcriptLabel": "Conversación",
       "toggle": {
-        "showTerminal": "Mostrar terminal",
-        "showChat": "Mostrar vista de chat"
+        "showTerminal": "Mostrar terminal"
+      },
+      "resumeInNewChat": {
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
+        "cannotResume": "Esta conversación de {{agent}} no se puede reanudar en un chat nativo."
       },
       "state": {
         "loading": {
@@ -18376,7 +18401,8 @@
         "one": "1 archivo modificado",
         "many": "{{count}} archivos modificados",
         "partial": "Diff parcial",
-        "recorded": "Totales de las ediciones registradas en este turno."
+        "showDiff": "Mostrar diferencias",
+        "hideDiff": "Ocultar diferencias"
       },
       "notices": {
         "contextCleared": "Contexto borrado",
@@ -18415,6 +18441,8 @@
         "subtitle": "Los archivos se añaden a tu mensaje como rutas que el agente puede leer."
       },
       "copyCode": "Copiar código",
+      "wrapLines": "Ajustar líneas",
+      "disableLineWrap": "Desactivar ajuste de línea",
       "context": {
         "unavailable": "El uso del contexto aún no se conoce. Estará disponible cuando el agente vuelva a responder.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",
@@ -19114,8 +19142,6 @@
       "eyebrow": "Nuevo",
       "title": "El chat nativo mejora",
       "chatModeNote": "Las pestañas de agente nuevas siguen abriéndose en la terminal, como antes.",
-      "chatModeLabel": "Activar el modo chat",
-      "chatModeHint": "Las pestañas de agente nuevas se abren como chat.",
       "intro": "Los chats nuevos de agentes compatibles usan la vista de chat mejorada. Para alternar entre chat y CLI, abre {{panel}} (barra lateral derecha):",
       "resumeInNativeChat": "{{action}} abre una conversación de CLI compatible en el chat nativo.",
       "resumeInCli": "{{action}} copia un chat de Claude/Codex a una CLI nueva sin tocar el original.",

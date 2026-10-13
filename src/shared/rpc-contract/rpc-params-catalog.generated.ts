@@ -528,6 +528,7 @@ import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
+import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalSwitchOrigin } from './terminal-originating-pane-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalAnswerQuestion } from './terminal-question-answer-params'
@@ -1275,6 +1276,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
   'terminal.wait': TerminalWait,
+  'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
+  'terminalDaemon.severedStatus': null,
   'ui.get': null,
   'ui.recordFeatureInteraction': FeatureInteractionIdParam,
   'ui.set': UiUpdate,

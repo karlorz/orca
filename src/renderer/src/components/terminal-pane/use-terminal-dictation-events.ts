@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject, type RefObject } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
 import { handleDictationReplaceTextEvent } from './terminal-dictation-replace'
 
