@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { handleDictationReplaceTextEvent } from './terminal-dictation-replace'
 
 vi.mock('./terminal-programmatic-text-paste', () => ({
