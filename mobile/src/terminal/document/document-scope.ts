@@ -384,7 +384,7 @@ export function createTerminalDocumentScope(
     ...named
   }
   // Default bridge post must be per-scope so stop can cancel only this document's retries.
-  if (!Object.prototype.hasOwnProperty.call(named, 'postToHost')) {
+  if (!Object.hasOwn(named, 'postToHost')) {
     scope.postToHost = createCancellablePostToReactNativeWebView(scope)
   }
   return scope
