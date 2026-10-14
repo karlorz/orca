@@ -30,6 +30,7 @@ export type FocusTerminalOptions = {
   existingSessionOnly?: boolean
   verifySession?: () => boolean
   activateHostWindow?: boolean
+  flashFocusedPane?: boolean
 }
 
 export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafPtyId {
@@ -192,6 +193,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
           ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
           ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {}),
           ...(options.activateHostWindow === true ? { activateHostWindow: true } : {}),
+          ...(options.flashFocusedPane === true ? { flashFocusedPane: true } : {}),
           ...(options.existingSessionOnly
             ? {
                 existingSessionOnly: true,

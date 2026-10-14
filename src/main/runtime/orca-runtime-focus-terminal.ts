@@ -73,7 +73,8 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyRevea
       expectedIncarnationId: binding.incarnationId,
       existingSessionOnly: true,
       verifySession,
-      activateHostWindow: options.activateHostWindow === true
+      activateHostWindow: options.activateHostWindow === true,
+      flashFocusedPane: true
     })
     const current = this.getSessionTerminalOwner(binding.paneKey)
     if (

@@ -392,4 +392,46 @@ describe('runtime window lifecycle existing-session activation policy', () => {
     expect(mockAppFocus).not.toHaveBeenCalled()
     expect(mockSafelyRevealWindow).not.toHaveBeenCalled()
   })
+
+  it('forwards the pane flash flag to the renderer payload only when set', async () => {
+    const { notifier, send, deliverReply } = setup()
+    const flashPromise = notifier.revealTerminalSession?.('wt-1', {
+      ptyId: 'pty-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      existingSessionOnly: true,
+      flashFocusedPane: true,
+      expectedProcessIdentity: validProcessIdentity,
+      canFocusExistingSession: () => true
+    })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Inspect the payload tuples passed to mock send.
+    const sendCalls = send.mock.calls as unknown as [
+      string,
+      { requestId: string; flashFocusedPane?: boolean }
+    ][]
+    expect(sendCalls[0][1].flashFocusedPane).toBe(true)
+    deliverReply({
+      requestId: sendCalls[0][1].requestId,
+      tabId: 'tab-1',
+      identity: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1', ptyId: 'pty-1' }
+    })
+    await flashPromise
+
+    const plainPromise = notifier.revealTerminalSession?.('wt-1', {
+      ptyId: 'pty-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      existingSessionOnly: true,
+      expectedProcessIdentity: validProcessIdentity,
+      canFocusExistingSession: () => true
+    })
+    expect(sendCalls[1][1]).not.toHaveProperty('flashFocusedPane')
+    deliverReply({
+      requestId: sendCalls[1][1].requestId,
+      tabId: 'tab-1',
+      identity: { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1', ptyId: 'pty-1' }
+    })
+    await plainPromise
+  })
 })

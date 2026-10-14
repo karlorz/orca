@@ -1,4 +1,5 @@
 import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { releaseAgentLaunchPaneSpawn } from '@/lib/agent-launch-pane-spawn-hold'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
@@ -10,6 +11,7 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { tryMakePaneKey } from './agent-status-routing'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
+import { surfaceExistingSessionReveal } from './terminal-existing-session-reveal'
 import { useAppStore } from '../../store'
 import {
   activateExistingLeafInLayout,
@@ -38,6 +40,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         activate,
         focus,
         existingSessionOnly,
+        flashFocusedPane,
         presentation,
         surfaceOwner,
         agentLaunchViewer,
@@ -50,32 +53,15 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         try {
           const store = useAppStore.getState()
           if (existingSessionOnly) {
-            if (
-              !requestId ||
-              !ptyId ||
-              !tabId ||
-              !leafId ||
-              command ||
-              resumeProviderSession ||
-              launchConfig
-            ) {
-              throw new Error('terminal_reveal_identity_required')
-            }
-            const identity = verifyTerminalRevealIdentity(store, {
+            surfaceExistingSessionReveal(store, {
+              requestId,
               worktreeId,
+              ptyId,
               tabId,
               leafId,
-              ptyId
-            })
-            activateTerminalInitiatedWorktree(store, worktreeId)
-            store.setActiveTabType('terminal', worktreeId)
-            store.setActiveTab(tabId)
-            store.revealWorktreeInSidebar(worktreeId)
-            focusTerminalInitiatedTab(tabId, leafId, worktreeId)
-            window.api.ui.replyTerminalCreate({
-              requestId,
-              tabId,
-              identity
+              command,
+              resumeProviderSession,
+              launchConfig
             })
             return
           }
@@ -174,7 +160,15 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           }
           if (shouldSurfaceOwner) {
             store.revealWorktreeInSidebar(worktreeId)
-            focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
+            if (flashFocusedPane === true && shouldActivate) {
+              // Why: explicit focus requests (terminal.switch/focus) flash the pane like a notification click.
+              activateTabAndFocusPane(tab.id, leafId ?? null, {
+                flashFocusedPane: true,
+                scrollToBottomIfOutputSinceLastView: true
+              })
+            } else {
+              focusTerminalInitiatedTab(tab.id, leafId, worktreeId)
+            }
           }
           if (agentLaunchViewer) {
             presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)

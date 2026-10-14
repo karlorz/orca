@@ -165,7 +165,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ? { expectedIncarnationId: params.expectedIncarnationId }
             : {}),
           navigateHost,
-          activateHostWindow: navigateHost && clientKind === undefined
+          activateHostWindow: navigateHost && clientKind === undefined,
+          flashFocusedPane: true
         })
       }
     }

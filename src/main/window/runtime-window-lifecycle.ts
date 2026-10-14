@@ -163,7 +163,8 @@ export function registerRuntimeWindowLifecycle(
             ? { splitTelemetrySource: opts.splitTelemetrySource }
             : {}),
           ...(opts.focus !== undefined ? { focus: opts.focus } : {}),
-          ...(opts.existingSessionOnly ? { existingSessionOnly: true } : {})
+          ...(opts.existingSessionOnly ? { existingSessionOnly: true } : {}),
+          ...(opts.flashFocusedPane === true ? { flashFocusedPane: true } : {})
         })
         if (!sent) {
           clearTimeout(timer)

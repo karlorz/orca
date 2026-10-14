@@ -80,6 +80,7 @@ export type RuntimeNotifier = {
       focus?: boolean
       existingSessionOnly?: boolean
       activateHostWindow?: boolean
+      flashFocusedPane?: boolean
       canFocusExistingSession?: () => boolean
       expectedProcessIdentity?: {
         terminalHandle: string

@@ -492,3 +492,18 @@ features:
       - src/main/acp/acp-structured-session-adapter.ts
       - src/cli/handlers/agent-session-control.ts
     wiki: projects/openpets/work/2026-10-11-codex-overlay-card-followups
+
+  - id: pet-navigation-pane-flash
+    title: CLI session navigation (switch-origin/switch-session/terminal switch) flashes the focused pane like a notification click
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/hooks/ipc-events/terminal-presentation-ipc-bridge.ts
+      - src/main/runtime/orca-runtime-guarded-pty-reveal.ts
+      - src/main/runtime/orca-runtime-focus-terminal.ts
+      - src/main/runtime/terminal-originating-pane-navigation.ts
+      - src/main/runtime/terminal-originating-pane-navigation-types.ts
+      - src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods.ts
+      - src/main/runtime/runtime-notifier-contract.ts
+      - src/main/window/runtime-window-lifecycle.ts
+      - src/preload/api/ui-command-event-api.ts

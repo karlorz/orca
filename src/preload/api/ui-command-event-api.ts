@@ -171,6 +171,7 @@ export type UiCommandEventApi = {
       activate?: boolean
       focus?: boolean
       existingSessionOnly?: boolean
+      flashFocusedPane?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
       agentLaunchViewer?: AgentLaunchTabViewerRule
