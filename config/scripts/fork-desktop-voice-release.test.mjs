@@ -167,6 +167,8 @@ describe('fork desktop voice release workflow', () => {
       'verify-fork-desktop-release-artifacts.mjs desktop-artifacts-linux --platform=linux'
     )
     expect(rawYaml).toContain('desktop-artifacts-linux')
+    expect(rawYaml).toContain('scripts=(build:wsl-guest build:electron-vite:parallel)')
+    expect(rawYaml).not.toContain('build:relay')
   })
 
   it('includes build-windows job on windows-2022 building unsigned NSIS installer and blockmap', () => {
@@ -178,6 +180,8 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('build-windows:')
     expect(rawYaml).toContain('windows-2022')
     expect(rawYaml).toContain('build-windows-cli-launcher.mjs')
+    expect(rawYaml).toContain('build-windows-process-tree-addon.mjs')
+    expect(rawYaml).not.toContain('build-windows-process-tree-relay-addon.mjs')
     expect(rawYaml).toMatch(/electron-builder[^\n]*--win[^\n]*--publish never/)
     expect(rawYaml).toContain('generate-windows-blockmap.mjs')
     expect(rawYaml).toContain(
