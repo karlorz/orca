@@ -28,9 +28,11 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import { openForWrite } from './structured-agent-session-send-preparation'
 import { handOverSubmission, performSend } from './structured-agent-session-turns'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
+import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import type { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
 import {
   recordedBoundControlReceipt,
+  recordedBoundControlFromStore,
   observeBoundControlReceipt,
   boundControlReceipt
 } from './structured-agent-session-bound-control-receipts'
@@ -189,6 +191,8 @@ export class StructuredAgentSessionBoundControls {
       params,
       {
         method: 'agentSession.cancel',
+        conversationWrite: true,
+        commandReceipt: STOP_COMMAND_RECEIPT,
         prepareCancel: () => {
           const current = this.targets.read(target.sessionId)
           const stale = this.targets.validateIdentity(target, current)
@@ -200,7 +204,7 @@ export class StructuredAgentSessionBoundControls {
           }
         },
         beforeCancel: () => {
-          const stale = this.targets.validate(cancelTarget, false)
+          const stale = this.targets.validateIdentity(cancelTarget)
           if (stale) {
             throw new AgentSessionRefusalError(stale)
           }
@@ -212,13 +216,10 @@ export class StructuredAgentSessionBoundControls {
         run: async () => {
           throw new Error('Bound Stop requires the conversation-stop runner')
         },
-        settledOutcome: (value) => ({
-          status: 'succeeded',
-          sessionId: envelope.sessionId,
-          boundControl: { receipt: value.controlReceipt, cancelled: value.cancelled }
-        }),
         replay: (_ctx, prior) => {
-          const saved = recordedBoundControlReceipt(prior)
+          const saved =
+            recordedBoundControlReceipt(prior) ??
+            recordedBoundControlFromStore(this.context(), caller, envelope)
           const controlReceipt = saved?.receipt
           return controlReceipt && saved?.cancelled !== undefined
             ? {

@@ -1,4 +1,3 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BOUND_CALLER,
@@ -38,23 +37,14 @@ describe('bound control currentness at awaited provider boundaries', () => {
     let cancelled = false
     rig.cancelTurn.mockImplementationOnce(async (input) => {
       await Promise.resolve()
-      await rig.session.journal.appendItem(
-        {
-          provider: 'legacy',
-          agent: 'grok',
-          sessionId: 'native-grok-1',
-          recordId: 'revision-race'
-        },
-        { kind: 'status', text: 'new provider state' },
-        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
+      rig.state.nativeSessionId = 'native-grok-moved'
       input.beforeCancel?.()
       cancelled = true
       return { cancelled: true }
     })
     expect(await rig.host.cancel(BOUND_CALLER, params)).toMatchObject({
       ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
+      refusal: { code: 'agent_session_operation_unknown' }
     })
     expect(cancelled).toBe(false)
     expect(rig.state.live).toBe(true)

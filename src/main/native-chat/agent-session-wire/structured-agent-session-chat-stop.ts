@@ -113,7 +113,6 @@ export function mutateWithChatStop<TValue>(
       return { ok: true, value: { ...named, cancelled: true } }
     }
     const record = context.deps.store.getRecord(ctx.sessionId)
-    plan.prepareCancel?.()
     return performCancel(
       { ...ctx, failureTextContext: structuredAgentSessionFailureWordsContext(record) },
       {
@@ -133,6 +132,7 @@ export function mutateWithChatStop<TValue>(
     )
   }
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
+    plan.prepareCancel?.()
     const target = captureChatStopTarget(ctx, {
       child: context.sessions.get(ctx.sessionId)?.child ?? null,
       ...named,

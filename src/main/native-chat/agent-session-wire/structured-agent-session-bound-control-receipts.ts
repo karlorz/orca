@@ -29,12 +29,49 @@ export function recordedBoundControlReceipt(outcome: AgentSessionOperationOutcom
   return read.success ? read.data : null
 }
 
+/** Command-receipt replay builds a ledger outcome without `boundControl`; the store row still has it. */
+export function recordedBoundControlFromStore(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope
+) {
+  const row = context.deps.store.evaluateMutationOperation({
+    callerKey: caller.callerKey,
+    envelope,
+    hostFingerprint: envelope.payloadFingerprint,
+    now: context.now()
+  })
+  return row?.decision.decision === 'replay'
+    ? recordedBoundControlReceipt(row.decision.row.outcome)
+    : null
+}
+
 export function boundControlReceipt(
   target: AgentSessionControlTarget,
   clientOperationId: string,
   state: AgentSessionControlReceipt['state']
 ): AgentSessionControlReceipt {
   return { target, clientOperationId, state }
+}
+
+async function persistBoundControlOutcome(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  envelope: AgentSessionMutationEnvelope,
+  value: { controlReceipt: AgentSessionControlReceipt; cancelled?: boolean }
+): Promise<void> {
+  await context.deps.store.recordOperationOutcome({
+    callerKey: caller.callerKey,
+    operationId: envelope.clientOperationId,
+    outcome: {
+      status: 'succeeded',
+      sessionId: envelope.sessionId,
+      boundControl: {
+        receipt: value.controlReceipt,
+        ...('cancelled' in value ? { cancelled: value.cancelled } : {})
+      }
+    }
+  })
 }
 
 export async function observeBoundControlReceipt<
@@ -55,6 +92,9 @@ export async function observeBoundControlReceipt<
   }
   const receipt = result.value.controlReceipt
   if (receipt.state !== 'accepted' && receipt.state !== 'stopAccepted') {
+    if (stop) {
+      await persistBoundControlOutcome(context, caller, params.envelope, result.value)
+    }
     return result
   }
   const { envelope, expectedControlTarget: target } = params
@@ -116,19 +156,11 @@ export async function observeBoundControlReceipt<
     if (prior && prior.state !== 'accepted' && prior.state !== 'stopAccepted') {
       return { ...result, value: { ...result.value, controlReceipt: prior } }
     }
-    await context.deps.store.recordOperationOutcome({
-      callerKey: row.decision.row.callerKey,
-      operationId: envelope.clientOperationId,
-      outcome: {
-        status: 'succeeded',
-        sessionId: envelope.sessionId,
-        boundControl: {
-          receipt: controlReceipt,
-          ...('cancelled' in result.value ? { cancelled: result.value.cancelled } : {})
-        }
-      }
-    })
   }
+  await persistBoundControlOutcome(context, caller, envelope, {
+    ...result.value,
+    controlReceipt
+  })
   return {
     ...result,
     value: { ...result.value, ...(submission ? { submission } : {}), controlReceipt }
