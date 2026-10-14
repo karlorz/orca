@@ -109,7 +109,7 @@ jobs:
           status=0
           pnpm run build:cli || status=1
 
-          scripts=(build:relay build:electron-vite:parallel)
+          scripts=(build:wsl-guest build:electron-vite:parallel)
           pids=()
           for script in "${scripts[@]}"; do
             pnpm run "$script" &
@@ -231,7 +231,7 @@ jobs:
         shell: pwsh
         run: |
           node config/scripts/build-windows-cli-launcher.mjs
-          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64
 
       - name: Build package inputs
         shell: bash

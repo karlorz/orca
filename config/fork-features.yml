@@ -103,6 +103,7 @@ features:
       - config/scripts/fork-next-desktop-tag.mjs
       - config/scripts/ci-dependency-download-cache.test.mjs
       - config/scripts/verify-fork-desktop-release-artifacts.mjs
+      - config/scripts/verify-packaged-daemon-entry.cjs
   - id: fork-desktop-orcad-template
     title: Fork desktop releases ship the managed SSH orcad template
     kind: release
