@@ -1,6 +1,6 @@
 import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { releaseAgentLaunchPaneSpawn } from '@/lib/agent-launch-pane-spawn-hold'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
@@ -113,7 +113,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (ptyId && tabId && leafId && reusedTab?.agentLaunchPane?.leafId === leafId) {
             // A launch pane this window made and the host never showed early: the host now holds it,
             // so its spawn may attach instead of waiting out the whole launch.
-            releaseAgentLaunchPaneSpawn(tabId, leafId)
+            settleAgentLaunchPaneStart(tabId, leafId, ptyId)
           }
           const tab =
             reusedTab ??

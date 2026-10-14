@@ -2,10 +2,16 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import type { AutomationRunViewState } from './automation-run-view-state'
+
+const viewStateMock = vi.hoisted(() => ({ current: null as AutomationRunViewState | null }))
+
+vi.mock('./use-automation-run-live-view-state', () => ({
+  useAutomationRunLiveViewState: () => viewStateMock.current
+}))
 
 const run: AutomationRun = {
   id: 'run-1',
@@ -30,13 +36,13 @@ const run: AutomationRun = {
 }
 
 function renderPage(viewState: AutomationRunViewState): void {
+  viewStateMock.current = viewState
   render(
     <AutomationRunDetailsPage
       automation={null}
       run={run}
       relativeNow={1}
       workspaceDisplay={null}
-      viewState={viewState}
       canRerun={false}
       isRerunPending={false}
       onRerun={() => {}}
@@ -47,7 +53,10 @@ function renderPage(viewState: AutomationRunViewState): void {
 }
 
 describe('AutomationRunDetailsPage', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    viewStateMock.current = null
+    cleanup()
+  })
 
   it('shows the open action when it can open something', () => {
     renderPage({

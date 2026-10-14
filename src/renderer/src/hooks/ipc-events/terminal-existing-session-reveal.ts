@@ -1,11 +1,11 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../../store/types'
-import { activateTerminalInitiatedWorktree } from './terminal-command-state'
 
 // Verified session navigation (switch-origin/switch-session) surfaces the already-bound tab.
 export function surfaceExistingSessionReveal(
@@ -34,7 +34,7 @@ export function surfaceExistingSessionReveal(
     throw new Error('terminal_reveal_identity_required')
   }
   const identity = verifyTerminalRevealIdentity(store, { worktreeId, tabId, leafId, ptyId })
-  activateTerminalInitiatedWorktree(store, worktreeId)
+  revealWorkspaceSurface(store, worktreeId)
   store.setActiveTabType('terminal', worktreeId)
   store.setActiveTab(tabId)
   store.revealWorktreeInSidebar(worktreeId)
