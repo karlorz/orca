@@ -93,7 +93,10 @@ export async function observeBoundControlReceipt<
   const receipt = result.value.controlReceipt
   if (receipt.state !== 'accepted' && receipt.state !== 'stopAccepted') {
     if (stop) {
-      await persistBoundControlOutcome(context, caller, params.envelope, result.value)
+      await persistBoundControlOutcome(context, caller, params.envelope, {
+        controlReceipt: receipt,
+        ...('cancelled' in result.value ? { cancelled: result.value.cancelled } : {})
+      })
     }
     return result
   }
