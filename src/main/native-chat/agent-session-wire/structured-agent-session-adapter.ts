@@ -294,6 +294,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
    *  exit was observed first-hand but its descendants were not proven gone. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
+  /** Read the already-owned Grok ACP child; never acquire for a control lookup. */
+  controlBinding?(sessionId: string): {
+    nativeSessionId: string
+    acquisitionGeneration: string
+    turnId: string | null
+    promptPending: boolean
+    canFollowUp: boolean
+  } | null
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -304,6 +312,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     requestedAt?: number
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
+    beforePromptWrite?: () => void
   }): Promise<AgentSessionDispatchOutcome>
   /** How this session narrows its agent's declared rewind; `agent` answers for one with no child
    *  running. The router applies the declaration first, so an adapter's answer never widens it. */
@@ -339,6 +348,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
    *  a turn the client never asked to stop. With no `turnId` the conversation asked to stop
    *  everything it has in flight — a running turn, or a dispatch whose turn has not opened yet. */
   cancelTurn(input: {
+    beforeCancel?: () => void
     sessionId: string
     turnId?: string
     fence: number

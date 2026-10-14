@@ -1,3 +1,4 @@
+import { AgentSessionControlTargetSchema } from '../agent-session-bound-control'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -130,6 +131,7 @@ export const CreateSupportParams = z
 export const SendParams = z
   .object({
     envelope: MutationEnvelope,
+    expectedControlTarget: AgentSessionControlTargetSchema.optional(),
     retryUnknown: z.literal(true).optional(),
     /** Queue the send as a host-held draft while the main agent is working. Strict object, so an
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
@@ -164,6 +166,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CancelParams = z
   .object({
     envelope: MutationEnvelope,
+    expectedControlTarget: AgentSessionControlTargetSchema.optional(),
     // Absent: stop whatever the conversation has in flight. Present: only if that turn is current.
     turnId: Identifier('Invalid turn id').optional(),
     scope: z.literal('background-tasks').optional(),

@@ -1,3 +1,4 @@
+import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from '../../shared/agent-session-bound-control'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
@@ -91,6 +92,34 @@ describe('CLI remote WebSocket transport', () => {
         ]
       })
     )
+  })
+
+  it('negotiates bound control with the selected remote execution runtime without local fallback', async () => {
+    const runtime = await startTestRuntime('bound-remote')
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+    await expect(
+      client.call('agentSession.controlTarget', { provider: 'grok', nativeSessionId: 'native-1' })
+    ).rejects.toThrow('Unknown method')
+    expect(runtime.authFrames).toContainEqual(
+      expect.objectContaining({
+        clientCapabilities: expect.arrayContaining([
+          AGENT_SESSION_BOUND_CONTROL_CAPABILITY,
+          'agent-session.structured.v1'
+        ])
+      })
+    )
+    expect(runtime.requestMethods).toContain('agentSession.controlTarget')
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('rejects malformed remote pairing codes before local runtime lookup', () => {

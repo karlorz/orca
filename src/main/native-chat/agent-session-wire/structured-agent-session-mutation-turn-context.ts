@@ -17,6 +17,7 @@ export function mutationTurnContext<TValue>(
     journal,
     fence,
     adapter: request.adapter,
+    ...(request.plan.beforeCancel ? { beforeCancel: request.plan.beforeCancel } : {}),
     agents: request.agents,
     agent: record.provider,
     logger: request.logger,

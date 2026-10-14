@@ -269,6 +269,7 @@ export async function acquireAcpStructuredSession(input: {
     }
     session = {
       sessionId,
+      nativeSessionId: started.sessionId,
       fence: acquire.fence,
       acquisitionGeneration: generation,
       spec,

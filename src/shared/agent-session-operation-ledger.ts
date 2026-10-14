@@ -56,6 +56,8 @@ export type AgentSessionOperationOutcome =
        * the value is read instead, where a payload we cannot read costs one replay.
        */
       launch?: unknown
+      /** Decoded at replay; older readers must retain this operation row. */
+      boundControl?: unknown
     }
   | {
       status: 'failed'

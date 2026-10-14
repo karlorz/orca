@@ -138,6 +138,7 @@ export function mutateWithChatStop<TValue>(
             ? ctx.journal.stopMarks.latest()?.sequence !== priorStop?.sequence
             : reach === 'repeat'
         try {
+          plan.prepareCancel?.()
           return await performCancel(
             { ...ctx, failureTextContext: structuredAgentSessionFailureWordsContext(record) },
             {

@@ -53,6 +53,8 @@ import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-
 
 export type MutationPlan<TValue> = {
   method: string
+  prepareCancel?: () => void
+  beforeCancel?: () => void
   fields: Record<string, unknown>
   operationIdScope?: 'global'
   /** Admitted without the writer lease: see `admitAgentSessionMutation`. */

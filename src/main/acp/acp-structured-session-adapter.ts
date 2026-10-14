@@ -5,7 +5,6 @@
 import { randomUUID } from 'node:crypto'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import {
   AgentSessionAcquisitionExitProvenError,
@@ -23,6 +22,7 @@ import { supportsSupervisedProviderChildLocation } from '../provider-process/sup
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { acpAgentName, acquireAcpStructuredSession } from './acp-structured-acquire'
 import {
+  readAcpControlBinding,
   closeAcpSessionJournal,
   endAcpStructuredSession,
   type AcpStructuredSession
@@ -139,14 +139,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
   }
 
-  async dispatch(input: {
-    sessionId: string
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    fence: number
-    requestedAt?: number
-    beforeDispatch?: () => Promise<void>
-  }): Promise<AgentSessionDispatchOutcome> {
+  controlBinding = (sessionId: string) => readAcpControlBinding(this.sessions.get(sessionId))
+
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const lost = this.sessions.get(input.sessionId)
     if (lost && lost.journalClosed !== null) {
       // The connection broke and the exit is not yet proven: the message never left Orca.
@@ -162,9 +157,13 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return this.rejected(session, 'providerExited')
     }
     await input.beforeDispatch?.()
+    if (this.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
+      return this.rejected(session, 'providerExited')
+    }
     session.turns.dispatch({
       clientMessageId: input.clientMessageId,
       prompt,
+      ...(input.beforePromptWrite ? { beforePromptWrite: input.beforePromptWrite } : {}),
       requestedAt: input.requestedAt ?? this.now()
     })
     // The write is the admission; the agent's first event for the turn settles it.
@@ -188,6 +187,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
     // The agent may end its turn its own way; the host ends the process once that lands or the
     // grace runs out (`awaitStoppedRequestEnd`), never waiting on the cancel's write.
+    input.beforeCancel?.()
     interruptAcpTurn(session)
     return { cancelled: true }
   }

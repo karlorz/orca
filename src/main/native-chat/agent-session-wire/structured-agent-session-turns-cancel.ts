@@ -7,7 +7,10 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
-import { refuseUnclassified } from '../../../shared/agent-session-wire-refusals'
+import {
+  isAgentSessionRefusalError,
+  refuseUnclassified
+} from '../../../shared/agent-session-wire-refusals'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type { AgentSessionCancelOutcome } from './structured-agent-session-adapter'
 import {
@@ -220,6 +223,7 @@ async function cancelAndNote(
         ? { cancelled: background?.cancelled === true }
         : await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
+            ...(ctx.beforeCancel ? { beforeCancel: ctx.beforeCancel } : {}),
             ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
             fence: ctx.fence,
             // The journal is what the client read to name a turn, so it is what judges the request.
@@ -246,7 +250,7 @@ async function cancelAndNote(
       note = stopRefusedNote(ctx, refusal)
     }
   } catch (error) {
-    if (input.prompt) {
+    if (input.prompt || isAgentSessionRefusalError(error)) {
       throw error
     }
     // A timeout or lost contact proves nothing about the task: unconfirmed, never "not stopped".

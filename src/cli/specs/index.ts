@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CONTROL_COMMAND_SPECS } from './agent-session-control'
 import type { CommandSpec } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
@@ -25,6 +26,7 @@ import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 
 export const COMMAND_SPECS: CommandSpec[] = [
+  ...AGENT_SESSION_CONTROL_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,
   ...REFERENCE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,

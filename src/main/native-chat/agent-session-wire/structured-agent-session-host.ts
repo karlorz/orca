@@ -1,3 +1,4 @@
+import { wireStructuredAgentSessionBoundControls } from './structured-agent-session-bound-control-wiring'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
@@ -25,10 +26,7 @@ import {
 } from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import * as sessionTabs from './structured-agent-session-host-tabs'
-import {
-  structuredAgentSessionMutationDelegates,
-  type StructuredAgentSessionMutationContext
-} from './structured-agent-session-host-mutations'
+import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
 import { releaseStructuredAgentSessionUnansweredDispatches } from './structured-agent-session-unanswered-dispatch-release'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
@@ -265,7 +263,7 @@ export class StructuredAgentSessionHost {
       idleSweep: this.lifetime,
       tasks: this.tasks,
       restartResume: this.restartResume,
-      serialize: this.serialize,
+      serialize: (sessionId, task) => this.serialize(sessionId, task),
       trigger: options?.trigger ?? 'quit'
     }).finally(() => this.clientDelivery.closeAll())
   }
@@ -292,7 +290,13 @@ export class StructuredAgentSessionHost {
     }
   }
 
-  send = this.conversationCommands.send
+  private readonly boundControls = wireStructuredAgentSessionBoundControls(
+    () => this.mutationContext(),
+    (...args) => this.clientDelivery.waitForSendSettlement(...args),
+    (...args) => this.conversationCommands.send(...args)
+  )
+  controlTarget = this.boundControls.controlTarget
+  send = this.boundControls.send
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
@@ -302,12 +306,11 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
-  cancel = this.mutations.cancel
-  respondToPrompt = this.mutations.respondToPrompt
-  setOption = this.mutations.setOption
-  changeThreadGoal = this.mutations.changeThreadGoal
-  readOptions = this.mutations.readOptions
+  cancel = this.boundControls.cancel
+  respondToPrompt = this.boundControls.respondToPrompt
+  setOption = this.boundControls.setOption
+  changeThreadGoal = this.boundControls.changeThreadGoal
+  readOptions = this.boundControls.readOptions
 
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)

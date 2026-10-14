@@ -1,3 +1,8 @@
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
+import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from '../../shared/agent-session-bound-control'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import {
@@ -8,6 +13,16 @@ import {
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
+function agentSessionCapabilities(method: string): string[] {
+  return method.startsWith('agentSession.')
+    ? [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUND_CONTROL_CAPABILITY
+      ]
+    : []
+}
+
 export async function sendWebSocketRequest<TResult>(
   connection: PairedRuntimeConnection,
   method: string,
@@ -16,7 +31,15 @@ export async function sendWebSocketRequest<TResult>(
   envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
-    return await sendRemoteRuntimeRequest<TResult>(connection, method, params, timeoutMs, envelope)
+    return await sendRemoteRuntimeRequest<TResult>(
+      connection,
+      method,
+      params,
+      timeoutMs,
+      envelope,
+      undefined,
+      agentSessionCapabilities(method)
+    )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message, error.data)
@@ -40,7 +63,8 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
       params,
       timeoutMs,
       validateStatus,
-      envelope
+      envelope,
+      agentSessionCapabilities(method)
     )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {

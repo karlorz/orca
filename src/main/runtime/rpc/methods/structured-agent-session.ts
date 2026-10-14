@@ -1,3 +1,5 @@
+import { AgentSessionControlTargetParams } from '../../../../shared/agent-session-bound-control'
+import { requireBoundControlCapability } from './structured-agent-session-bound-control-gate'
 // `agentSession.*` — the structured session RPC surface.
 //
 // Every method here is gated on the client advertising
@@ -61,6 +63,15 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
+    name: 'agentSession.controlTarget',
+    permission: 'workspace',
+    params: AgentSessionControlTargetParams,
+    handler: async (params, ctx) => {
+      requireBoundControlCapability(ctx)
+      return requireStructuredCleanupHost(ctx).controlTarget(params)
+    }
+  }),
+  defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
     params: RewindParams,
@@ -121,7 +132,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.cancel',
     permission: 'workspace',
     params: CancelParams,
-    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
+    handler: async (params, ctx) => {
+      if (params.expectedControlTarget) {
+        requireBoundControlCapability(ctx)
+      }
+      return requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
+    }
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({

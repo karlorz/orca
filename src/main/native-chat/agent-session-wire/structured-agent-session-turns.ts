@@ -51,6 +51,7 @@ export { performCancel } from './structured-agent-session-turns-cancel'
 
 export type AgentSessionTurnContext = {
   sessionId: string
+  beforeCancel?: () => void
   journal: AgentSessionJournal
   fence: number
   adapter: StructuredAgentSessionAdapter
@@ -111,7 +112,9 @@ async function dispatchSafely(
       clientMessageId,
       body,
       fence: ctx.fence,
-      requestedAt
+      requestedAt,
+      ...(ctx.beforeDispatch ? { beforeDispatch: ctx.beforeDispatch } : {}),
+      ...(ctx.beforePromptWrite ? { beforePromptWrite: ctx.beforePromptWrite } : {})
     })
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
@@ -138,6 +141,7 @@ export async function performSend(
     origin?: 'client' | 'host'
     /** Who it is from; the submission keeps the kind only. */
     source?: AgentSessionMessageSource
+    directHandover?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -157,7 +161,11 @@ export async function performSend(
   }
   try {
     await ctx.journal.appendSubmission(
-      { ...input, fence: ctx.fence, handoverRecorded: true },
+      {
+        ...input,
+        fence: ctx.fence,
+        ...(input.directHandover ? {} : { handoverRecorded: true as const })
+      },
       undefined,
       ctx.operationReceipt
     )
@@ -194,7 +202,10 @@ export async function performSend(
   }
 }
 
-export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  beforeDispatch?: () => Promise<void>
+  beforePromptWrite?: () => void
+}
 
 /**
  * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
