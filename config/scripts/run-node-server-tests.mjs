@@ -82,7 +82,8 @@ if (artifact) {
   )
   process.stdout.write(`${JSON.stringify({ target, ...response })}\n`)
 
-  const source = `https://github.com/stablyai/orca/tree/${resolveBuildSourceCommit()}`
+  // Why: fork builds advertise karlorz/orca; matching stablyai/orca fails every persistence lane.
+  const source = `https://github.com/karlorz/orca/tree/${resolveBuildSourceCommit()}`
   const cli = runProcessSync({
     program: runtimePath,
     args: [

@@ -35,6 +35,7 @@ features:
       - packages/orca-cli
       - .github/workflows/fork-npm-cli-release.yml
       - docs/fork-entry-points.md
+      - config/scripts/run-node-server-tests.mjs
   - id: cmd-j-recent-agent-activity
     title: Cmd+J recent chats and worktrees follow agent activity
     kind: product
