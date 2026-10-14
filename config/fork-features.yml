@@ -484,7 +484,7 @@ features:
   - id: grok-bound-structured-session-controls
     title: Public exact-target Grok Follow up and Stop with durable receipts and negotiated CLI adapters
     kind: product
-    status: review
+    status: landed
     paths:
       - src/shared/agent-session-bound-control.ts
       - src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.ts
