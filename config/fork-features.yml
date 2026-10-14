@@ -494,6 +494,16 @@ features:
       - src/cli/handlers/agent-session-control.ts
     wiki: projects/openpets/work/2026-10-11-codex-overlay-card-followups
 
+  - id: managed-orcad-restore-hold
+    title: Env-gated no-update/no-deploy path so managed-tunnel restore cannot mutate live orcad
+    kind: product
+    status: landed
+    paths:
+      - src/main/ssh/managed-orcad-restore-hold.ts
+      - src/main/ssh/orcad-managed-update-on-restore.ts
+      - src/main/ipc/runtime-environment-managed-tunnel.ts
+    wiki: projects/orca/work/2026-10-14-pvelxc-shared-mobile-sessions
+
   - id: pet-navigation-pane-flash
     title: CLI session navigation (switch-origin/switch-session/terminal switch) flashes the focused pane like a notification click
     kind: product

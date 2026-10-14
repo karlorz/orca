@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   ensureTunnel: vi.fn(async () => {}),
@@ -32,10 +32,18 @@ vi.mock('./ssh-ipc-context', () => ({ connectionManager: null, getCurrentMainWin
 vi.mock('./ssh-renderer-broadcast', () => ({ broadcastSshState: vi.fn() }))
 
 import { MANAGED_ORCAD_NOT_ACTIVATED_DETAIL } from '../ssh/orcad-managed-serving'
+import { MANAGED_ORCAD_RESTORE_HOLD_ENV } from '../ssh/managed-orcad-restore-hold'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 
 describe('resolving a managed runtime for a call', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
+
+  afterEach(() => {
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
 
   it('redeploys, before the call, a server another desktop stopped mid-session', async () => {
     mocks.verify.mockResolvedValue({
@@ -55,5 +63,26 @@ describe('resolving a managed runtime for a call', () => {
     await resolveManagedRuntimeEnvironment('/u', 'env-1')
     expect(mocks.redeploy).not.toHaveBeenCalled()
     expect(mocks.restoreUpdate).toHaveBeenCalledWith('env-1', expect.any(Function))
+  })
+
+  it('does not call update or redeploy on the restore hold path, even when serving', async () => {
+    process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV] = '1'
+    mocks.verify.mockResolvedValue({ state: 'serving' })
+    await resolveManagedRuntimeEnvironment('/u', 'env-1')
+    expect(mocks.restoreUpdate).not.toHaveBeenCalled()
+    expect(mocks.redeploy).not.toHaveBeenCalled()
+    expect(mocks.rebuildTunnel).not.toHaveBeenCalled()
+  })
+
+  it('does not redeploy a stopped server on the restore hold path', async () => {
+    process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV] = 'true'
+    mocks.verify.mockResolvedValue({
+      state: 'unverifiable',
+      detail: MANAGED_ORCAD_NOT_ACTIVATED_DETAIL
+    })
+    await resolveManagedRuntimeEnvironment('/u', 'env-1')
+    expect(mocks.restoreUpdate).not.toHaveBeenCalled()
+    expect(mocks.redeploy).not.toHaveBeenCalled()
+    expect(mocks.rebuildTunnel).not.toHaveBeenCalled()
   })
 })
