@@ -36,7 +36,7 @@
 
 Monitore e conduza seus agentes pelo celular — receba uma notificação quando um agente terminar e envie instruções de acompanhamento de qualquer lugar.
 
-[App Store para iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK Android 0.0.55](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.55/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[App Store para iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK Android](https://www.onorca.dev/download/android) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -175,7 +175,7 @@ Funciona com **qualquer agente CLI** — se roda em um terminal, roda no Orca.
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" alt="Logotipo do Claude Code" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" alt="Logotipo do Codex" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
-  <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=grok.com&sz=64" alt="Logotipo do Grok" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
+  <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" alt="Logotipo do Grok" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" alt="Logotipo do Cursor" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <a href="https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt="Logotipo do GitHub Copilot" width="16" valign="middle" /> GitHub Copilot</kbd></a> &nbsp;
   <a href="https://dev.meta.ai/docs/muse-code"><kbd><img src="../../src/shared/agent-icons/muse.png" alt="Logotipo do Muse" width="16" valign="middle" /> Muse</kbd></a> &nbsp;
@@ -233,7 +233,7 @@ yay -S stably-orca-bin
 Conecte ao app desktop para monitorar e conduzir seus agentes pelo celular.
 
 - **iOS:** [Baixar na App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Baixar APK 0.0.55](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.55/app-release.apk)
+- **Android:** [Baixar APK](https://www.onorca.dev/download/android)
 
 ---
 

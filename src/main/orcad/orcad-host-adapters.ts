@@ -1,25 +1,22 @@
+/** The Node host's stand-ins for Electron's app environment and secret store. */
 import process from 'node:process'
-import {
-  setAppEnvironment,
-  type AppEnvironment
-} from '../../shared/app-environment'
+import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
 import { describeOrcadSecretProtectionGap } from './orcad-secret-protection-gap'
 
-let installedQuitHandlers = (): void => {}
+let quitRegisteredHandlers = (): void => {}
 
-/** Run every `onWillQuit` handler installed by the Node app environment. */
 export function runOrcadQuitHandlers(): void {
-  installedQuitHandlers()
+  quitRegisteredHandlers()
 }
 
 function createNodeAppEnvironment(): AppEnvironment {
   const quitHandlers: (() => void)[] = []
   // The main signal handler awaits runtime and browser teardown before process.exit.
   // Keep will-quit callbacks synchronous, but never let them pre-empt that async barrier.
-  installedQuitHandlers = (): void => {
+  quitRegisteredHandlers = (): void => {
     const errors: unknown[] = []
     for (const handler of quitHandlers.splice(0)) {
       try {

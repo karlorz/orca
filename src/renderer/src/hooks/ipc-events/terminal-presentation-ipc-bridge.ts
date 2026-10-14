@@ -11,11 +11,11 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { tryMakePaneKey } from './agent-status-routing'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
+import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { surfaceExistingSessionReveal } from './terminal-existing-session-reveal'
 import { useAppStore } from '../../store'
 import {
   activateExistingLeafInLayout,
-  activateTerminalInitiatedWorktree,
   addSplitLeafToLayout,
   focusTerminalInitiatedTab,
   resolveTerminalPresentation
@@ -34,13 +34,13 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         resumeProviderSession,
         launchToken,
         launchAgent,
+        existingSessionOnly,
+        flashFocusedPane,
         viewMode,
         title,
         ptyId,
         activate,
         focus,
-        existingSessionOnly,
-        flashFocusedPane,
         presentation,
         surfaceOwner,
         agentLaunchViewer,
@@ -52,6 +52,17 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
       }) => {
         try {
           const store = useAppStore.getState()
+          const terminalPresentation = resolveTerminalPresentation({
+            presentation,
+            activate,
+            focus
+          })
+          const shouldActivate =
+            agentLaunchViewer === undefined && terminalPresentation === 'focused'
+          const shouldSurfaceOwner =
+            agentLaunchViewer === undefined &&
+            terminalPresentation !== 'background' &&
+            surfaceOwner !== false
           if (existingSessionOnly) {
             surfaceExistingSessionReveal(store, {
               requestId,
@@ -65,21 +76,18 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             })
             return
           }
-          const terminalPresentation = resolveTerminalPresentation({
-            presentation,
-            activate,
-            focus
-          })
-          const shouldActivate =
-            agentLaunchViewer === undefined && terminalPresentation === 'focused'
-          const shouldSurfaceOwner =
-            agentLaunchViewer === undefined &&
-            terminalPresentation !== 'background' &&
-            surfaceOwner !== false
-          if (shouldActivate) {
-            activateTerminalInitiatedWorktree(store, worktreeId)
-          }
           const worktreeTabs = store.tabsByWorktree[worktreeId] ?? []
+          const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
+          const splitTargetTab = isSplitReveal
+            ? worktreeTabs.find((candidate) => candidate.id === tabId)
+            : undefined
+          // Why: before activating, so a split into a tab this window lacks does not navigate.
+          if (isSplitReveal && !splitTargetTab) {
+            throw new Error(`Terminal tab ${tabId} not found`)
+          }
+          if (shouldActivate) {
+            revealWorkspaceSurface(store, worktreeId)
+          }
           if (ptyId && tabId && leafId && wasAgentLaunchPaneClosedByUser(tabId, leafId)) {
             // The user closed the launch's tab or pane while it waited. That close wins: it stays
             // closed, and its agent stops, as closing any tab stops what runs in it.
@@ -101,13 +109,6 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             ownership.kind === 'owned'
               ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
               : undefined
-          const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
-          const splitTargetTab = isSplitReveal
-            ? worktreeTabs.find((candidate) => candidate.id === tabId)
-            : undefined
-          if (isSplitReveal && !splitTargetTab) {
-            throw new Error(`Terminal tab ${tabId} not found`)
-          }
           const reusedTab = existingTab ?? splitTargetTab
           if (ptyId && tabId && leafId && reusedTab?.agentLaunchPane?.leafId === leafId) {
             // A launch pane this window made and the host never showed early: the host now holds it,
@@ -157,9 +158,10 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (shouldActivate) {
             store.setActiveTabType('terminal', worktreeId)
             store.setActiveTab(tab.id)
+          } else if (shouldSurfaceOwner) {
+            store.revealWorktreeInSidebar(worktreeId)
           }
           if (shouldSurfaceOwner) {
-            store.revealWorktreeInSidebar(worktreeId)
             if (flashFocusedPane === true && shouldActivate) {
               // Why: explicit focus requests (terminal.switch/focus) flash the pane like a notification click.
               activateTabAndFocusPane(tab.id, leafId ?? null, {

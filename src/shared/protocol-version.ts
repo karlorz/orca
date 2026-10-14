@@ -1,4 +1,9 @@
 import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from './agent-session-bound-control'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from './jira-agent-capability'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from './jira-quick-filters'
+import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from './jira-saved-filter-capability'
+import * as jiraDetailCapabilities from './jira-detail-capabilities'
+export * from './jira-detail-capabilities'
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from './ssh-target-management'
 import {
@@ -45,6 +50,8 @@ export {
 } from './orchestration-runtime-capabilities'
 import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './agent-session-resume-runtime-capabilities'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from './qoder-terminal-create-capability'
+import { SESSION_TABS_RUNTIME_CAPABILITIES } from './session-tabs-runtime-capabilities'
+export { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from './session-tabs-runtime-capabilities'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from './preflight-other-runtime-refusal-capability'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
@@ -55,9 +62,11 @@ import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-se
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES } from './agent-session-create-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from './mobile-desktop-relay-contract'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from './agent-launch-runtime-capability'
 import { FORK_TERMINAL_AND_AGENT_LAUNCH_RUNTIME_CAPABILITIES } from './terminal-navigation-runtime-capabilities'
+import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
+import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
@@ -98,9 +107,6 @@ export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
   'linear.issue-attribute-filter.v1' as const
-export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const
-export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
-  'Creating Jira issues with user fields requires a newer Orca server. Update the server and try again.'
 // Why: signals the host exposes the Agent Session History scanner over RPC
 // (aiVault.listSessions). Registered unconditionally for every build, so it is a
 // STATIC capability advertised by getStatus() automatically — NOT a runtime
@@ -165,12 +171,6 @@ export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 // that. Advertised unconditionally: every build carrying this constant has the gate.
 export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
   'worktree.archive-failure-blocking.v1' as const
-export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
-export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
-// Why: `orca account add claude` signs in to an account folder the host creates first.
-export const CLAUDE_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.claude-sign-in.v1' as const
-export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
-export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
@@ -182,10 +182,6 @@ export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
-// Why: this proves both headed and runtime-owned host paths place after a complete split parent.
-// Legacy host paths disagree, so clients without this capability defer placement to the snapshot.
-export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
-  'session-tabs.split-group-placement.v1' as const
 // Why: a client advertising this retains every terminal retirement proof it receives until the
 // surface is published live again, so a session-tabs stream sends each proof once instead of
 // repeating the host's whole bounded list on every title tick.
@@ -343,7 +339,7 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   ...AUTOMATION_RUNTIME_CLIENT_CAPABILITIES,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  agentLaunchCapabilities.AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
@@ -351,6 +347,9 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
 
 export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_BOUND_CONTROL_CAPABILITY,
+  jiraDetailCapabilities.JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY,
+  JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY,
+  jiraDetailCapabilities.JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
   ...ORCAD_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
@@ -385,7 +384,9 @@ export const RUNTIME_CAPABILITIES = [
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
-  JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
+  ...jiraDetailCapabilities.JIRA_DETAIL_RUNTIME_CAPABILITIES,
+  JIRA_SAVED_FILTER_RUNTIME_CAPABILITY,
+  JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
@@ -400,7 +401,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
-  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
+  ...SESSION_TABS_RUNTIME_CAPABILITIES,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
@@ -433,15 +434,11 @@ export const RUNTIME_CAPABILITIES = [
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-  ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
-  DATA_ACCOUNT_RUNTIME_CAPABILITY,
-  CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
+  ...ACCOUNT_RUNTIME_CAPABILITIES,
   ...SKILL_RUNTIME_CAPABILITIES,
   ...AUTOMATION_RUNTIME_CAPABILITIES,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
-  'pairing.delegated-mobile-devices.v1',
+  ...MOBILE_RELAY_RUNTIME_CAPABILITIES,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY,

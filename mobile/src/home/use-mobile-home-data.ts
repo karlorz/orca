@@ -11,7 +11,7 @@ import {
   mobileOnboardingDestination
 } from '../onboarding/mobile-onboarding-plan'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import type { TaskProvider } from '../../../src/shared/task-providers'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'

@@ -178,13 +178,20 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       opts.agent,
       opts.prompt,
       opts.launchPreferences,
-      opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : undefined
+      {
+        ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+        launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
+      }
     )
+    if (startup.launchRuntime instanceof Error) {
+      throw startup.launchRuntime
+    }
     const terminal = await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
       ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
       launchAgent: startup.agent,
+      launchRuntime: startup.launchRuntime,
       startupCommandDelivery: startup.startup.startupCommandDelivery,
       telemetry: startup.startup.telemetry,
       title: opts.title

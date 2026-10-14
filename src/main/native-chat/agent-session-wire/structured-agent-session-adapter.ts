@@ -14,7 +14,10 @@ import type {
 // take this?" — and it answers `unknown` rather than guessing, because the
 // journal renders that as delivery unconfirmed instead of as failure.
 
-import type { AgentSessionBackgroundTaskStops } from '../../../shared/agent-child-work-stop-targets'
+import type {
+  AgentChildWorkStopAcknowledgement,
+  AgentSessionBackgroundTaskStops
+} from '../../../shared/agent-child-work-stop-targets'
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
@@ -53,13 +56,8 @@ import type { ProviderHistoryWindow } from '../agent-session-journal/journal-sub
 import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
-
-/** A live options read, plus what the child listed for its account's saved catalog. The host
- *  saves that listing and strips it before answering; an adapter whose listing reaches the
- *  catalog another way omits it. */
-export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
-  catalogListing?: AgentModelCatalogLiveListing
-}
+export type { StructuredAgentSessionLiveOptions } from './structured-agent-session-live-options'
+import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-live-options'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   readonly code = 'agent_session_operation_invalid'
@@ -372,11 +370,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Stops exactly the tasks `taskIds` names, which the host resolves from its child records.
    *  `stillRunning` is the provider's own answer that one survived its stop; a throw leaves the
-   *  effect unknown. */
+   *  effect unknown. `acknowledge` names each task the provider accepted the stop of as its answer
+   *  lands, so a later failure in the batch keeps it; the host alone turns it into that run's
+   *  provisional ending. */
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
     taskIds: readonly string[]
+    acknowledge?: (acknowledgement: AgentChildWorkStopAcknowledgement) => void
   }): Promise<{ cancelled: boolean; stillRunning?: true }>
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */

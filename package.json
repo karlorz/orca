@@ -307,6 +307,7 @@
     "oxlint-plugin-react-doctor": "0.9.14",
     "oxlint-tsgolint": "7.0.2003",
     "pdfjs-dist": "^6.3.289",
+    "playwright-core": "1.64.0",
     "pngjs": "^7.0.0",
     "radix-ui": "^1.6.7",
     "react": "~19.2.8",
@@ -345,6 +346,7 @@
   },
   "optionalDependencies": {
     "@orca/windows-registry": "workspace:*",
+    "@orca/windows-security": "workspace:*",
     "@vscode/windows-process-tree": "0.8.0",
     "sherpa-onnx-darwin-arm64": "1.12.37",
     "sherpa-onnx-darwin-x64": "1.12.37",
@@ -368,7 +370,9 @@
   "packageManager": "pnpm@12.8.1+sha512.f64ba907507f5ceafe06c8d38e6052d0179444580ec1279ddd5bfc11cb48aa8a2644b66598e07e761da84872a9fc57d5f902b87fa49d024198d558612aabbe45",
   "reactDoctor": {
     "ignore": {
-      "files": ["cloud/**"],
+      "files": [
+        "cloud/**"
+      ],
       "overrides": [
         {
           "files": [

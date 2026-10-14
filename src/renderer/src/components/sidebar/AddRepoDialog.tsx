@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from './useCreateRepo'
@@ -21,6 +21,8 @@ import {
 } from './use-add-repo-hosted-controller'
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
 import { useAddRepoLocalFilesystemBrowse } from './add-repo-local-filesystem-browser'
+import { readDroppedHostPath } from './add-repo-wsl-host-folder-picker'
+import { useAddRepoWslHostPaths } from './use-add-repo-wsl-host-paths'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -32,6 +34,11 @@ export default React.memo(function AddRepoDialog({
   // channel belongs to the store-modal instance.
   const droppedLocalPath = useAppStore((s) =>
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
+  )
+  const droppedHostPathData = useAppStore((s) => (hosted ? undefined : s.modalData.droppedHostPath))
+  const droppedHostPath = useMemo(
+    () => readDroppedHostPath({ droppedHostPath: droppedHostPathData }),
+    [droppedHostPathData]
   )
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
@@ -50,7 +57,11 @@ export default React.memo(function AddRepoDialog({
     setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
-  const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+  const hostSelection = useAddRepoHostSelection({
+    isOpen,
+    setStep,
+    preferredHostId: droppedHostPath?.hostId ?? null
+  })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
@@ -260,6 +271,15 @@ export default React.memo(function AddRepoDialog({
     onResetHostScopedState: resetHostScopedState
   })
 
+  // Why after the host-change reset: a drop's path must survive the reset its host switch causes.
+  const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
+    isOpen,
+    droppedHostPath,
+    selectedHostId: hostSelection.selectedHostId,
+    setServerPath,
+    setStep
+  })
+
   const { handleBack, handleOpenChange } = useAddRepoDialogChromeHandlers({
     closeModal,
     isAdding,
@@ -288,6 +308,7 @@ export default React.memo(function AddRepoDialog({
         nestedScanInProgress={nestedScanInProgress}
         nestedScanId={nestedScanId}
         serverPath={serverPath}
+        serverPathPrefilled={prefilledServerPath !== null && prefilledServerPath === serverPath}
         isAddingServerPath={isAddingServerPath}
         cloneUrl={cloneUrl}
         cloneDestination={cloneDestination}
@@ -321,7 +342,11 @@ export default React.memo(function AddRepoDialog({
         onBrowse={() =>
           routeAddRepoBrowse(hostSelection.selectedParsedHost, {
             browseLocal,
-            browseRuntime: () => setStep('server-path')
+            browseRuntime: () => {
+              clearPrefilledServerPath()
+              setStep('server-path')
+            },
+            browseWslHost
           })
         }
         onOpenCloneStep={() => {

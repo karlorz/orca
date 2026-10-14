@@ -80,7 +80,8 @@ export function getAutomationRunViewState({
 
   // Why: leftover paneKey/ptyId after the user closes the tab is not a live
   // terminal — offer Resume so we reopen the session instead of View run.
-  if (run.workspaceId && workspaceExists) {
+  // Why dispatchedAt: a run that never dispatched left no agent to resume; opening seeds an empty shell (STA-10103).
+  if (run.workspaceId && workspaceExists && run.dispatchedAt !== null) {
     return {
       availability: 'workspace',
       actionLabel: 'Resume workspace',

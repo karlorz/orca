@@ -53,6 +53,7 @@
       },
       "JiraIssueWorkspace": {
         "2a829a2f00": "priority",
+        "54649eaeab": "+ Assignee",
         "693be070d0": "transition",
         "9ebee71962": "labels",
         "b8e2079d96": "assignee",
@@ -1292,20 +1293,6 @@
           "a05bcdaf57": "Agents View",
           "f63ea281e3": "Threaded left-sidebar feed for agent completions and blocking states.",
           "fb82ea1d7a": "Automatically materialize configured files or folders into newly created worktrees.",
-          "nativeChat": {
-            "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
-            "resumeTitle": "Resume working chats automatically after a restart",
-            "resumeToggleLabel": "Toggle automatic resume after a restart",
-            "shellEnvCopy": "Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.",
-            "shellEnvNameAdd": "Add",
-            "shellEnvNamePlaceholder": "Variable name",
-            "shellEnvNameRemove": "Remove {{value0}}",
-            "shellEnvNamesAlwaysPassed": "PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.",
-            "shellEnvNamesEmpty": "No variables added yet.",
-            "shellEnvNamesLabel": "Variables to pass from your shell",
-            "shellEnvTitle": "Use your shell environment",
-            "shellEnvToggleLabel": "Toggle using your shell environment"
-          },
           "newWorktreeCardStyle": {
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation."
           }
@@ -1498,8 +1485,11 @@
         "ProjectWindowsRuntimeSetting": {
           "activeTaskPlural": "{{count}} active tasks",
           "activeTaskSingular": "{{count}} active task",
+          "distroMissing": "{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.",
+          "distroRequired": "Choose a WSL distro or switch this project to Windows.",
           "liveTerminalPlural": "{{count}} live terminals",
-          "liveTerminalSingular": "{{count}} live terminal"
+          "liveTerminalSingular": "{{count}} live terminal",
+          "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "QuickCommandsPane": {
           "44923dd982": "destructive",
@@ -1614,7 +1604,9 @@
         },
         "SshPane": {
           "94c5284560": "Targets",
-          "a7d28dff81": "Add a remote host to connect to it in Orca."
+          "a7d28dff81": "Add a remote host to connect to it in Orca.",
+          "syncedServerPlural": "Synced {{count}} servers",
+          "syncedServerSingular": "Synced {{count}} server"
         },
         "SshTargetCard": {
           "47e94bd6ba": "connected",
@@ -1925,6 +1917,18 @@
         "sshHostServer": {
           "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.",
           "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect."
+        },
+        "task": {
+          "tracker": {
+            "integration": {
+              "cards": {
+                "connectedSitePlural": "{{count}} sites connected",
+                "connectedSiteSingular": "{{count}} site connected",
+                "connectedWorkspacePlural": "{{count}} workspaces connected",
+                "connectedWorkspaceSingular": "{{count}} workspace connected"
+              }
+            }
+          }
         },
         "terminal": {
           "windows": {
@@ -2967,8 +2971,7 @@
       },
       "composer": {
         "effort": "Effort",
-        "imageUnsupported": "Image paste is not supported for this agent.",
-        "permissions": "Permissions"
+        "imageUnsupported": "Image paste is not supported for this agent."
       },
       "failureWords": {
         "accountSwitchInProgress": "A Claude account switch is in progress. Try again after it finishes.",
@@ -2992,6 +2995,8 @@
         "attachmentTotalTooLarge": "The images on this message are too large together, so the message was not sent.",
         "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
         "attachmentUnsupportedType": "{{agent}} accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.",
+        "backgroundTaskNotStopped": "The background task wasn't stopped.",
+        "backgroundTasksNotStopped": "The background tasks weren't stopped.",
         "cancelUnconfirmed": "Cancellation was not confirmed.",
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
@@ -3014,6 +3019,8 @@
         "compactionUnconfirmed": "Compaction completion is unconfirmed.",
         "couldNotRestart": "{{agent}} couldn't restart.",
         "couldNotStart": "{{agent}} couldn't start.",
+        "couldNotStop": "Couldn't stop {{agent}}.",
+        "couldNotStopTheAgent": "Couldn't stop the agent.",
         "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
         "emptyMessage": "This message is empty, so it was not sent.",
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
@@ -3143,6 +3150,7 @@
         "answerFirst": "Answer the question or approval first.",
         "attachmentExpired": "This attachment expired.",
         "backgroundTasksRunning": "Background tasks are still running.",
+        "cancelNotSaved": "Couldn't cancel this question or approval.",
         "cannotRunHere": "Orca can't run this agent in a chat here.",
         "capacity": "Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.",
         "chatNotFound": "Orca can't find this chat.",
@@ -3270,6 +3278,11 @@
       "omittedFiles": "Files omitted by sparse checkout are not searched.",
       "viewOnly": "Sparse checkout · View changes do not change checked-out files.",
       "viewing": "Viewing: {{path}}"
+    }
+  },
+  "jira": {
+    "workspace": {
+      "open": "Open workspace linked to {{key}}"
     }
   },
   "menu": {
