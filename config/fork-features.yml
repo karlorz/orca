@@ -528,6 +528,7 @@ features:
       - src/cli/worktree-gc-model.ts
       - src/cli/worktree-gc-git.ts
       - src/cli/worktree-gc-eligibility.ts
+      - src/cli/worktree-gc-process-cwd.ts
       - src/cli/worktree-gc-run.ts
       - src/cli/handlers/worktree-gc.ts
       - src/cli/specs/worktree-gc.ts

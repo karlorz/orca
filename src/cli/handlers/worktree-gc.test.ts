@@ -77,6 +77,102 @@ describe('worktree gc CLI', () => {
     expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
   })
 
+  it('with --repo closes only terminals for the selected repository', async () => {
+    const journalDir = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-cli-'))
+    dirs.push(journalDir)
+    const closed: string[] = []
+    const call = vi.fn(
+      async (
+        method: string,
+        params?: { terminal?: string }
+      ): Promise<RuntimeRpcSuccess<unknown>> => {
+        if (method === 'worktree.list') {
+          return {
+            id: 'list',
+            ok: true as const,
+            result: {
+              worktrees: [
+                {
+                  id: 'wt-a',
+                  path: '/tmp/repo-a-gc',
+                  hostId: 'local',
+                  lastActivityAt: 1,
+                  isMainWorktree: true
+                }
+              ],
+              totalCount: 1,
+              truncated: false
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.list') {
+          return {
+            id: 'terms',
+            ok: true as const,
+            result: {
+              terminals: [
+                {
+                  handle: 'term_a',
+                  title: 'A',
+                  worktreePath: '/tmp/repo-a-gc',
+                  worktreeId: 'wt-a',
+                  lastOutputAt: 1
+                },
+                {
+                  handle: 'term_b',
+                  title: 'B',
+                  worktreePath: '/tmp/repo-b-gc',
+                  worktreeId: 'wt-b',
+                  lastOutputAt: 1
+                }
+              ]
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.read') {
+          return {
+            id: 'read',
+            ok: true as const,
+            result: { terminal: { tail: [] } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.close') {
+          closed.push(params?.terminal ?? '')
+          return {
+            id: 'close',
+            ok: true as const,
+            result: { close: { handle: params?.terminal } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        throw new Error(`unexpected ${method}`)
+      }
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await WORKTREE_GC_HANDLERS['worktree gc'](
+      gcHandlerContext(
+        new Map<string, string | boolean>([
+          ['apply', true],
+          ['repo', 'repo-a'],
+          ['journal-dir', journalDir]
+        ]),
+        call
+      )
+    )
+    expect(closed).toEqual(['term_a'])
+    expect(call).not.toHaveBeenCalledWith(
+      'terminal.close',
+      expect.objectContaining({ terminal: 'term_b' })
+    )
+    expect(call).not.toHaveBeenCalledWith(
+      'terminal.read',
+      expect.objectContaining({ terminal: 'term_b' })
+    )
+  })
+
   it('turns --force into the explicit never-force error code', async () => {
     try {
       await WORKTREE_GC_HANDLERS['worktree gc'](

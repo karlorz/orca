@@ -181,6 +181,7 @@ export async function evaluateGcWorktree(input: {
     rec.reasons.push(WORKTREE_GC_ORPHAN_REASON)
     return rec
   }
+  const gitMs = await newestGitMtimeMs(input.git.path)
   const status = await readGitStatusPorcelain(input.git.path, input.runGit)
   if (!status.ok) {
     rec.reasons.push('status-failed')
@@ -217,11 +218,10 @@ export async function evaluateGcWorktree(input: {
   ) {
     rec.reasons.push('process-cwd-inside')
   }
-  const activityAt = input.orca?.lastActivityAt
-  const lastMs =
-    activityAt && activityAt > 0
-      ? activityAt
-      : ((await newestGitMtimeMs(input.git.path)) ?? input.nowMs)
+  const samples = [input.orca?.lastActivityAt, gitMs].filter(
+    (ms): ms is number => typeof ms === 'number' && ms > 0
+  )
+  const lastMs = samples.length > 0 ? Math.max(...samples) : input.nowMs
   if (input.nowMs - lastMs < WORKTREE_GC_IDLE_MS) {
     rec.reasons.push(`active<24h(${Math.floor((input.nowMs - lastMs) / 3_600_000)}h)`)
   }

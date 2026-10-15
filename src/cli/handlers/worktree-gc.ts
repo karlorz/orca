@@ -17,33 +17,42 @@ import { listLocalProcessCwds } from '../worktree-gc-process-cwd'
 import { formatWorktreeGcReport, runWorktreeGc } from '../worktree-gc-run'
 
 function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): WorktreeGcRuntime {
+  const listWorktrees = async () => {
+    const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
+      ...(repo ? { repo } : {}),
+      limit: 10_000
+    })
+    return {
+      worktrees: result.result.worktrees.map((worktree) => ({
+        id: worktree.id,
+        path: worktree.path,
+        hostId: worktree.hostId,
+        lastActivityAt: worktree.lastActivityAt,
+        isMainWorktree: worktree.isMainWorktree
+      })),
+      truncated: result.result.truncated
+    }
+  }
   return {
-    async listWorktrees() {
-      const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-        ...(repo ? { repo } : {}),
-        limit: 10_000
-      })
-      return {
-        worktrees: result.result.worktrees.map((worktree) => ({
-          id: worktree.id,
-          path: worktree.path,
-          hostId: worktree.hostId,
-          lastActivityAt: worktree.lastActivityAt,
-          isMainWorktree: worktree.isMainWorktree
-        })),
-        truncated: result.result.truncated
-      }
-    },
+    listWorktrees,
     async listTerminals() {
       const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
         includeVisualLayouts: false
       })
-      return result.result.terminals.map((terminal) => ({
-        handle: terminal.handle,
-        title: terminal.title,
-        worktreePath: terminal.worktreePath,
-        lastOutputAt: terminal.lastOutputAt
-      }))
+      const listed = repo ? await listWorktrees() : null
+      const paths = new Set((listed?.worktrees ?? []).map((worktree) => worktree.path))
+      const ids = new Set((listed?.worktrees ?? []).map((worktree) => worktree.id))
+      return result.result.terminals
+        .filter(
+          (terminal) =>
+            listed === null || paths.has(terminal.worktreePath) || ids.has(terminal.worktreeId)
+        )
+        .map((terminal) => ({
+          handle: terminal.handle,
+          title: terminal.title,
+          worktreePath: terminal.worktreePath,
+          lastOutputAt: terminal.lastOutputAt
+        }))
     },
     async readTerminalTail(handle) {
       const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {

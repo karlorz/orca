@@ -2,15 +2,27 @@ import { readdir, readlink } from 'node:fs/promises'
 import path from 'node:path'
 import type { WorktreeGcProcessCwdScan } from './worktree-gc-model'
 
+export type WorktreeGcProcFs = {
+  readdir(dir: string): Promise<string[]>
+  readlink(target: string): Promise<string>
+}
+
+function processVanished(error: unknown): boolean {
+  return (
+    error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ESRCH')
+  )
+}
+
 export async function listLocalProcessCwds(
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  procFs: WorktreeGcProcFs = { readdir, readlink }
 ): Promise<WorktreeGcProcessCwdScan> {
   if (platform !== 'linux') {
     return { verdict: 'unverifiable' }
   }
   let names: string[]
   try {
-    names = await readdir('/proc')
+    names = await procFs.readdir('/proc')
   } catch {
     return { verdict: 'unverifiable' }
   }
@@ -20,9 +32,12 @@ export async function listLocalProcessCwds(
       continue
     }
     try {
-      cwds.push(await readlink(path.join('/proc', name, 'cwd')))
-    } catch {
-      // Process exited or cwd is unreadable; skip.
+      cwds.push(await procFs.readlink(path.join('/proc', name, 'cwd')))
+    } catch (error) {
+      if (processVanished(error)) {
+        continue
+      }
+      return { verdict: 'unverifiable' }
     }
   }
   return { verdict: 'live', cwds }

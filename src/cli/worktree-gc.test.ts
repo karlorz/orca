@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
+import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 import { WORKTREE_GC_IDLE_MS } from './worktree-gc-model'
 import { runGitCommand } from './worktree-gc-git'
 import { runWorktreeGc, worktreeGcJournalStamp } from './worktree-gc-run'
@@ -10,6 +11,37 @@ import type { WorktreeGcRuntime } from './worktree-gc-model'
 
 const DAY_MS = WORKTREE_GC_IDLE_MS
 const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
+
+async function stampMtime(target: string, mtimeMs: number): Promise<void> {
+  try {
+    await utimes(target, mtimeMs / 1000, mtimeMs / 1000)
+  } catch {
+    // Missing HEAD/index is normal for a gitfile worktree.
+  }
+}
+
+async function ageGitActivity(worktreePath: string, mtimeMs: number): Promise<void> {
+  const gitFile = path.join(worktreePath, '.git')
+  await stampMtime(worktreePath, mtimeMs)
+  await stampMtime(gitFile, mtimeMs)
+  await stampMtime(path.join(gitFile, 'HEAD'), mtimeMs)
+  await stampMtime(path.join(gitFile, 'index'), mtimeMs)
+  try {
+    const info = await lstat(gitFile)
+    if (!info.isFile()) {
+      return
+    }
+    const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
+    if (!marker) {
+      return
+    }
+    const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
+    await stampMtime(path.join(gitdir, 'HEAD'), mtimeMs)
+    await stampMtime(path.join(gitdir, 'index'), mtimeMs)
+  } catch {
+    // No git metadata to stamp.
+  }
+}
 
 async function git(cwd: string, args: string[]): Promise<string> {
   const result = await runGitCommand(cwd, args)
@@ -45,6 +77,9 @@ async function createMergedLinkedRepo(): Promise<{
   await git(repo, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
   await git(repo, ['worktree', 'add', '-b', 'feature/done', linked])
   await git(repo, ['config', 'receive.denyCurrentBranch', 'ignore'])
+  const idleMs = NOW_MS - DAY_MS * 2
+  await ageGitActivity(repo, idleMs)
+  await ageGitActivity(linked, idleMs)
   return { root, repo, linked, journalDir }
 }
 
@@ -292,6 +327,92 @@ describe('orca worktree gc rules', () => {
     expect(journalAtRemove).toBe(true)
   })
 
+  it('journals the complete inventory before closing any terminal', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const journalPath = path.join(fixture.journalDir, `gc-${worktreeGcJournalStamp(NOW_MS)}.json`)
+    let journalAtClose: unknown
+    const closed: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        terminals: async () => [
+          {
+            handle: 'term_idle',
+            title: 'idle',
+            worktreePath: fixture.repo,
+            lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000
+          }
+        ],
+        closeTerminal: async (handle) => {
+          journalAtClose = JSON.parse(await readFile(journalPath, 'utf8'))
+          closed.push(handle)
+          return true
+        },
+        remove: async () => true
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(closed).toEqual(['term_idle'])
+    expect(journalAtClose).toEqual(
+      expect.objectContaining({
+        terminals: expect.arrayContaining([
+          expect.objectContaining({ handle: 'term_idle', action: 'close' })
+        ]),
+        worktrees: expect.arrayContaining([
+          expect.objectContaining({ path: fixture.linked, action: 'remove' })
+        ])
+      })
+    )
+    expect(report.terminals[0]?.ok).toBe(true)
+  })
+
+  it('aborts closes and removals when the inventory journal cannot be written', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const blocked = path.join(fixture.root, 'journal-is-a-file')
+    await writeFile(blocked, 'not-a-directory\n')
+    const closed: string[] = []
+    const removed: string[] = []
+    await expect(
+      runWorktreeGc({
+        apply: true,
+        nowMs: NOW_MS,
+        idleTermMin: 60,
+        coordHandle: null,
+        journalDir: blocked,
+        runtime: runtimeFor(fixture.repo, fixture.linked, {
+          terminals: async () => [
+            {
+              handle: 'term_idle',
+              title: 'idle',
+              worktreePath: fixture.repo,
+              lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000
+            }
+          ],
+          closeTerminal: async (handle) => {
+            closed.push(handle)
+            return true
+          },
+          remove: async (input) => {
+            removed.push(input.id)
+            return true
+          }
+        }),
+        listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+        listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+      })
+    ).rejects.toThrow()
+    expect(closed).toEqual([])
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+  })
+
   it('never closes the coord terminal even when it is idle', async () => {
     const fixture = await createMergedLinkedRepo()
     roots.push(fixture.root)
@@ -418,6 +539,47 @@ describe('orca worktree gc rules', () => {
     expect(cwdInside.worktrees.find((row) => row.path === fixture.linked)?.reasons).toContain(
       'process-cwd-inside'
     )
+    const unverifiable = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        remove: async () => {
+          throw new Error('unverifiable process cwd must not be removed')
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'unverifiable' })
+    })
+    expect(unverifiable.worktrees.find((row) => row.path === fixture.linked)?.reasons).toContain(
+      'process-cwd-unverifiable'
+    )
+  })
+
+  it('keeps a worktree when git metadata is newer than a stale lastActivityAt', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await ageGitActivity(fixture.linked, NOW_MS - 60_000)
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        linkedActivityAt: NOW_MS - DAY_MS * 2,
+        remove: async () => {
+          throw new Error('recent git activity must not be removed')
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons.some((reason) => reason.includes('active<24h'))).toBe(true)
   })
 
   it('removes an unmerged branch whose GitHub PR is MERGED or CLOSED', async () => {
@@ -426,6 +588,8 @@ describe('orca worktree gc rules', () => {
     await git(fixture.linked, ['commit', '--allow-empty', '-m', 'closed-pr'])
     await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
     const head = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
     const report = await runWorktreeGc({
       apply: true,
       nowMs: NOW_MS,

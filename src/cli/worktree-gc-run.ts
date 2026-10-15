@@ -128,16 +128,7 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
       })
     )
   }
-  if (input.apply) {
-    for (const terminal of report.terminals) {
-      if (terminal.action !== 'close') {
-        continue
-      }
-      terminal.ok = await input.runtime.closeTerminal(terminal.handle)
-    }
-  }
-  const liveTerminals = input.apply ? await input.runtime.listTerminals() : terminals
-  const attached = attachedPathsFromTerminals(liveTerminals)
+  const attached = attachedPathsFromTerminals(terminals)
   const processCwds = await input.listProcessCwds()
   const byPath = orcaByPath(listed.worktrees)
   const seen = new Set<string>()
@@ -190,6 +181,12 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
   await writeWorktreeGcJournal(report.journalPath, report)
   if (!input.apply) {
     return report
+  }
+  for (const terminal of report.terminals) {
+    if (terminal.action !== 'close') {
+      continue
+    }
+    terminal.ok = await input.runtime.closeTerminal(terminal.handle)
   }
   const repos = new Set<string>()
   for (const rec of report.worktrees) {
