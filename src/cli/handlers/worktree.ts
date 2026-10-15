@@ -49,6 +49,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
+import { WORKTREE_GC_HANDLERS } from './worktree-gc'
 
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,
@@ -97,6 +98,7 @@ function getOptionalSetupDecision(
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
+  ...WORKTREE_GC_HANDLERS,
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
       'worktree.ps',

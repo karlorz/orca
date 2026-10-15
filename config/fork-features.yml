@@ -519,3 +519,15 @@ features:
       - src/main/runtime/runtime-notifier-contract.ts
       - src/main/window/runtime-window-lifecycle.ts
       - src/preload/api/ui-command-event-api.ts
+
+  - id: worktree-gc-cli
+    title: Native orca worktree gc with dry-run default and four removal rules
+    kind: product
+    status: landed
+    paths:
+      - src/cli/worktree-gc-model.ts
+      - src/cli/worktree-gc-git.ts
+      - src/cli/worktree-gc-eligibility.ts
+      - src/cli/worktree-gc-run.ts
+      - src/cli/handlers/worktree-gc.ts
+      - src/cli/specs/worktree-gc.ts

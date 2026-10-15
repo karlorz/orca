@@ -82,6 +82,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  worktree create           Create a new Orca-managed worktree',
   '  worktree set              Update Orca metadata for a worktree',
   '  worktree rm               Remove a worktree from Orca and git',
+  '  worktree gc               Garbage-collect idle linked git worktrees and idle terminals',
   '  worktree ps               Show a compact orchestration summary across worktrees',
   '',
   'Agents:',
