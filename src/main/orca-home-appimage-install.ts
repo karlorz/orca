@@ -12,7 +12,7 @@ import {
   verifyHomeAppImageMarker,
   type HomeAppImageExtractor,
   type HomeAppImageIdentity
-} from './orca-home-appimage-verification'
+} from './orca-home-appimage-verification.ts'
 
 export {
   HOME_APPIMAGE_NAME,
@@ -25,7 +25,7 @@ export {
   verifyHomeAppImageMarker,
   type HomeAppImageExtractor,
   type HomeAppImageIdentity
-} from './orca-home-appimage-verification'
+} from './orca-home-appimage-verification.ts'
 
 async function syncDirectory(directory: string): Promise<void> {
   const file = await open(directory, 'r')

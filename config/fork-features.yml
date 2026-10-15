@@ -35,6 +35,7 @@ features:
     paths:
       - src/cli/home-appimage-cli-update.ts
       - src/cli/home-appimage-cli-update-session.ts
+      - src/cli/home-appimage-cli-daemon-inventory.ts
       - src/cli/handlers/update.ts
       - src/cli/specs/update.ts
       - src/main/orca-home-appimage-install.ts

@@ -1,14 +1,16 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { PROTOCOL_VERSION } from '../main/daemon/daemon-protocol-version'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createProductionHomeAppImageCliUpdateSession,
-  probeLiveHomeDaemonProtocols,
   resolveHomeAppImageRoot,
   type HomeAppImageCliUpdateHost
 } from './home-appimage-cli-update-session'
+import {
+  probeLiveHomeDaemonProtocols,
+  type HomeDaemonInventoryHost
+} from './home-appimage-cli-daemon-inventory'
 import { RuntimeClientError } from './runtime/types'
 
 const roots: string[] = []
@@ -29,6 +31,34 @@ function host(overrides: Partial<HomeAppImageCliUpdateHost> = {}): HomeAppImageC
     fetch: async () => new Response(null, { status: 404 }),
     liveProtocols: async () => null,
     ...overrides
+  }
+}
+
+async function daemonDir(): Promise<string> {
+  const userData = await mkdtemp(join(tmpdir(), 'orca-cli-home-update-daemon-'))
+  roots.push(userData)
+  await mkdir(join(userData, 'daemon'), { recursive: true })
+  return userData
+}
+
+function inventoryHost(
+  files: Record<string, string>,
+  inspect: HomeDaemonInventoryHost['inspectRecord'],
+  query: HomeDaemonInventoryHost['queryInventory']
+): HomeDaemonInventoryHost {
+  return {
+    readdir: async () => Object.keys(files),
+    readPidFile: async (path) => {
+      const name = path.split('/').at(-1) ?? path
+      if (!(name in files)) {
+        const error = new Error('missing') as NodeJS.ErrnoException
+        error.code = 'ENOENT'
+        throw error
+      }
+      return files[name]
+    },
+    inspectRecord: inspect,
+    queryInventory: query
   }
 }
 
@@ -68,17 +98,77 @@ describe('home AppImage CLI update session', () => {
     })
   })
 
-  it('reports live daemon protocol versions from pid files', async () => {
-    const userData = await mkdtemp(join(tmpdir(), 'orca-cli-home-update-daemon-'))
-    roots.push(userData)
-    const runtimeDir = join(userData, 'daemon')
-    await mkdir(runtimeDir, { recursive: true })
+  it('reports verified live protocols from daemon inventory, not the pid filename alone', async () => {
+    const query = vi.fn(async () => undefined)
+    expect(
+      await probeLiveHomeDaemonProtocols(
+        '/tmp/unused',
+        inventoryHost(
+          { 'daemon-v45.pid': JSON.stringify({ pid: 4242, linuxStartTicks: '99' }) },
+          async () => 'live',
+          query
+        )
+      )
+    ).toEqual([45])
+    expect(query).toHaveBeenCalledWith(45)
+  })
+
+  it('treats a stale reused PID as exited rather than compatible', async () => {
+    const userData = await daemonDir()
     await writeFile(
-      join(runtimeDir, `daemon-v${PROTOCOL_VERSION}.pid`),
-      JSON.stringify({ pid: process.pid }),
+      join(userData, 'daemon', 'daemon-v45.pid'),
+      JSON.stringify({ pid: process.pid, linuxStartTicks: '1' }),
       'utf8'
     )
-    expect(await probeLiveHomeDaemonProtocols(userData)).toEqual([PROTOCOL_VERSION])
-    expect(await probeLiveHomeDaemonProtocols(join(userData, 'missing'))).toBeNull()
+    expect(await probeLiveHomeDaemonProtocols(userData)).toBeNull()
+  })
+
+  it('fails closed on an unreadable or corrupt pid record even when another generation answers', async () => {
+    const query = vi.fn(async () => undefined)
+    const live = JSON.stringify({ pid: 4242, linuxStartTicks: '99' })
+    expect(
+      await probeLiveHomeDaemonProtocols(
+        '/tmp/unused',
+        inventoryHost(
+          { 'daemon-v44.pid': '{"pid":', 'daemon-v45.pid': live },
+          async () => 'live',
+          query
+        )
+      )
+    ).toBeNull()
+    expect(query).not.toHaveBeenCalled()
+    const error = Object.assign(new Error('denied'), { code: 'EACCES' })
+    expect(
+      await probeLiveHomeDaemonProtocols('/tmp/unused', {
+        readdir: async () => ['daemon-v44.pid', 'daemon-v45.pid'],
+        readPidFile: async (path) => {
+          if (path.endsWith('daemon-v44.pid')) {
+            throw error
+          }
+          return live
+        },
+        inspectRecord: async () => 'live',
+        queryInventory: query
+      })
+    ).toBeNull()
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('includes every verified generation, including unknown newer protocols', async () => {
+    const query = vi.fn(async () => undefined)
+    expect(
+      await probeLiveHomeDaemonProtocols(
+        '/tmp/unused',
+        inventoryHost(
+          {
+            'daemon-v44.pid': JSON.stringify({ pid: 11, linuxStartTicks: '2' }),
+            'daemon-v99.pid': JSON.stringify({ pid: 12, linuxStartTicks: '3' })
+          },
+          async () => 'live',
+          query
+        )
+      )
+    ).toEqual([44, 99])
+    expect(query.mock.calls.map((call) => call[0])).toEqual([44, 99])
   })
 })

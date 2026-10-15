@@ -10,17 +10,15 @@ import {
   reconcileHomeAppImage,
   validHomeReleaseTag
 } from '../main/orca-home-appimage-install'
-import {
-  PROTOCOL_VERSION,
-  PREVIOUS_DAEMON_PROTOCOL_VERSIONS
-} from '../main/daemon/daemon-protocol-version'
-import { parseDaemonPidFile } from '../main/daemon/daemon-pid-file-parse'
 import { HomeAppImageUpdater } from '../main/home-appimage-updater'
 import { isEnsureManagedHomeAppImage } from '../main/linux-home-update-policy'
 import { readOrcaCliVersion } from './cli-version'
+import { probeLiveHomeDaemonProtocols } from './home-appimage-cli-daemon-inventory'
 import type { HomeAppImageCliUpdateSession } from './home-appimage-cli-update'
 import { getDefaultUserDataPath } from './runtime/metadata'
 import { RuntimeClientError } from './runtime/types'
+
+export { probeLiveHomeDaemonProtocols } from './home-appimage-cli-daemon-inventory'
 
 export type HomeAppImageCliUpdateHost = {
   platform: NodeJS.Platform
@@ -118,19 +116,6 @@ export function resolveHomeAppImageRoot(host: HomeAppImageCliUpdateHost): string
   )
 }
 
-export async function probeLiveHomeDaemonProtocols(
-  userDataPath: string
-): Promise<readonly number[] | null> {
-  const runtimeDir = join(userDataPath, 'daemon')
-  const live: number[] = []
-  for (const protocolVersion of [PROTOCOL_VERSION, ...PREVIOUS_DAEMON_PROTOCOL_VERSIONS]) {
-    if (await daemonProtocolMayBeLive(runtimeDir, protocolVersion)) {
-      live.push(protocolVersion)
-    }
-  }
-  return live.length > 0 ? live : null
-}
-
 async function resolveRunningHomeTag(root: string, cliVersion: string | null): Promise<string> {
   const fromCli = cliVersion ? `v${cliVersion}` : null
   if (fromCli && validHomeReleaseTag(fromCli)) {
@@ -148,24 +133,6 @@ async function resolveRunningHomeTag(root: string, cliVersion: string | null): P
     'update_unavailable',
     'Could not determine the running home AppImage tag.'
   )
-}
-
-async function daemonProtocolMayBeLive(
-  runtimeDir: string,
-  protocolVersion: number
-): Promise<boolean> {
-  try {
-    const parsed = parseDaemonPidFile(
-      await readFile(join(runtimeDir, `daemon-v${protocolVersion}.pid`), 'utf8')
-    )
-    if (!parsed) {
-      return false
-    }
-    process.kill(parsed.pid, 0)
-    return true
-  } catch {
-    return false
-  }
 }
 
 async function extractHomeAppImage(image: string, cwd: string): Promise<void> {
