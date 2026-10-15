@@ -77,12 +77,12 @@ export async function inspectHomeDaemonPidRecord(
       return 'unverifiable'
     }
     if (startTicks !== record.linuxStartTicks) {
-      return 'exited'
+      return 'unverifiable'
     }
     if (record.bootId) {
       const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim()
       if (bootId !== record.bootId) {
-        return 'exited'
+        return 'unverifiable'
       }
     }
     return 'live'

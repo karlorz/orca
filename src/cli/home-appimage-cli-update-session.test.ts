@@ -8,6 +8,7 @@ import {
   type HomeAppImageCliUpdateHost
 } from './home-appimage-cli-update-session'
 import {
+  inspectHomeDaemonPidRecord,
   probeLiveHomeDaemonProtocols,
   type HomeDaemonInventoryHost
 } from './home-appimage-cli-daemon-inventory'
@@ -113,7 +114,7 @@ describe('home AppImage CLI update session', () => {
     expect(query).toHaveBeenCalledWith(45)
   })
 
-  it('treats a stale reused PID as exited rather than compatible', async () => {
+  it('treats a stale reused PID as unverifiable rather than compatible', async () => {
     const userData = await daemonDir()
     await writeFile(
       join(userData, 'daemon', 'daemon-v45.pid'),
@@ -121,6 +122,24 @@ describe('home AppImage CLI update session', () => {
       'utf8'
     )
     expect(await probeLiveHomeDaemonProtocols(userData)).toBeNull()
+  })
+
+  it('fails closed when a stale reused PID sits beside another verified generation', async () => {
+    const query = vi.fn(async () => undefined)
+    expect(
+      await probeLiveHomeDaemonProtocols(
+        '/tmp/unused',
+        inventoryHost(
+          {
+            'daemon-v44.pid': JSON.stringify({ pid: process.pid, linuxStartTicks: '1' }),
+            'daemon-v45.pid': JSON.stringify({ pid: 4242, linuxStartTicks: '99' })
+          },
+          inspectHomeDaemonPidRecord,
+          query
+        )
+      )
+    ).toBeNull()
+    expect(query).not.toHaveBeenCalled()
   })
 
   it('fails closed on an unreadable or corrupt pid record even when another generation answers', async () => {
