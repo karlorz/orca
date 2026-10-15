@@ -8,7 +8,7 @@ import {
   acquireHomeAppImageLock,
   commitHomeAppImage,
   reconcileHomeAppImage
-} from '../../config/scripts/orca-home-appimage-install'
+} from './orca-home-appimage-install'
 
 async function extractHomeAppImage(image: string, cwd: string): Promise<void> {
   for (const resource of [

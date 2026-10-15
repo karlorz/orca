@@ -23,9 +23,23 @@ features:
       - src/main/home-appimage-updater.ts
       - src/main/home-appimage-runtime.ts
       - src/main/home-appimage-release-policy.ts
+      - src/main/orca-home-appimage-install.ts
+      - src/main/orca-home-appimage-verification.ts
       - src/main/linux-home-update-policy.ts
       - src/main/updater
       - docs/reference/linux-home-appimage-install.md
+  - id: linux-home-appimage-cli-update
+    title: CLI orca update check|apply for the home AppImage updater
+    kind: product
+    status: landed
+    paths:
+      - src/cli/home-appimage-cli-update.ts
+      - src/cli/home-appimage-cli-update-session.ts
+      - src/cli/home-appimage-cli-daemon-inventory.ts
+      - src/cli/handlers/update.ts
+      - src/cli/specs/update.ts
+      - src/main/orca-home-appimage-install.ts
+      - src/main/orca-home-appimage-verification.ts
   - id: fork-owned-entry-points
     title: Fork-owned skill installs, package metadata, and npm CLI launcher
     kind: release

@@ -284,6 +284,13 @@
     "../src/main/startup/serve-mode-argv.ts",
     // The parity test keeps this import-free list aligned with COMMAND_SPECS.
     "../src/main/startup/cli-command-names.ts",
+    "../src/main/home-appimage-updater.ts",
+    "../src/main/home-appimage-release-policy.ts",
+    "../src/main/orca-home-appimage-install.ts",
+    "../src/main/orca-home-appimage-verification.ts",
+    "../src/main/linux-home-update-policy.ts",
+    "../src/main/daemon/daemon-protocol-version.ts",
+    "../src/main/daemon/daemon-pid-file-parse.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/sqlite/sync-database.ts",
     "../src/main/sqlite/sqlite-statement.ts",
@@ -298,6 +305,7 @@
     "module": "Node20",
     "moduleResolution": "Node16",
     "rootDir": "../src",
-    "outDir": "../out"
+    "outDir": "../out",
+    "rewriteRelativeImportExtensions": true
   }
 }

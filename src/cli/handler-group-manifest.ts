@@ -23,6 +23,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
   },
   {
+    name: 'update',
+    keys: ['update check', 'update apply'],
+    load: async () => (await import('./handlers/update.js')).UPDATE_HANDLERS
+  },
+  {
     name: 'serve-restore',
     keys: ['serve restore resume'],
     load: async () => (await import('./handlers/serve-restore.js')).SERVE_RESTORE_HANDLERS
