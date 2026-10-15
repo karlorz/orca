@@ -7,6 +7,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  open                      Launch Orca and wait for the runtime to be reachable',
   '  serve                     Start a headless Orca runtime server',
   '  status                    Show app/runtime/graph readiness',
+  '  update check              Check the Linux home AppImage feed for a newer pin',
+  '  update apply              Download and commit a newer home AppImage pin',
   '',
   'Diagnostics:',
   '  diagnostics memory        Collect a memory snapshot for Orca and managed terminals',

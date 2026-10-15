@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { compareHomeTags } from '../../config/scripts/orca-home-appimage-install'
+import { compareHomeTags } from './orca-home-appimage-install'
 
 export const HOME_UPDATE_RUNBOOK =
   'https://github.com/karlorz/orca/blob/fork-main/docs/reference/linux-home-appimage-install.md#attended-daemon-protocol-update'
