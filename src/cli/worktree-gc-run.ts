@@ -8,12 +8,10 @@ import {
   evaluateGcWorktree,
   orphanWorktreeRecord
 } from './worktree-gc-eligibility'
+import { applyWorktreeGcDestructions } from './worktree-gc-apply'
 import {
   listGitWorktrees,
-  preserveGcBranchTip,
-  pruneGitWorktrees,
   readGitCommonDir,
-  removeGitWorktree,
   repoRootFromCommonDir,
   runGitCommand
 } from './worktree-gc-git'
@@ -25,6 +23,10 @@ import type {
   WorktreeGcRuntime,
   WorktreeGcRuntimeWorktree
 } from './worktree-gc-model'
+import {
+  attachedPathsFromTerminals,
+  terminalInventoryIsComplete
+} from './worktree-gc-terminal-scope'
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0')
@@ -70,12 +72,6 @@ async function collectRepoRoots(
   return [...roots].sort()
 }
 
-function attachedPathsFromTerminals(terminals: { worktreePath: string }[]): Set<string> {
-  return new Set(
-    terminals.map((terminal) => terminal.worktreePath).filter((entry) => entry.length > 0)
-  )
-}
-
 export type RunWorktreeGcInput = {
   apply: boolean
   nowMs: number
@@ -92,7 +88,8 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
   const runGit = input.runGit ?? runGitCommand
   const listPrStates = input.listPrStates ?? (async () => ({ ok: false, states: [] as const }))
   const listed = await input.runtime.listWorktrees()
-  const terminals = await input.runtime.listTerminals()
+  const terminalList = await input.runtime.listTerminals()
+  const terminals = terminalList.terminals
   const report: WorktreeGcReport = {
     ts: new Date(input.nowMs).toISOString(),
     apply: input.apply,
@@ -115,8 +112,8 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
   }
   for (const terminal of terminals) {
     const tail = await input.runtime.readTerminalTail(terminal.handle)
-    report.terminals.push(
-      classifyGcTerminal({
+    report.terminals.push({
+      ...classifyGcTerminal({
         handle: terminal.handle,
         title: terminal.title,
         worktreePath: terminal.worktreePath,
@@ -125,8 +122,11 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
         nowMs: input.nowMs,
         idleTermMin: input.idleTermMin,
         coordHandle: input.coordHandle
-      })
-    )
+      }),
+      worktreeId: terminal.worktreeId,
+      incarnationId: terminal.incarnationId,
+      executionHostId: terminal.executionHostId
+    })
   }
   const attached = attachedPathsFromTerminals(terminals)
   const processCwds = await input.listProcessCwds()
@@ -178,38 +178,28 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
       })
     )
   }
+  if (!terminalInventoryIsComplete(terminalList)) {
+    for (const rec of report.worktrees) {
+      if (rec.action !== 'remove') {
+        continue
+      }
+      rec.action = 'keep'
+      rec.reasons.push('terminal-list-incomplete')
+    }
+  }
   await writeWorktreeGcJournal(report.journalPath, report)
   if (!input.apply) {
     return report
   }
-  for (const terminal of report.terminals) {
-    if (terminal.action !== 'close') {
-      continue
-    }
-    terminal.ok = await input.runtime.closeTerminal(terminal.handle)
-  }
-  const repos = new Set<string>()
-  for (const rec of report.worktrees) {
-    if (rec.action !== 'remove') {
-      continue
-    }
-    rec.ok =
-      rec.orcaId && rec.hostId
-        ? await input.runtime.removeWorktree({ id: rec.orcaId, hostId: rec.hostId })
-        : await removeGitWorktree(rec.repo, rec.path, runGit)
-    await preserveGcBranchTip(rec.repo, rec.branch, rec.head, runGit)
-    if (rec.repo && rec.repo !== '?') {
-      repos.add(rec.repo)
-    }
-  }
-  for (const rec of report.worktrees) {
-    if (rec.repo && rec.repo !== '?') {
-      repos.add(rec.repo)
-    }
-  }
-  for (const repo of repos) {
-    await pruneGitWorktrees(repo, runGit)
-  }
+  await applyWorktreeGcDestructions({
+    report,
+    runtime: input.runtime,
+    nowMs: input.nowMs,
+    idleTermMin: input.idleTermMin,
+    coordHandle: input.coordHandle,
+    listProcessCwds: input.listProcessCwds,
+    runGit
+  })
   await writeWorktreeGcJournal(report.journalPath, report)
   return report
 }

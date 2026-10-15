@@ -11,10 +11,16 @@ import { WORKTREE_GC_HANDLERS } from './worktree-gc'
 
 function gcHandlerContext(
   flags: Map<string, string | boolean>,
-  call: ReturnType<typeof vi.fn>
+  call: ReturnType<typeof vi.fn>,
+  options: { isRemote?: boolean } = {}
 ): HandlerContext {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree gc only calls client.call; this stub is that method.
-  return { flags, cwd: '/tmp', json: true, client: { call } as never }
+  return {
+    flags,
+    cwd: '/tmp',
+    json: true,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree gc only reads client.call and client.isRemote.
+    client: { call, isRemote: options.isRemote ?? false } as never
+  }
 }
 
 describe('worktree gc CLI', () => {
@@ -63,7 +69,12 @@ describe('worktree gc CLI', () => {
         return {
           id: 'terms',
           ok: true as const,
-          result: { terminals: [] },
+          result: {
+            terminals: [],
+            totalCount: 0,
+            truncated: false,
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
+          },
           _meta: { runtimeId: 'runtime-1' }
         }
       }
@@ -75,6 +86,10 @@ describe('worktree gc CLI', () => {
     )
     expect(call).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
     expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
+    expect(call).toHaveBeenCalledWith(
+      'terminal.list',
+      expect.objectContaining({ includeVisualLayouts: false, limit: 10_000 })
+    )
   })
 
   it('with --repo closes only terminals for the selected repository', async () => {
@@ -117,16 +132,23 @@ describe('worktree gc CLI', () => {
                   title: 'A',
                   worktreePath: '/tmp/repo-a-gc',
                   worktreeId: 'wt-a',
-                  lastOutputAt: 1
+                  lastOutputAt: 1,
+                  incarnationId: 'inc-a',
+                  executionHostId: 'local'
                 },
                 {
                   handle: 'term_b',
                   title: 'B',
                   worktreePath: '/tmp/repo-b-gc',
                   worktreeId: 'wt-b',
-                  lastOutputAt: 1
+                  lastOutputAt: 1,
+                  incarnationId: 'inc-b',
+                  executionHostId: 'local'
                 }
-              ]
+              ],
+              totalCount: 2,
+              truncated: false,
+              hostScope: { hostIds: ['local'], omittedHostIds: [] }
             },
             _meta: { runtimeId: 'runtime-1' }
           }
@@ -170,6 +192,116 @@ describe('worktree gc CLI', () => {
     expect(call).not.toHaveBeenCalledWith(
       'terminal.read',
       expect.objectContaining({ terminal: 'term_b' })
+    )
+    expect(call).toHaveBeenCalledWith(
+      'terminal.close',
+      expect.objectContaining({ terminal: 'term_a', expectedIncarnationId: 'inc-a' })
+    )
+  })
+
+  it('rejects a remote client before inventory or process scans', async () => {
+    const call = vi.fn()
+    await expect(
+      WORKTREE_GC_HANDLERS['worktree gc'](
+        gcHandlerContext(new Map([['apply', true]]), call, { isRemote: true })
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_environment'
+    })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('with --repo does not close a same-path terminal from another host', async () => {
+    const journalDir = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-cli-'))
+    dirs.push(journalDir)
+    const closed: string[] = []
+    const call = vi.fn(
+      async (
+        method: string,
+        params?: { terminal?: string }
+      ): Promise<RuntimeRpcSuccess<unknown>> => {
+        if (method === 'worktree.list') {
+          return {
+            id: 'list',
+            ok: true as const,
+            result: {
+              worktrees: [
+                {
+                  id: 'a::/repo',
+                  path: '/repo',
+                  hostId: 'local',
+                  lastActivityAt: 1,
+                  isMainWorktree: true
+                }
+              ],
+              totalCount: 1,
+              truncated: false
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.list') {
+          return {
+            id: 'terms',
+            ok: true as const,
+            result: {
+              terminals: [
+                {
+                  handle: 'term-repo-B',
+                  title: 'B',
+                  worktreePath: '/repo',
+                  worktreeId: 'b::/repo',
+                  lastOutputAt: 1,
+                  incarnationId: 'inc-b',
+                  executionHostId: 'ssh:other'
+                }
+              ],
+              totalCount: 1,
+              truncated: false,
+              hostScope: { hostIds: ['local', 'ssh:other'], omittedHostIds: [] }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.read') {
+          return {
+            id: 'read',
+            ok: true as const,
+            result: { terminal: { tail: [] } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.close') {
+          closed.push(params?.terminal ?? '')
+          return {
+            id: 'close',
+            ok: true as const,
+            result: { close: { handle: params?.terminal } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        throw new Error(`unexpected ${method}`)
+      }
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await WORKTREE_GC_HANDLERS['worktree gc'](
+      gcHandlerContext(
+        new Map<string, string | boolean>([
+          ['apply', true],
+          ['repo', 'repo-a'],
+          ['journal-dir', journalDir]
+        ]),
+        call
+      )
+    )
+    expect(closed).toEqual([])
+    expect(call).not.toHaveBeenCalledWith(
+      'terminal.close',
+      expect.objectContaining({ terminal: 'term-repo-B' })
+    )
+    expect(call).not.toHaveBeenCalledWith(
+      'terminal.read',
+      expect.objectContaining({ terminal: 'term-repo-B' })
     )
   })
 

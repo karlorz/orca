@@ -7,7 +7,12 @@ import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 import { WORKTREE_GC_IDLE_MS } from './worktree-gc-model'
 import { runGitCommand } from './worktree-gc-git'
 import { runWorktreeGc, worktreeGcJournalStamp } from './worktree-gc-run'
-import type { WorktreeGcRuntime } from './worktree-gc-model'
+import type {
+  WorktreeGcRuntime,
+  WorktreeGcRuntimeTerminal,
+  WorktreeGcTerminalList
+} from './worktree-gc-model'
+import { completeGcTerminalList } from './worktree-gc-terminal-scope'
 
 const DAY_MS = WORKTREE_GC_IDLE_MS
 const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
@@ -88,7 +93,7 @@ function runtimeFor(
   linked: string,
   options: {
     remove?: (input: { id: string; hostId: string }) => Promise<boolean>
-    terminals?: WorktreeGcRuntime['listTerminals']
+    terminals?: () => Promise<WorktreeGcRuntimeTerminal[] | WorktreeGcTerminalList>
     closeTerminal?: WorktreeGcRuntime['closeTerminal']
     linkedActivityAt?: number
   } = {}
@@ -113,7 +118,10 @@ function runtimeFor(
     async listWorktrees() {
       return { worktrees, truncated: false }
     },
-    listTerminals: options.terminals ?? (async () => []),
+    async listTerminals() {
+      const listed = options.terminals ? await options.terminals() : []
+      return Array.isArray(listed) ? completeGcTerminalList(listed) : listed
+    },
     async readTerminalTail() {
       return ''
     },
@@ -281,7 +289,7 @@ describe('orca worktree gc rules', () => {
           }
         },
         async listTerminals() {
-          return []
+          return completeGcTerminalList()
         },
         async readTerminalTail() {
           return ''
@@ -345,7 +353,10 @@ describe('orca worktree gc rules', () => {
             handle: 'term_idle',
             title: 'idle',
             worktreePath: fixture.repo,
-            lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000
+            worktreeId: `repo::${fixture.repo}`,
+            lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000,
+            incarnationId: 'inc-idle',
+            executionHostId: 'local'
           }
         ],
         closeTerminal: async (handle) => {
@@ -392,7 +403,10 @@ describe('orca worktree gc rules', () => {
               handle: 'term_idle',
               title: 'idle',
               worktreePath: fixture.repo,
-              lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000
+              worktreeId: `repo::${fixture.repo}`,
+              lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000,
+              incarnationId: 'inc-idle',
+              executionHostId: 'local'
             }
           ],
           closeTerminal: async (handle) => {
@@ -608,5 +622,76 @@ describe('orca worktree gc rules', () => {
     expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('remove')
     expect(existsSync(fixture.linked)).toBe(false)
     expect(await git(fixture.repo, ['rev-parse', 'refs/orca-gc/feature/done'])).toBe(head)
+  })
+
+  it('does not remove when a truncated terminal list omits an attached terminal', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        terminals: async () => completeGcTerminalList([], { truncated: true, totalCount: 201 }),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: ['/tmp/outside-workspace'] })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('keep')
+    expect(report.worktrees.find((row) => row.path === fixture.linked)?.reasons).toContain(
+      'terminal-list-incomplete'
+    )
+  })
+
+  it('does not close a terminal that becomes busy during inventory', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    let inventoryStarted = false
+    const closed: string[] = []
+    const runtime = runtimeFor(fixture.repo, fixture.linked, {
+      terminals: async () => [
+        {
+          handle: 'term-became-active',
+          title: 'worker',
+          worktreePath: fixture.repo,
+          worktreeId: `repo::${fixture.repo}`,
+          lastOutputAt: inventoryStarted ? NOW_MS : NOW_MS - 3 * 60 * 60 * 1000,
+          incarnationId: 'inc-1',
+          executionHostId: 'local'
+        }
+      ],
+      closeTerminal: async (handle) => {
+        closed.push(handle)
+        return true
+      },
+      remove: async () => true
+    })
+    runtime.readTerminalTail = async () => (inventoryStarted ? 'Thinking' : '')
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime,
+      runGit: async (cwd, args) => {
+        inventoryStarted = true
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(closed).toEqual([])
+    expect(report.terminals[0]?.action).toBe('keep')
+    expect(report.terminals[0]?.why).toBe('busy')
   })
 })

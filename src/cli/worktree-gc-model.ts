@@ -1,3 +1,6 @@
+import type { RuntimeListingHostScope } from '../shared/runtime-listing-host-scope'
+
+export const WORKTREE_GC_LIST_LIMIT = 10_000
 export const WORKTREE_GC_IDLE_MS = 24 * 60 * 60 * 1000
 export const WORKTREE_GC_DEFAULT_IDLE_TERM_MIN = 60
 export const WORKTREE_GC_BUSY_MARKS = [
@@ -38,7 +41,10 @@ export type WorktreeGcTerminalRecord = {
   handle: string
   title: string
   worktreePath: string
+  worktreeId?: string
   lastOutputAt: number | null
+  incarnationId?: string | null
+  executionHostId?: string
   action: WorktreeGcTerminalAction
   why: string
   ok?: boolean
@@ -83,7 +89,17 @@ export type WorktreeGcRuntimeTerminal = {
   handle: string
   title: string | null
   worktreePath: string
+  worktreeId?: string
   lastOutputAt: number | null
+  incarnationId?: string | null
+  executionHostId?: string
+}
+
+export type WorktreeGcTerminalList = {
+  terminals: WorktreeGcRuntimeTerminal[]
+  truncated: boolean
+  totalCount: number
+  hostScope?: RuntimeListingHostScope
 }
 
 export type WorktreeGcRuntime = {
@@ -91,8 +107,8 @@ export type WorktreeGcRuntime = {
     worktrees: WorktreeGcRuntimeWorktree[]
     truncated: boolean
   }>
-  listTerminals: () => Promise<WorktreeGcRuntimeTerminal[]>
+  listTerminals: () => Promise<WorktreeGcTerminalList>
   readTerminalTail: (handle: string) => Promise<string>
-  closeTerminal: (handle: string) => Promise<boolean>
+  closeTerminal: (handle: string, expectedIncarnationId?: string | null) => Promise<boolean>
   removeWorktree: (input: { id: string; hostId: string }) => Promise<boolean>
 }

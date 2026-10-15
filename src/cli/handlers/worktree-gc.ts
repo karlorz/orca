@@ -12,15 +12,20 @@ import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getDefaultUserDataPath } from '../runtime/metadata'
 import { lookupGithubPrStates } from '../worktree-gc-github'
-import { WORKTREE_GC_DEFAULT_IDLE_TERM_MIN, type WorktreeGcRuntime } from '../worktree-gc-model'
+import {
+  WORKTREE_GC_DEFAULT_IDLE_TERM_MIN,
+  WORKTREE_GC_LIST_LIMIT,
+  type WorktreeGcRuntime
+} from '../worktree-gc-model'
 import { listLocalProcessCwds } from '../worktree-gc-process-cwd'
 import { formatWorktreeGcReport, runWorktreeGc } from '../worktree-gc-run'
+import { mapRuntimeTerminalList } from '../worktree-gc-terminal-scope'
 
 function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): WorktreeGcRuntime {
   const listWorktrees = async () => {
     const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
       ...(repo ? { repo } : {}),
-      limit: 10_000
+      limit: WORKTREE_GC_LIST_LIMIT
     })
     return {
       worktrees: result.result.worktrees.map((worktree) => ({
@@ -37,22 +42,11 @@ function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): Worktree
     listWorktrees,
     async listTerminals() {
       const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
-        includeVisualLayouts: false
+        includeVisualLayouts: false,
+        limit: WORKTREE_GC_LIST_LIMIT
       })
       const listed = repo ? await listWorktrees() : null
-      const paths = new Set((listed?.worktrees ?? []).map((worktree) => worktree.path))
-      const ids = new Set((listed?.worktrees ?? []).map((worktree) => worktree.id))
-      return result.result.terminals
-        .filter(
-          (terminal) =>
-            listed === null || paths.has(terminal.worktreePath) || ids.has(terminal.worktreeId)
-        )
-        .map((terminal) => ({
-          handle: terminal.handle,
-          title: terminal.title,
-          worktreePath: terminal.worktreePath,
-          lastOutputAt: terminal.lastOutputAt
-        }))
+      return mapRuntimeTerminalList(result.result, listed?.worktrees ?? null)
     },
     async readTerminalTail(handle) {
       const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
@@ -61,9 +55,10 @@ function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): Worktree
       })
       return result.result.terminal.tail.join('\n')
     },
-    async closeTerminal(handle) {
+    async closeTerminal(handle, expectedIncarnationId) {
       const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
-        terminal: handle
+        terminal: handle,
+        ...(expectedIncarnationId ? { expectedIncarnationId } : {})
       })
       return Boolean(result.result.close.handle)
     },
@@ -94,6 +89,12 @@ export const WORKTREE_GC_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError(
         'invalid_argument',
         'orca worktree gc never uses --force. Pass --apply to act, or omit it for a dry-run.'
+      )
+    }
+    if (client.isRemote) {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        'orca worktree gc refuses a remote runtime. Run it on the execution host that owns the worktrees.'
       )
     }
     const report = await runWorktreeGc({

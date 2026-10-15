@@ -229,6 +229,35 @@ export async function evaluateGcWorktree(input: {
   return rec
 }
 
+export function liveEvidenceBlocksGcRemoval(input: {
+  path: string
+  attachedPaths: ReadonlySet<string>
+  processCwds: WorktreeGcProcessCwdScan
+  lastActivityAt?: number
+  nowMs: number
+}): string | null {
+  if (input.attachedPaths.has(input.path)) {
+    return 'terminal-attached'
+  }
+  if (input.processCwds.verdict === 'unverifiable') {
+    return 'process-cwd-unverifiable'
+  }
+  if (
+    input.processCwds.verdict === 'live' &&
+    input.processCwds.cwds.some((cwd) => cwd === input.path || isPathInsideOrEqual(input.path, cwd))
+  ) {
+    return 'process-cwd-inside'
+  }
+  if (
+    input.lastActivityAt &&
+    input.lastActivityAt > 0 &&
+    input.nowMs - input.lastActivityAt < WORKTREE_GC_IDLE_MS
+  ) {
+    return `active<24h(${Math.floor((input.nowMs - input.lastActivityAt) / 3_600_000)}h)`
+  }
+  return null
+}
+
 export function orphanWorktreeRecord(worktreePath: string): WorktreeGcWorktreeRecord {
   return {
     path: worktreePath,
