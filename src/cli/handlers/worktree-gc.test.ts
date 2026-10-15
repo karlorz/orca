@@ -4,13 +4,14 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
+import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import { COMMAND_SPECS } from '../specs'
 import { parseArgs, validateCommandAndFlags } from '../args'
 import { WORKTREE_GC_HANDLERS } from './worktree-gc'
 
 function gcHandlerContext(
   flags: Map<string, string | boolean>,
-  call: HandlerContext['client']['call']
+  call: ReturnType<typeof vi.fn>
 ): HandlerContext {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree gc only calls client.call; this stub is that method.
   return { flags, cwd: '/tmp', json: true, client: { call } as never }
@@ -49,11 +50,11 @@ describe('worktree gc CLI', () => {
   it('dry-run does not close terminals or remove worktrees', async () => {
     const journalDir = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-cli-'))
     dirs.push(journalDir)
-    const call = vi.fn(async (method: string) => {
+    const call = vi.fn(async (method: string): Promise<RuntimeRpcSuccess<unknown>> => {
       if (method === 'worktree.list') {
         return {
           id: 'list',
-          ok: true,
+          ok: true as const,
           result: { worktrees: [], totalCount: 0, truncated: false },
           _meta: { runtimeId: 'runtime-1' }
         }
@@ -61,7 +62,7 @@ describe('worktree gc CLI', () => {
       if (method === 'terminal.list') {
         return {
           id: 'terms',
-          ok: true,
+          ok: true as const,
           result: { terminals: [] },
           _meta: { runtimeId: 'runtime-1' }
         }
