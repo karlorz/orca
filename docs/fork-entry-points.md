@@ -25,18 +25,18 @@ The desktop app remains the CLI version authority.
 
 ## Mobile Android APK updates
 
-Fork Android APKs check GitHub Releases on `karlorz/orca` for `mobile-android-v*` tags. This is an APK download check from the home card and the protocol wall, not Expo EAS OTA. Installed `expo.version` is the published train (`0.0.52` today); fork tags carry a suffix (`mobile-android-v0.0.52-3`). The checker offers a newer train only. The published same-train APK is `mobile-android-v0.0.52-3` (versionCode 86). It is a manual install because the binary still reports the train `0.0.52`.
+Fork Android APKs check GitHub Releases on `karlorz/orca` for `mobile-android-v*` tags. This is an APK download check from the home card and the protocol wall, not Expo EAS OTA. Installed `expo.version` is the published train (`0.0.55` today); fork tags carry a suffix (`mobile-android-v0.0.55-8`). The checker offers a newer train only. The published same-train APK is `mobile-android-v0.0.55-8` (versionCode 95). It is a manual install because the binary still reports the train `0.0.55`.
 
 The About source row and Settings Support issues link also use `karlorz/orca`.
 
 ## Current upstream sync and release trains
 
-As of 2026-10-03 the published upstream trains and fork tags are:
+As of 2026-10-16 the published upstream trains and fork tags are:
 
 | Train          | Upstream release                                                                                 | Fork tag                   | Notes                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Desktop        | [`v1.4.219`](https://github.com/stablyai/orca/releases/tag/v1.4.219)                             | `v1.4.219-0`               | Auto-cut after attended merge `9106b8e404`.                                                                            |
-| Mobile Android | [`mobile-android-v0.0.52`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.52) | `mobile-android-v0.0.52-3` | Published APK, expo `0.0.52`, versionCode 86. `-3` is the APK that checks `karlorz/orca`. Train string stays `0.0.52`. |
+| Desktop        | [`v1.4.227`](https://github.com/stablyai/orca/releases/tag/v1.4.227)                             | `v1.4.227-6`               | Live cut; Linux and Windows packaging passed. macOS package then `publish-release` still run after the CLI runtime unpack fix. |
+| Mobile Android | [`mobile-android-v0.0.55`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.55) | `mobile-android-v0.0.55-8` | Published APK, expo `0.0.55`, versionCode 95. `-8` is the APK that checks `karlorz/orca`. Train string stays `0.0.55`. |
 
 The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is historical: merge `ce818bd5151a02937033752cb22cae2a522ba81b`, later run [`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538). Desktop retry `v1.4.217-1` published through [workflow run `36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692) (no APK). Mobile on that train ended at `mobile-android-v0.0.50-8`.
 
@@ -47,8 +47,8 @@ The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is h
    tags, and auto-cuts `v<base>-0` and `mobile-android-v<train>-0` when a new
    train has no fork suffix. It runs on the daily schedule or by
    `workflow_dispatch`.
-2. Desktop tags use `v<base>-N`, such as `v1.4.219-0`. Mobile tags use
-   `mobile-android-v<train>-N`, such as `mobile-android-v0.0.52-1`. The two
+2. Desktop tags use `v<base>-N`, such as `v1.4.227-0`. Mobile tags use
+   `mobile-android-v<train>-N`, such as `mobile-android-v0.0.55-1`. The two
    workflows have separate tag filters and release assets.
 3. An attended desktop cut runs from a clean, pushed `fork-main` with
    `node config/scripts/fork-next-desktop-tag.mjs --write`; the automatic sync
