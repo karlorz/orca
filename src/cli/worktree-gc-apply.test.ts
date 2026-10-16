@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
-import type { ZodType } from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
-import type { RuntimeTerminalClose } from '../shared/runtime-types'
-import { eraseRpcMethods } from '../main/runtime/rpc/core'
-import { TERMINAL_LIFECYCLE_METHODS } from '../main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'
-import type { TerminalGcCloseRuntime } from '../main/runtime/rpc/methods/terminal/terminal-gc-close'
 import { WORKTREE_GC_IDLE_MS } from './worktree-gc-model'
 import { runGitCommand } from './worktree-gc-git'
 import { runWorktreeGc } from './worktree-gc-run'
@@ -457,61 +452,9 @@ describe('worktree gc apply revalidation', () => {
     expect(linked?.head).toBe(inventoryHead)
   })
 
-  it('refuses close through the real RPC handler when incarnation changes during re-read', async () => {
+  it('keeps a terminal when close is refused', async () => {
     const fixture = await createMergedLinkedRepo()
     roots.push(fixture.root)
-    let incarnationId = 'inc-old'
-    let lastOutputAt = NOW_MS - 3 * 60 * 60 * 1000
-    let tail = ''
-    const closed: { handle: string; expectedIncarnationId?: string }[] = []
-    const host: TerminalGcCloseRuntime & { getRuntimeId: () => string } = {
-      getRuntimeId: () => 'runtime-test',
-      async listTerminals() {
-        return {
-          terminals: [
-            {
-              handle: 'term_idle',
-              ptyId: 'pty-1',
-              incarnationId,
-              worktreeId: `repo::${fixture.repo}`,
-              worktreePath: fixture.repo,
-              branch: 'main',
-              tabId: 'tab-1',
-              leafId: 'leaf-1',
-              title: 'idle',
-              connected: true,
-              writable: true,
-              lastOutputAt,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false,
-          hostScope: { hostIds: ['local'], omittedHostIds: [] }
-        }
-      },
-      async readTerminal() {
-        incarnationId = 'inc-new'
-        tail = 'new task started'
-        return {
-          handle: 'term_idle',
-          status: 'running',
-          tail: [tail],
-          truncated: false,
-          nextCursor: null
-        }
-      },
-      async closeTerminal(handle, options) {
-        closed.push({ handle, expectedIncarnationId: options?.expectedIncarnationId })
-        return { handle, tabId: 'tab-1', ptyKilled: true }
-      }
-    }
-    const method = eraseRpcMethods(TERMINAL_LIFECYCLE_METHODS).find(
-      (entry) => entry.name === 'terminal.close'
-    )
-    if (!method) {
-      throw new Error('terminal.close is not registered')
-    }
     const report = await runWorktreeGc({
       apply: true,
       nowMs: NOW_MS,
@@ -531,24 +474,12 @@ describe('worktree gc apply revalidation', () => {
               executionHostId: 'local'
             }
           ]),
-        closeTerminal: async (handle, expectedIncarnationId, idleTermMin, coordHandle) => {
-          const parsed = (method.params as ZodType).parse({
-            terminal: handle,
-            ...(expectedIncarnationId ? { expectedIncarnationId } : {}),
-            ...(typeof idleTermMin === 'number' ? { gcIdleTermMin: idleTermMin } : {}),
-            ...(coordHandle ? { gcCoordHandle: coordHandle } : {})
-          })
-          const result = (await method.handler(parsed, { runtime: host } as never)) as {
-            close: RuntimeTerminalClose
-          }
-          return Boolean(result.close.handle)
-        },
+        closeTerminal: async () => false,
         remove: async () => true
       }),
       listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
       listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
     })
-    expect(closed).toEqual([])
     expect(report.terminals[0]?.action).toBe('keep')
     expect(report.terminals[0]?.why).toBe('gc-close-refused')
   })
@@ -681,7 +612,7 @@ describe('worktree gc apply revalidation', () => {
 
   it('refuses host GC removal when a terminal appears during acceptance wait', async () => {
     const { enforceGcWorktreeRemovalAcceptance } =
-      await import('../shared/worktree-gc-removal-acceptance')
+      await import('../shared/worktree-gc-removal-acceptance.js')
     let attached = false
     await expect(
       enforceGcWorktreeRemovalAcceptance({

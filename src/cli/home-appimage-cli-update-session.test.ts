@@ -100,7 +100,7 @@ describe('home AppImage CLI update session', () => {
   })
 
   it('reports verified live protocols from daemon inventory, not the pid filename alone', async () => {
-    const query = vi.fn(async () => undefined)
+    const query = vi.fn<(protocolVersion: number) => Promise<void>>(async () => undefined)
     expect(
       await probeLiveHomeDaemonProtocols(
         '/tmp/unused',
@@ -125,7 +125,7 @@ describe('home AppImage CLI update session', () => {
   })
 
   it('fails closed when a stale reused PID sits beside another verified generation', async () => {
-    const query = vi.fn(async () => undefined)
+    const query = vi.fn<(protocolVersion: number) => Promise<void>>(async () => undefined)
     expect(
       await probeLiveHomeDaemonProtocols(
         '/tmp/unused',
@@ -143,7 +143,7 @@ describe('home AppImage CLI update session', () => {
   })
 
   it('fails closed on an unreadable or corrupt pid record even when another generation answers', async () => {
-    const query = vi.fn(async () => undefined)
+    const query = vi.fn<(protocolVersion: number) => Promise<void>>(async () => undefined)
     const live = JSON.stringify({ pid: 4242, linuxStartTicks: '99' })
     expect(
       await probeLiveHomeDaemonProtocols(
@@ -174,7 +174,7 @@ describe('home AppImage CLI update session', () => {
   })
 
   it('includes every verified generation, including unknown newer protocols', async () => {
-    const query = vi.fn(async () => undefined)
+    const query = vi.fn<(protocolVersion: number) => Promise<void>>(async () => undefined)
     expect(
       await probeLiveHomeDaemonProtocols(
         '/tmp/unused',
