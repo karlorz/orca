@@ -25,7 +25,10 @@ import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-re
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
-import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+import type {
+  RemoveManagedWorktreeOptions,
+  RuntimeWorktreeRemovalTarget
+} from './runtime-worktree-selection'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
@@ -33,7 +36,6 @@ import {
 } from '../worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../worktree-removal-acceptance-queue'
 import { assertRegisteredGcWorktreeRemoval } from './worktree-gc-removal-acceptance'
-import type { RemoveManagedWorktreeOptions } from './runtime-worktree-selection'
 
 /** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
 export function removeRuntimeRegisteredLocalWorktree(
