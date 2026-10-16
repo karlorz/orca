@@ -69,6 +69,10 @@ async function prepareNetworkServerForCall(
     if (isStoppedElsewhere(serving)) {
       // Why awaited: this call needs the server, and another desktop's stop can land mid-session.
       if (await redeployStoppedManagedOrcad(environment.id, createDeps)) {
+        const targetId = getOrcadSshDeployment(environment)?.sshTargetId
+        if (targetId) {
+          await forgetLaunchSessionVerdictLazily(targetId)
+        }
         // Why rebuild: the redeployed server may bind another port than the reused forward targets.
         await rebuildOrcadManagedTunnel(userDataPath, environment.id)
       }
@@ -88,6 +92,13 @@ async function prepareNetworkServerForCall(
       }
     }
   }
+}
+
+/** This session relaunched the server, so a cached "launch session ended" verdict is stale. */
+async function forgetLaunchSessionVerdictLazily(targetId: string): Promise<void> {
+  // Why lazy: the note module publishes through this one.
+  const { forgetLaunchSessionVerdict } = await import('./ssh-host-launch-session-note')
+  forgetLaunchSessionVerdict(targetId)
 }
 
 function isStoppedElsewhere(serving: OrcadManagedServing): boolean {
@@ -113,12 +124,16 @@ export function installManagedOrcadStartStatus(): void {
   setManagedOrcadStartListener({
     starting: (target) =>
       publishHostServerStatus(target.id, { kind: 'setting-up', phase: 'starting' }),
-    settled: (target, environmentId, serving) =>
+    settled: (target, environmentId, serving) => {
+      if (serving.state === 'started') {
+        void forgetLaunchSessionVerdictLazily(target.id).catch(() => {})
+      }
       publishHostServerStatus(target.id, {
         kind: 'managed',
         environmentId,
         ...(serving.state === 'unverifiable' ? { serving } : {})
       })
+    }
   })
 }
 
