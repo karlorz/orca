@@ -397,7 +397,10 @@ describe('electron-builder config', () => {
         'out/package.json',
         'out/cli/**',
         'out/shared/**',
-        'out/main/claude-accounts/keychain.js'
+        'out/main/claude-accounts/keychain.js',
+        'out/main/home-appimage-*.js',
+        'out/main/orca-home-appimage-*.js',
+        'out/main/linux-home-update-policy.js'
       ])
     )
   })
