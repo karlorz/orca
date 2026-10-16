@@ -9,6 +9,7 @@ import {
   listSupportedWindowsShellOverrides
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
+import { OptionalExecutionHostId } from './worktree-params'
 
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
@@ -33,6 +34,14 @@ export const TerminalFocus = TerminalHandle.extend({
 export const TerminalClose = TerminalHandle.extend({
   gcIdleTermMin: OptionalFiniteNumber,
   gcCoordHandle: OptionalString
+})
+
+/** `terminal.reveal` takes no handle: a pane a paired server owns has none on this host. */
+export const TerminalReveal = z.object({
+  worktreeId: requiredString('Missing worktree id').pipe(z.string().max(1024)),
+  tabId: requiredString('Missing tab id').pipe(z.string().max(128)),
+  leafId: requiredString('Missing leaf id').pipe(z.string().max(128)).optional(),
+  executionHostId: OptionalExecutionHostId
 })
 
 /**

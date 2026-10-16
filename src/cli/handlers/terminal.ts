@@ -42,6 +42,7 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { revealPairedTerminalOnLocalDesktop } from '../paired-terminal-desktop-reveal'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalQuestionAnswerHandler } from './terminal-question-answer'
 import { terminalSendHandler } from './terminal-send'
@@ -54,10 +55,14 @@ import { terminalSwitchOriginHandler } from './terminal-originating-pane'
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
+  const terminal = await getTerminalHandle(flags, cwd, client)
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-    terminal: await getTerminalHandle(flags, cwd, client),
+    terminal,
     navigation: 'host'
   })
+  if (client.isRemote && result.result.focus.navigated === false) {
+    result.result.focus.navigated = await revealPairedTerminalOnLocalDesktop(client, terminal)
+  }
   printResult(result, json, formatTerminalFocus)
 }
 
