@@ -189,6 +189,7 @@ describe('Electron Vite output contract', () => {
     }
 
     for (const name of [
+      'daemon/daemon-pid-file-parse',
       'gitlab/project-ref-parser',
       'home-appimage-release-policy',
       'home-appimage-updater',
@@ -210,6 +211,7 @@ describe('Electron Vite output contract', () => {
     ]) {
       expect(input).toHaveProperty(name)
     }
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/daemon/daemon-pid-file-parse.js')
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/gitlab/project-ref-parser.js')
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/home-appimage-*.js')
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/orca-home-appimage-*.js')

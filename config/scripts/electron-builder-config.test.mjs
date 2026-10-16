@@ -398,6 +398,7 @@ describe('electron-builder config', () => {
         'out/cli/**',
         'out/shared/**',
         'out/main/claude-accounts/keychain.js',
+        'out/main/daemon/daemon-pid-file-parse.js',
         'out/main/home-appimage-*.js',
         'out/main/orca-home-appimage-*.js',
         'out/main/linux-home-update-policy.js'

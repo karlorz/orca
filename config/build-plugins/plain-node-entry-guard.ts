@@ -20,6 +20,7 @@ type OutputChunk = Rollup.OutputChunk
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/managed-agent-hook-controls',
+  'daemon/daemon-pid-file-parse',
   'gitlab/project-ref-parser',
   'home-appimage-release-policy',
   'home-appimage-updater',

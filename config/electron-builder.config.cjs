@@ -387,6 +387,7 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/claude-accounts/keychain.js',
+    'out/main/daemon/daemon-pid-file-parse.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
