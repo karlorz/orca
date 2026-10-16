@@ -187,6 +187,20 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   }),
   defineMethod({
+    name: 'terminal.gcClose',
+    permission: 'workspace',
+    params: TerminalClose,
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.gcClose',
+        context,
+        'terminal',
+        params.terminal,
+        () => closeTerminalFromRpc(context.runtime, params)
+      )
+    })
+  }),
+  defineMethod({
     name: 'terminal.closeTab',
     permission: 'workspace',
     params: TerminalHandle,

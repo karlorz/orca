@@ -5,9 +5,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { classifyGcTerminalIdle, isWorktreeGcBusyTail } from '../shared/worktree-gc-terminal-idle'
+import { newestGitActivityMs } from './worktree-gc-git-activity'
 import {
   countUnpushedCommits,
   isMergedIntoDefault,
+  readGitHead,
   readGitStatusPorcelain,
   shortBranchName
 } from './worktree-gc-git'
@@ -78,40 +80,6 @@ export async function detectOrphanGitdir(worktreePath: string): Promise<boolean>
   }
 }
 
-async function newestGitMtimeMs(worktreePath: string): Promise<number | null> {
-  // Omit index and the .git directory: this process's own `git status` refreshes them
-  // and would make an immediate apply recheck look like recent user activity.
-  const candidates = [path.join(worktreePath, '.git', 'HEAD'), worktreePath]
-  let newest: number | null = null
-  for (const candidate of candidates) {
-    try {
-      const mtimeMs = (await stat(candidate)).mtimeMs
-      newest = newest === null ? mtimeMs : Math.max(newest, mtimeMs)
-    } catch {
-      // Missing HEAD is normal for a gitfile worktree.
-    }
-  }
-  const gitFile = path.join(worktreePath, '.git')
-  try {
-    const info = await lstat(gitFile)
-    if (info.isFile()) {
-      const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
-      if (marker) {
-        const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
-        try {
-          const mtimeMs = (await stat(path.join(gitdir, 'HEAD'))).mtimeMs
-          newest = newest === null ? mtimeMs : Math.max(newest, mtimeMs)
-        } catch {
-          // Linked worktrees may omit HEAD until first checkout.
-        }
-      }
-    }
-  } catch {
-    // No git metadata.
-  }
-  return newest
-}
-
 function hostRemovalReason(hostId: string | undefined): string | undefined {
   if (!hostId) {
     return 'host-unverifiable'
@@ -131,6 +99,8 @@ export async function evaluateGcWorktree(input: {
   nowMs: number
   runGit: WorktreeGcGitRunner
   listPrStates: WorktreeGcPrLookup
+  readAttachedPaths?: () => Promise<ReadonlySet<string>>
+  readProcessCwds?: () => Promise<WorktreeGcProcessCwdScan>
 }): Promise<WorktreeGcWorktreeRecord> {
   const branch = shortBranchName(input.git.branch)
   const rec: WorktreeGcWorktreeRecord = {
@@ -167,7 +137,7 @@ export async function evaluateGcWorktree(input: {
     rec.reasons.push(WORKTREE_GC_ORPHAN_REASON)
     return rec
   }
-  const gitMs = await newestGitMtimeMs(input.git.path)
+  const gitMs = await newestGitActivityMs(input.git.path, branch)
   const status = await readGitStatusPorcelain(input.git.path, input.runGit)
   if (!status.ok) {
     rec.reasons.push('status-failed')
@@ -192,13 +162,23 @@ export async function evaluateGcWorktree(input: {
       }
     }
   }
-  if (input.attachedPaths.has(input.git.path)) {
+  const attachedPaths = input.readAttachedPaths
+    ? await input.readAttachedPaths()
+    : input.attachedPaths
+  const processCwds = input.readProcessCwds ? await input.readProcessCwds() : input.processCwds
+  const liveHead = await readGitHead(input.git.path, input.runGit)
+  if (!liveHead) {
+    rec.reasons.push('head-unverifiable')
+  } else if (input.git.head && liveHead !== input.git.head) {
+    rec.reasons.push('head-changed')
+  }
+  if (attachedPaths.has(input.git.path)) {
     rec.reasons.push('terminal-attached')
   }
-  if (input.processCwds.verdict === 'unverifiable') {
+  if (processCwds.verdict === 'unverifiable') {
     rec.reasons.push('process-cwd-unverifiable')
   } else if (
-    input.processCwds.cwds.some(
+    processCwds.cwds.some(
       (cwd) => cwd === input.git.path || isPathInsideOrEqual(input.git.path, cwd)
     )
   ) {

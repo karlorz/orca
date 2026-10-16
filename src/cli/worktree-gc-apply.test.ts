@@ -1,10 +1,9 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import type { ZodType } from 'zod'
-import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import type { RuntimeTerminalClose } from '../shared/runtime-types'
 import { eraseRpcMethods } from '../main/runtime/rpc/core'
@@ -19,6 +18,7 @@ import {
   mapRuntimeTerminalList,
   terminalInventoryIsComplete
 } from './worktree-gc-terminal-scope'
+import { gitActivityStampTargets } from './worktree-gc-git-activity'
 
 const DAY_MS = WORKTREE_GC_IDLE_MS
 const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
@@ -31,26 +31,9 @@ async function stampMtime(target: string, mtimeMs: number): Promise<void> {
   }
 }
 
-async function ageGitActivity(worktreePath: string, mtimeMs: number): Promise<void> {
-  const gitFile = path.join(worktreePath, '.git')
-  await stampMtime(worktreePath, mtimeMs)
-  await stampMtime(gitFile, mtimeMs)
-  await stampMtime(path.join(gitFile, 'HEAD'), mtimeMs)
-  await stampMtime(path.join(gitFile, 'index'), mtimeMs)
-  try {
-    const info = await lstat(gitFile)
-    if (!info.isFile()) {
-      return
-    }
-    const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
-    if (!marker) {
-      return
-    }
-    const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
-    await stampMtime(path.join(gitdir, 'HEAD'), mtimeMs)
-    await stampMtime(path.join(gitdir, 'index'), mtimeMs)
-  } catch {
-    // No git metadata to stamp.
+async function ageGitActivity(worktreePath: string, mtimeMs: number, branch = ''): Promise<void> {
+  for (const target of await gitActivityStampTargets(worktreePath, branch)) {
+    await stampMtime(target, mtimeMs)
   }
 }
 
@@ -350,6 +333,128 @@ describe('worktree gc apply revalidation', () => {
     })
     expect(removed).toEqual([`repo::${fixture.linked}`])
     expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('remove')
+  })
+
+  it('keeps a candidate when a process appears during its PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+    const removed: string[] = []
+    let liveCwds: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => {
+        liveCwds = [fixture.linked]
+        return { ok: true, states: ['CLOSED'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: liveCwds })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('process-cwd-inside')
+  })
+
+  it('keeps a candidate when a terminal appears during its PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+    const removed: string[] = []
+    let attachTerminal = false
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          attachTerminal
+            ? completeGcTerminalList([
+                {
+                  handle: 'term_live',
+                  title: 'live',
+                  worktreePath: fixture.linked,
+                  worktreeId: `repo::${fixture.linked}`,
+                  lastOutputAt: NOW_MS,
+                  incarnationId: 'inc-live',
+                  executionHostId: 'local'
+                }
+              ])
+            : completeGcTerminalList(),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => {
+        attachTerminal = true
+        return { ok: true, states: ['CLOSED'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('terminal-attached')
+  })
+
+  it('keeps a candidate when HEAD moves during status and does not preserve the wrong tip', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const inventoryHead = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    const removed: string[] = []
+    const preserved: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === '--no-optional-locks' && args[1] === 'status') {
+          await git(fixture.linked, ['commit', '--allow-empty', '-m', 'during-status'])
+          await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+        }
+        if (args[0] === 'update-ref') {
+          preserved.push(args[2] ?? '')
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['CLOSED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(preserved).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('head-changed')
+    expect(linked?.head).toBe(inventoryHead)
   })
 
   it('refuses close through the real RPC handler when incarnation changes during re-read', async () => {

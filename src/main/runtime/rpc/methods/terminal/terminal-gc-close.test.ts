@@ -7,18 +7,18 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalSummary
 } from '../../../../../shared/runtime-types'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../../orca-runtime-stop-explicitly-closed-tab-ptys'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal-lifecycle-methods'
 import type { TerminalGcCloseRuntime } from './terminal-gc-close'
 
 const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
 const IDLE_OUTPUT_AT = NOW_MS - 3 * 60 * 60 * 1000
 
-function closeMethod() {
-  const method = eraseRpcMethods(TERMINAL_LIFECYCLE_METHODS).find(
-    (entry) => entry.name === 'terminal.close'
-  )
+function closeMethod(name = 'terminal.close') {
+  const method = eraseRpcMethods(TERMINAL_LIFECYCLE_METHODS).find((entry) => entry.name === name)
   if (!method) {
-    throw new Error('terminal.close is not registered')
+    throw new Error(`${name} is not registered`)
   }
   return method
 }
@@ -93,11 +93,118 @@ function hostRuntime(state: {
 
 async function callRegisteredClose(
   runtime: TerminalGcCloseRuntime,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  methodName = 'terminal.close'
 ): Promise<{ close: RuntimeTerminalClose }> {
-  const method = closeMethod()
+  const method = closeMethod(methodName)
   const parsed = (method.params as ZodType).parse(params)
   return method.handler(parsed, { runtime } as never) as Promise<{ close: RuntimeTerminalClose }>
+}
+
+function realCloseHost(state: {
+  incarnationId: string
+  lastOutputAt: number
+  tail: string
+  onTabClose?: () => void
+}): TerminalGcCloseRuntime & {
+  stopped: { ptyId: string; incarnationId?: string }[]
+  ptysById: Map<
+    string,
+    {
+      ptyId: string
+      incarnationId: string
+      lastOutputAt: number
+      worktreeId: string
+      tabId: string
+    }
+  >
+} {
+  const ptysById = new Map<
+    string,
+    {
+      ptyId: string
+      incarnationId: string
+      lastOutputAt: number
+      worktreeId: string
+      tabId: string
+    }
+  >()
+  const putPty = (incarnationId: string, lastOutputAt: number) => {
+    ptysById.set('pty-1', {
+      ptyId: 'pty-1',
+      incarnationId,
+      lastOutputAt,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1'
+    })
+  }
+  putPty(state.incarnationId, state.lastOutputAt)
+  const stopped: { ptyId: string; incarnationId?: string }[] = []
+  const runtime = Object.create(OrcaRuntimeWithStopExplicitlyClosedTabPtys.prototype) as Record<
+    string,
+    unknown
+  > &
+    TerminalGcCloseRuntime & {
+      stopped: { ptyId: string; incarnationId?: string }[]
+      ptysById: Map<
+        string,
+        {
+          ptyId: string
+          incarnationId: string
+          lastOutputAt: number
+          worktreeId: string
+          tabId: string
+        }
+      >
+    }
+  Object.assign(runtime, {
+    stopped,
+    ptysById,
+    getRuntimeId: () => 'runtime-test',
+    tabs: new Set(['tab-1']),
+    notifier: { closeTerminalTab: async () => undefined },
+    claudeAgentTeams: { removeTeamForLeaderHandle() {} },
+    ptyController: {
+      async stopAndWait(ptyId: string) {
+        stopped.push({ ptyId, incarnationId: ptysById.get(ptyId)?.incarnationId })
+        return true
+      },
+      kill: () => false
+    },
+    getLivePtyForHandle() {
+      const pty = ptysById.get('pty-1')
+      return pty ? { record: { tabId: 'tab-1', ptyId: 'pty-1' }, pty } : null
+    },
+    resolvePtyTabCloseSurfaceAuthority() {
+      return { surface: { tab: { parentTabId: 'tab-1', leafId: 'leaf-1' } } }
+    },
+    findMobileTerminalSurface: () => null,
+    getMobileTerminalLeafPtyIds: () => [],
+    resolveTerminalCloseTarget: () => 'last-pane',
+    getPtyIdsForExplicitTabClose: () => ['pty-1'],
+    async closeMobileSessionTab() {
+      state.onTabClose?.()
+    },
+    notifyRendererOfHeadlessTerminalClose() {},
+    markPtyStopRequested() {},
+    markPtyLivenessUnverifiable() {},
+    getPtyLivenessVerdict: () => ({ status: 'exited' }),
+    async listTerminals() {
+      return listed(
+        summary({ incarnationId: state.incarnationId, lastOutputAt: state.lastOutputAt })
+      )
+    },
+    async readTerminal(): Promise<RuntimeTerminalRead> {
+      return {
+        handle: 'term_idle',
+        status: 'running',
+        tail: state.tail ? [state.tail] : [],
+        truncated: false,
+        nextCursor: null
+      }
+    }
+  })
+  return runtime
 }
 
 describe('terminal.close GC idle fence', () => {
@@ -181,5 +288,74 @@ describe('terminal.close GC idle fence', () => {
       callRegisteredClose(host, { terminal: 'term_idle', gcIdleTermMin: 60 })
     ).rejects.toThrow('gc_close_unverifiable')
     expect(host.closed).toEqual([])
+  })
+
+  it('does not stop a replacement PTY that appears during awaited tab close', async () => {
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      onTabClose: () => {
+        runtimeState.incarnationId = 'inc-new'
+        runtime.ptysById.set('pty-1', {
+          ptyId: 'pty-1',
+          incarnationId: 'inc-new',
+          lastOutputAt: Date.now(),
+          worktreeId: 'wt-1',
+          tabId: 'tab-1'
+        })
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    await expect(
+      callRegisteredClose(runtime, {
+        terminal: 'term_idle',
+        expectedIncarnationId: 'inc-old',
+        gcIdleTermMin: 60
+      })
+    ).rejects.toThrow('gc_close_refused:incarnation-changed')
+    expect(runtime.stopped).toEqual([])
+  })
+
+  it('does not stop when same-incarnation activity resumes during awaited tab close', async () => {
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      onTabClose: () => {
+        runtimeState.lastOutputAt = Date.now()
+        runtimeState.tail = 'Thinking'
+        runtime.ptysById.set('pty-1', {
+          ptyId: 'pty-1',
+          incarnationId: 'inc-old',
+          lastOutputAt: Date.now(),
+          worktreeId: 'wt-1',
+          tabId: 'tab-1'
+        })
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    await expect(
+      callRegisteredClose(runtime, {
+        terminal: 'term_idle',
+        expectedIncarnationId: 'inc-old',
+        gcIdleTermMin: 60
+      })
+    ).rejects.toThrow(/gc_close_refused:(busy|recent-output)/)
+    expect(runtime.stopped).toEqual([])
+  })
+
+  it('older hosts strip GC fields from terminal.close and do not implement gcClose', () => {
+    const stripped = TerminalHandle.parse({
+      terminal: 'term_idle',
+      expectedIncarnationId: 'inc-old',
+      gcIdleTermMin: 60,
+      gcCoordHandle: 'term_coord'
+    })
+    expect(stripped).toEqual({ terminal: 'term_idle', expectedIncarnationId: 'inc-old' })
+    expect(
+      eraseRpcMethods(TERMINAL_LIFECYCLE_METHODS).some((entry) => entry.name === 'terminal.gcClose')
+    ).toBe(true)
+    expect(closeMethod('terminal.gcClose').name).toBe('terminal.gcClose')
   })
 })

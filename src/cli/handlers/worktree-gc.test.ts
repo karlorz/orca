@@ -86,6 +86,7 @@ describe('worktree gc CLI', () => {
     )
     expect(call).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
     expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
+    expect(call).not.toHaveBeenCalledWith('terminal.gcClose', expect.anything())
     expect(call).toHaveBeenCalledWith(
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: false, limit: 10_000 })
@@ -161,7 +162,7 @@ describe('worktree gc CLI', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
-        if (method === 'terminal.close') {
+        if (method === 'terminal.gcClose') {
           closed.push(params?.terminal ?? '')
           return {
             id: 'close',
@@ -185,8 +186,9 @@ describe('worktree gc CLI', () => {
       )
     )
     expect(closed).toEqual(['term_a'])
+    expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
     expect(call).not.toHaveBeenCalledWith(
-      'terminal.close',
+      'terminal.gcClose',
       expect.objectContaining({ terminal: 'term_b' })
     )
     expect(call).not.toHaveBeenCalledWith(
@@ -194,7 +196,7 @@ describe('worktree gc CLI', () => {
       expect.objectContaining({ terminal: 'term_b' })
     )
     expect(call).toHaveBeenCalledWith(
-      'terminal.close',
+      'terminal.gcClose',
       expect.objectContaining({
         terminal: 'term_a',
         expectedIncarnationId: 'inc-a',
@@ -275,7 +277,7 @@ describe('worktree gc CLI', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
-        if (method === 'terminal.close') {
+        if (method === 'terminal.gcClose' || method === 'terminal.close') {
           closed.push(params?.terminal ?? '')
           return {
             id: 'close',
@@ -300,6 +302,10 @@ describe('worktree gc CLI', () => {
     )
     expect(closed).toEqual([])
     expect(call).not.toHaveBeenCalledWith(
+      'terminal.gcClose',
+      expect.objectContaining({ terminal: 'term-repo-B' })
+    )
+    expect(call).not.toHaveBeenCalledWith(
       'terminal.close',
       expect.objectContaining({ terminal: 'term-repo-B' })
     )
@@ -307,6 +313,95 @@ describe('worktree gc CLI', () => {
       'terminal.read',
       expect.objectContaining({ terminal: 'term-repo-B' })
     )
+  })
+
+  it('does not close when the host lacks terminal.gcClose', async () => {
+    const journalDir = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-cli-'))
+    dirs.push(journalDir)
+    const closed: string[] = []
+    const call = vi.fn(
+      async (
+        method: string,
+        params?: { terminal?: string }
+      ): Promise<RuntimeRpcSuccess<unknown>> => {
+        if (method === 'worktree.list') {
+          return {
+            id: 'list',
+            ok: true as const,
+            result: {
+              worktrees: [
+                {
+                  id: 'wt-a',
+                  path: '/tmp/repo-a-gc',
+                  hostId: 'local',
+                  lastActivityAt: 1,
+                  isMainWorktree: true
+                }
+              ],
+              totalCount: 1,
+              truncated: false
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.list') {
+          return {
+            id: 'terms',
+            ok: true as const,
+            result: {
+              terminals: [
+                {
+                  handle: 'term_a',
+                  title: 'A',
+                  worktreePath: '/tmp/repo-a-gc',
+                  worktreeId: 'wt-a',
+                  lastOutputAt: 1,
+                  incarnationId: 'inc-a',
+                  executionHostId: 'local'
+                }
+              ],
+              totalCount: 1,
+              truncated: false,
+              hostScope: { hostIds: ['local'], omittedHostIds: [] }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.read') {
+          return {
+            id: 'read',
+            ok: true as const,
+            result: { terminal: { tail: [] } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.close') {
+          closed.push(params?.terminal ?? '')
+          return {
+            id: 'close',
+            ok: true as const,
+            result: { close: { handle: params?.terminal } },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+        if (method === 'terminal.gcClose') {
+          throw new RuntimeClientError('method_not_found', 'Unknown method: terminal.gcClose')
+        }
+        throw new Error(`unexpected ${method}`)
+      }
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await WORKTREE_GC_HANDLERS['worktree gc'](
+      gcHandlerContext(
+        new Map<string, string | boolean>([
+          ['apply', true],
+          ['journal-dir', journalDir]
+        ]),
+        call
+      )
+    )
+    expect(closed).toEqual([])
+    expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
   })
 
   it('turns --force into the explicit never-force error code', async () => {

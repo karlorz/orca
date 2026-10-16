@@ -144,11 +144,20 @@ export async function isMergedIntoDefault(
   return result.code === 0
 }
 
+export async function readGitHead(
+  cwd: string,
+  runGit: WorktreeGcGitRunner
+): Promise<string | null> {
+  const result = await runGit(cwd, ['rev-parse', 'HEAD'])
+  return result.code === 0 && result.stdout.length > 0 ? result.stdout : null
+}
+
 export async function readGitStatusPorcelain(
   cwd: string,
   runGit: WorktreeGcGitRunner
 ): Promise<{ ok: boolean; dirty: boolean }> {
-  const result = await runGit(cwd, ['status', '--porcelain'])
+  // Global --no-optional-locks: Git 2.15+; avoids this process refreshing index mtimes.
+  const result = await runGit(cwd, ['--no-optional-locks', 'status', '--porcelain'])
   if (result.code !== 0) {
     return { ok: false, dirty: false }
   }

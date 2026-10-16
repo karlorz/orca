@@ -1258,6 +1258,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.createAgentSession': CreateAgentSessionParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,
   'terminal.focus': TerminalFocus,
+  'terminal.gcClose': TerminalClose,
   'terminal.getAutoRestoreFit': TerminalGetAutoRestoreFitParams,
   'terminal.getDisplayMode': TerminalHandle,
   'terminal.inspectProcess': TerminalInspectProcess,

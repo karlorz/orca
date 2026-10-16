@@ -56,13 +56,20 @@ function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): Worktree
       return result.result.terminal.tail.join('\n')
     },
     async closeTerminal(handle, expectedIncarnationId, idleTermMin, coordHandle) {
-      const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
-        terminal: handle,
-        ...(expectedIncarnationId ? { expectedIncarnationId } : {}),
-        ...(typeof idleTermMin === 'number' ? { gcIdleTermMin: idleTermMin } : {}),
-        ...(coordHandle ? { gcCoordHandle: coordHandle } : {})
-      })
-      return Boolean(result.result.close.handle)
+      try {
+        const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.gcClose', {
+          terminal: handle,
+          ...(expectedIncarnationId ? { expectedIncarnationId } : {}),
+          ...(typeof idleTermMin === 'number' ? { gcIdleTermMin: idleTermMin } : {}),
+          ...(coordHandle ? { gcCoordHandle: coordHandle } : {})
+        })
+        return Boolean(result.result.close.handle)
+      } catch (error) {
+        if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+          return false
+        }
+        throw error
+      }
     },
     async removeWorktree(input) {
       const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {

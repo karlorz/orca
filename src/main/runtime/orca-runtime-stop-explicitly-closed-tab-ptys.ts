@@ -6,6 +6,11 @@ import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { errorMessage } from '../../shared/error-message'
+import {
+  capturePtyIncarnationIds,
+  finishGuardedPtyStop,
+  type TerminalGcCloseStopOptions
+} from './rpc/methods/terminal/terminal-gc-close-stop-fence'
 
 /** How an explicit close's stop of its addressed PTY ended. */
 type ExplicitCloseStop = { stopped: boolean }
@@ -15,13 +20,22 @@ const NO_STOP: ExplicitCloseStop = { stopped: false }
 export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
-    addressedPtyId: string
+    addressedPtyId: string,
+    capturedIncarnations?: ReadonlyMap<string, string>
   ): Promise<ExplicitCloseStop> {
     let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
+      const capturedIncarnationId = capturedIncarnations?.get(ptyId)
+      const liveIncarnationId = this.ptysById.get(ptyId)?.incarnationId
+      if (capturedIncarnationId && liveIncarnationId !== capturedIncarnationId) {
+        if (ptyId === addressedPtyId) {
+          throw new Error('terminal_handle_stale')
+        }
+        continue
+      }
       this.markPtyStopRequested(ptyId)
-      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
+      const expectedIncarnationId = capturedIncarnationId ?? liveIncarnationId
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
@@ -85,7 +99,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
 
   async closeTerminal(
     handle: string,
-    options?: { expectedIncarnationId?: string }
+    options?: TerminalGcCloseStopOptions
   ): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
     if (options?.expectedIncarnationId) {
@@ -103,6 +117,8 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       }
     }
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    const finishStop = (ids, addressed, captured) =>
+      finishGuardedPtyStop(this, handle, ids, addressed, captured, options)
     if (pty) {
       const closeAuthority: RuntimePtyTabCloseAuthority = {
         handle,
@@ -129,6 +145,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         this.resolveTerminalCloseTarget(pty.pty.worktreeId, paneTarget) === 'last-pane'
       if (closesTab && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        const captured = capturePtyIncarnationIds(this.ptysById, ptyIdsToKill)
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             localPtyTeardownOwnedExternally: true
@@ -139,10 +156,11 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           }
           this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
-        const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        const stop = await finishStop(ptyIdsToKill, pty.pty.ptyId, captured)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       if (closesTab && surface && ptyCloseAuthority && !this.tabs.has(surface.tab.parentTabId)) {
+        const captured = capturePtyIncarnationIds(this.ptysById, [pty.pty.ptyId])
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             reason: 'user',
@@ -153,11 +171,11 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+          const stop = await finishStop([pty.pty.ptyId], pty.pty.ptyId, captured)
           this.notifyRendererOfHeadlessTerminalClose(tabId)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
-        const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+        const stop = await finishStop([pty.pty.ptyId], pty.pty.ptyId, captured)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       // Why the tabs guard: a headless host has no renderer tab to close through the notifier.
@@ -169,6 +187,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         this.notifier?.closeTerminalTab
       ) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
+        const captured = capturePtyIncarnationIds(this.ptysById, ptyIdsToKill)
         let tabClosed = true
         try {
           await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
@@ -180,11 +199,15 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           tabClosed = false
         }
         if (tabClosed) {
-          const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+          const stop = await finishStop(ptyIdsToKill, pty.pty.ptyId, captured)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
       }
-      const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+      const stop = await this.stopExplicitlyClosedTabPtys(
+        [pty.pty.ptyId],
+        pty.pty.ptyId,
+        capturePtyIncarnationIds(this.ptysById, [pty.pty.ptyId])
+      )
       if (!closesTab) {
         // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
         // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
@@ -217,11 +240,12 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       : leaf.ptyId
         ? [leaf.ptyId]
         : []
+    const captured = capturePtyIncarnationIds(this.ptysById, ptyIdsToKill)
     if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
     }
     const stop = leaf.ptyId
-      ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
+      ? await finishStop(ptyIdsToKill, leaf.ptyId, captured)
       : NO_STOP
     if (!closesTab) {
       await this.closeTerminalPane(leaf.worktreeId, paneTarget)

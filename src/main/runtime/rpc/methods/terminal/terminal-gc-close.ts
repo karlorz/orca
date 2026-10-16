@@ -21,7 +21,11 @@ export type TerminalGcCloseRuntime = {
   readTerminal: (handle: string, opts?: { limit?: number }) => Promise<RuntimeTerminalRead>
   closeTerminal: (
     handle: string,
-    options?: { expectedIncarnationId?: string }
+    options?: {
+      expectedIncarnationId?: string
+      gcIdleTermMin?: number
+      gcCoordHandle?: string
+    }
   ) => Promise<RuntimeTerminalClose>
 }
 
@@ -105,5 +109,9 @@ export async function closeTerminalFromRpc(
   if (!decision.close) {
     throw new Error(`gc_close_refused:${decision.why}`)
   }
-  return runtime.closeTerminal(params.terminal, { expectedIncarnationId })
+  return runtime.closeTerminal(params.terminal, {
+    expectedIncarnationId,
+    gcIdleTermMin: params.gcIdleTermMin,
+    ...(params.gcCoordHandle ? { gcCoordHandle: params.gcCoordHandle } : {})
+  })
 }

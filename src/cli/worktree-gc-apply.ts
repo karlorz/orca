@@ -78,9 +78,7 @@ async function revalidateWorktreeRemoval(
   }
 ): Promise<WorktreeGcWorktreeRecord> {
   const listed = await input.runtime.listWorktrees()
-  const terminals = await input.runtime.listTerminals()
-  const processCwds = await input.listProcessCwds()
-  if (listed.truncated || !terminalInventoryIsComplete(terminals)) {
+  if (listed.truncated) {
     return keepWorktree(rec, 'terminal-list-incomplete')
   }
   if (!rec.repo || rec.repo === '?') {
@@ -94,23 +92,31 @@ async function revalidateWorktreeRemoval(
       return keepWorktree(rec, 'workspace-identity-changed')
     }
   }
+  await input.listProcessCwds()
   const git = (await listGitWorktrees(rec.repo, input.runGit)).find(
     (worktree) => worktree.path === rec.path
   )
   if (!git) {
     return keepWorktree(rec, 'workspace-identity-changed')
   }
+  let liveInventoryComplete = true
   const fresh = await evaluateGcWorktree({
     git,
     repo: rec.repo,
     orca: orca
       ? { id: orca.id, hostId: orca.hostId, lastActivityAt: orca.lastActivityAt }
       : undefined,
-    attachedPaths: attachedPathsFromTerminals(terminals.terminals),
-    processCwds,
+    attachedPaths: new Set(),
+    processCwds: { verdict: 'live', cwds: [] },
     nowMs: input.nowMs,
     runGit: input.runGit,
-    listPrStates: input.listPrStates
+    listPrStates: input.listPrStates,
+    readAttachedPaths: async () => {
+      const terminals = await input.runtime.listTerminals()
+      liveInventoryComplete = terminalInventoryIsComplete(terminals)
+      return attachedPathsFromTerminals(terminals.terminals)
+    },
+    readProcessCwds: input.listProcessCwds
   })
   rec.branch = fresh.branch
   rec.head = fresh.head
@@ -118,6 +124,9 @@ async function revalidateWorktreeRemoval(
   rec.hostId = fresh.hostId
   rec.reasons = fresh.reasons
   rec.action = fresh.action
+  if (!liveInventoryComplete) {
+    return keepWorktree(rec, 'terminal-list-incomplete')
+  }
   return rec
 }
 

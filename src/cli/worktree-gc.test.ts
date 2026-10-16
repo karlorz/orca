@@ -13,6 +13,7 @@ import type {
   WorktreeGcTerminalList
 } from './worktree-gc-model'
 import { completeGcTerminalList } from './worktree-gc-terminal-scope'
+import { gitActivityStampTargets } from './worktree-gc-git-activity'
 
 const DAY_MS = WORKTREE_GC_IDLE_MS
 const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
@@ -25,26 +26,9 @@ async function stampMtime(target: string, mtimeMs: number): Promise<void> {
   }
 }
 
-async function ageGitActivity(worktreePath: string, mtimeMs: number): Promise<void> {
-  const gitFile = path.join(worktreePath, '.git')
-  await stampMtime(worktreePath, mtimeMs)
-  await stampMtime(gitFile, mtimeMs)
-  await stampMtime(path.join(gitFile, 'HEAD'), mtimeMs)
-  await stampMtime(path.join(gitFile, 'index'), mtimeMs)
-  try {
-    const info = await lstat(gitFile)
-    if (!info.isFile()) {
-      return
-    }
-    const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
-    if (!marker) {
-      return
-    }
-    const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
-    await stampMtime(path.join(gitdir, 'HEAD'), mtimeMs)
-    await stampMtime(path.join(gitdir, 'index'), mtimeMs)
-  } catch {
-    // No git metadata to stamp.
+async function ageGitActivity(worktreePath: string, mtimeMs: number, branch = ''): Promise<void> {
+  for (const target of await gitActivityStampTargets(worktreePath, branch)) {
+    await stampMtime(target, mtimeMs)
   }
 }
 
@@ -570,6 +554,50 @@ describe('orca worktree gc rules', () => {
     expect(unverifiable.worktrees.find((row) => row.path === fixture.linked)?.reasons).toContain(
       'process-cwd-unverifiable'
     )
+  })
+
+  it('keeps a recently committed same-branch worktree without touching checkout root or HEAD', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'recent-same-branch'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    const idleMs = NOW_MS - DAY_MS * 2
+    await stampMtime(fixture.linked, idleMs)
+    await stampMtime(path.join(fixture.linked, '.git'), idleMs)
+    try {
+      const info = await lstat(path.join(fixture.linked, '.git'))
+      if (info.isFile()) {
+        const marker = parseGitdirMarkerPayload(
+          await readFile(path.join(fixture.linked, '.git'), 'utf8')
+        )
+        if (marker) {
+          const gitdir = path.isAbsolute(marker) ? marker : path.resolve(fixture.linked, marker)
+          await stampMtime(path.join(gitdir, 'HEAD'), idleMs)
+        }
+      } else {
+        await stampMtime(path.join(fixture.linked, '.git', 'HEAD'), idleMs)
+      }
+    } catch {
+      await stampMtime(path.join(fixture.linked, '.git', 'HEAD'), idleMs)
+    }
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        linkedActivityAt: idleMs,
+        remove: async () => {
+          throw new Error('recent same-branch commit must not be removed')
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons.some((reason) => reason.includes('active<24h'))).toBe(true)
   })
 
   it('keeps a worktree when git metadata is newer than a stale lastActivityAt', async () => {
