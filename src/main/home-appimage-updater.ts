@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, open, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { compareHomeTags } from '../../config/scripts/orca-home-appimage-install'
+import { compareHomeTags } from './orca-home-appimage-install'
 import type { UpdateStatus } from '../shared/update-status-types'
 import {
   assertHomeDaemonProtocol,

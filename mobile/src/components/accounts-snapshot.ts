@@ -114,7 +114,8 @@ const RateLimitProviderFields = [
   ['kimi', 'kimi'],
   ['minimax', 'minimax'],
   ['grok', 'grok'],
-  ['antigravity', 'antigravity']
+  ['antigravity', 'antigravity'],
+  ['cursor', 'cursor']
 ] as const
 
 const ClaudeAccountSummarySchema = z
@@ -194,6 +195,7 @@ export const AccountsSnapshotSchema = z
         minimax: DisplayOnlyProviderRateLimitsSchema,
         grok: DisplayOnlyProviderRateLimitsSchema,
         antigravity: DisplayOnlyProviderRateLimitsSchema,
+        cursor: DisplayOnlyProviderRateLimitsSchema,
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
