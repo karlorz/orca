@@ -4,6 +4,7 @@
 // isolates the command, and only those records and fields are written.
 
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { adoptTouchedFoldedRows } from './workspace-layout-folded-rows'
 
 type Json = Record<string, unknown>
 
@@ -16,27 +17,38 @@ const LIST_FIELDS: Record<string, (record: Json) => unknown> = {
   browserTabsByWorktree: (record) => record.id
 }
 
-// Why 2: a session map (layouts by tab, sleeping records by pane) holds records; a changed record
-// field is replaced whole, as diffStoredSession reports it.
+// Session maps hold records (layouts by tab, sleeping records by pane): patch down to each record's
+// fields and replace a changed field whole, as diffStoredSession reports it.
 const MAP_RECORD_DEPTH = 2
 
 /**
  * `stored` with the records the command touched (those differing between `before` and `after`)
- * written as `after` has them. A touched record the load supplied is written whole; every
- * untouched record stays as stored. `stored` itself when the command changed nothing.
+ * written as `after` has them. A touched record the load supplied is written whole, and a folded
+ * legacy row whose claim the command touched takes its loaded form; every untouched record stays
+ * as stored. `stored` itself when the command changed nothing.
  */
 export function patchStoredSession(
   stored: WorkspaceSessionState,
   before: WorkspaceSessionState,
   after: WorkspaceSessionState
 ): WorkspaceSessionState {
-  const storedFields = toJson(stored)
+  const patched = patchRecords(stored, before, after)
+  const adopted = adoptTouchedFoldedRows(stored, patched, before)
+  return adopted === stored ? patched : patchRecords(adopted, before, after)
+}
+
+function patchRecords(
+  stored: WorkspaceSessionState,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState
+): WorkspaceSessionState {
   const beforeFields = toJson(before)
   const afterFields = toJson(after)
   const changed = changedKeys(beforeFields, afterFields)
   if (changed.length === 0) {
     return stored
   }
+  const storedFields = toJson(stored)
   const patched: Json = { ...storedFields }
   for (const field of changed) {
     const idOf = LIST_FIELDS[field]
@@ -111,7 +123,7 @@ function patchList(stored: Json[], before: Json[], after: Json[], idOf: (record:
   const queue = after
     .map((record) => result.find((candidate) => idOf(candidate) === idOf(record)))
     .filter((record): record is Json => record !== undefined)
-  return result.map((record) => (placed.has(idOf(record)) ? queue.shift()! : record))
+  return result.map((record) => (placed.has(idOf(record)) ? (queue.shift() ?? record) : record))
 }
 
 /** After the nearest record that precedes it in `after` and is already in the list. */
@@ -121,8 +133,8 @@ function insertionIndex(
   position: number,
   idOf: (record: Json) => unknown
 ): number {
-  for (let previous = position - 1; previous >= 0; previous--) {
-    const index = result.findIndex((record) => idOf(record) === idOf(after[previous]!))
+  for (const preceding of after.slice(0, position).toReversed()) {
+    const index = result.findIndex((record) => idOf(record) === idOf(preceding))
     if (index !== -1) {
       return index + 1
     }

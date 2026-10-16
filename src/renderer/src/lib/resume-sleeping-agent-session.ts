@@ -20,6 +20,7 @@ import {
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   findUnhydratedHostMirrorForPane,
+  isHostMirroredSleepingRecord,
   type UnhydratedHostMirror
 } from './host-mirrored-pane-liveness'
 import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
@@ -294,6 +295,10 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     if (isPaneOwned) {
+      continue
+    }
+    // Mirrored rows cannot authorize a writer: closes, re-keys and pending handles look alike here.
+    if (isHostMirroredSleepingRecord(record)) {
       continue
     }
     if (launchSleepingAgentSession(record, options)) {

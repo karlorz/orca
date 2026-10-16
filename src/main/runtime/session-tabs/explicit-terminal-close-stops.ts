@@ -11,6 +11,10 @@ import {
   finishGuardedPtyStop,
   type TerminalGcCloseStopOptions
 } from '../rpc/methods/terminal/terminal-gc-close-stop-fence'
+import {
+  closePairedHostLeafFirst,
+  isTerminalTabPinnedInSession
+} from './paired-host-terminal-close'
 
 /** How an explicit close's stop of its addressed PTY ended. */
 type ExplicitCloseStop = { stopped: boolean }
@@ -129,6 +133,25 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       return { ...close, ptyStopVerdict: 'live' }
     }
     return close
+  }
+
+  /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
+  private closeOnOwningPairedHost(
+    handle: string,
+    leaf: { worktreeId: string; tabId: string; leafId: string; ptyId: string | null },
+    method: 'terminal.close' | 'terminal.closeTab',
+    closesTab: boolean
+  ): ReturnType<typeof closePairedHostLeafFirst> {
+    return closePairedHostLeafFirst(leaf, method, {
+      call: (environmentId, hostMethod, params, timeoutMs) =>
+        this.callOrchestrationWorkerServer(environmentId, hostMethod, params, timeoutMs),
+      isTabPinned: () =>
+        closesTab &&
+        this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId).some((hostId) =>
+          isTerminalTabPinnedInSession(this.store?.getWorkspaceSession?.(hostId), leaf)
+        ),
+      readBoundLeaf: () => this.getLiveLeafForHandle(handle).leaf
+    })
   }
 
   async closeTerminal(
@@ -264,6 +287,15 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const paneTarget = { kind: 'pane' as const, tabId: leaf.tabId, leafId: leaf.leafId }
+    const hostClose = await this.closeOnOwningPairedHost(
+      handle,
+      leaf,
+      'terminal.close',
+      this.resolveTerminalCloseTarget(leaf.worktreeId, paneTarget) === 'last-pane'
+    )
+    if (hostClose && !hostClose.stillBound) {
+      return { handle, tabId: leaf.tabId, ...hostClose.close }
+    }
     const closesTab = this.resolveTerminalCloseTarget(leaf.worktreeId, paneTarget) === 'last-pane'
     const ptyIdsToKill = closesTab
       ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
@@ -273,6 +305,14 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     const captured = capturePtyIncarnationIds(this.ptysById, ptyIdsToKill)
     if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
+    }
+    if (hostClose) {
+      if (!closesTab) {
+        await this.closeTerminalPane(leaf.worktreeId, paneTarget)
+      } else if (!this.notifier?.closeTerminalTab) {
+        this.notifier?.closeTerminal(leaf.tabId)
+      }
+      return { handle, tabId: leaf.tabId, ...hostClose.close }
     }
     const stop = leaf.ptyId ? await finishStop(ptyIdsToKill, leaf.ptyId, captured) : NO_STOP
     if (!closesTab) {
@@ -309,8 +349,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    const hostClose = await this.closeOnOwningPairedHost(handle, leaf, 'terminal.closeTab', true)
+    if (hostClose && !hostClose.stillBound) {
+      return { handle, tabId: leaf.tabId, ...hostClose.close, closeMode: 'tab' }
+    }
     await this.closeMobileSessionTab(`id:${leaf.worktreeId}`, leaf.tabId, { reason: 'user' })
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-    return { handle, tabId: leaf.tabId, closeMode: 'tab', ptyKilled: false }
+    return { handle, tabId: leaf.tabId, ptyKilled: false, ...hostClose?.close, closeMode: 'tab' }
   }
 }

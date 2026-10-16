@@ -21,6 +21,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.rename', { terminal: 'term', title: null }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
   ['terminal.resetInputModes', { terminal: 'term' }, false],
+  ['terminal.readKittyFile', { terminal: 'term', path: '/tmp/image.png' }, false],
   ['terminal.send', { terminal: 'term', text: 'x' }, false],
   ['terminal.wait', { terminal: 'term', for: 'exit' }, false],
   ['terminal.create', {}, false],
@@ -83,11 +84,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(42)
+    expect(TERMINAL_METHODS).toHaveLength(43)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(42)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(43)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
