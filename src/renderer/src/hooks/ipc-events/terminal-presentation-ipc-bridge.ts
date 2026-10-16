@@ -14,6 +14,7 @@ import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { surfaceExistingSessionReveal } from './terminal-existing-session-reveal'
 import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   activateExistingLeafInLayout,
   addSplitLeafToLayout,
@@ -109,7 +110,16 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             ownership.kind === 'owned'
               ? worktreeTabs.find((candidate) => candidate.id === ownership.tabId)
               : undefined
-          const reusedTab = existingTab ?? splitTargetTab
+          let reusedTab = existingTab ?? splitTargetTab
+          // Switch point: main wrote this tab before revealing it, so its frame may have drawn it
+          // while stale records left the terminal's owner unclear; that tab is the one to show.
+          const frameDrawnTab =
+            ORCA_LAYOUT_OWNER_IS_MAIN && !reusedTab && tabId !== undefined
+              ? worktreeTabs.find((candidate) => candidate.id === tabId)
+              : undefined
+          if (frameDrawnTab) {
+            reusedTab = frameDrawnTab
+          }
           if (ptyId && tabId && leafId && reusedTab?.agentLaunchPane?.leafId === leafId) {
             // A launch pane this window made and the host never showed early: the host now holds it,
             // so its spawn may attach instead of waiting out the whole launch.
@@ -133,7 +143,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                     : {}),
                   ...(cwd ? { startupCwd: cwd } : {}),
                   // Why: CLI-spawned PTYs bake the pane key into env; adopt the same tab id so hook-event attribution keeps working.
-                  ...(tabId !== undefined ? { id: tabId } : {})
+                  ...(tabId !== undefined ? { id: tabId } : {}),
+                  // Switch point: main's pane too, so this create matches the tab main already wrote.
+                  ...(ORCA_LAYOUT_OWNER_IS_MAIN && leafId ? { initialLeafId: leafId } : {})
                 })
               : store.createTab(
                   worktreeId,
