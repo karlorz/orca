@@ -21,6 +21,11 @@ type OutputChunk = Rollup.OutputChunk
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/managed-agent-hook-controls',
   'gitlab/project-ref-parser',
+  'home-appimage-release-policy',
+  'home-appimage-updater',
+  'linux-home-update-policy',
+  'orca-home-appimage-install',
+  'orca-home-appimage-verification',
   'orca-profiles/profile-index-store',
   'claude-accounts/keychain',
   ...[

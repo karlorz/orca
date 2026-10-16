@@ -190,6 +190,11 @@ describe('Electron Vite output contract', () => {
 
     for (const name of [
       'gitlab/project-ref-parser',
+      'home-appimage-release-policy',
+      'home-appimage-updater',
+      'linux-home-update-policy',
+      'orca-home-appimage-install',
+      'orca-home-appimage-verification',
       'orca-profiles/profile-index-store',
       'persistence/profile-state/profile-state-access',
       'persistence/profile-state/profile-state-active-location',
@@ -206,6 +211,9 @@ describe('Electron Vite output contract', () => {
       expect(input).toHaveProperty(name)
     }
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/gitlab/project-ref-parser.js')
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/home-appimage-*.js')
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/orca-home-appimage-*.js')
+    expect(electronBuilderConfig.asarUnpack).toContain('out/main/linux-home-update-policy.js')
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
     expect(electronBuilderConfig.asarUnpack).toContain(
       'out/main/orca-profiles/profile-index-store.js'
