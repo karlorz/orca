@@ -16,11 +16,14 @@ vi.mock('./AutomationPrecheckFields', () => ({ AutomationPrecheckFields: () => n
 vi.mock('./AutomationSetupDecisionField', () => ({ AutomationSetupDecisionField: () => null }))
 vi.mock('./AutomationDestinationField', () => ({ AutomationDestinationField: () => null }))
 vi.mock('./AutomationExtraAgentArgsField', () => ({ AutomationExtraAgentArgsField: () => null }))
+vi.mock('./AutomationModelField', () => ({ AutomationModelField: () => null }))
 
 const DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
+  model: '',
+  agentFlags: '',
   extraAgentArgs: '',
   projectId: '',
   workspaceMode: 'existing',

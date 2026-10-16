@@ -111,7 +111,10 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
           return null
         }
         return {
-          record: { handle: live.record.handle, ptyId: live.record.ptyId },
+          record: {
+            handle: live.record.handle,
+            ptyId: live.record.ptyId ?? undefined
+          },
           pty: {
             ptyId: live.pty.ptyId,
             incarnationId: live.pty.incarnationId,
@@ -120,7 +123,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
             tabId: live.pty.tabId,
             connected: live.pty.connected,
             connectionId: live.pty.connectionId,
-            isWsl: live.pty.isWsl
+            ...(live.pty.isWsl == null ? {} : { isWsl: live.pty.isWsl })
           }
         }
       },
@@ -141,7 +144,17 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
           return null
         }
       },
-      focusTerminal: (handle, options) => this.focusTerminal(handle, options)
+      focusTerminal: async (handle, options) => {
+        const focused = await this.focusTerminal(handle, options)
+        return {
+          navigated: focused.navigated === true,
+          tabId: focused.tabId,
+          worktreeId: focused.worktreeId,
+          identity: focused.identity,
+          windowFocused: focused.windowFocused,
+          paneFocused: focused.paneFocused
+        }
+      }
     }
     return switchOriginatingPaneWithHost(host, target, options)
   }

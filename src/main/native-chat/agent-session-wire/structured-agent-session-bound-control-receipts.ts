@@ -57,7 +57,10 @@ export function boundControlReceipt(
 function boundControlReceiptFromResult(
   value: AgentSessionSendResult | AgentSessionCancelResult
 ): AgentSessionControlReceipt | undefined {
-  return 'controlReceipt' in value ? value.controlReceipt : undefined
+  const parsed = AgentSessionControlReceiptSchema.safeParse(
+    'controlReceipt' in value ? value.controlReceipt : undefined
+  )
+  return parsed.success ? parsed.data : undefined
 }
 
 async function persistBoundControlOutcome(
