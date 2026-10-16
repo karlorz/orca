@@ -15,46 +15,12 @@ export type AutomationRunPaneTarget = {
   tabId: string
   paneKey: string
   leafId: string
+  /** Null while a hibernated run pane waits for its tab to wake it. */
   ptyId: string | null
 }
 
-export function getAutomationRunOpenTabId(
-  run: Pick<AutomationRun, 'terminalPaneKey'>
-): string | null {
+function getAutomationRunOpenTabId(run: Pick<AutomationRun, 'terminalPaneKey'>): string | null {
   return parsePaneKey(run.terminalPaneKey ?? '')?.tabId ?? null
-}
-
-/** Same source the click path uses (`tabsByWorktree`), not leftover unified-tab ghosts. */
-export function automationRunTerminalTabExists({
-  run,
-  tabsByWorktree
-}: {
-  run: Pick<AutomationRun, 'terminalPaneKey' | 'workspaceId'>
-  tabsByWorktree: Record<string, readonly { id: string }[] | undefined>
-}): boolean {
-  const tabId = getAutomationRunOpenTabId(run)
-  if (!tabId || !run.workspaceId) {
-    return false
-  }
-  return (tabsByWorktree[run.workspaceId] ?? []).some((tab) => tab.id === tabId)
-}
-
-export function selectAutomationRunPaneMounted(
-  state: {
-    tabsByWorktree: Record<string, readonly { id: string }[] | undefined>
-    terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
-  },
-  run: Pick<AutomationRun, 'terminalPaneKey' | 'workspaceId'>
-): boolean {
-  const openTabId = getAutomationRunOpenTabId(run)
-  return canOpenAutomationRunOpenTarget({
-    run,
-    terminalTabExists: automationRunTerminalTabExists({
-      run,
-      tabsByWorktree: state.tabsByWorktree
-    }),
-    currentLayout: openTabId ? state.terminalLayoutsByTabId[openTabId] : null
-  })
 }
 
 export function automationRunMatchesPaneKey(
@@ -62,22 +28,6 @@ export function automationRunMatchesPaneKey(
   paneKey: string
 ): boolean {
   return run.terminalPaneKey ? paneKey === run.terminalPaneKey : false
-}
-
-export function isAutomationRunPaneMounted({
-  run,
-  terminalTabExists,
-  currentLayout
-}: {
-  run: Pick<AutomationRun, 'terminalPaneKey'>
-  terminalTabExists: boolean
-  currentLayout: TerminalLayoutSnapshot | null | undefined
-}): boolean {
-  const parsed = parsePaneKey(run.terminalPaneKey ?? '')
-  if (!terminalTabExists || !parsed || !currentLayout?.root) {
-    return false
-  }
-  return terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)
 }
 
 export function resolveAutomationRunOpenTarget({
@@ -92,29 +42,34 @@ export function resolveAutomationRunOpenTarget({
   livePtyIds: readonly string[]
 }): AutomationRunPaneTarget | null {
   const parsed = parsePaneKey(run.terminalPaneKey ?? '')
-  if (!isAutomationRunPaneMounted({ run, terminalTabExists, currentLayout }) || !parsed) {
+  if (!terminalTabExists || !parsed || !currentLayout?.root) {
     return null
   }
-  const layoutPtyId = currentLayout?.ptyIdsByLeafId?.[parsed.leafId]
-  const ptyId =
-    run.terminalPtyId && livePtyIds.includes(run.terminalPtyId)
-      ? run.terminalPtyId
-      : (layoutPtyId ?? run.terminalPtyId ?? null)
+  if (!terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)) {
+    return null
+  }
+  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
+  if (!run.terminalPtyId) {
+    // Why: a slept run pane keeps its key but drops its PTY id; the pane, not a process, is the target.
+    return {
+      tabId: parsed.tabId,
+      paneKey: run.terminalPaneKey!,
+      leafId: parsed.leafId,
+      ptyId: layoutPtyId && livePtyIds.includes(layoutPtyId) ? layoutPtyId : null
+    }
+  }
+  if (!livePtyIds.includes(run.terminalPtyId)) {
+    return null
+  }
+  if (layoutPtyId !== undefined && layoutPtyId !== run.terminalPtyId) {
+    return null
+  }
   return {
     tabId: parsed.tabId,
     paneKey: run.terminalPaneKey!,
     leafId: parsed.leafId,
-    ptyId
+    ptyId: run.terminalPtyId
   }
-}
-
-export function canOpenAutomationRunOpenTarget(args: {
-  run: Pick<AutomationRun, 'terminalPaneKey'>
-  terminalTabExists: boolean
-  currentLayout: TerminalLayoutSnapshot | null | undefined
-  livePtyIds?: readonly string[]
-}): boolean {
-  return isAutomationRunPaneMounted(args)
 }
 
 export type AutomationRunTerminalState = {
@@ -181,10 +136,7 @@ export function buildAutomationRunOpenLayout({
     activeLeafId: target.leafId,
     expandedLeafId: currentLayout.expandedLeafId === target.leafId ? target.leafId : null,
     ptyIdsByLeafId: target.ptyId
-      ? {
-          ...currentLayout.ptyIdsByLeafId,
-          [target.leafId]: target.ptyId
-        }
+      ? { ...currentLayout.ptyIdsByLeafId, [target.leafId]: target.ptyId }
       : currentLayout.ptyIdsByLeafId
   }
 }

@@ -31,7 +31,8 @@ import {
   missedBeyondGrace,
   recordMissedRun,
   recordRefusedAutomationRun,
-  recordUnevaluableAutomation
+  recordUnevaluableAutomation,
+  WSL_MOVE_OWNED_BY_HOST
 } from './dispatch-refusal'
 import type {
   AutomationsChangedPayload,
@@ -290,16 +291,31 @@ export class AutomationService {
     const target = this.resolveTarget(automation)
     const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
     const refusal = describeScheduledRefusal({ target, canDispatch })
+    // The WSL host runs this one now; a skip per tick would only churn the retained local copy.
+    if (refusal === WSL_MOVE_OWNED_BY_HOST) {
+      await this.runs.advanceNextRun(automation.id, now)
+      return
+    }
     if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
       await this.runs.advanceNextRun(automation.id, now)
       return
     }
 
-    await this.requestDispatch(
+    await requestAutomationDispatch(
+      {
+        store: this.store,
+        runs: this.runs,
+        isActive: () => !this.stopped && generation === this.dispatchGeneration,
+        getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
+        headlessDispatcher: this.headlessDispatcher,
+        resolveTarget: (current) => this.resolveTarget(current),
+        runPrecheck: () => this.runPrecheck(automation.id, run.id),
+        markDispatchResult: (result) => this.markDispatchResult(result),
+        watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
+      },
       automation,
       await this.runs.createRun(automation, scheduledFor),
-      target,
-      generation
+      target
     )
     await this.runs.advanceNextRun(automation.id, now)
   }
@@ -313,29 +329,5 @@ export class AutomationService {
   private canDispatchToRenderer(): boolean {
     const webContents = this.webContents
     return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
-  }
-
-  private requestDispatch(
-    automation: Automation,
-    run: AutomationRun,
-    target: AutomationRunTargetResult,
-    generation: number
-  ): Promise<AutomationRun> {
-    return requestAutomationDispatch(
-      {
-        store: this.store,
-        runs: this.runs,
-        isActive: () => !this.stopped && generation === this.dispatchGeneration,
-        getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-        headlessDispatcher: this.headlessDispatcher,
-        resolveTarget: (current) => this.resolveTarget(current),
-        runPrecheck: () => this.runPrecheck(automation.id, run.id),
-        markDispatchResult: (result) => this.markDispatchResult(result),
-        watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
-      },
-      automation,
-      run,
-      target
-    )
   }
 }

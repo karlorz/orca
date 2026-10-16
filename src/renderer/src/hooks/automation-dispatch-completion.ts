@@ -20,9 +20,9 @@ import { automationAgentCompletionResult } from '../../../shared/automation-agen
 import type { AgentMainAgentVerdictSource } from '../../../shared/agent-main-agent-verdict'
 import { getAgentStateHistoryOverlap } from './automation-agent-state-history-overlap'
 import { createAutomationRunSessionPersistence } from './automation-run-session-persistence'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
-
 
 // Why a helper: the persisted run error keeps upstream's untranslated exit text in one place.
 function automationProcessExitError(code: number): string {
@@ -35,7 +35,7 @@ export function createAutomationDispatchCompletion(args: {
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
-  finalizeTerminalOwnership: () => boolean | Promise<boolean>
+  finalizeTerminalOwnership: AutomationTerminalOwnership['finalize']
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
@@ -106,6 +106,28 @@ export function createAutomationDispatchCompletion(args: {
           error: automationProcessExitError(pendingExitCode)
         }
       : automationAgentCompletionResult(row)
+  const retireRunTerminal = async (): Promise<void> => {
+    const retirement = await args.finalizeTerminalOwnership({
+      // Why: only a workspace made for this run is its own; a shared one would gather a sleeping tab per run.
+      preservePane: args.worktree.automationProvenance?.automationRunId === args.run.id
+    })
+    if (!retirement) {
+      return
+    }
+    // Why: drop pointers to the stopped process (best-effort) so "View run" never dead-ends;
+    // a slept pane keeps its tab and pane key, which reopen and resume it.
+    try {
+      await args.markDispatchResult({
+        runId: args.run.id,
+        status: 'completed',
+        ...(retirement === 'closed' ? { terminalSessionId: null, terminalPaneKey: null } : {}),
+        terminalPtyId: null
+      })
+    } catch (error) {
+      console.error('[automations] Failed to clear retired terminal identity:', error)
+    }
+    await clearRetiredRunTerminalIdentity()
+  }
   const finishCompletionResult = async (
     providerSessionId: string | null,
     result: ReturnType<typeof automationAgentCompletionResult>
@@ -127,8 +149,8 @@ export function createAutomationDispatchCompletion(args: {
     terminalFinalizationStarted = true
     if (result.status === 'dispatch_failed') {
       args.releaseTerminalOwnership()
-    } else if (await args.finalizeTerminalOwnership()) {
-      await clearRetiredRunTerminalIdentity()
+    } else {
+      await retireRunTerminal()
     }
     await persistLateProviderSessionId(providerSessionId, result)
   }

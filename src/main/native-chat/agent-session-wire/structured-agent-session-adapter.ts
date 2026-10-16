@@ -1,7 +1,5 @@
-import type {
-  AgentSessionAccountKind,
-  AgentSessionUnavailable
-} from '../../../shared/agent-session-availability'
+import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionRewindReason,
   AgentSessionRewindSupport
@@ -36,9 +34,9 @@ import type {
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type {
   AgentSessionOptionsResult,
-  AgentSessionSlashCommand,
-  AgentSessionThreadGoalChange
+  AgentSessionSlashCommand
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
@@ -59,45 +57,13 @@ import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-
 export type { StructuredAgentSessionLiveOptions } from './structured-agent-session-live-options'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-live-options'
 
-export class AgentSessionAcquisitionRefusal extends Error {
-  readonly code = 'agent_session_operation_invalid'
-
-  constructor(
-    message: string,
-    /** The situation, so the chat can say what to do; the message is Orca's log wording. Absent,
-     *  the provider refused its own start. */
-    readonly reason: AgentSessionRefusalReason<'agent_session_operation_invalid'> = 'providerStartFailed',
-    readonly account?: AgentSessionAccountKind
-  ) {
-    super(message)
-    this.name = 'AgentSessionAcquisitionRefusal'
-  }
-
-  /** The conversation's history is more than this host can restore. */
-  static historyTooLarge(message: string): AgentSessionAcquisitionRefusal {
-    return new AgentSessionAcquisitionRefusal(message, 'historyTooLarge')
-  }
-}
-
-export class AgentSessionPromptUnavailableError extends Error {
-  constructor(itemId: string) {
-    super(`The provider is no longer waiting on ${itemId}.`)
-    this.name = 'AgentSessionPromptUnavailableError'
-  }
-}
-
-/** The provider cannot take this answer. Thrown before the journal commit, so nothing is recorded. */
-export class AgentSessionPromptAnswerRejectedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AgentSessionPromptAnswerRejectedError'
-  }
-}
-
 export {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionAcquisitionRefusal,
+  AgentSessionPromptUnavailableError,
+  AgentSessionPromptAnswerRejectedError
 } from './structured-agent-session-acquisition-errors'
 
 /** What a reservation turns into once something is actually running under it:
@@ -129,6 +95,7 @@ export type AgentSessionPreSpawnReason = Extract<
   | 'claudeAccountFolderMissing'
   | 'claudeAccountSetupFailed'
   | 'agentCommandNotRunnable'
+  | 'runtimeNotInstalled'
 >
 
 /** Acquisition failed with first-hand proof that no provider process existed. */
@@ -444,6 +411,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     identity: AgentSessionJournalIdentity
     accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
+  /** Copies provider conversation `providerSessionId` of the chat into a new one the agent saves,
+   *  answering the copy's id; the chat keeps its own. Runs whether or not the chat's agent is
+   *  running. Absent where the agent copies through its CLI instead (`agentForksThroughChat`). */
+  copyConversation?(input: {
+    identity: AgentSessionJournalIdentity
+    providerSessionId: string
+    accountHome: AgentSessionAccountHome
+  }): Promise<AiVaultConversationCopy>
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
    *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */

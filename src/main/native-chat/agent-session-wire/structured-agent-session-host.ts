@@ -45,7 +45,6 @@ import {
 } from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 
@@ -72,7 +71,7 @@ export class StructuredAgentSessionHost {
     this.sessions,
     () => this.now(),
     () => this.deps,
-    (sessionId) => this.queued.onJournalActivity(sessionId),
+    this.queued,
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
     (sessionId) => this.backgroundTasks.publish(sessionId),
     (sessionId) => this.backgroundTasks.read(sessionId)
@@ -128,6 +127,7 @@ export class StructuredAgentSessionHost {
     })
     this.restore = reveal.createStructuredAgentSessionHostRestore(deps, {
       reconcileLeases: this.reconcileLeases,
+      reconcileRestartLeases: () => this.reconcileLeases(),
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       hasSession: this.hasSession,
@@ -141,13 +141,8 @@ export class StructuredAgentSessionHost {
       store: deps.store,
       sessions: this.sessions,
       flushLifecycle: (sessionId) => this.runtimeState.lifecycleBarrier(sessionId),
-      publishFence: (sessionId, session) =>
-        this.subscribers.snapshot(
-          sessionId,
-          session.journal,
-          structuredAgentSessionConversationFence(deps.store, sessionId)
-        ),
       publishStatus: this.clientDelivery.publishStatusAndSettlement,
+      generationEnded: this.clientDelivery.publishGenerationEnded,
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
       now: () => this.now(),
       runtimeState: this.runtimeState,
@@ -174,8 +169,7 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  hasLoadedProviders = (): boolean =>
-    [...this.sessions.values()].some(({ child }) => child !== null)
+  hasLoadedProviders = () => [...this.sessions.values()].some(({ child }) => child !== null)
   sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
@@ -189,6 +183,7 @@ export class StructuredAgentSessionHost {
       sessions: this.sessions,
       now: () => this.now(),
       publishStatus: this.clientDelivery.publishStatus,
+      generationEnded: this.clientDelivery.publishGenerationEnded,
       wakeDelivery: (sessionId: string) => this.conversationDelivery.loop.wake(sessionId),
       endExitedChild: this.eventRecovery.endExitedChildUnderSerialize
     } satisfies StructuredAgentSessionLifetimeContext
@@ -229,6 +224,8 @@ export class StructuredAgentSessionHost {
   showSessionTabs = this.tabs.showSessionTabs
   setSessionTabVisibility = this.tabs.setSessionTabVisibility
   notifySessionTabHidden = this.tabs.notifySessionTabHidden
+  runWhileExecutionIdle = <T>(sessionId: string, task: () => Promise<T>): Promise<T | null> =>
+    this.lifetime.runWhileExecutionIdle(sessionId, task)
   /** This runtime holds a chat record, readable or not. */
   holdsSessions = (): boolean => this.deps.store.holdsRecords()
   onSessionsHeld = (listener: () => void): (() => void) => this.deps.store.onFirstRecord(listener)
@@ -334,6 +331,9 @@ export class StructuredAgentSessionHost {
    *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
   journalSnapshot = async (sessionId: string): Promise<AgentJournalSnapshot> =>
     (await this.lifetime.conversation(sessionId)).journal.snapshot()
+
+  /** The host's projection of a held chat's current work (`structuredAgentSessionCurrentWork`). */
+  currentWork = this.clientDelivery.readCurrentWork
 
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 

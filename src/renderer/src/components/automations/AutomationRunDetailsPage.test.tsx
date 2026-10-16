@@ -13,6 +13,15 @@ vi.mock('./use-automation-run-live-view-state', () => ({
   useAutomationRunLiveViewState: () => viewStateMock.current
 }))
 
+// These fixtures exercise markdown without rendering diagrams.
+const boundaryMocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
+
 const run: AutomationRun = {
   id: 'run-1',
   automationId: 'automation-1',
@@ -56,6 +65,11 @@ describe('AutomationRunDetailsPage', () => {
   afterEach(() => {
     viewStateMock.current = null
     cleanup()
+    try {
+      expect(boundaryMocks.mermaid).not.toHaveBeenCalled()
+    } finally {
+      boundaryMocks.mermaid.mockClear()
+    }
   })
 
   it('shows the open action when it can open something', () => {

@@ -11,7 +11,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../../../../shared/runtime-types'
 import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../../orca-runtime-stop-explicitly-closed-tab-ptys'
+import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../../session-tabs/explicit-terminal-close-stops'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal-lifecycle-methods'
 import type { TerminalGcCloseRuntime } from './terminal-gc-close'
 
