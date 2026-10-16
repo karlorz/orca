@@ -273,8 +273,18 @@ function withoutHtml(parent: Parent, nested: boolean): void {
 
 /** The text with the markup its last top-level block leaves open closed, as desktop closes it.
  *  Only that block: a lone `*` earlier in the reply is no opener, and remend would close it. */
+function lastTopLevelBlockStart(tokens: readonly Token[]): number {
+  for (let i = tokens.length - 1; i >= 0; i -= 1) {
+    const token = tokens[i]
+    if (token.level === 0 && token.map) {
+      return token.map[0]
+    }
+  }
+  return 0
+}
+
 function withLastBlockClosed(source: string, tokens: readonly Token[]): string {
-  const lastBlock = tokens.findLast((token) => token.level === 0 && token.map)?.map?.[0] ?? 0
+  const lastBlock = lastTopLevelBlockStart(tokens)
   const lines = source.split('\n')
   const tail = lines.slice(lastBlock).join('\n')
   const closed = remend(tail, { linkMode: 'text-only' })
