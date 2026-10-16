@@ -85,6 +85,7 @@ describe('worktree gc CLI', () => {
       gcHandlerContext(new Map([['journal-dir', journalDir]]), call)
     )
     expect(call).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
+    expect(call).not.toHaveBeenCalledWith('worktree.gcRm', expect.anything())
     expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
     expect(call).not.toHaveBeenCalledWith('terminal.gcClose', expect.anything())
     expect(call).toHaveBeenCalledWith(
@@ -402,6 +403,72 @@ describe('worktree gc CLI', () => {
     )
     expect(closed).toEqual([])
     expect(call).not.toHaveBeenCalledWith('terminal.close', expect.anything())
+  })
+
+  it('does not remove when the host lacks worktree.gcRm', async () => {
+    const journalDir = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-cli-'))
+    dirs.push(journalDir)
+    const removed: string[] = []
+    const call = vi.fn(async (method: string): Promise<RuntimeRpcSuccess<unknown>> => {
+      if (method === 'worktree.list') {
+        return {
+          id: 'list',
+          ok: true as const,
+          result: {
+            worktrees: [
+              {
+                id: 'wt-a',
+                path: '/tmp/repo-a-gc',
+                hostId: 'local',
+                lastActivityAt: 1,
+                isMainWorktree: true
+              }
+            ],
+            totalCount: 1,
+            truncated: false
+          },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'terminal.list') {
+        return {
+          id: 'terms',
+          ok: true as const,
+          result: {
+            terminals: [],
+            totalCount: 0,
+            truncated: false,
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
+          },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'worktree.rm') {
+        removed.push('rm')
+        return {
+          id: 'rm',
+          ok: true as const,
+          result: { removed: true },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      if (method === 'worktree.gcRm') {
+        throw new RuntimeClientError('method_not_found', 'Unknown method: worktree.gcRm')
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await WORKTREE_GC_HANDLERS['worktree gc'](
+      gcHandlerContext(
+        new Map<string, string | boolean>([
+          ['apply', true],
+          ['journal-dir', journalDir]
+        ]),
+        call
+      )
+    )
+    expect(removed).toEqual([])
+    expect(call).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
   })
 
   it('turns --force into the explicit never-force error code', async () => {

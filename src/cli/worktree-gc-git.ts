@@ -152,6 +152,14 @@ export async function readGitHead(
   return result.code === 0 && result.stdout.length > 0 ? result.stdout : null
 }
 
+export async function readGitBranch(
+  cwd: string,
+  runGit: WorktreeGcGitRunner
+): Promise<string | null> {
+  const result = await runGit(cwd, ['symbolic-ref', '--short', 'HEAD'])
+  return result.code === 0 && result.stdout.length > 0 ? result.stdout : null
+}
+
 export async function readGitStatusPorcelain(
   cwd: string,
   runGit: WorktreeGcGitRunner

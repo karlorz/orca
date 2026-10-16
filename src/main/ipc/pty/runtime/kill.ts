@@ -24,9 +24,21 @@ function publishSyntheticExit(
   deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
 }
 
+function expectedIncarnationStillLive(
+  ptyId: string,
+  expectedIncarnationId: string | undefined
+): boolean {
+  if (!expectedIncarnationId) {
+    return true
+  }
+  const live = ptyIncarnationById.get(ptyId)
+  return live === expectedIncarnationId
+}
+
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  opts?: { expectedIncarnationId?: string }
 ): boolean {
   const {
     runtime,
@@ -49,6 +61,9 @@ export function killPtyFromRuntimeController(
     runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
   }
   const killWithCurrentProvider = (): boolean => {
+    if (!expectedIncarnationStillLive(ptyId, opts?.expectedIncarnationId)) {
+      return false
+    }
     let provider: IPtyProvider
     try {
       provider = getProviderForPty(ptyId)
@@ -134,7 +149,7 @@ export function retireRejectedPtyFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
 ): Promise<boolean> {
   const {
     runtime,
@@ -171,6 +186,9 @@ export async function stopAndWaitPtyFromRuntimeController(
     } else {
       await startupPromise
     }
+  }
+  if (!expectedIncarnationStillLive(ptyId, opts?.expectedIncarnationId)) {
+    return false
   }
   let provider: IPtyProvider
   try {

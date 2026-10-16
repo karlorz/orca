@@ -32,6 +32,8 @@ import {
   waitForPendingWorktreeRemoval
 } from '../worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../worktree-removal-acceptance-queue'
+import { assertRegisteredGcWorktreeRemoval } from './worktree-gc-removal-acceptance'
+import type { RemoveManagedWorktreeOptions } from './runtime-worktree-selection'
 
 /** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
 export function removeRuntimeRegisteredLocalWorktree(
@@ -77,6 +79,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   /** Fired when Git finished, not on acceptance. */
   onRemoved: () => void
   publish: () => void
+  gcAcceptance?: RemoveManagedWorktreeOptions['gcAcceptance']
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
@@ -147,6 +150,16 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const gate = await args.acquireWatcherRemoval(canonicalPath)
   let accepted = false
   try {
+    if (args.gcAcceptance) {
+      await assertRegisteredGcWorktreeRemoval({
+        examined: args.gcAcceptance.examined,
+        repoPath: repo.path,
+        localOptions,
+        hasLocalOptions: args.hasLocalOptions,
+        readAttached: args.gcAcceptance.readAttached,
+        readProcessCwds: args.gcAcceptance.readProcessCwds
+      })
+    }
     await args.stopPtys()
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)

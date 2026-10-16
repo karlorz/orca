@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ptyIncarnationById } from '../../../../ipc/pty/provider/ownership-state'
+import { stopAndWaitPtyFromRuntimeController } from '../../../../ipc/pty/runtime/kill'
+import type { PtyRuntimeControllerDeps } from '../../../../ipc/pty/runtime/controller-deps'
 import type { ZodType } from 'zod'
 import { eraseRpcMethods } from '../../core'
 import type {
@@ -101,13 +104,21 @@ async function callRegisteredClose(
   return method.handler(parsed, { runtime } as never) as Promise<{ close: RuntimeTerminalClose }>
 }
 
+const NOTIFIER_LEAF_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+const NOTIFIER_PANE_KEY = `tab-1:${NOTIFIER_LEAF_ID}`
+
 function realCloseHost(state: {
   incarnationId: string
   lastOutputAt: number
   tail: string
   onTabClose?: () => void
+  onStopWait?: () => void | Promise<void>
+  stopAndWaitResult?: boolean
+  tabCloseVia?: 'mobile' | 'notifier'
+  providerStartup?: { promise: Promise<void>; onRequested?: () => void }
 }): TerminalGcCloseRuntime & {
   stopped: { ptyId: string; incarnationId?: string }[]
+  killed: { ptyId: string; incarnationId?: string; expectedIncarnationId?: string }[]
   ptysById: Map<
     string,
     {
@@ -116,6 +127,7 @@ function realCloseHost(state: {
       lastOutputAt: number
       worktreeId: string
       tabId: string
+      paneKey?: string
     }
   >
 } {
@@ -127,6 +139,7 @@ function realCloseHost(state: {
       lastOutputAt: number
       worktreeId: string
       tabId: string
+      paneKey?: string
     }
   >()
   const putPty = (incarnationId: string, lastOutputAt: number) => {
@@ -135,17 +148,20 @@ function realCloseHost(state: {
       incarnationId,
       lastOutputAt,
       worktreeId: 'wt-1',
-      tabId: 'tab-1'
+      tabId: 'tab-1',
+      ...(state.tabCloseVia === 'notifier' ? { paneKey: NOTIFIER_PANE_KEY } : {})
     })
   }
   putPty(state.incarnationId, state.lastOutputAt)
   const stopped: { ptyId: string; incarnationId?: string }[] = []
+  const killed: { ptyId: string; incarnationId?: string; expectedIncarnationId?: string }[] = []
   const runtime = Object.create(OrcaRuntimeWithStopExplicitlyClosedTabPtys.prototype) as Record<
     string,
     unknown
   > &
     TerminalGcCloseRuntime & {
       stopped: { ptyId: string; incarnationId?: string }[]
+      killed: { ptyId: string; incarnationId?: string; expectedIncarnationId?: string }[]
       ptysById: Map<
         string,
         {
@@ -154,29 +170,79 @@ function realCloseHost(state: {
           lastOutputAt: number
           worktreeId: string
           tabId: string
+          paneKey?: string
         }
       >
     }
   Object.assign(runtime, {
     stopped,
+    killed,
     ptysById,
     getRuntimeId: () => 'runtime-test',
     tabs: new Set(['tab-1']),
-    notifier: { closeTerminalTab: async () => undefined },
+    notifier: {
+      closeTerminalTab: async () => {
+        state.onTabClose?.()
+        if (state.tabCloseVia === 'notifier') {
+          throw new Error('tab_not_found')
+        }
+      }
+    },
     claudeAgentTeams: { removeTeamForLeaderHandle() {} },
     ptyController: {
-      async stopAndWait(ptyId: string) {
+      async stopAndWait(
+        ptyId: string,
+        opts?: { expectedIncarnationId?: string; deadlineMs?: number }
+      ) {
+        if (state.providerStartup) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: GC close tests only exercise startup/incarnation ports.
+          return stopAndWaitPtyFromRuntimeController(
+            {
+              runtime,
+              getLocalPtyProviderStartupPromise: () => {
+                state.providerStartup?.onRequested?.()
+                return state.providerStartup?.promise
+              },
+              shutdownProviderAndDetectExit: async () => true,
+              finishPtyShutdown: () => opts?.expectedIncarnationId,
+              rememberSyntheticKillExit() {},
+              sendPtyExitToRenderer() {}
+            } as unknown as PtyRuntimeControllerDeps,
+            ptyId,
+            opts
+          )
+        }
+        await state.onStopWait?.()
+        if (
+          opts?.expectedIncarnationId &&
+          ptysById.get(ptyId)?.incarnationId !== opts.expectedIncarnationId
+        ) {
+          return false
+        }
         stopped.push({ ptyId, incarnationId: ptysById.get(ptyId)?.incarnationId })
-        return true
+        return state.stopAndWaitResult !== false
       },
-      kill: () => false
+      kill(ptyId: string, opts?: { expectedIncarnationId?: string }) {
+        const live = ptysById.get(ptyId)?.incarnationId
+        if (opts?.expectedIncarnationId && live !== opts.expectedIncarnationId) {
+          return false
+        }
+        killed.push({
+          ptyId,
+          incarnationId: live,
+          expectedIncarnationId: opts?.expectedIncarnationId
+        })
+        return false
+      }
     },
     getLivePtyForHandle() {
       const pty = ptysById.get('pty-1')
       return pty ? { record: { tabId: 'tab-1', ptyId: 'pty-1' }, pty } : null
     },
     resolvePtyTabCloseSurfaceAuthority() {
-      return { surface: { tab: { parentTabId: 'tab-1', leafId: 'leaf-1' } } }
+      return state.tabCloseVia === 'notifier'
+        ? null
+        : { surface: { tab: { parentTabId: 'tab-1', leafId: 'leaf-1' } } }
     },
     findMobileTerminalSurface: () => null,
     getMobileTerminalLeafPtyIds: () => [],
@@ -208,6 +274,10 @@ function realCloseHost(state: {
 }
 
 describe('terminal.close GC idle fence', () => {
+  afterEach(() => {
+    ptyIncarnationById.delete('pty-1')
+  })
+
   it('does not close a replacement incarnation that appears during re-read', async () => {
     const runtimeState = {
       incarnationId: 'inc-old',
@@ -343,6 +413,154 @@ describe('terminal.close GC idle fence', () => {
       })
     ).rejects.toThrow(/gc_close_refused:(busy|recent-output)/)
     expect(runtime.stopped).toEqual([])
+  })
+
+  it('does not stop a replacement after notifier tab_not_found', async () => {
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      tabCloseVia: 'notifier' as const,
+      onTabClose: () => {
+        runtimeState.incarnationId = 'inc-new'
+        runtime.ptysById.set('pty-1', {
+          ptyId: 'pty-1',
+          incarnationId: 'inc-new',
+          lastOutputAt: Date.now(),
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          paneKey: NOTIFIER_PANE_KEY
+        })
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    await expect(
+      callRegisteredClose(
+        runtime,
+        {
+          terminal: 'term_idle',
+          expectedIncarnationId: 'inc-old',
+          gcIdleTermMin: 60
+        },
+        'terminal.gcClose'
+      )
+    ).rejects.toThrow('gc_close_refused:incarnation-changed')
+    expect(runtime.stopped).toEqual([])
+    expect(runtime.killed).toEqual([])
+  })
+
+  it('does not stop resumed activity after notifier tab_not_found', async () => {
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      tabCloseVia: 'notifier' as const,
+      onTabClose: () => {
+        runtimeState.lastOutputAt = Date.now()
+        runtimeState.tail = 'Thinking'
+        runtime.ptysById.set('pty-1', {
+          ptyId: 'pty-1',
+          incarnationId: 'inc-old',
+          lastOutputAt: Date.now(),
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          paneKey: NOTIFIER_PANE_KEY
+        })
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    await expect(
+      callRegisteredClose(
+        runtime,
+        {
+          terminal: 'term_idle',
+          expectedIncarnationId: 'inc-old',
+          gcIdleTermMin: 60
+        },
+        'terminal.gcClose'
+      )
+    ).rejects.toThrow(/gc_close_refused:(busy|recent-output)/)
+    expect(runtime.stopped).toEqual([])
+    expect(runtime.killed).toEqual([])
+  })
+
+  it('does not kill a replacement that appears while stopAndWait is pending', async () => {
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      stopAndWaitResult: false,
+      onStopWait: () => {
+        runtimeState.incarnationId = 'inc-new'
+        runtime.ptysById.set('pty-1', {
+          ptyId: 'pty-1',
+          incarnationId: 'inc-new',
+          lastOutputAt: Date.now(),
+          worktreeId: 'wt-1',
+          tabId: 'tab-1'
+        })
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    await expect(
+      callRegisteredClose(
+        runtime,
+        {
+          terminal: 'term_idle',
+          expectedIncarnationId: 'inc-old',
+          gcIdleTermMin: 60
+        },
+        'terminal.gcClose'
+      )
+    ).rejects.toThrow('terminal_handle_stale')
+    expect(runtime.stopped).toEqual([])
+    expect(runtime.killed).toEqual([])
+  })
+
+  it('does not select a replacement provider after startup', async () => {
+    let resumeStartup: (() => void) | undefined
+    let sawStartup = false
+    const startup = new Promise<void>((resolve) => {
+      resumeStartup = resolve
+    })
+    const runtimeState = {
+      incarnationId: 'inc-old',
+      lastOutputAt: IDLE_OUTPUT_AT,
+      tail: '',
+      providerStartup: {
+        promise: startup,
+        onRequested: () => {
+          sawStartup = true
+        }
+      }
+    }
+    const runtime = realCloseHost(runtimeState)
+    ptyIncarnationById.set('pty-1', 'inc-old')
+    const pending = callRegisteredClose(
+      runtime,
+      {
+        terminal: 'term_idle',
+        expectedIncarnationId: 'inc-old',
+        gcIdleTermMin: 60
+      },
+      'terminal.gcClose'
+    )
+    await vi.waitFor(() => {
+      expect(sawStartup).toBe(true)
+    })
+    runtimeState.incarnationId = 'inc-new'
+    runtime.ptysById.set('pty-1', {
+      ptyId: 'pty-1',
+      incarnationId: 'inc-new',
+      lastOutputAt: Date.now(),
+      worktreeId: 'wt-1',
+      tabId: 'tab-1'
+    })
+    ptyIncarnationById.set('pty-1', 'inc-new')
+    resumeStartup?.()
+    await expect(pending).rejects.toThrow('terminal_handle_stale')
+    expect(runtime.stopped).toEqual([])
+    expect(runtime.killed).toEqual([])
   })
 
   it('older hosts strip GC fields from terminal.close and do not implement gcClose', () => {

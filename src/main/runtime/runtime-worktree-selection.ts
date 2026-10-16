@@ -2,6 +2,10 @@ import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type {
+  GcExaminedWorktree,
+  GcProcessCwdScan
+} from '../../shared/worktree-gc-removal-acceptance'
 
 export type RuntimeWorktreeRemovalTarget = {
   id: string
@@ -25,12 +29,17 @@ export type RemoveManagedWorktreeOptions = {
   hostId?: string
   /** Reply with the finished delete's result; otherwise a background delete replies on acceptance. */
   waitForBackgroundRemoval?: boolean
+  gcAcceptance?: {
+    examined: GcExaminedWorktree
+    readAttached: () => Promise<boolean>
+    readProcessCwds: () => Promise<GcProcessCwdScan>
+  }
 }
 
 export function getRuntimeWorktreeRemovalOptionsKey(
   options: Pick<
     RemoveManagedWorktreeOptions,
-    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook' | 'gcAcceptance'
   >
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
@@ -40,7 +49,8 @@ export function getRuntimeWorktreeRemovalOptionsKey(
   // onto the in-flight attempt that is about to refuse on it.
   const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
   const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
-  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
+  const gcKey = options.gcAcceptance ? 'gc' : 'interactive'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${gcKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime

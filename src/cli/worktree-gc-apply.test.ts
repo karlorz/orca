@@ -77,10 +77,10 @@ async function createMergedLinkedRepo(extraLinked = false): Promise<{
   }
   await git(repo, ['config', 'receive.denyCurrentBranch', 'ignore'])
   const idleMs = NOW_MS - DAY_MS * 2
-  await ageGitActivity(repo, idleMs)
-  await ageGitActivity(linked, idleMs)
+  await ageGitActivity(repo, idleMs, 'main')
+  await ageGitActivity(linked, idleMs, 'feature/done')
   if (extraLinked) {
-    await ageGitActivity(linkedB, idleMs)
+    await ageGitActivity(linkedB, idleMs, 'feature/done-b')
   }
   return { root, repo, linked, linkedB, journalDir }
 }
@@ -183,8 +183,8 @@ describe('worktree gc apply revalidation', () => {
         if (scans === 2) {
           await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pushed-after-inventory'])
           await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
-          await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
-          await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+          await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+          await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
         }
         return { verdict: 'live', cwds: [] }
       }
@@ -340,8 +340,8 @@ describe('worktree gc apply revalidation', () => {
     roots.push(fixture.root)
     await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
     await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
-    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
-    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
     const removed: string[] = []
     let liveCwds: string[] = []
     const report = await runWorktreeGc({
@@ -374,8 +374,8 @@ describe('worktree gc apply revalidation', () => {
     roots.push(fixture.root)
     await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
     await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
-    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
-    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
     const removed: string[] = []
     let attachTerminal = false
     const report = await runWorktreeGc({
@@ -551,5 +551,152 @@ describe('worktree gc apply revalidation', () => {
     expect(closed).toEqual([])
     expect(report.terminals[0]?.action).toBe('keep')
     expect(report.terminals[0]?.why).toBe('gc-close-refused')
+  })
+
+  it('keeps a candidate when a terminal appears during the final HEAD read', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let attachTerminal = false
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          attachTerminal
+            ? completeGcTerminalList([
+                {
+                  handle: 'term_live',
+                  title: 'live',
+                  worktreePath: fixture.linked,
+                  worktreeId: `repo::${fixture.linked}`,
+                  lastOutputAt: NOW_MS,
+                  incarnationId: 'inc-live',
+                  executionHostId: 'local'
+                }
+              ])
+            : completeGcTerminalList(),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+          attachTerminal = true
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('terminal-attached')
+  })
+
+  it('keeps a candidate when a process appears during the final HEAD read', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let liveCwds: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+          liveCwds = [fixture.linked]
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: liveCwds })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('process-cwd-inside')
+  })
+
+  it('keeps a candidate that switches branch at the same hash during PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
+    const inventoryHead = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    const removed: string[] = []
+    const preserved: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (args[0] === 'update-ref') {
+          preserved.push(args[2] ?? '')
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async (cwd, branch) => {
+        if (branch === 'feature/done') {
+          await git(cwd, ['checkout', '-B', 'feature/new-open'])
+          return { ok: true, states: ['CLOSED'] }
+        }
+        return { ok: true, states: ['OPEN'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(preserved).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    expect(await git(fixture.linked, ['rev-parse', 'HEAD'])).toBe(inventoryHead)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('branch-changed')
+  })
+
+  it('refuses host GC removal when a terminal appears during acceptance wait', async () => {
+    const { enforceGcWorktreeRemovalAcceptance } =
+      await import('../shared/worktree-gc-removal-acceptance')
+    let attached = false
+    await expect(
+      enforceGcWorktreeRemovalAcceptance({
+        wait: async () => {
+          attached = true
+        },
+        examined: { path: '/wt', branch: 'feature/done', head: 'abc' },
+        readLive: async () => ({
+          path: '/wt',
+          branch: 'feature/done',
+          head: 'abc',
+          attached,
+          processCwds: { verdict: 'live', cwds: [] }
+        })
+      })
+    ).rejects.toThrow('gc_rm_refused:terminal-attached')
   })
 })

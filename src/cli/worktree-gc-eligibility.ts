@@ -9,6 +9,7 @@ import { newestGitActivityMs } from './worktree-gc-git-activity'
 import {
   countUnpushedCommits,
   isMergedIntoDefault,
+  readGitBranch,
   readGitHead,
   readGitStatusPorcelain,
   shortBranchName
@@ -137,7 +138,6 @@ export async function evaluateGcWorktree(input: {
     rec.reasons.push(WORKTREE_GC_ORPHAN_REASON)
     return rec
   }
-  const gitMs = await newestGitActivityMs(input.git.path, branch)
   const status = await readGitStatusPorcelain(input.git.path, input.runGit)
   if (!status.ok) {
     rec.reasons.push('status-failed')
@@ -162,16 +162,25 @@ export async function evaluateGcWorktree(input: {
       }
     }
   }
-  const attachedPaths = input.readAttachedPaths
-    ? await input.readAttachedPaths()
-    : input.attachedPaths
-  const processCwds = input.readProcessCwds ? await input.readProcessCwds() : input.processCwds
+  if (branch) {
+    const liveBranch = await readGitBranch(input.git.path, input.runGit)
+    if (!liveBranch) {
+      rec.reasons.push('branch-unverifiable')
+    } else if (liveBranch !== branch) {
+      rec.reasons.push('branch-changed')
+    }
+  }
   const liveHead = await readGitHead(input.git.path, input.runGit)
   if (!liveHead) {
     rec.reasons.push('head-unverifiable')
   } else if (input.git.head && liveHead !== input.git.head) {
     rec.reasons.push('head-changed')
   }
+  const gitMs = await newestGitActivityMs(input.git.path, branch)
+  const attachedPaths = input.readAttachedPaths
+    ? await input.readAttachedPaths()
+    : input.attachedPaths
+  const processCwds = input.readProcessCwds ? await input.readProcessCwds() : input.processCwds
   if (attachedPaths.has(input.git.path)) {
     rec.reasons.push('terminal-attached')
   }

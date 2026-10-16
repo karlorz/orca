@@ -67,8 +67,8 @@ async function createMergedLinkedRepo(): Promise<{
   await git(repo, ['worktree', 'add', '-b', 'feature/done', linked])
   await git(repo, ['config', 'receive.denyCurrentBranch', 'ignore'])
   const idleMs = NOW_MS - DAY_MS * 2
-  await ageGitActivity(repo, idleMs)
-  await ageGitActivity(linked, idleMs)
+  await ageGitActivity(repo, idleMs, 'main')
+  await ageGitActivity(linked, idleMs, 'feature/done')
   return { root, repo, linked, journalDir }
 }
 
@@ -603,7 +603,7 @@ describe('orca worktree gc rules', () => {
   it('keeps a worktree when git metadata is newer than a stale lastActivityAt', async () => {
     const fixture = await createMergedLinkedRepo()
     roots.push(fixture.root)
-    await ageGitActivity(fixture.linked, NOW_MS - 60_000)
+    await ageGitActivity(fixture.linked, NOW_MS - 60_000, 'feature/done')
     const report = await runWorktreeGc({
       apply: true,
       nowMs: NOW_MS,
@@ -630,8 +630,8 @@ describe('orca worktree gc rules', () => {
     await git(fixture.linked, ['commit', '--allow-empty', '-m', 'closed-pr'])
     await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
     const head = await git(fixture.linked, ['rev-parse', 'HEAD'])
-    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2)
-    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2)
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
     const report = await runWorktreeGc({
       apply: true,
       nowMs: NOW_MS,
@@ -721,5 +721,31 @@ describe('orca worktree gc rules', () => {
     expect(closed).toEqual([])
     expect(report.terminals[0]?.action).toBe('keep')
     expect(report.terminals[0]?.why).toBe('busy')
+  })
+
+  it('does not treat unrelated branch or main-checkout activity as this worktree being active', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.repo, ['commit', '--allow-empty', '-m', 'unrelated-main'])
+    await git(fixture.repo, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    const removed: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(fixture.repo, fixture.linked, {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([`repo::${fixture.linked}`])
+    expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('remove')
   })
 })

@@ -109,5 +109,11 @@ export type WorktreeGcRuntime = {
     idleTermMin?: number,
     coordHandle?: string | null
   ) => Promise<boolean>
-  removeWorktree: (input: { id: string; hostId: string }) => Promise<boolean>
+  removeWorktree: (input: {
+    id: string
+    hostId: string
+    examinedPath: string
+    examinedBranch: string
+    examinedHead: string
+  }) => Promise<boolean>
 }

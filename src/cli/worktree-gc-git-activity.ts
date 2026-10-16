@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile, stat } from 'node:fs/promises'
+import { lstat, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 
@@ -10,81 +10,71 @@ async function mtimeMs(target: string): Promise<number | null> {
   }
 }
 
-async function nestedFiles(root: string): Promise<string[]> {
-  try {
-    const entries = await readdir(root, { withFileTypes: true })
-    const files = [root]
-    for (const entry of entries) {
-      const full = path.join(root, entry.name)
-      if (entry.isDirectory()) {
-        files.push(...(await nestedFiles(full)))
-      } else {
-        files.push(full)
-      }
-    }
-    return files
-  } catch {
-    return []
-  }
-}
-
-export async function gitActivityStampTargets(
-  worktreePath: string,
-  branch = ''
-): Promise<string[]> {
-  const candidates = [worktreePath, path.join(worktreePath, '.git')]
-  const short = branch.replace(/^refs\/heads\//, '')
-  for (const dir of await collectGitMetadataDirs(worktreePath)) {
-    candidates.push(
-      dir,
-      path.join(dir, 'HEAD'),
-      path.join(dir, 'index'),
-      path.join(dir, 'logs', 'HEAD'),
-      path.join(dir, 'packed-refs'),
-      ...(await nestedFiles(path.join(dir, 'refs', 'heads'))),
-      ...(await nestedFiles(path.join(dir, 'logs', 'refs', 'heads')))
-    )
-    if (short) {
-      candidates.push(
-        path.join(dir, 'refs', 'heads', short),
-        path.join(dir, 'logs', 'refs', 'heads', short)
-      )
-    }
-  }
-  return candidates
-}
-
-async function collectGitMetadataDirs(worktreePath: string): Promise<string[]> {
+async function resolveGitMetadataDirs(
+  worktreePath: string
+): Promise<{ gitdir: string | null; commondir: string | null }> {
   const gitFile = path.join(worktreePath, '.git')
   try {
     const info = await lstat(gitFile)
-    if (!info.isDirectory() && !info.isFile()) {
-      return []
-    }
     if (info.isDirectory()) {
-      return [gitFile]
+      return { gitdir: gitFile, commondir: null }
+    }
+    if (!info.isFile()) {
+      return { gitdir: null, commondir: null }
     }
     const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
     if (!marker) {
-      return []
+      return { gitdir: null, commondir: null }
     }
     const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
-    const dirs = [gitdir]
     try {
       const common = (await readFile(path.join(gitdir, 'commondir'), 'utf8')).trim()
       if (common) {
-        dirs.push(path.isAbsolute(common) ? common : path.resolve(gitdir, common))
+        return {
+          gitdir,
+          commondir: path.isAbsolute(common) ? common : path.resolve(gitdir, common)
+        }
       }
     } catch {
       // Linked worktrees without commondir still expose HEAD/index/reflog on gitdir.
     }
-    return dirs
+    return { gitdir, commondir: null }
   } catch {
-    return []
+    return { gitdir: null, commondir: null }
   }
 }
 
-/** Real Git activity mtimes, including index/reflog/resolved refs. Does not spawn Git. */
+/**
+ * Per-worktree HEAD/index/reflog, plus only the examined branch's ref/reflog in
+ * the common directory. Unrelated branch and main-checkout index samples are
+ * excluded so a sibling stay idle.
+ */
+export async function gitActivityStampTargets(
+  worktreePath: string,
+  branch = ''
+): Promise<string[]> {
+  const short = branch.replace(/^refs\/heads\//, '')
+  const candidates = [worktreePath, path.join(worktreePath, '.git')]
+  const { gitdir, commondir } = await resolveGitMetadataDirs(worktreePath)
+  if (gitdir) {
+    candidates.push(
+      gitdir,
+      path.join(gitdir, 'HEAD'),
+      path.join(gitdir, 'index'),
+      path.join(gitdir, 'logs', 'HEAD')
+    )
+  }
+  const refRoot = commondir ?? gitdir
+  if (refRoot && short) {
+    candidates.push(
+      path.join(refRoot, 'refs', 'heads', short),
+      path.join(refRoot, 'logs', 'refs', 'heads', short)
+    )
+  }
+  return candidates
+}
+
+/** Real Git activity mtimes for this worktree and examined branch. Does not spawn Git. */
 export async function newestGitActivityMs(
   worktreePath: string,
   branch = ''

@@ -72,13 +72,23 @@ function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): Worktree
       }
     },
     async removeWorktree(input) {
-      const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
-        worktree: `id:${input.id}`,
-        hostId: input.hostId,
-        force: false,
-        allowUnverifiedPtyStop: false
-      })
-      return result.result.removed === true
+      try {
+        const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.gcRm', {
+          worktree: `id:${input.id}`,
+          hostId: input.hostId,
+          force: false,
+          allowUnverifiedPtyStop: false,
+          gcExaminedPath: input.examinedPath,
+          gcExaminedBranch: input.examinedBranch,
+          gcExaminedHead: input.examinedHead
+        })
+        return result.result.removed === true
+      } catch (error) {
+        if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+          return false
+        }
+        throw error
+      }
     }
   }
 }

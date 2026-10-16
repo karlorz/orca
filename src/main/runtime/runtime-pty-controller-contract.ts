@@ -129,11 +129,11 @@ export type RuntimePtyController = {
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
   attach?(ptyId: string): Promise<boolean>
-  kill(ptyId: string): boolean
+  kill(ptyId: string, opts?: { expectedIncarnationId?: string }): boolean
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

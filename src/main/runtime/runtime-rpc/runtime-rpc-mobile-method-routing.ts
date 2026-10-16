@@ -209,6 +209,7 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.ps',
   'worktree.resolveMrBase',
   'worktree.resolvePrBase',
+  'worktree.gcRm',
   'worktree.rm',
   'worktree.set',
   'worktree.show',

@@ -36,18 +36,28 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       }
       this.markPtyStopRequested(ptyId)
       const expectedIncarnationId = capturedIncarnationId ?? liveIncarnationId
+      const stopOpts = expectedIncarnationId
+        ? { deadlineMs, expectedIncarnationId }
+        : { deadlineMs }
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
-          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
+          stopped = await this.ptyController.stopAndWait(ptyId, stopOpts)
         } catch (error) {
           this.markPtyLivenessUnverifiable(ptyId, errorMessage(error))
+        }
+        const liveAfterWait = this.ptysById.get(ptyId)?.incarnationId
+        if (expectedIncarnationId && liveAfterWait !== expectedIncarnationId) {
+          if (ptyId === addressedPtyId) {
+            throw new Error('terminal_handle_stale')
+          }
+          continue
         }
         // Preserve an observed exit when a broader inventory check could not finish.
         if (
           !stopped &&
           expectedIncarnationId &&
-          this.ptysById.get(ptyId)?.incarnationId === expectedIncarnationId &&
+          liveAfterWait === expectedIncarnationId &&
           this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
         ) {
           stopped = true
@@ -58,7 +68,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
-            this.ptyController.kill(ptyId)
+            this.ptyController.kill(ptyId, { expectedIncarnationId })
             if (!verdict || verdict.status === 'live') {
               this.markPtyLivenessUnverifiable(
                 ptyId,
@@ -68,7 +78,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           }
         }
       } else {
-        stopped = this.ptyController?.kill(ptyId) ?? false
+        stopped = this.ptyController?.kill(ptyId, { expectedIncarnationId }) ?? false
       }
       if (ptyId === addressedPtyId) {
         addressedPtyStop = { stopped }
@@ -188,22 +198,18 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       ) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         const captured = capturePtyIncarnationIds(this.ptysById, ptyIdsToKill)
-        let tabClosed = true
         try {
           await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
         } catch (error) {
-          // The tab went away concurrently; fall through and close the PTY alone.
+          // The tab went away concurrently; still stop only the captured incarnation.
           if (!(error instanceof Error) || error.message !== 'tab_not_found') {
             throw error
           }
-          tabClosed = false
         }
-        if (tabClosed) {
-          const stop = await finishStop(ptyIdsToKill, pty.pty.ptyId, captured)
-          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
-        }
+        const stop = await finishStop(ptyIdsToKill, pty.pty.ptyId, captured)
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      const stop = await this.stopExplicitlyClosedTabPtys(
+      const stop = await finishStop(
         [pty.pty.ptyId],
         pty.pty.ptyId,
         capturePtyIncarnationIds(this.ptysById, [pty.pty.ptyId])
@@ -244,9 +250,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
     }
-    const stop = leaf.ptyId
-      ? await finishStop(ptyIdsToKill, leaf.ptyId, captured)
-      : NO_STOP
+    const stop = leaf.ptyId ? await finishStop(ptyIdsToKill, leaf.ptyId, captured) : NO_STOP
     if (!closesTab) {
       await this.closeTerminalPane(leaf.worktreeId, paneTarget)
     } else if (!this.notifier?.closeTerminalTab) {

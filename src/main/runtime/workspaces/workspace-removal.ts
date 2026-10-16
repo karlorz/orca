@@ -274,7 +274,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
             purgeRemovedWorktree()
           },
           onRemoved: emitRemoved,
-          publish: () => this.publishWorktreeRemovalChange(repo!.id)
+          publish: () => this.publishWorktreeRemovalChange(repo!.id),
+          ...(options.gcAcceptance ? { gcAcceptance: options.gcAcceptance } : {})
         })
       })
     })()

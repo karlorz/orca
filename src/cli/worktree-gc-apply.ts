@@ -3,7 +3,8 @@ import {
   listGitWorktrees,
   preserveGcBranchTip,
   pruneGitWorktrees,
-  removeGitWorktree
+  removeGitWorktree,
+  shortBranchName
 } from './worktree-gc-git'
 import type {
   WorktreeGcGitRunner,
@@ -99,6 +100,9 @@ async function revalidateWorktreeRemoval(
   if (!git) {
     return keepWorktree(rec, 'workspace-identity-changed')
   }
+  if (shortBranchName(git.branch) !== rec.branch) {
+    return keepWorktree(rec, 'branch-changed')
+  }
   let liveInventoryComplete = true
   const fresh = await evaluateGcWorktree({
     git,
@@ -179,9 +183,19 @@ export async function applyWorktreeGcDestructions(input: {
     }
     rec.ok =
       rec.orcaId && rec.hostId
-        ? await input.runtime.removeWorktree({ id: rec.orcaId, hostId: rec.hostId })
+        ? await input.runtime.removeWorktree({
+            id: rec.orcaId,
+            hostId: rec.hostId,
+            examinedPath: rec.path,
+            examinedBranch: rec.branch,
+            examinedHead: rec.head
+          })
         : await removeGitWorktree(rec.repo, rec.path, input.runGit)
-    await preserveGcBranchTip(rec.repo, rec.branch, rec.head, input.runGit)
+    if (rec.ok) {
+      await preserveGcBranchTip(rec.repo, rec.branch, rec.head, input.runGit)
+    } else {
+      keepWorktree(rec, 'gc-rm-refused')
+    }
     if (rec.repo && rec.repo !== '?') {
       repos.add(rec.repo)
     }
