@@ -79,7 +79,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.stably.orca.mobile",
-      "versionCode": 89,
+      "versionCode": 90,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
