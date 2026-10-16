@@ -17,7 +17,7 @@ import {
   WORKTREE_GC_LIST_LIMIT,
   type WorktreeGcRuntime
 } from '../worktree-gc-model'
-import { listLocalProcessCwds } from '../worktree-gc-process-cwd'
+import { listLocalProcessCwds } from '../../shared/worktree-gc-process-cwd'
 import { formatWorktreeGcReport, runWorktreeGc } from '../worktree-gc-run'
 import { mapRuntimeTerminalList } from '../worktree-gc-terminal-scope'
 

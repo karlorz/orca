@@ -2,7 +2,7 @@ import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-gen
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { WorktreeGcRemove, WorktreeRemove } from '../../../../shared/rpc-contract/worktree-params'
-import { listLocalProcessCwds } from '../../../../cli/worktree-gc-process-cwd'
+import { listLocalProcessCwds } from '../../../../shared/worktree-gc-process-cwd'
 import { defineMethod, type RpcContext } from '../core'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'

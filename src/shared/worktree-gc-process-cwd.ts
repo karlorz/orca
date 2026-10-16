@@ -1,6 +1,9 @@
 import { readdir, readlink } from 'node:fs/promises'
 import path from 'node:path'
-import type { WorktreeGcProcessCwdScan } from './worktree-gc-model'
+
+export type WorktreeGcProcessCwdScan =
+  | { verdict: 'live'; cwds: readonly string[] }
+  | { verdict: 'unverifiable' }
 
 export type WorktreeGcProcFs = {
   readdir(dir: string): Promise<string[]>

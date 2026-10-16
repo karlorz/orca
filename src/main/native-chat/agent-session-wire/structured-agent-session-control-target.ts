@@ -13,6 +13,7 @@ import { refuse } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { holdsLiveProviderChild } from './structured-agent-session-provider-child'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 
 export class StructuredAgentSessionControlTargets {
   private readonly runtimeId = randomUUID()
@@ -90,7 +91,10 @@ export class StructuredAgentSessionControlTargets {
       this.snapshots.delete(sessionId)
       return { supported: false, reason: 'nativeMismatch' }
     }
-    const turnId = session.journal.activeTurnId()
+    const turnId = hostStructuredAgentSessionCurrentWork(
+      { store: deps.store, sessions },
+      sessionId
+    ).activeTurnId()
     if (
       turnId !== binding.turnId ||
       (turnId === null &&

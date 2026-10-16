@@ -10,6 +10,7 @@ import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { resolveOwner } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { AppState } from '@/store/types'
 
 export type AutomationRunPaneTarget = {
   tabId: string
@@ -19,8 +20,44 @@ export type AutomationRunPaneTarget = {
   ptyId: string | null
 }
 
-function getAutomationRunOpenTabId(run: Pick<AutomationRun, 'terminalPaneKey'>): string | null {
+export function getAutomationRunOpenTabId(
+  run: Pick<AutomationRun, 'terminalPaneKey'>
+): string | null {
   return parsePaneKey(run.terminalPaneKey ?? '')?.tabId ?? null
+}
+
+export function isAutomationRunPaneMounted({
+  run,
+  terminalTabExists,
+  currentLayout
+}: {
+  run: Pick<AutomationRun, 'terminalPaneKey'>
+  terminalTabExists: boolean
+  currentLayout: TerminalLayoutSnapshot | null | undefined
+}): boolean {
+  const pane = parsePaneKey(run.terminalPaneKey ?? '')
+  if (!pane || !terminalTabExists) {
+    return false
+  }
+  if (!pane.leafId || !currentLayout?.root) {
+    return terminalTabExists
+  }
+  return terminalLayoutContainsLeaf(currentLayout.root, pane.leafId)
+}
+
+export function selectAutomationRunPaneMounted(state: AppState, run: AutomationRun): boolean {
+  const tabId = getAutomationRunOpenTabId(run)
+  if (!tabId || !run.workspaceId) {
+    return false
+  }
+  const terminalTabExists = (state.tabsByWorktree[run.workspaceId] ?? []).some(
+    (tab) => tab.id === tabId
+  )
+  return isAutomationRunPaneMounted({
+    run,
+    terminalTabExists,
+    currentLayout: state.terminalLayoutsByTabId[tabId]
+  })
 }
 
 export function automationRunMatchesPaneKey(

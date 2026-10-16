@@ -16,16 +16,12 @@ vi.mock('./AutomationPrecheckFields', () => ({ AutomationPrecheckFields: () => n
 vi.mock('./AutomationSetupDecisionField', () => ({ AutomationSetupDecisionField: () => null }))
 vi.mock('./AutomationDestinationField', () => ({ AutomationDestinationField: () => null }))
 vi.mock('./AutomationExtraAgentArgsField', () => ({ AutomationExtraAgentArgsField: () => null }))
-// Fork: the per-automation model field renders its own comboboxes.
-vi.mock('./AutomationModelField', () => ({ AutomationModelField: () => null }))
 
 const DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
   extraAgentArgs: '',
-  model: '',
-  agentFlags: '',
   projectId: '',
   workspaceMode: 'existing',
   workspaceId: '',

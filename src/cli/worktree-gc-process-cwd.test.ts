@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listLocalProcessCwds, type WorktreeGcProcFs } from './worktree-gc-process-cwd'
+import { listLocalProcessCwds, type WorktreeGcProcFs } from '../shared/worktree-gc-process-cwd'
 
 function fsError(code: string): Error {
   return Object.assign(new Error(code), { code })

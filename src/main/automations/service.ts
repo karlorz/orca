@@ -1,13 +1,17 @@
 import {
   AutomationDispatchCancelledError,
-  requestAutomationDispatch,
   type AutomationRendererChannel
 } from './automation-dispatch-request'
+import {
+  dispatchAutomationRun,
+  evaluateScheduledAutomation,
+  resolveAutomationDispatchTarget,
+  type AutomationScheduledDispatchHost
+} from './automation-scheduled-dispatch'
 export type { AutomationRendererChannel } from './automation-dispatch-request'
 import type { Store } from '../persistence'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
@@ -15,7 +19,6 @@ import {
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
-import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
@@ -26,14 +29,7 @@ import {
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
 import { createAutomationRunResultCapture } from './automation-run-result-capture'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
-import {
-  describeScheduledRefusal,
-  missedBeyondGrace,
-  recordMissedRun,
-  recordRefusedAutomationRun,
-  recordUnevaluableAutomation,
-  WSL_MOVE_OWNED_BY_HOST
-} from './dispatch-refusal'
+import { recordRefusedAutomationRun, recordUnevaluableAutomation } from './dispatch-refusal'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
@@ -154,9 +150,9 @@ export class AutomationService {
     if (!automation) {
       throw new Error('Automation not found.')
     }
-    const target = this.resolveTarget(automation)
+    const target = resolveAutomationDispatchTarget(this.dispatchHost(), automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
-    return await this.requestDispatch(automation, run, target, generation)
+    return await dispatchAutomationRun(this.dispatchHost(), automation, run, target, generation)
   }
 
   /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
@@ -184,7 +180,7 @@ export class AutomationService {
     if (run.trigger !== 'scheduled' || !automation.precheck) {
       return null
     }
-    const target = this.resolveTarget(automation)
+    const target = resolveAutomationDispatchTarget(this.dispatchHost(), automation)
     if (!target.ok) {
       return {
         command: automation.precheck.command,
@@ -255,7 +251,7 @@ export class AutomationService {
         // Isolated per record (#16303): an unreadable schedule throws out of the
         // occurrence math, and an uncaught throw here skipped every later due row.
         try {
-          await this.evaluateAutomation(automation, now)
+          await evaluateScheduledAutomation(this.dispatchHost(), automation, now)
         } catch (error) {
           if (
             !(error instanceof AutomationDispatchCancelledError) &&
@@ -272,62 +268,20 @@ export class AutomationService {
     }
   }
 
-  private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
-    const generation = this.dispatchGeneration
-    const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
-    if (scheduledFor === null) {
-      await this.runs.advanceNextRun(automation.id, now)
-      return
+  private dispatchHost(): AutomationScheduledDispatchHost {
+    return {
+      store: this.store,
+      runs: this.runs,
+      tickMs: this.tickMs,
+      isStopped: () => this.stopped,
+      dispatchGeneration: () => this.dispatchGeneration,
+      headlessDispatcher: this.headlessDispatcher,
+      allowRemoteHostScheduling: this.allowRemoteHostScheduling,
+      webContents: () => this.webContents,
+      rendererReady: () => this.rendererReady,
+      completionWatcher: this.completionWatcher,
+      runPrecheck: (automationId, runId) => this.runPrecheck(automationId, runId),
+      markDispatchResult: (result) => this.markDispatchResult(result)
     }
-    if (missedBeyondGrace({ automation, scheduledFor, now, tickMs: this.tickMs })) {
-      await recordMissedRun({ runs: this.runs, automation, scheduledFor })
-      await this.runs.advanceNextRun(automation.id, now)
-      return
-    }
-
-    // Resolved before the run exists: a refusal repeats every occurrence, and a
-    // */5 automation would otherwise write ~288 identical rows a day — past
-    // retention, which would evict the automation's real history.
-    const target = this.resolveTarget(automation)
-    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
-    const refusal = describeScheduledRefusal({ target, canDispatch })
-    // The WSL host runs this one now; a skip per tick would only churn the retained local copy.
-    if (refusal === WSL_MOVE_OWNED_BY_HOST) {
-      await this.runs.advanceNextRun(automation.id, now)
-      return
-    }
-    if (refusal && (await this.runs.repeatSkip(automation.id, refusal, scheduledFor))) {
-      await this.runs.advanceNextRun(automation.id, now)
-      return
-    }
-
-    await requestAutomationDispatch(
-      {
-        store: this.store,
-        runs: this.runs,
-        isActive: () => !this.stopped && generation === this.dispatchGeneration,
-        getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
-        headlessDispatcher: this.headlessDispatcher,
-        resolveTarget: (current) => this.resolveTarget(current),
-        runPrecheck: () => this.runPrecheck(automation.id, run.id),
-        markDispatchResult: (result) => this.markDispatchResult(result),
-        watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
-      },
-      automation,
-      await this.runs.createRun(automation, scheduledFor),
-      target
-    )
-    await this.runs.advanceNextRun(automation.id, now)
-  }
-
-  private resolveTarget(automation: Automation): AutomationRunTargetResult {
-    return resolveAutomationRunTarget(this.store, automation, {
-      allowRemoteHostScheduling: this.allowRemoteHostScheduling
-    })
-  }
-
-  private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
   }
 }

@@ -23,9 +23,7 @@ export type WorktreeGcPrLookup = (
   branch: string
 ) => Promise<{ ok: boolean; states: readonly string[] }>
 
-export type WorktreeGcProcessCwdScan =
-  | { verdict: 'live'; cwds: readonly string[] }
-  | { verdict: 'unverifiable' }
+export type { WorktreeGcProcessCwdScan } from '../shared/worktree-gc-process-cwd'
 
 export type WorktreeGcTerminalAction = 'keep' | 'close'
 export type WorktreeGcWorktreeAction = 'keep' | 'remove' | 'prune'
