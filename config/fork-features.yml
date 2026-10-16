@@ -159,6 +159,16 @@ features:
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
       - mobile/src/storage/preferences.test.ts
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
+  - id: mobile-cursor-account-usage
+    title: Mobile Account usage opt-in Cursor toggle, same display-only pattern as Grok
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/components
+      - mobile/app/account-usage-settings.tsx
+      - mobile/src/home/MobileHomeAccountUsageCards.tsx
+      - mobile/app/h/[hostId]/accounts.tsx
+      - mobile/src/storage/preferences.test.ts
   - id: fork-live-status
     title: Tiny read-only Coolify operator status app for own-auth and official-relay
     kind: product

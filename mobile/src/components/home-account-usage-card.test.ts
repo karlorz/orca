@@ -46,6 +46,7 @@ function snapshot(): AccountsSnapshot {
       claude: limits('claude'),
       codex: null,
       antigravity: limits('antigravity'),
+      cursor: limits('cursor'),
       inactiveClaudeAccounts: [],
       inactiveCodexAccounts: []
     }
@@ -113,6 +114,45 @@ describe('HomeAccountUsageCard visibility', () => {
     })
 
     expect(textValues(renderer!)).toContain('Resets in 1h')
+
+    act(() => renderer?.unmount())
+  })
+
+  it('renders opted-in Cursor usage and keeps it off the default Claude/Codex set', () => {
+    let renderer: ReactTestRenderer | null = null
+    act(() => {
+      renderer = create(
+        createElement(HomeAccountUsageCard, {
+          snapshot: snapshot(),
+          visibleProviders: new Set(['cursor']),
+          showHostName: false,
+          hostName: 'Desk',
+          now: 0,
+          onPress: vi.fn()
+        })
+      )
+    })
+
+    const cursorTexts = textValues(renderer!)
+    expect(cursorTexts).toContain('Cursor')
+    expect(cursorTexts).not.toContain('claude@example.com')
+
+    act(() => renderer?.unmount())
+
+    act(() => {
+      renderer = create(
+        createElement(HomeAccountUsageCard, {
+          snapshot: snapshot(),
+          visibleProviders: new Set(['claude', 'codex']),
+          showHostName: false,
+          hostName: 'Desk',
+          now: 0,
+          onPress: vi.fn()
+        })
+      )
+    })
+
+    expect(textValues(renderer!)).not.toContain('Cursor')
 
     act(() => renderer?.unmount())
   })

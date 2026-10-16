@@ -67,7 +67,7 @@ describe('account usage settings route', () => {
     vi.restoreAllMocks()
   })
 
-  it('exposes all eight provider switches with stable accessible names', async () => {
+  it('exposes all nine provider switches with stable accessible names', async () => {
     const renderer = await renderRoute()
     const back = renderer.root.findAllByType('Pressable')[0]
     const switches = renderer.root.findAllByType('Switch')
@@ -84,8 +84,22 @@ describe('account usage settings route', () => {
       'Show OpenCode Go usage',
       'Show Kimi usage',
       'Show MiniMax usage',
-      'Show Grok usage'
+      'Show Grok usage',
+      'Show Cursor usage'
     ])
+    expect(
+      Object.fromEntries(switches.map((item) => [item.props.accessibilityLabel, item.props.value]))
+    ).toEqual({
+      'Show Claude usage': true,
+      'Show Codex usage': true,
+      'Show Gemini usage': false,
+      'Show Antigravity usage': false,
+      'Show OpenCode Go usage': false,
+      'Show Kimi usage': false,
+      'Show MiniMax usage': false,
+      'Show Grok usage': false,
+      'Show Cursor usage': false
+    })
 
     act(() => renderer.unmount())
   })

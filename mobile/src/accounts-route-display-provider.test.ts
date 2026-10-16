@@ -7,7 +7,8 @@ import type { AccountsSnapshot, ProviderRateLimits } from './components/account-
 const dependencies = vi.hoisted(() => ({
   loadHosts: vi.fn(),
   snapshot: null as AccountsSnapshot | null,
-  subscribe: vi.fn()
+  subscribe: vi.fn(),
+  visibleProviders: new Set<string>(['antigravity'])
 }))
 
 vi.mock('react-native', () => ({
@@ -68,7 +69,7 @@ vi.mock('./transport/client-context', () => {
   }
 })
 vi.mock('./components/use-visible-usage-providers', () => ({
-  useVisibleUsageProviders: () => new Set(['antigravity'])
+  useVisibleUsageProviders: () => dependencies.visibleProviders
 }))
 vi.mock('./components/AgentIcons', () => ({
   ClaudeIcon: 'ClaudeIcon',
@@ -108,7 +109,10 @@ function limits(): ProviderRateLimits {
   }
 }
 
-function snapshot(antigravity: ProviderRateLimits | null): AccountsSnapshot {
+function snapshot(
+  antigravity: ProviderRateLimits | null,
+  extras: { cursor?: ProviderRateLimits | null } = {}
+): AccountsSnapshot {
   return {
     claude: { accounts: [], activeAccountId: null },
     codex: { accounts: [], activeAccountId: null },
@@ -116,6 +120,7 @@ function snapshot(antigravity: ProviderRateLimits | null): AccountsSnapshot {
       claude: null,
       codex: null,
       antigravity,
+      cursor: extras.cursor ?? null,
       inactiveClaudeAccounts: [],
       inactiveCodexAccounts: []
     }
@@ -144,6 +149,7 @@ function textValues(renderer: ReactTestRenderer): string[] {
 describe('accounts route display-only providers', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    dependencies.visibleProviders = new Set(['antigravity'])
     dependencies.loadHosts.mockReset().mockResolvedValue([{ id: 'host-1', name: 'Desk' }])
     dependencies.subscribe.mockReset().mockImplementation((_method, _params, emit) => {
       emit({ type: 'ready', snapshot: dependencies.snapshot })
@@ -180,6 +186,35 @@ describe('accounts route display-only providers', () => {
     const renderer = await renderRoute()
 
     expect(textValues(renderer)).not.toContain('Antigravity')
+
+    act(() => renderer.unmount())
+  })
+
+  it('renders opted-in Cursor usage on the per-host accounts screen', async () => {
+    dependencies.visibleProviders = new Set(['cursor'])
+    dependencies.snapshot = snapshot(null, {
+      cursor: {
+        provider: 'cursor',
+        session: null,
+        weekly: null,
+        monthly: {
+          usedPercent: 18,
+          windowMinutes: 43200,
+          resetsAt: Date.now() + 60 * 60_000,
+          resetDescription: null
+        },
+        updatedAt: 1,
+        error: null,
+        status: 'ok'
+      }
+    })
+    const renderer = await renderRoute()
+    const texts = textValues(renderer)
+
+    expect(texts).toContain('Cursor')
+    expect(texts).toContain('System default')
+    expect(texts).toContain('18%')
+    expect(texts).not.toContain('Antigravity')
 
     act(() => renderer.unmount())
   })

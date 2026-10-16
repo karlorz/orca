@@ -534,6 +534,15 @@ describe('visible usage providers preference', () => {
     )
   })
 
+  it('persists opted-in cursor after grok in canonical order', async () => {
+    await saveVisibleUsageProviders(new Set(['cursor', 'claude', 'grok']))
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:visibleUsageProviders',
+      JSON.stringify(['claude', 'grok', 'cursor'])
+    )
+  })
+
   it('drops unknown or stale ids on load', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(
       JSON.stringify(['claude', 'opencodeGo', 'bogus', 'grok'])

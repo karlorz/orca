@@ -125,6 +125,28 @@ describe('decodeAccountsSnapshot', () => {
     expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
   })
 
+  it('validates the cursor display-only snapshot field', () => {
+    const snapshot = makeSnapshot()
+    setPath(snapshot, ['rateLimits', 'cursor'], {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 18,
+        windowMinutes: 43200,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: 100,
+      error: null,
+      status: 'ok'
+    })
+    expect(decodeAccountsSnapshot(snapshot).rateLimits.cursor?.provider).toBe('cursor')
+
+    setPath(snapshot, ['rateLimits', 'cursor', 'provider'], 'grok')
+    expect(() => decodeAccountsSnapshot(snapshot)).toThrow('Invalid accounts snapshot from host')
+  })
+
   it.each([
     ['account arrays', ['codex', 'accounts'], {}],
     ['active account IDs', ['codex', 'activeAccountId'], 42],
