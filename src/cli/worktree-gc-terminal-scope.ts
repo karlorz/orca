@@ -21,6 +21,9 @@ export function completeGcTerminalList(
 }
 
 export function terminalInventoryIsComplete(list: WorktreeGcTerminalList): boolean {
+  if (list.inventoryComplete !== undefined) {
+    return list.inventoryComplete
+  }
   if (list.truncated || list.totalCount > list.terminals.length) {
     return false
   }
@@ -67,10 +70,17 @@ export function mapRuntimeTerminalList(
     incarnationId: terminal.incarnationId,
     executionHostId: terminal.executionHostId
   }))
+  const unfiltered: WorktreeGcTerminalList = {
+    terminals: mapped,
+    truncated: result.truncated,
+    totalCount: result.totalCount,
+    hostScope: result.hostScope
+  }
   return {
     terminals: repoWorktrees ? filterTerminalsForSelectedWorktrees(mapped, repoWorktrees) : mapped,
     truncated: result.truncated,
     totalCount: result.totalCount,
-    hostScope: result.hostScope
+    hostScope: result.hostScope,
+    inventoryComplete: terminalInventoryIsComplete(unfiltered)
   }
 }

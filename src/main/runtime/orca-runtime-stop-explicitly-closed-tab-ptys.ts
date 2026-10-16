@@ -83,8 +83,25 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     return close
   }
 
-  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+  async closeTerminal(
+    handle: string,
+    options?: { expectedIncarnationId?: string }
+  ): Promise<RuntimeTerminalClose> {
     const pty = this.getLivePtyForHandle(handle)
+    if (options?.expectedIncarnationId) {
+      const liveIncarnation = pty?.pty.incarnationId
+      if (!liveIncarnation || liveIncarnation !== options.expectedIncarnationId) {
+        if (!pty) {
+          const { leaf } = this.getLiveLeafForHandle(handle)
+          const leafIncarnation = leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.incarnationId : null
+          if (!leafIncarnation || leafIncarnation !== options.expectedIncarnationId) {
+            throw new Error('terminal_handle_stale')
+          }
+        } else {
+          throw new Error('terminal_handle_stale')
+        }
+      }
+    }
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
       const closeAuthority: RuntimePtyTabCloseAuthority = {

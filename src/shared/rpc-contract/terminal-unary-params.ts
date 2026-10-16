@@ -19,6 +19,11 @@ export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
 
+export const TerminalClose = TerminalHandle.extend({
+  gcIdleTermMin: OptionalFiniteNumber,
+  gcCoordHandle: OptionalString
+})
+
 /**
  * `terminal.inspectProcess` carries one member the sibling handle methods must not: whether the
  * caller's answer decides something once, which is what licenses the host to pay for a process-table

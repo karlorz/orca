@@ -7,6 +7,7 @@ import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalClose,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
@@ -17,6 +18,7 @@ import {
   TerminalStopExact,
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { closeTerminalFromRpc } from './terminal-gc-close'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
@@ -173,14 +175,14 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.close',
     permission: 'workspace',
-    params: TerminalHandle,
+    params: TerminalClose,
     handler: async (params, context) => ({
       close: await withTerminalCloseAttribution(
         'terminal.close',
         context,
         'terminal',
         params.terminal,
-        () => context.runtime.closeTerminal(params.terminal)
+        () => closeTerminalFromRpc(context.runtime, params)
       )
     })
   }),

@@ -55,10 +55,12 @@ function createWorktreeGcRuntime(client: RuntimeClient, repo?: string): Worktree
       })
       return result.result.terminal.tail.join('\n')
     },
-    async closeTerminal(handle, expectedIncarnationId) {
+    async closeTerminal(handle, expectedIncarnationId, idleTermMin, coordHandle) {
       const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
         terminal: handle,
-        ...(expectedIncarnationId ? { expectedIncarnationId } : {})
+        ...(expectedIncarnationId ? { expectedIncarnationId } : {}),
+        ...(typeof idleTermMin === 'number' ? { gcIdleTermMin: idleTermMin } : {}),
+        ...(coordHandle ? { gcCoordHandle: coordHandle } : {})
       })
       return Boolean(result.result.close.handle)
     },

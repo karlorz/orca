@@ -1,11 +1,17 @@
-import { classifyGcTerminal, liveEvidenceBlocksGcRemoval } from './worktree-gc-eligibility'
-import { preserveGcBranchTip, pruneGitWorktrees, removeGitWorktree } from './worktree-gc-git'
+import { evaluateGcWorktree, classifyGcTerminal } from './worktree-gc-eligibility'
+import {
+  listGitWorktrees,
+  preserveGcBranchTip,
+  pruneGitWorktrees,
+  removeGitWorktree
+} from './worktree-gc-git'
 import type {
   WorktreeGcGitRunner,
+  WorktreeGcPrLookup,
   WorktreeGcProcessCwdScan,
   WorktreeGcReport,
   WorktreeGcRuntime,
-  WorktreeGcTerminalRecord
+  WorktreeGcWorktreeRecord
 } from './worktree-gc-model'
 import {
   attachedPathsFromTerminals,
@@ -13,7 +19,7 @@ import {
 } from './worktree-gc-terminal-scope'
 
 async function revalidateTerminalClose(
-  terminal: WorktreeGcTerminalRecord,
+  terminal: { handle: string; incarnationId?: string | null },
   input: {
     runtime: WorktreeGcRuntime
     nowMs: number
@@ -55,6 +61,66 @@ async function revalidateTerminalClose(
   return { close: true, incarnationId }
 }
 
+function keepWorktree(rec: WorktreeGcWorktreeRecord, reason: string): WorktreeGcWorktreeRecord {
+  rec.action = 'keep'
+  rec.reasons.push(reason)
+  return rec
+}
+
+async function revalidateWorktreeRemoval(
+  rec: WorktreeGcWorktreeRecord,
+  input: {
+    runtime: WorktreeGcRuntime
+    nowMs: number
+    listProcessCwds: () => Promise<WorktreeGcProcessCwdScan>
+    runGit: WorktreeGcGitRunner
+    listPrStates: WorktreeGcPrLookup
+  }
+): Promise<WorktreeGcWorktreeRecord> {
+  const listed = await input.runtime.listWorktrees()
+  const terminals = await input.runtime.listTerminals()
+  const processCwds = await input.listProcessCwds()
+  if (listed.truncated || !terminalInventoryIsComplete(terminals)) {
+    return keepWorktree(rec, 'terminal-list-incomplete')
+  }
+  if (!rec.repo || rec.repo === '?') {
+    return keepWorktree(rec, 'workspace-identity-changed')
+  }
+  const orca = rec.orcaId
+    ? listed.worktrees.find((worktree) => worktree.id === rec.orcaId)
+    : listed.worktrees.find((worktree) => worktree.path === rec.path)
+  if (rec.orcaId) {
+    if (!orca || orca.path !== rec.path || (rec.hostId && orca.hostId !== rec.hostId)) {
+      return keepWorktree(rec, 'workspace-identity-changed')
+    }
+  }
+  const git = (await listGitWorktrees(rec.repo, input.runGit)).find(
+    (worktree) => worktree.path === rec.path
+  )
+  if (!git) {
+    return keepWorktree(rec, 'workspace-identity-changed')
+  }
+  const fresh = await evaluateGcWorktree({
+    git,
+    repo: rec.repo,
+    orca: orca
+      ? { id: orca.id, hostId: orca.hostId, lastActivityAt: orca.lastActivityAt }
+      : undefined,
+    attachedPaths: attachedPathsFromTerminals(terminals.terminals),
+    processCwds,
+    nowMs: input.nowMs,
+    runGit: input.runGit,
+    listPrStates: input.listPrStates
+  })
+  rec.branch = fresh.branch
+  rec.head = fresh.head
+  rec.orcaId = fresh.orcaId
+  rec.hostId = fresh.hostId
+  rec.reasons = fresh.reasons
+  rec.action = fresh.action
+  return rec
+}
+
 export async function applyWorktreeGcDestructions(input: {
   report: WorktreeGcReport
   runtime: WorktreeGcRuntime
@@ -63,6 +129,7 @@ export async function applyWorktreeGcDestructions(input: {
   coordHandle: string | null
   listProcessCwds: () => Promise<WorktreeGcProcessCwdScan>
   runGit: WorktreeGcGitRunner
+  listPrStates: WorktreeGcPrLookup
 }): Promise<void> {
   for (const terminal of input.report.terminals) {
     if (terminal.action !== 'close') {
@@ -74,14 +141,21 @@ export async function applyWorktreeGcDestructions(input: {
       terminal.why = decision.why
       continue
     }
-    terminal.ok = await input.runtime.closeTerminal(terminal.handle, decision.incarnationId)
+    try {
+      terminal.ok = await input.runtime.closeTerminal(
+        terminal.handle,
+        decision.incarnationId,
+        input.idleTermMin,
+        input.coordHandle
+      )
+    } catch {
+      terminal.ok = false
+    }
+    if (!terminal.ok) {
+      terminal.action = 'keep'
+      terminal.why = 'gc-close-refused'
+    }
   }
-  const listed = await input.runtime.listWorktrees()
-  const terminals = await input.runtime.listTerminals()
-  const processCwds = await input.listProcessCwds()
-  const attached = attachedPathsFromTerminals(terminals.terminals)
-  const byId = new Map(listed.worktrees.map((worktree) => [worktree.id, worktree]))
-  const listingComplete = !listed.truncated && terminalInventoryIsComplete(terminals)
   const repos = new Set<string>()
   for (const rec of input.report.worktrees) {
     if (rec.action !== 'remove') {
@@ -90,22 +164,8 @@ export async function applyWorktreeGcDestructions(input: {
       }
       continue
     }
-    if (!listingComplete) {
-      rec.action = 'keep'
-      rec.reasons.push('terminal-list-incomplete')
-      continue
-    }
-    const orca = rec.orcaId ? byId.get(rec.orcaId) : undefined
-    const blocked = liveEvidenceBlocksGcRemoval({
-      path: rec.path,
-      attachedPaths: attached,
-      processCwds,
-      lastActivityAt: orca?.lastActivityAt,
-      nowMs: input.nowMs
-    })
-    if (blocked) {
-      rec.action = 'keep'
-      rec.reasons.push(blocked)
+    await revalidateWorktreeRemoval(rec, input)
+    if (rec.action !== 'remove') {
       continue
     }
     rec.ok =

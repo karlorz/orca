@@ -549,6 +549,7 @@ import {
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalClose,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
@@ -1250,7 +1251,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.agentStatus': TerminalHandle,
   'terminal.answerQuestion': TerminalAnswerQuestion,
   'terminal.clearBuffer': TerminalHandle,
-  'terminal.close': TerminalHandle,
+  'terminal.close': TerminalClose,
   'terminal.closeAll': TerminalCloseAll,
   'terminal.closeTab': TerminalHandle,
   'terminal.create': TerminalCreateParams,

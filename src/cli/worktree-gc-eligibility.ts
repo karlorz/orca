@@ -4,6 +4,7 @@ import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { parseGitdirMarkerPayload } from '../shared/gitdir-marker-payload'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { classifyGcTerminalIdle, isWorktreeGcBusyTail } from '../shared/worktree-gc-terminal-idle'
 import {
   countUnpushedCommits,
   isMergedIntoDefault,
@@ -11,7 +12,6 @@ import {
   shortBranchName
 } from './worktree-gc-git'
 import {
-  WORKTREE_GC_BUSY_MARKS,
   WORKTREE_GC_IDLE_MS,
   WORKTREE_GC_ORPHAN_REASON,
   type WorktreeGcGitRunner,
@@ -22,9 +22,7 @@ import {
   type WorktreeGcWorktreeRecord
 } from './worktree-gc-model'
 
-export function isWorktreeGcBusyTail(tail: string): boolean {
-  return WORKTREE_GC_BUSY_MARKS.some((mark) => tail.includes(mark))
-}
+export { isWorktreeGcBusyTail }
 
 export function classifyGcTerminal(input: {
   handle: string
@@ -37,28 +35,21 @@ export function classifyGcTerminal(input: {
   coordHandle: string | null
 }): WorktreeGcTerminalRecord {
   const title = (input.title ?? '').slice(0, 50)
-  const base = {
+  const idle = classifyGcTerminalIdle({
+    lastOutputAt: input.lastOutputAt,
+    tail: input.tail,
+    nowMs: input.nowMs,
+    idleTermMin: input.idleTermMin,
+    isCoord: Boolean(input.coordHandle && input.handle === input.coordHandle)
+  })
+  return {
     handle: input.handle,
     title,
-    worktreePath: input.worktreePath
+    worktreePath: input.worktreePath,
+    lastOutputAt: input.lastOutputAt,
+    action: idle.action,
+    why: idle.why
   }
-  if (input.coordHandle && input.handle === input.coordHandle) {
-    return { ...base, lastOutputAt: input.lastOutputAt, action: 'keep', why: 'coord' }
-  }
-  if (isWorktreeGcBusyTail(input.tail)) {
-    return { ...base, lastOutputAt: input.lastOutputAt, action: 'keep', why: 'busy' }
-  }
-  const lastOutputAt = input.lastOutputAt ?? input.nowMs
-  const idleMs = input.nowMs - lastOutputAt
-  if (idleMs < input.idleTermMin * 60 * 1000) {
-    return {
-      ...base,
-      lastOutputAt: input.lastOutputAt,
-      action: 'keep',
-      why: `recent-output(${Math.floor(idleMs / 60_000)}m)`
-    }
-  }
-  return { ...base, lastOutputAt: input.lastOutputAt, action: 'close', why: 'idle' }
 }
 
 async function pathIsDirectory(target: string): Promise<boolean> {
@@ -88,19 +79,16 @@ export async function detectOrphanGitdir(worktreePath: string): Promise<boolean>
 }
 
 async function newestGitMtimeMs(worktreePath: string): Promise<number | null> {
-  const candidates = [
-    path.join(worktreePath, '.git'),
-    path.join(worktreePath, '.git', 'HEAD'),
-    path.join(worktreePath, '.git', 'index'),
-    worktreePath
-  ]
+  // Omit index and the .git directory: this process's own `git status` refreshes them
+  // and would make an immediate apply recheck look like recent user activity.
+  const candidates = [path.join(worktreePath, '.git', 'HEAD'), worktreePath]
   let newest: number | null = null
   for (const candidate of candidates) {
     try {
       const mtimeMs = (await stat(candidate)).mtimeMs
       newest = newest === null ? mtimeMs : Math.max(newest, mtimeMs)
     } catch {
-      // Missing HEAD/index is normal for a gitfile worktree.
+      // Missing HEAD is normal for a gitfile worktree.
     }
   }
   const gitFile = path.join(worktreePath, '.git')
@@ -110,13 +98,11 @@ async function newestGitMtimeMs(worktreePath: string): Promise<number | null> {
       const marker = parseGitdirMarkerPayload(await readFile(gitFile, 'utf8'))
       if (marker) {
         const gitdir = path.isAbsolute(marker) ? marker : path.resolve(worktreePath, marker)
-        for (const name of ['HEAD', 'index']) {
-          try {
-            const mtimeMs = (await stat(path.join(gitdir, name))).mtimeMs
-            newest = newest === null ? mtimeMs : Math.max(newest, mtimeMs)
-          } catch {
-            // Linked worktrees may omit index until first use.
-          }
+        try {
+          const mtimeMs = (await stat(path.join(gitdir, 'HEAD'))).mtimeMs
+          newest = newest === null ? mtimeMs : Math.max(newest, mtimeMs)
+        } catch {
+          // Linked worktrees may omit HEAD until first checkout.
         }
       }
     }
@@ -227,35 +213,6 @@ export async function evaluateGcWorktree(input: {
   }
   rec.action = rec.reasons.length === 0 ? 'remove' : 'keep'
   return rec
-}
-
-export function liveEvidenceBlocksGcRemoval(input: {
-  path: string
-  attachedPaths: ReadonlySet<string>
-  processCwds: WorktreeGcProcessCwdScan
-  lastActivityAt?: number
-  nowMs: number
-}): string | null {
-  if (input.attachedPaths.has(input.path)) {
-    return 'terminal-attached'
-  }
-  if (input.processCwds.verdict === 'unverifiable') {
-    return 'process-cwd-unverifiable'
-  }
-  if (
-    input.processCwds.verdict === 'live' &&
-    input.processCwds.cwds.some((cwd) => cwd === input.path || isPathInsideOrEqual(input.path, cwd))
-  ) {
-    return 'process-cwd-inside'
-  }
-  if (
-    input.lastActivityAt &&
-    input.lastActivityAt > 0 &&
-    input.nowMs - input.lastActivityAt < WORKTREE_GC_IDLE_MS
-  ) {
-    return `active<24h(${Math.floor((input.nowMs - input.lastActivityAt) / 3_600_000)}h)`
-  }
-  return null
 }
 
 export function orphanWorktreeRecord(worktreePath: string): WorktreeGcWorktreeRecord {

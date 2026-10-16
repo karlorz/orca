@@ -198,7 +198,8 @@ export async function runWorktreeGc(input: RunWorktreeGcInput): Promise<Worktree
     idleTermMin: input.idleTermMin,
     coordHandle: input.coordHandle,
     listProcessCwds: input.listProcessCwds,
-    runGit
+    runGit,
+    listPrStates
   })
   await writeWorktreeGcJournal(report.journalPath, report)
   return report

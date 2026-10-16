@@ -195,7 +195,11 @@ describe('worktree gc CLI', () => {
     )
     expect(call).toHaveBeenCalledWith(
       'terminal.close',
-      expect.objectContaining({ terminal: 'term_a', expectedIncarnationId: 'inc-a' })
+      expect.objectContaining({
+        terminal: 'term_a',
+        expectedIncarnationId: 'inc-a',
+        gcIdleTermMin: 60
+      })
     )
   })
 
