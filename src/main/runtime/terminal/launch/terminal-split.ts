@@ -1,12 +1,12 @@
 import type { TerminalSplitOptions } from './terminal-split-surface'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/explicit-terminal-close-stops'
+import { OrcaRuntimeWithCloseTerminal } from '../../session-tabs/explicit-terminal-close'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { Worktree } from '../../../../shared/worktree/types'
 
-export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
+export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithCloseTerminal {
   protected abstract splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
     opts?: TerminalSplitOptions,

@@ -19,7 +19,7 @@ import {
   type TerminalOriginatingPaneHost
 } from '../../terminal-originating-pane-navigation'
 
-export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
+export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
   getSessionTerminalOwner(paneKey: string): GrokSessionTerminalOwner | null {
     const matches = [...this.ptysById.values()].filter(
       (pty) => pty.paneKey === paneKey && pty.connected
@@ -105,8 +105,25 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyRevea
       getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       readObservedAgentStatusPaneIdentity: (paneKey: string) =>
         this.readObservedAgentStatusPaneIdentityFn(paneKey),
-      getLivePtyForHandle: (handle: string) =>
-        this.getLivePtyForHandle(handle) ?? this.getLivePtyForRetainedHandle(handle),
+      getLivePtyForHandle: (handle: string) => {
+        const live = this.getLivePtyForHandle(handle) ?? this.getLivePtyForRetainedHandle(handle)
+        if (!live) {
+          return null
+        }
+        return {
+          record: { handle: live.record.handle, ptyId: live.record.ptyId },
+          pty: {
+            ptyId: live.pty.ptyId,
+            incarnationId: live.pty.incarnationId,
+            paneKey: live.pty.paneKey,
+            worktreeId: live.pty.worktreeId,
+            tabId: live.pty.tabId,
+            connected: live.pty.connected,
+            connectionId: live.pty.connectionId,
+            isWsl: live.pty.isWsl
+          }
+        }
+      },
       getRendererLeaf: (tabId: string, leafId: string) => {
         this.assertGraphReady()
         return this.leaves.get(this.getLeafKey(tabId, leafId)) ?? null
@@ -114,16 +131,17 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyRevea
       resolveWorktree: async (worktreeId: string) => {
         try {
           const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+          const rootPath = 'rootPath' in resolved ? resolved.rootPath : undefined
           return {
             id: resolved.id,
             path: resolved.git.path,
-            ...('rootPath' in resolved ? { rootPath: resolved.rootPath } : {})
+            ...(typeof rootPath === 'string' ? { rootPath } : {})
           }
         } catch {
           return null
         }
       },
-      focusTerminal: (handle: string, opts) => this.focusTerminal(handle, opts)
+      focusTerminal: (handle, options) => this.focusTerminal(handle, options)
     }
     return switchOriginatingPaneWithHost(host, target, options)
   }

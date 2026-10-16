@@ -11,7 +11,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../../../../shared/runtime-types'
 import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../../session-tabs/explicit-terminal-close-stops'
+import { OrcaRuntimeWithCloseTerminal } from '../../../session-tabs/explicit-terminal-close'
 import { TERMINAL_LIFECYCLE_METHODS } from './terminal-lifecycle-methods'
 import type { TerminalGcCloseRuntime } from './terminal-gc-close'
 
@@ -155,10 +155,7 @@ function realCloseHost(state: {
   putPty(state.incarnationId, state.lastOutputAt)
   const stopped: { ptyId: string; incarnationId?: string }[] = []
   const killed: { ptyId: string; incarnationId?: string; expectedIncarnationId?: string }[] = []
-  const runtime = Object.create(OrcaRuntimeWithStopExplicitlyClosedTabPtys.prototype) as Record<
-    string,
-    unknown
-  > &
+  const runtime = Object.create(OrcaRuntimeWithCloseTerminal.prototype) as Record<string, unknown> &
     TerminalGcCloseRuntime & {
       stopped: { ptyId: string; incarnationId?: string }[]
       killed: { ptyId: string; incarnationId?: string; expectedIncarnationId?: string }[]

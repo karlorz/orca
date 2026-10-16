@@ -91,10 +91,15 @@ export class StructuredAgentSessionControlTargets {
       this.snapshots.delete(sessionId)
       return { supported: false, reason: 'nativeMismatch' }
     }
-    const turnId = hostStructuredAgentSessionCurrentWork(
+    const currentWork = hostStructuredAgentSessionCurrentWork(
       { store: deps.store, sessions },
       sessionId
-    ).activeTurnId()
+    )
+    if (!currentWork) {
+      this.snapshots.delete(sessionId)
+      return { supported: false, reason: 'nativeMismatch' }
+    }
+    const turnId = currentWork.activeTurnId()
     if (
       turnId !== binding.turnId ||
       (turnId === null &&

@@ -7,8 +7,10 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import { Input } from '@/components/ui/input'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
+import { AutomationModelField } from './AutomationModelField'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
@@ -80,6 +82,33 @@ export function AutomationEditorSettingsSidebar({
               defaultAgent={settings?.defaultTuiAgent ?? null}
               triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
               allowNarrowTrigger
+            />
+          </Field>
+          <AutomationModelField
+            draft={draft}
+            pickerTriggerClassName={pickerTriggerClassName}
+            onDraftChange={onDraftChange}
+          />
+          <Field
+            className="mt-3"
+            label={translate(
+              'auto.components.automations.AutomationEditorSettingsSidebar.agentFlags',
+              'Agent flags'
+            )}
+            labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
+          >
+            <Input
+              value={draft.agentFlags}
+              onChange={(event) =>
+                onDraftChange((current) => ({ ...current, agentFlags: event.target.value }))
+              }
+              placeholder={translate(
+                'auto.components.automations.AutomationEditorSettingsSidebar.optionalProviderFlags',
+                'Optional provider flags'
+              )}
+              spellCheck={false}
+              autoComplete="off"
+              className="font-mono text-xs"
             />
           </Field>
           <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />

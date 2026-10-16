@@ -54,6 +54,12 @@ export function boundControlReceipt(
   return { target, clientOperationId, state }
 }
 
+function boundControlReceiptFromResult(
+  value: AgentSessionSendResult | AgentSessionCancelResult
+): AgentSessionControlReceipt | undefined {
+  return 'controlReceipt' in value ? value.controlReceipt : undefined
+}
+
 async function persistBoundControlOutcome(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -87,10 +93,13 @@ export async function observeBoundControlReceipt<
   result: AgentSessionMutationResult<T>,
   stop: boolean
 ): Promise<AgentSessionMutationResult<T>> {
-  if (!result.ok || !('controlReceipt' in result.value) || !result.value.controlReceipt) {
+  if (!result.ok) {
     return result
   }
-  const receipt = result.value.controlReceipt
+  const receipt = boundControlReceiptFromResult(result.value)
+  if (!receipt) {
+    return result
+  }
   if (receipt.state !== 'accepted' && receipt.state !== 'stopAccepted') {
     if (stop) {
       await persistBoundControlOutcome(context, caller, params.envelope, {

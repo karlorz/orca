@@ -7,7 +7,7 @@ export type TerminalGcCloseStopOptions = {
 }
 
 export function capturePtyIncarnationIds(
-  ptysById: { get(id: string): { incarnationId?: string } | undefined },
+  ptysById: { get(id: string): { incarnationId?: string | null } | undefined },
   ptyIds: readonly string[]
 ): Map<string, string> {
   const captured = new Map<string, string>()
@@ -61,7 +61,7 @@ export function gcCloseRefuseError(why: string, gcIdleTermMin: number | undefine
 
 export type GcCloseStopHost = {
   ptysById: {
-    get(id: string): { incarnationId?: string; lastOutputAt?: number | null } | undefined
+    get(id: string): { incarnationId?: string | null; lastOutputAt?: number | null } | undefined
   }
   stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
