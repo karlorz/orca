@@ -7,6 +7,7 @@ import {
   fetchHomeUpdateResponse,
   formatForkUpdateRequestError,
   homeUpdateRequestHeaders,
+  readHomeUpdateBodySnippet,
   requireHomeUpdateResponse
 } from './home-appimage-release-request'
 
@@ -79,6 +80,22 @@ describe('home AppImage GitHub request helper', () => {
         'https://release-assets.githubusercontent.com/github-production-release-asset/1?token=x'
       ).hostname
     ).toBe('release-assets.githubusercontent.com')
+  })
+
+  it('reads only a bounded prefix of a large error body for the snippet', async () => {
+    let pulled = 0
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1
+        controller.enqueue(new TextEncoder().encode('a'.repeat(1024)))
+        if (pulled > 64) {
+          controller.close()
+        }
+      }
+    })
+    const snippet = await readHomeUpdateBodySnippet(new Response(stream, { status: 500 }))
+    expect(snippet.length).toBeLessThanOrEqual(180)
+    expect(pulled).toBeLessThanOrEqual(8)
   })
 
   it('throws a diagnostic error on a non-OK API response', async () => {

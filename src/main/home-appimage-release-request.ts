@@ -1,5 +1,6 @@
-const MAX_REDIRECTS = 8
+export const HOME_UPDATE_MAX_REDIRECTS = 8
 const BODY_SNIPPET_CHARS = 180
+const BODY_SNIPPET_MAX_BYTES = 4 * 1024
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const GITHUB_RELEASE_CDN_HOSTS = new Set([
   'objects.githubusercontent.com',
@@ -67,9 +68,47 @@ export function formatForkUpdateRequestError(url: string, status: number, snippe
   return `Fork update request failed (${status}) ${url}${body}`
 }
 
+async function readHomeUpdateBodyPrefix(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.body) {
+    return new TextEncoder().encode((await response.text()).slice(0, maxBytes))
+  }
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read()
+      if (done || !value) {
+        break
+      }
+      const take = value.subarray(0, maxBytes - total)
+      chunks.push(take)
+      total += take.byteLength
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    try {
+      reader.releaseLock()
+    } catch {
+      // cancel() already released the lock on some runtimes.
+    }
+  }
+  const output = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return output
+}
+
 export async function readHomeUpdateBodySnippet(response: Response): Promise<string> {
   try {
-    return (await response.text()).replace(/\s+/g, ' ').trim().slice(0, BODY_SNIPPET_CHARS)
+    return new TextDecoder()
+      .decode(await readHomeUpdateBodyPrefix(response, BODY_SNIPPET_MAX_BYTES))
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, BODY_SNIPPET_CHARS)
   } catch {
     return ''
   }
@@ -82,7 +121,7 @@ export async function fetchHomeUpdateResponse(
 ): Promise<Response> {
   const signal = AbortSignal.timeout(timeoutMs)
   let current = assertHomeUpdateUrl(url).href
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+  for (let hop = 0; hop <= HOME_UPDATE_MAX_REDIRECTS; hop++) {
     const response = await fetchImpl(current, {
       method: 'GET',
       redirect: 'manual',

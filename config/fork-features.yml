@@ -10,7 +10,7 @@ fork:
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
   - id: linux-home-appimage-update-check
-    title: Home AppImage update-check diagnostics, atom fallback, identity heal, and skip fork agent-state-rules fetch
+    title: Home AppImage update-check diagnostics, atom fallback, fail-closed identity, and skip fork agent-state-rules fetch
     kind: product
     status: landed
     paths:
@@ -19,6 +19,8 @@ features:
       - src/main/home-appimage-release-policy.ts
       - src/main/home-appimage-release-request.ts
       - src/main/home-appimage-release-discovery.ts
+      - src/main/home-appimage-electron-fetch.ts
+      - src/main/host/electron-proxy-login-fetch.ts
       - src/main/orca-home-appimage-install.ts
       - src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
       - config/scripts/install-orca-home-appimage.sh

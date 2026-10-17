@@ -9,6 +9,7 @@ import {
 import {
   HOME_RELEASES_API_URL,
   fetchHomeUpdateResponse,
+  formatForkUpdateRequestError,
   readHomeUpdateBodySnippet,
   requireHomeUpdateResponse,
   type HomeUpdateFetch
@@ -62,16 +63,16 @@ async function discoverFromAtom(
     ).filter((tag) => compareHomeReleaseTags(tag, runningTag) > 0)
     for (const tag of tags.slice(0, MAX_ATOM_PROBE_TAGS)) {
       const release = homeReleaseFromDesktopTag(tag)
-      const sums = await fetchHomeUpdateResponse(
-        fetchImpl,
-        homeReleaseAssetUrl(release, 'SHA256SUMS.txt'),
-        DEFAULT_FETCH_TIMEOUT_MS
-      )
+      const sumsUrl = homeReleaseAssetUrl(release, 'SHA256SUMS.txt')
+      const sums = await fetchHomeUpdateResponse(fetchImpl, sumsUrl, DEFAULT_FETCH_TIMEOUT_MS)
       if (sums.ok) {
         await sums.body?.cancel().catch(() => undefined)
         return { ok: true, release }
       }
-      await readHomeUpdateBodySnippet(sums)
+      const snippet = await readHomeUpdateBodySnippet(sums)
+      if (sums.status !== 404) {
+        return { ok: false, error: formatForkUpdateRequestError(sumsUrl, sums.status, snippet) }
+      }
     }
     return { ok: true, release: null }
   } catch (error) {

@@ -8,6 +8,7 @@ import {
   reconcileHomeAppImage,
   recoverHomeAppImage,
   verifyHomeAppImage,
+  verifyInstalledHomeAppImage,
   homeAppImageDigest
 } from './orca-home-appimage-install'
 
@@ -134,7 +135,7 @@ describe('shared home AppImage transaction and pin reconciliation', () => {
     expect(identity).toEqual({ tag: 'v1.4.227-6', sha256: next.sha256 })
     expect(await readFile(path.join(root, 'appimage.sha256'), 'utf8')).toContain(next.sha256)
   })
-  it('heals a stale installed-release.json when pin and checksum match the image', async () => {
+  it('does not heal a stale installed-release.json from a local pin and checksum', async () => {
     const root = await fixture()
     const next = await stage(root, 'next')
     await commitHomeAppImage(root, next.directory, 'v1.4.227-6', extract)
@@ -142,14 +143,48 @@ describe('shared home AppImage transaction and pin reconciliation', () => {
       path.join(root, 'installed-release.json'),
       JSON.stringify({ tag: 'v1.4.224-6', sha256: 'a'.repeat(64) })
     )
-    expect(await reconcileHomeAppImage(root, 'v1.4.224-6', extract)).toEqual({
-      tag: 'v1.4.227-6',
-      sha256: next.sha256
-    })
+    await expect(reconcileHomeAppImage(root, 'v1.4.224-6', extract)).rejects.toThrow(
+      'differs from its verified release identity'
+    )
     expect(JSON.parse(await readFile(path.join(root, 'installed-release.json'), 'utf8'))).toEqual({
-      tag: 'v1.4.227-6',
-      sha256: next.sha256
+      tag: 'v1.4.224-6',
+      sha256: 'a'.repeat(64)
     })
+  })
+  it('does not heal missing or corrupt identity from a matching pin and checksum', async () => {
+    const missing = await fixture()
+    const installed = await stage(missing, 'next')
+    await commitHomeAppImage(missing, installed.directory, 'v1.4.227-6', extract)
+    await rm(path.join(missing, 'installed-release.json'))
+    await expect(reconcileHomeAppImage(missing, 'v1.4.227-6', extract)).rejects.toThrow('disagree')
+    const corrupt = await fixture()
+    const current = await stage(corrupt, 'current')
+    await commitHomeAppImage(corrupt, current.directory, 'v1.4.227-6', extract)
+    await writeFile(path.join(corrupt, 'installed-release.json'), '{not json')
+    await expect(reconcileHomeAppImage(corrupt, 'v1.4.227-6', extract)).rejects.toThrow('corrupt')
+  })
+  it('does not heal a bumped pin and local checksum over a valid identity', async () => {
+    const root = await fixture()
+    const original = await stage(root, 'original')
+    await commitHomeAppImage(root, original.directory, 'v1.4.227-6', extract)
+    const swapped = await stage(root, 'swapped bytes')
+    await writeFile(path.join(root, 'orca-linux.AppImage'), 'swapped bytes')
+    await chmod(path.join(root, 'orca-linux.AppImage'), 0o755)
+    await writeFile(path.join(root, 'release-tag'), 'v1.4.227-7\n')
+    await writeFile(path.join(root, 'appimage.sha256'), `${swapped.sha256}  orca-linux.AppImage\n`)
+    await expect(reconcileHomeAppImage(root, 'v1.4.227-6', extract)).rejects.toThrow(
+      'differs from its verified release identity'
+    )
+  })
+  it('rejects a same-tag byte swap during installed-image verification', async () => {
+    const root = await fixture()
+    const original = await stage(root, 'original')
+    await commitHomeAppImage(root, original.directory, 'v1.4.227-6', extract)
+    const swapped = await stage(root, 'swapped bytes')
+    await writeFile(path.join(root, 'orca-linux.AppImage'), 'swapped bytes')
+    await chmod(path.join(root, 'orca-linux.AppImage'), 0o755)
+    await writeFile(path.join(root, 'appimage.sha256'), `${swapped.sha256}  orca-linux.AppImage\n`)
+    await expect(verifyInstalledHomeAppImage(root, extract)).rejects.toThrow('disagree')
   })
   it('does not heal a same-tag byte swap of the installed image', async () => {
     const root = await fixture()
