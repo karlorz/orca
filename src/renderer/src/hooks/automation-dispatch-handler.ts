@@ -5,6 +5,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
+import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchRequest,
@@ -164,10 +165,19 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+    // Fork: per-automation model/effort/profile and agent flags.
+    const modelSessionOptions = buildAutomationModelLaunchPreferences(
+      automation.agentId,
+      automation.model,
+      automation.reasoningEffort,
+      automation.agentProfile,
+      automation.agentFlags
+    )
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
+      ...(modelSessionOptions ? { sessionOptions: modelSessionOptions } : {}),
       ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,

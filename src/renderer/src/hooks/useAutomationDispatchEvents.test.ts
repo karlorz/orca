@@ -1,6 +1,7 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
 
 const mockDispatchEvent = vi.fn()
@@ -255,6 +256,35 @@ describe('useAutomationDispatchEvents setup launch', () => {
         worktreeId: 'wt-created'
       })
     )
+  })
+
+  it('passes per-automation model, effort and profile into the background launch', async () => {
+    await registerAndDispatch(
+      makeAutomation({
+        agentId: 'grok',
+        model: 'flash-max',
+        reasoningEffort: 'xhigh',
+        agentProfile: 'minimal'
+      })
+    )
+
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'grok',
+        sessionOptions: buildAutomationModelLaunchPreferences(
+          'grok',
+          'flash-max',
+          'xhigh',
+          'minimal'
+        )
+      })
+    )
+  })
+
+  it('omits session options when the automation has no model pin', async () => {
+    await registerAndDispatch()
+
+    expect(mockLaunchAgentBackgroundSession.mock.calls[0]?.[0]).not.toHaveProperty('sessionOptions')
   })
 
   it('does not rerun setup for existing-worktree automations', async () => {
