@@ -31,7 +31,7 @@ async function fixture(protocol = 44) {
     }))
   }
   const statuses: UpdateStatus[] = []
-  const fetch = vi.fn(async (url: string) => {
+  const fetch = vi.fn(async (url: string, _init?: RequestInit) => {
     if (url.includes('api.github.com')) {
       return Response.json([release])
     }
