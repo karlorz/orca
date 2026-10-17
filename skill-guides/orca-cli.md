@@ -22,6 +22,25 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Verify launch placement
+
+For a named target, discover its full ID with `ORCA worktree list --json`, then
+inspect host, path, and branch (when Git) with `ORCA worktree show --worktree
+id:<full-id> --json`. Pass that exact selector to existing-workspace launches;
+select an exact repo before new-worktree creation in another project. For an
+existing terminal, verify its workspace with `terminal show` before sending work.
+Do not infer placement from cwd or absolute paths in a task prompt. In particular,
+orchestration `current` means the coordinator's recorded workspace and can differ
+from shell cwd or `worktree current`. Keep caller identity intact. Coordinator
+identity and Run notification routing live in the orchestration skill.
+
+Verify the launch receipt's workspace and returned handle before follow-ups; use
+`worktree show`, `terminal show`, or `orchestration worker-show` if needed. Require
+the receiving agent to verify cwd/workspace before its first edit, using Git
+top-level/branch only when Git applies. On mismatch, stop further work and use the
+appropriate recovery flow; confirm the original editor stopped before replacing
+it. Absolute-path edits are not a workaround for launching in the wrong workspace.
+
 ## Tasks inbox
 
 The desktop GitHub Tasks inbox (the screen labeled GitHub · Local Mac) is part of this skill. It is not an orchestration task, a wiki work item, or a Linear issue. Do not use `ORCA orchestration task-create` to list or open it.
@@ -119,7 +138,9 @@ Selectors:
 
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
+- `worktree current` reports the enclosing workspace; do not generalize its cwd
+  resolution to other commands. Orchestration `--worktree current` means the
+  coordinator's recorded workspace. Use verified exact IDs for named targets.
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
@@ -147,7 +168,7 @@ ORCA worktree create --name task --run-hooks --json
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
-- `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
+- `worktree create` makes a new checkout. For a fresh agent in an existing checkout, use `ORCA agent launch --agent codex --worktree id:<verified-full-workspace-id> --json`.
 
 ## Review and issue references
 

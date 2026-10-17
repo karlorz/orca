@@ -27,13 +27,13 @@ otherwise omit it so the worker inherits the user's configured agent default.
 Add `--effort` only when that model supports it:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
-ORCA orchestration worker-start --task <task_id> --worktree current --agent muse --model muse-spark-1.3 --json
+ORCA orchestration worker-start --task <task_id> --worktree id:<verified-full-workspace-id> --agent claude --model opus --effort high --json
+ORCA orchestration worker-start --task <task_id> --worktree id:<verified-full-workspace-id> --agent muse --model muse-spark-1.3 --json
 ```
 
 OpenCode also accepts `--model` in an existing worktree when the execution host
 verifies its CLI version and model availability. Creating a new worktree with an
-OpenCode model override is unsupported; use `--worktree current` or an existing
+OpenCode model override is unsupported; use a verified exact existing
 worktree selector, or omit `--model`. OpenCode effort is unsupported. Omit the
 model to inherit its configuration; unsupported or unknown hosts refuse the
 override explicitly.
@@ -51,9 +51,10 @@ transfer cleanup ownership to the new Dispatch:
 
 ```text
 ORCA orchestration worker-show --dispatch <dispatch_id> --json
-ORCA orchestration worker-start --task <next_task_id> --terminal <agent_terminal_handle> --json
+ORCA orchestration worker-start --task <next_task_id> --worktree id:<verified-full-workspace-id> --terminal <agent_terminal_handle> --json
 ```
 
+Verify that the proven terminal belongs to that exact workspace before reuse.
 Otherwise explicitly retain or release the settled worker. Do not leave it live
 only to inspect output; archived output remains available through `worker-read`.
 

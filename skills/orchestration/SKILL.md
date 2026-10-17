@@ -64,3 +64,25 @@ and retry. If it fails with `runtime_access_denied`, your sandbox blocked the co
 re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
 `skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
 read-only discovery and do not guess unsupported commands.
+
+## Verify the target before dispatch
+
+For a named repository/workspace, discover its full ID with `ORCA worktree list
+--json`, inspect it with `ORCA worktree show --worktree id:<full-id> --json`, and
+pass that exact selector to `worker-start`. Check host, path, and branch (when
+Git). `--worktree current` and an omitted selector mean the coordinator's recorded
+workspace, not shell cwd; `worktree current` can report a different workspace.
+Absolute paths in a Task spec do not select placement. Do not change caller
+identity to force it. Verify the returned workspace and handle before follow-up
+work, and require the worker to verify cwd/workspace before editing. On mismatch,
+use lifecycle recovery and confirm the original editor has stopped before any
+replacement; do not continue via absolute paths. This guard also applies when
+an older bundled guide uses `current` examples.
+
+Also verify the coordinator's own identity before `run-create` or `run-use`.
+Inspect the injected session or `ORCA_TERMINAL_HANDLE` and its workspace; inherited
+environment is not proof this agent owns that terminal. Run notifications follow
+the coordinator binding, independently of worker placement. If it names another
+live session, do not consume its inbox or impersonate it with flags/environment.
+Launch a dedicated coordinator in the verified target and have it bind the Run
+from its own identity; verify `run-show` before claiming routing is repaired.

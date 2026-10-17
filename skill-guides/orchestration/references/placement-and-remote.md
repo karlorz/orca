@@ -5,14 +5,18 @@ WSL, or another connected Orca server.
 
 ## Placement choices
 
-A fresh worker means a fresh agent terminal, not a new Git worktree. Use the
-current or an exact existing workspace by default. Create a worktree only when
+A fresh worker means a fresh agent terminal, not a new Git worktree. Discover and
+verify the intended existing workspace, then pass its exact selector by default.
+For orchestration, `current` is the coordinator's recorded workspace, not shell
+cwd; a `worktree current` result or absolute task paths cannot override it.
+Create a worktree only when
 the user requested one or a concrete checkout or filesystem conflict makes
 sharing unsafe.
 
 ```text
-# Current workspace; setup is not rerun.
-ORCA orchestration worker-start --task <task_id> --worktree current --agent codex --json
+# Verified existing workspace; setup is not rerun.
+ORCA worktree show --worktree id:<verified-full-workspace-id> --json
+ORCA orchestration worker-start --task <task_id> --worktree id:<verified-full-workspace-id> --agent codex --json
 
 # Stacked child worktree.
 ORCA orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
@@ -24,6 +28,14 @@ ORCA orchestration worker-start --task <task_id> --worktree new-top-level --name
 Current and exact existing workspaces create a fresh terminal unless
 `--terminal` is explicit. Folder workspaces are first-class; do not invoke Git
 or require worktree lineage when the selected workspace is a folder.
+
+Compare the launch receipt's resolved workspace and handle against the intended
+host/path (and branch for Git); inspect `worker-show` if needed. The worker must
+verify its cwd/workspace before editing. On mismatch, use lifecycle recovery and
+prove the original editor stopped before replacement; never work around wrong
+placement with absolute paths. For `new-child`, verify the coordinator workspace
+is the intended parent first; use an exact repo for independent creation when
+the coordinator belongs to another project.
 
 Register a folder workspace through project setup. `repo add --path <dir>`
 requires a valid Git repository and rejects a plain directory:
