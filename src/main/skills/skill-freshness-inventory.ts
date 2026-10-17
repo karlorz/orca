@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import type {
   SkillFreshnessInstallation,
-  SkillFreshnessInventory
+  SkillFreshnessInventory,
+  SkillFreshnessScanIssue
 } from '../../shared/skill-freshness'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { loadSkillBundleManifest } from './skill-bundle-artifacts'
@@ -13,7 +14,6 @@ import {
   classifyHomeSkillCandidate,
   classifyUnsupportedSkillCandidate,
   dedupeSkillFreshnessPlacements,
-  observeSkillFreshnessInstallation,
   type CandidateLstat
 } from './skill-freshness-placement-observation'
 import { scanKnownPluginSkillCandidates } from './skill-plugin-cache-scan'
@@ -29,6 +29,26 @@ export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
     scanned: roots.slice(0, MAXIMUM_REPOSITORY_SKILL_ROOTS),
     omitted: roots.slice(MAXIMUM_REPOSITORY_SKILL_ROOTS)
   }
+}
+
+async function presentRepositorySkillRoots(
+  roots: readonly SkillScanRoot[],
+  candidateLstat: CandidateLstat
+): Promise<SkillScanRoot[]> {
+  const presence = await Promise.all(
+    roots.map(async (root) => {
+      try {
+        const stats = await candidateLstat(root.path)
+        return stats.isDirectory() || stats.isSymbolicLink() ? root : null
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+          return null
+        }
+        return root
+      }
+    })
+  )
+  return presence.filter((root): root is SkillScanRoot => root !== null)
 }
 
 export async function inventorySkillFreshness(args: {
@@ -56,13 +76,13 @@ export async function inventorySkillFreshness(args: {
   const roots = buildSkillDiscoverySources(discoveryArgs)
   const homeRoots = roots.filter((root) => root.sourceKind === 'home')
   const allRepoRoots = roots.filter((root) => root.sourceKind === 'repo')
-  const { scanned: repoRoots, omitted: omittedRepoRoots } = boundRepositorySkillRoots(allRepoRoots)
   const pluginRoots = roots.filter((root) => root.sourceKind === 'plugin')
   const canonicalRootPath = homeRoots.find((root) => root.id === 'home-agents')?.path
   if (!canonicalRootPath) {
     throw new Error('Missing canonical agent skills root')
   }
 
+  const candidateLstat = args.candidateLstat ?? ((path) => lstat(path))
   const homeTasks = manifest.skills.flatMap((current) =>
     homeRoots.map(
       (root) => () =>
@@ -71,17 +91,30 @@ export async function inventorySkillFreshness(args: {
           current,
           lockSource: lockSourceOf(current.name),
           canonicalRootPath,
-          candidateLstat: args.candidateLstat ?? ((path) => lstat(path))
+          candidateLstat
         })
     )
   )
-  // Why: each observation may retain the package byte ceiling while hashing;
-  // launch/focus scans must not fan out across every known placement.
-  const homeInstallations = (await runSkillCandidateTasks(homeTasks)).filter(
-    (installation): installation is SkillFreshnessInstallation => installation !== null
-  )
-
-  const candidateLstat = args.candidateLstat ?? ((path) => lstat(path))
+  const knownSkillNames = new Set(currentByName.keys())
+  // Why: presence, home hashing, and the plugin walk do not depend on each
+  // other. The 128-root cap only applies to repo folders that actually exist;
+  // missing provider roots used to exhaust it and show up as inaccessible copies.
+  const [presentRepoRoots, homeInstallations, pluginScans] = await Promise.all([
+    presentRepositorySkillRoots(allRepoRoots, candidateLstat),
+    runSkillCandidateTasks(homeTasks).then((results) =>
+      results.filter(
+        (installation): installation is SkillFreshnessInstallation => installation !== null
+      )
+    ),
+    Promise.all(
+      pluginRoots.map(async (root) => ({
+        root,
+        scan: await scanKnownPluginSkillCandidates(root.path, knownSkillNames)
+      }))
+    )
+  ])
+  const { scanned: repoRoots, omitted: omittedRepoRoots } =
+    boundRepositorySkillRoots(presentRepoRoots)
   const repoTasks = manifest.skills.flatMap((current) =>
     repoRoots.map(
       (root) => () =>
@@ -94,35 +127,19 @@ export async function inventorySkillFreshness(args: {
         })
     )
   )
-  // Why: stored repositories can grow without bound. If the probe budget is
-  // exhausted, one sentinel per name preserves safety without hashing more packages.
-  const omittedRepoTasks =
-    omittedRepoRoots.length === 0
+  const omittedRoot = omittedRepoRoots[0]
+  const repositoryLimitIssues: SkillFreshnessScanIssue[] =
+    omittedRoot === undefined
       ? []
-      : manifest.skills.map(
-          (current) => () =>
-            observeSkillFreshnessInstallation({
-              current,
-              lockSource: lockSourceOf(current.name),
-              rootId: 'repo-scan-limit',
-              providers: [...new Set(omittedRepoRoots.flatMap((root) => root.providers))],
-              sourceKind: 'repo',
-              sourceLabel: 'Additional repositories',
-              unresolvedPath: omittedRepoRoots[0]?.path ?? 'repo-scan-limit',
-              topology: {
-                topology: 'repo-scope',
-                resolvedPath: null,
-                identity: null,
-                errorCategory: 'repository-scan-limit'
-              }
-            })
-        )
-  const pluginScans = await Promise.all(
-    pluginRoots.map(async (root) => ({
-      root,
-      scan: await scanKnownPluginSkillCandidates(root.path, new Set(currentByName.keys()))
-    }))
-  )
+      : [
+          {
+            rootId: 'repo-scan-limit',
+            sourceLabel: 'Additional repositories',
+            path: omittedRoot.path,
+            reason: 'repository-limit',
+            errorCode: null
+          }
+        ]
   const pluginTasks = pluginScans.flatMap(({ root, scan }) =>
     scan.candidates.flatMap((candidate) => {
       const current = currentByName.get(candidate.name)
@@ -140,15 +157,18 @@ export async function inventorySkillFreshness(args: {
         : []
     })
   )
-  const scanIssues = pluginScans.flatMap(({ root, scan }) =>
-    scan.issues.map((issue) => ({
-      rootId: root.id,
-      sourceLabel: root.label,
-      ...issue
-    }))
-  )
+  const scanIssues = [
+    ...repositoryLimitIssues,
+    ...pluginScans.flatMap(({ root, scan }) =>
+      scan.issues.map((issue) => ({
+        rootId: root.id,
+        sourceLabel: root.label,
+        ...issue
+      }))
+    )
+  ]
   const unsupportedInstallations = (
-    await runSkillCandidateTasks([...repoTasks, ...omittedRepoTasks, ...pluginTasks])
+    await runSkillCandidateTasks([...repoTasks, ...pluginTasks])
   ).filter((installation): installation is SkillFreshnessInstallation => installation !== null)
   const installations = dedupeSkillFreshnessPlacements([
     ...homeInstallations,

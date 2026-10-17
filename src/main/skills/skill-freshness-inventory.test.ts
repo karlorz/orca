@@ -344,6 +344,7 @@ describe('read-only skill freshness inventory', () => {
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
     const repoPath = join(test.root, 'repo')
     const inaccessiblePath = join(repoPath, '.agents', 'skills', 'orca-cli')
+    await mkdir(join(repoPath, '.agents', 'skills'), { recursive: true })
 
     const inventory = await inventorySkillFreshness({
       homeDir: test.homeDir,
@@ -437,22 +438,47 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations.some((entry) => entry.unresolvedPath === emptyRoot)).toBe(false)
   })
 
-  it('reports the repository scan limit without withholding the global update', async () => {
+  it('does not invent inaccessible copies from missing project provider folders', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
     const repos = Array.from(
-      { length: MAXIMUM_REPOSITORY_SKILL_ROOTS / 2 + 1 },
+      { length: 3 },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan reads only id and path.
       (_, index) => ({ id: `repo-${index}`, path: join(test.root, `repo-${index}`) }) as Repo
     )
 
     const inventory = await test.scan({ repos })
 
-    expect(inventory.installations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ errorCategory: 'repository-scan-limit', status: 'inaccessible' })
-      ])
+    expect(inventory.installations.every((entry) => entry.topology !== 'repo-scope')).toBe(true)
+    expect(inventory.scanIssues).toEqual([])
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('reports an existing-root repository scan limit without a fake skill location', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const repos = Array.from(
+      { length: MAXIMUM_REPOSITORY_SKILL_ROOTS + 1 },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scan reads only id and path.
+      (_, index) => ({ id: `repo-${index}`, path: join(test.root, `repo-${index}`) }) as Repo
     )
+    await Promise.all(
+      repos.map((repo) => mkdir(join(repo.path, '.agents', 'skills'), { recursive: true }))
+    )
+
+    const inventory = await test.scan({ repos })
+
+    expect(
+      inventory.installations.some((entry) => entry.errorCategory === 'repository-scan-limit')
+    ).toBe(false)
+    expect(inventory.scanIssues).toEqual([
+      expect.objectContaining({
+        rootId: 'repo-scan-limit',
+        sourceLabel: 'Additional repositories',
+        reason: 'repository-limit',
+        errorCode: null
+      })
+    ])
     expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
   })
 

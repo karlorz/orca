@@ -277,7 +277,12 @@ export async function scanKnownPluginSkillCandidates(
           if (directoryEntry) {
             const resolvedEntry = await realpath(entryPath)
             if (resolvedRoot !== null && !isWithinRoot(resolvedRoot, resolvedEntry)) {
-              recordIssue(entryPath, 'outside-root')
+              // Why: Codex's bundled Chrome plugin is `cache/.../chrome/latest` →
+              // `.codex/.tmp/...`. That is a vendor package, not a skill. Listing
+              // every such link filled the update dialog with packaging noise.
+              if (withinDeclaredSkillRoot || knownNames.has(entry.name)) {
+                recordIssue(entryPath, 'outside-root')
+              }
               continue
             }
           }

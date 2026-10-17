@@ -620,18 +620,21 @@ describe('plugin skill candidate scan', () => {
 
   // Why: linking skills out of the cache is ordinary vendor packaging, so 'outside-root' is
   // what fills the display budget on a real install — before any read failure is reached.
-  async function createCacheBehindSpentBudget(prefix: string, loopCount: number): Promise<string> {
+  async function createCacheBehindSpentBudget(
+    prefix: string,
+    loopCount: number
+  ): Promise<{ root: string; knownNames: Set<string> }> {
     const parent = await mkdtemp(join(tmpdir(), prefix))
     temporaryDirectories.push(parent)
     const root = join(parent, 'cache')
     const outside = join(parent, 'outside')
     await mkdir(outside, { recursive: true })
     await mkdir(root, { recursive: true })
-    await Promise.all(
-      Array.from({ length: MAXIMUM_PLUGIN_SCAN_ISSUES }, (_, index) =>
-        symlink(outside, join(root, `aa-linked-${index.toString().padStart(2, '0')}`), 'dir')
-      )
+    const linkedNames = Array.from(
+      { length: MAXIMUM_PLUGIN_SCAN_ISSUES },
+      (_, index) => `aa-linked-${index.toString().padStart(2, '0')}`
     )
+    await Promise.all(linkedNames.map((name) => symlink(outside, join(root, name), 'dir')))
     // Sorts after the links, so these are read once the budget is already spent.
     await Promise.all(
       Array.from({ length: loopCount }, (_, index) => {
@@ -639,15 +642,18 @@ describe('plugin skill candidate scan', () => {
         return symlink(name, join(root, name), 'dir')
       })
     )
-    return root
+    return { root, knownNames: new Set(['orca-cli', ...linkedNames]) }
   }
 
   it.skipIf(process.platform === 'win32')(
     'keeps a read failure that lands after the display budget is spent',
     async () => {
-      const root = await createCacheBehindSpentBudget('orca-plugin-attention-eviction-', 1)
+      const { root, knownNames } = await createCacheBehindSpentBudget(
+        'orca-plugin-attention-eviction-',
+        1
+      )
 
-      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, knownNames)
 
       // Why: a read failure is the only issue that can take the headline off "all up to
       // date". Evicting it for display budget reports all-clear over a path that could be
@@ -669,12 +675,12 @@ describe('plugin skill candidate scan', () => {
   it.skipIf(process.platform === 'win32')(
     'bounds how many read failures outrank the display budget',
     async () => {
-      const root = await createCacheBehindSpentBudget(
+      const { root, knownNames } = await createCacheBehindSpentBudget(
         'orca-plugin-attention-bound-',
         MAXIMUM_PLUGIN_SCAN_ATTENTION_ISSUES + 4
       )
 
-      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+      const result = await scanKnownPluginSkillCandidates(root, knownNames)
 
       // Why: outranking the budget is what makes this class unbounded, so a tree full of
       // unreadable folders must not be able to pin one issue per folder in memory.
@@ -823,6 +829,53 @@ describe('plugin skill candidate scan', () => {
       await mkdir(join(outside, 'orca-cli'), { recursive: true })
       await mkdir(root, { recursive: true })
       await writeFile(join(outside, 'orca-cli', 'SKILL.md'), '# Orca CLI\n')
+      await symlink(outside, linkPath, 'dir')
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      expect(result).toEqual({
+        candidates: [],
+        issues: []
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not list a vendor package symlink that is not a known skill',
+    async () => {
+      const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-chrome-latest-'))
+      temporaryDirectories.push(parent)
+      const root = join(parent, 'cache')
+      const latest = join(root, 'openai-bundled', 'chrome', 'latest')
+      const outside = join(
+        parent,
+        '.tmp',
+        'bundled-marketplaces',
+        'openai-bundled',
+        'plugins',
+        'chrome'
+      )
+      await mkdir(join(root, 'openai-bundled', 'chrome'), { recursive: true })
+      await mkdir(outside, { recursive: true })
+      await symlink(outside, latest, 'dir')
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      expect(result).toEqual({ candidates: [], issues: [] })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'records an outside-root skip for a known-name skill symlink',
+    async () => {
+      const parent = await mkdtemp(join(tmpdir(), 'orca-plugin-known-outside-'))
+      temporaryDirectories.push(parent)
+      const root = join(parent, 'cache')
+      const outside = join(parent, 'outside')
+      const linkPath = join(root, 'orca-cli')
+      await mkdir(outside, { recursive: true })
+      await mkdir(root, { recursive: true })
+      await writeFile(join(outside, 'SKILL.md'), '# Orca CLI\n')
       await symlink(outside, linkPath, 'dir')
 
       const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))

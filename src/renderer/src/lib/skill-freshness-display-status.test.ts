@@ -135,6 +135,7 @@ describe('getSkillFreshnessDisplayStatus', () => {
     ['candidate-limit'],
     ['manifest-limit'],
     ['issue-limit'],
+    ['repository-limit'],
     // Why: a vendor linking its skills out of the cache is a packaging choice, not a
     // fault the user can clear — deleting the link only makes the package manager
     // recreate it. Amber here is clean-on-main turned permanently amber.
