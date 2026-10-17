@@ -151,6 +151,31 @@ describe('shared home AppImage transaction and pin reconciliation', () => {
       sha256: next.sha256
     })
   })
+  it('does not heal a same-tag byte swap of the installed image', async () => {
+    const root = await fixture()
+    const original = await stage(root, 'original')
+    await commitHomeAppImage(root, original.directory, 'v1.4.227-6', extract)
+    const swapped = await stage(root, 'swapped bytes')
+    await writeFile(path.join(root, 'orca-linux.AppImage'), 'swapped bytes')
+    await chmod(path.join(root, 'orca-linux.AppImage'), 0o755)
+    await writeFile(path.join(root, 'appimage.sha256'), `${swapped.sha256}  orca-linux.AppImage\n`)
+    await expect(reconcileHomeAppImage(root, 'v1.4.227-6', extract)).rejects.toThrow(
+      'differs from its verified release identity'
+    )
+  })
+  it('does not heal a pin older than the verified JSON identity', async () => {
+    const root = await fixture()
+    const current = await stage(root, 'current')
+    await commitHomeAppImage(root, current.directory, 'v1.4.227-6', extract)
+    const older = await stage(root, 'older image')
+    await writeFile(path.join(root, 'orca-linux.AppImage'), 'older image')
+    await chmod(path.join(root, 'orca-linux.AppImage'), 0o755)
+    await writeFile(path.join(root, 'release-tag'), 'v1.4.224-6\n')
+    await writeFile(path.join(root, 'appimage.sha256'), `${older.sha256}  orca-linux.AppImage\n`)
+    await expect(reconcileHomeAppImage(root, 'v1.4.224-6', extract)).rejects.toThrow(
+      'differs from its verified release identity'
+    )
+  })
   it('fails closed on missing identity or an installed downgrade', async () => {
     const root = await fixture()
     const old = await stage(root, 'old')

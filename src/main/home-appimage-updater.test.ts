@@ -199,6 +199,24 @@ describe('managed home updater actions', () => {
     expect(f.statuses.at(-1)).toMatchObject({ version: '1.4.224-1' })
     expect(f.fetch.mock.calls.some(([url]) => url.includes('/releases/latest'))).toBe(false)
   })
+  it('does not treat a 200 HTML atom body as an empty update feed', async () => {
+    const f = await fixture()
+    f.fetch.mockImplementation(async (url: string) => {
+      if (url.includes('api.github.com')) {
+        return new Response('{"message":"Not Found"}', { status: 404 })
+      }
+      if (url === KARLORZ_FORK_RELEASE_FEED.repoAtomUrl) {
+        return new Response('<html>proxy interstitial</html>')
+      }
+      return new Response('miss', { status: 404 })
+    })
+    await f.updater.check(true)
+    const status = f.statuses.at(-1)
+    expect(status?.state).toBe('error')
+    const message = status?.state === 'error' ? status.message : ''
+    expect(message).toContain(`Fork update request failed (404) ${HOME_RELEASES_API_URL}`)
+    expect(message).toContain('Invalid fork release atom feed')
+  })
   it('follows a GitHub asset 302 when downloading the AppImage', async () => {
     const f = await fixture()
     await f.updater.check(true)

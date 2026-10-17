@@ -1,6 +1,13 @@
 const MAX_REDIRECTS = 8
 const BODY_SNIPPET_CHARS = 180
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+const GITHUB_RELEASE_CDN_HOSTS = new Set([
+  'objects.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+  'github-releases.githubusercontent.com'
+])
+const HOME_GITHUB_REPO_PREFIX = '/karlorz/orca/'
+const HOME_RELEASES_API_PATH = '/repos/karlorz/orca/releases'
 
 export const HOME_UPDATER_USER_AGENT = 'karlorz-orca-home-updater'
 export const HOME_GITHUB_API_VERSION = '2022-11-28'
@@ -19,15 +26,31 @@ export function assertHomeUpdateUrl(url: string): URL {
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
     throw new Error('Fork update URL is outside the GitHub release hosts')
   }
-  const { hostname } = parsed
-  if (
-    hostname !== 'api.github.com' &&
-    hostname !== 'github.com' &&
-    !hostname.endsWith('.githubusercontent.com')
-  ) {
-    throw new Error('Fork update URL is outside the GitHub release hosts')
+  const { hostname, pathname } = parsed
+  if (hostname === 'api.github.com') {
+    if (pathname !== HOME_RELEASES_API_PATH || parsed.hash) {
+      throw new Error('Fork update URL is outside the GitHub release hosts')
+    }
+    return parsed
   }
-  return parsed
+  if (hostname === 'github.com') {
+    // Why no search/hash: GitHub open-redirects live in query strings; keep hops on this repo.
+    if (
+      parsed.search ||
+      parsed.hash ||
+      !(
+        pathname === `${HOME_GITHUB_REPO_PREFIX}releases.atom` ||
+        pathname.startsWith(`${HOME_GITHUB_REPO_PREFIX}releases/download/`)
+      )
+    ) {
+      throw new Error('Fork update URL is outside the GitHub release hosts')
+    }
+    return parsed
+  }
+  if (GITHUB_RELEASE_CDN_HOSTS.has(hostname)) {
+    return parsed
+  }
+  throw new Error('Fork update URL is outside the GitHub release hosts')
 }
 
 export function homeUpdateRequestHeaders(url: string): Headers {

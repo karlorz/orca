@@ -58,6 +58,27 @@ describe('home AppImage GitHub request helper', () => {
     expect(() => assertHomeUpdateUrl('http://github.com/karlorz/orca')).toThrow(
       'outside the GitHub release hosts'
     )
+    expect(() =>
+      assertHomeUpdateUrl('https://raw.githubusercontent.com/karlorz/orca/main/orca-linux.AppImage')
+    ).toThrow('outside the GitHub release hosts')
+    expect(() =>
+      assertHomeUpdateUrl(
+        'https://github.com/stablyai/orca/releases/download/v1.4.227/latest-linux.yml'
+      )
+    ).toThrow('outside the GitHub release hosts')
+    expect(() =>
+      assertHomeUpdateUrl(
+        'https://github.com/karlorz/orca/releases/download/v1.4.227-6/orca-linux.AppImage?next=https://evil.example'
+      )
+    ).toThrow('outside the GitHub release hosts')
+    expect(() => assertHomeUpdateUrl('https://github.com/karlorz/orca/issues/1')).toThrow(
+      'outside the GitHub release hosts'
+    )
+    expect(
+      assertHomeUpdateUrl(
+        'https://release-assets.githubusercontent.com/github-production-release-asset/1?token=x'
+      ).hostname
+    ).toBe('release-assets.githubusercontent.com')
   })
 
   it('throws a diagnostic error on a non-OK API response', async () => {

@@ -159,8 +159,13 @@ export async function reconcileHomeAppImage(
   if (recorded?.sha256 === digest) {
     identity = recorded
     await verifyHomeAppImageMarker(image, extract)
-  } else if (validHomeReleaseTag(pin) && savedDigest === digest) {
+  } else if (
+    validHomeReleaseTag(pin) &&
+    savedDigest === digest &&
+    (!recorded || compareHomeTags(pin, recorded.tag) > 0)
+  ) {
     // Older bash installers rewrote pin+checksum without installed-release.json.
+    // Only heal over an existing JSON identity in the attended-upgrade direction.
     identity = { tag: pin, sha256: digest }
     await verifyHomeAppImageMarker(image, extract)
   } else if (recorded) {

@@ -54,6 +54,9 @@ const HOME_RELEASE_ASSET_NAMES = [
 ] as const
 
 export function parseHomeDesktopTagsFromAtom(xml: string): string[] {
+  if (!/<feed[\s>]/i.test(xml)) {
+    throw new Error('Invalid fork release atom feed')
+  }
   const pattern = new RegExp(KARLORZ_FORK_RELEASE_FEED.tagHrefPattern.source, 'g')
   const tags: string[] = []
   const seen = new Set<string>()

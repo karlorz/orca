@@ -13,10 +13,12 @@ import {
   requireHomeUpdateResponse,
   type HomeUpdateFetch
 } from './home-appimage-release-request'
+import { readFetchResponseTextWithinLimit } from '../shared/fetch-response-body'
 import { KARLORZ_FORK_RELEASE_FEED } from './updater-release-feeds'
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000
 const MAX_ATOM_PROBE_TAGS = 6
+const ATOM_FEED_MAX_BYTES = 256 * 1024
 
 type ReleaseDiscovery =
   | { ok: true; release: HomeAppImageRelease | null }
@@ -55,9 +57,9 @@ async function discoverFromAtom(
       KARLORZ_FORK_RELEASE_FEED.repoAtomUrl,
       DEFAULT_FETCH_TIMEOUT_MS
     )
-    const tags = parseHomeDesktopTagsFromAtom(await response.text()).filter(
-      (tag) => compareHomeReleaseTags(tag, runningTag) > 0
-    )
+    const tags = parseHomeDesktopTagsFromAtom(
+      await readFetchResponseTextWithinLimit(response, ATOM_FEED_MAX_BYTES)
+    ).filter((tag) => compareHomeReleaseTags(tag, runningTag) > 0)
     for (const tag of tags.slice(0, MAX_ATOM_PROBE_TAGS)) {
       const release = homeReleaseFromDesktopTag(tag)
       const sums = await fetchHomeUpdateResponse(

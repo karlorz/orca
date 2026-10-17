@@ -52,6 +52,14 @@ describe('managed home release policy', () => {
     const release = homeReleaseFromDesktopTag('v1.4.227-6')
     expect(release.prerelease).toBe(true)
     expect(homeReleaseAssetUrl(release, 'orca-linux.AppImage')).toContain('/v1.4.227-6/')
+    expect(() => parseHomeDesktopTagsFromAtom('<html>captive portal</html>')).toThrow(
+      'Invalid fork release atom feed'
+    )
+    expect(
+      parseHomeDesktopTagsFromAtom(
+        '<?xml version="1.0"?><feed><entry><link href="https://github.com/karlorz/orca/releases/tag/v1.4.227-6%2F../evil"/></entry></feed>'
+      )
+    ).toEqual([])
   })
   it('skips releases missing required download assets', () => {
     const incomplete = homeReleaseFixture('v1.4.225-0')
