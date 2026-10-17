@@ -3,7 +3,11 @@ import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
+import {
+  getVersionChannel,
+  isForkDesktopVersion,
+  MAIN_RELEASE_REPO
+} from '../../../shared/release-channel'
 import { getMainHttpClient } from '../../network/http-client'
 import { writePluginFileAtomically } from '../../plugins/plugin-atomic-file-write'
 import {
@@ -31,6 +35,11 @@ export type AgentStateRulesChannel = 'next' | 'stable'
 export function agentStateRulesChannelForAppVersion(
   appVersion: string
 ): AgentStateRulesChannel | null {
+  // Fork desktop cuts are prereleases (`1.4.x-N`) but live-update tags are published
+  // only on stablyai/orca. Skip the fetch so a packaged fork does not 404 on startup.
+  if (isForkDesktopVersion(appVersion)) {
+    return null
+  }
   const channel = getVersionChannel(appVersion)
   if (!channel) {
     return null

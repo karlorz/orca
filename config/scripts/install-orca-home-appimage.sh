@@ -109,6 +109,7 @@ fi
 valid_tag "$TAG" || fail 'no valid fork desktop release selected'
 gh release download "$TAG" --repo karlorz/orca --dir "$STAGE" \
   --pattern orca-linux.AppImage --pattern SHA256SUMS.txt
+# commit writes release-tag, appimage.sha256, and installed-release.json together.
 shared commit "$ROOT" "$STAGE" "$TAG"
 install_launcher
 printf 'orca-home: installed %s at %s; GUI restart is manual\n' "$TAG" "$IMAGE"

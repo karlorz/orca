@@ -4,6 +4,8 @@ import {
   compareHomeReleaseTags,
   homeProtocolMetadata,
   homeReleaseAssetUrl,
+  homeReleaseFromDesktopTag,
+  parseHomeDesktopTagsFromAtom,
   selectHomeAppImageRelease,
   HOME_UPDATE_PROTOCOL_MESSAGE
 } from './home-appimage-release-policy'
@@ -36,6 +38,28 @@ describe('managed home release policy', () => {
     ).toBe('v1.4.224-10')
     expect(compareHomeReleaseTags('v1.4.225-0', 'v1.4.224-999')).toBeGreaterThan(0)
     expect(selectHomeAppImageRelease([homeReleaseFixture()], 'v1.4.224-1')).toBeNull()
+  })
+  it('parses prerelease fork desktop tags from the GitHub atom feed', () => {
+    const xml = [
+      '<?xml version="1.0" encoding="UTF-8"?><feed>',
+      '<entry><link rel="alternate" type="text/html" href="https://github.com/karlorz/orca/releases/tag/v1.4.227-6"/></entry>',
+      '<entry><link rel="alternate" type="text/html" href="https://github.com/karlorz/orca/releases/tag/v1.4.224-6"/></entry>',
+      '<entry><link rel="alternate" type="text/html" href="https://github.com/karlorz/orca/releases/tag/v1.4.227"/></entry>',
+      '<entry><link rel="alternate" type="text/html" href="https://github.com/karlorz/orca/releases/tag/mobile-android-v0.0.55-8"/></entry>',
+      '</feed>'
+    ].join('')
+    expect(parseHomeDesktopTagsFromAtom(xml)).toEqual(['v1.4.227-6', 'v1.4.224-6'])
+    const release = homeReleaseFromDesktopTag('v1.4.227-6')
+    expect(release.prerelease).toBe(true)
+    expect(homeReleaseAssetUrl(release, 'orca-linux.AppImage')).toContain('/v1.4.227-6/')
+    expect(() => parseHomeDesktopTagsFromAtom('<html>captive portal</html>')).toThrow(
+      'Invalid fork release atom feed'
+    )
+    expect(
+      parseHomeDesktopTagsFromAtom(
+        '<?xml version="1.0"?><feed><entry><link href="https://github.com/karlorz/orca/releases/tag/v1.4.227-6%2F../evil"/></entry></feed>'
+      )
+    ).toEqual([])
   })
   it('skips releases missing required download assets', () => {
     const incomplete = homeReleaseFixture('v1.4.225-0')

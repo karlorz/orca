@@ -121,16 +121,18 @@ export async function verifyInstalledHomeAppImage(
 ): Promise<HomeAppImageIdentity> {
   const image = join(root, HOME_APPIMAGE_NAME)
   const digest = await homeAppImageDigest(image)
-  const recorded = await readHomeImageIdentity(join(root, 'installed-release.json'))
   const pin = (await readFile(join(root, 'release-tag'), 'utf8').catch(() => '')).trim()
   const savedDigest = await readFile(join(root, 'appimage.sha256'), 'utf8').then(
     parseHomeAppImageChecksum,
     () => null
   )
+  const recorded = await readHomeImageIdentity(join(root, 'installed-release.json'))
   if (
+    !recorded ||
     savedDigest !== digest ||
     !validHomeReleaseTag(pin) ||
-    (recorded && (recorded.tag !== pin || recorded.sha256 !== digest))
+    recorded.sha256 !== digest ||
+    recorded.tag !== pin
   ) {
     throw new Error('Saved image and release pin disagree')
   }
@@ -139,7 +141,7 @@ export async function verifyInstalledHomeAppImage(
     throw new Error('Installed AppImage is not executable')
   }
   await verifyHomeAppImageMarker(image, extract)
-  return { tag: pin, sha256: digest }
+  return recorded
 }
 
 export async function reconcileHomeAppImage(

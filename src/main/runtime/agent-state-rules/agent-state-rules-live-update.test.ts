@@ -121,6 +121,8 @@ describe('agent state rules channel and URL', () => {
     ['1.4.0', 'stable'],
     ['1.4.1-rc.2', 'next'],
     ['1.4.1-rc.2.perf', 'next'],
+    ['1.4.227-6', null],
+    ['v1.4.224-6', null],
     ['not-a-version', null]
   ])('maps app version %s to %s', (version, channel) => {
     expect(agentStateRulesChannelForAppVersion(version)).toBe(channel)
@@ -324,6 +326,15 @@ describe('agent state rules live updates', () => {
     const h = harness({ isPackaged: false })
     await h.updater.start()
     expect(h.fetch).not.toHaveBeenCalled()
+    h.updater.stop()
+  })
+
+  it('does not fetch upstream rules tags for a fork desktop version', async () => {
+    const h = harness({ appVersion: '1.4.227-6' })
+    await h.updater.start()
+    expect(h.fetch).not.toHaveBeenCalled()
+    expect(status()).toEqual({ version: BUNDLED_AGENT_STATE_RULES_VERSION, source: 'bundled' })
+    expect(warnings()).toEqual([])
     h.updater.stop()
   })
 

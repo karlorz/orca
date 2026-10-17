@@ -60,6 +60,7 @@ expect_failure() { if "$@"; then echo "unexpected success: $*" >&2; exit 1; fi; 
 
 run --latest
 [[ "$(cat "$ORCA_HOME_INSTALL_DIR/release-tag")" == v1.4.222-10 ]]
+grep -F '"tag":"v1.4.222-10"' "$ORCA_HOME_INSTALL_DIR/installed-release.json"
 [[ -x "$HOME/bin/orca-ide-newbie" ]]
 run --check
 : >"$CALLS"

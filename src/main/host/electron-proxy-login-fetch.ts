@@ -27,12 +27,38 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')
 }
 
+export type ElectronNetRedirect = {
+  statusCode: number
+  method: string
+  redirectUrl: string
+  responseHeaders: Record<string, string[]>
+  followRedirect: () => void
+}
+
+function headersFromElectron(
+  responseHeaders: Record<string, string | string[]>,
+  redirectUrl?: string
+): Headers {
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(responseHeaders)) {
+    headers.set(key, Array.isArray(value) ? value.join(', ') : value)
+  }
+  if (redirectUrl && !headers.has('location')) {
+    headers.set('location', redirectUrl)
+  }
+  return headers
+}
+
 /**
  * Electron's net.fetch with a proxy `login` listener. Its internal request has none, so
  * Electron cancels every proxy challenge and app 'login' never sees main-process requests.
- * Everything else mirrors Electron 43's net.fetch.
+ * Manual redirects resolve a 3xx Response unless `onRedirect` calls followRedirect.
  */
-export function fetchWithProxyLogin(request: Request, proxySession: Session): Promise<Response> {
+export function fetchWithProxyLogin(
+  request: Request,
+  proxySession: Session,
+  onRedirect?: (redirect: ElectronNetRedirect) => void
+): Promise<Response> {
   const { signal } = request
   if (signal.aborted) {
     void request.body?.cancel(abortReason(signal)).catch(() => {})
@@ -52,6 +78,21 @@ export function fetchWithProxyLogin(request: Request, proxySession: Session): Pr
       redirect: request.redirect
     })
     let aborted = false
+    let settled = false
+    const resolveOnce = (response: Response): void => {
+      if (settled || aborted) {
+        return
+      }
+      settled = true
+      resolve(response)
+    }
+    const rejectOnce = (error: unknown): void => {
+      if (settled || aborted) {
+        return
+      }
+      settled = true
+      reject(error)
+    }
     signal.addEventListener(
       'abort',
       () => {
@@ -75,29 +116,58 @@ export function fetchWithProxyLogin(request: Request, proxySession: Session): Pr
         callback()
       }
     })
+    native.on('redirect', (statusCode, method, redirectUrl, responseHeaders) => {
+      if (aborted) {
+        return
+      }
+      try {
+        if (onRedirect) {
+          onRedirect({
+            statusCode,
+            method,
+            redirectUrl,
+            responseHeaders,
+            followRedirect: () => native.followRedirect()
+          })
+          return
+        }
+        if (request.redirect === 'manual') {
+          resolveOnce(
+            new Response(null, {
+              status: statusCode,
+              headers: headersFromElectron(responseHeaders, redirectUrl)
+            })
+          )
+          return
+        }
+        if (request.redirect === 'error') {
+          throw new Error('Redirect was cancelled')
+        }
+        native.followRedirect()
+      } catch (error) {
+        native.abort()
+        rejectOnce(error)
+      }
+    })
     native.on('response', (response) => {
       if (aborted) {
         return
       }
       if (!(response instanceof Readable)) {
         native.abort()
-        reject(new TypeError('Electron response is not a readable stream'))
+        rejectOnce(new TypeError('Electron response is not a readable stream'))
         return
       }
-      const headers = new Headers()
-      for (const [key, value] of Object.entries(response.headers)) {
-        headers.set(key, Array.isArray(value) ? value.join(', ') : value)
-      }
       const bodyless = NULL_BODY_STATUSES.includes(response.statusCode) || request.method === 'HEAD'
-      resolve(
+      resolveOnce(
         new Response(bodyless ? null : toWebBody(response), {
-          headers,
+          headers: headersFromElectron(response.headers),
           status: response.statusCode,
           statusText: response.statusMessage
         })
       )
     })
-    native.on('error', reject)
+    native.on('error', rejectOnce)
     if (request.mode && (request.mode !== 'cors' || origin)) {
       native.setHeader('Sec-Fetch-Mode', request.mode)
     }
@@ -107,10 +177,10 @@ export function fetchWithProxyLogin(request: Request, proxySession: Session): Pr
     if (!request.body) {
       native.end()
     } else if (native instanceof Writable) {
-      void request.body.pipeTo(Writable.toWeb(native)).then(() => native.end(), reject)
+      void request.body.pipeTo(Writable.toWeb(native)).then(() => native.end(), rejectOnce)
     } else {
       native.abort()
-      reject(new TypeError('Electron request is not a writable stream'))
+      rejectOnce(new TypeError('Electron request is not a writable stream'))
     }
   })
 }

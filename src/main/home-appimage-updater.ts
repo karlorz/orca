@@ -6,11 +6,17 @@ import {
   assertHomeDaemonProtocol,
   homeProtocolMetadata,
   homeReleaseAssetUrl,
-  selectHomeAppImageRelease,
   HOME_UPDATE_PROTOCOL_MESSAGE,
   type HomeAppImageRelease,
   type HomeProtocolMetadata
 } from './home-appimage-release-policy'
+import {
+  DEFAULT_FETCH_TIMEOUT_MS,
+  discoverHomeAppImageRelease
+} from './home-appimage-release-discovery'
+import { requireHomeUpdateResponse } from './home-appimage-release-request'
+
+const APPIMAGE_FETCH_TIMEOUT_MS = 30 * 60_000
 
 export type HomeAppImageUpdaterOptions = {
   root: string
@@ -75,10 +81,7 @@ export class HomeAppImageUpdater {
         return
       }
       this.selected = null
-      const response = await this.fetch(
-        'https://api.github.com/repos/karlorz/orca/releases?per_page=100'
-      )
-      const release = selectHomeAppImageRelease(await response.json(), this.options.runningTag)
+      const release = await discoverHomeAppImageRelease(this.options.fetch, this.options.runningTag)
       if (!release) {
         this.options.sendStatus({ state: 'not-available', userInitiated: this.userInitiated })
       } else {
@@ -123,14 +126,14 @@ export class HomeAppImageUpdater {
       }
       await mkdir(this.options.root, { recursive: true })
       stage = await mkdtemp(path.join(this.options.root, '.download.'))
-      const sums = await this.fetch(homeReleaseAssetUrl(release, 'SHA256SUMS.txt'))
+      const sums = await this.fetchOk(homeReleaseAssetUrl(release, 'SHA256SUMS.txt'))
       await writeFile(path.join(stage, 'SHA256SUMS.txt'), await sums.text(), {
         flag: 'wx',
         mode: 0o600
       })
-      const image = await this.fetch(
+      const image = await this.fetchOk(
         homeReleaseAssetUrl(release, 'orca-linux.AppImage'),
-        30 * 60_000
+        APPIMAGE_FETCH_TIMEOUT_MS
       )
       if (!image.body) {
         throw new Error('AppImage download returned an empty body')
@@ -218,18 +221,14 @@ export class HomeAppImageUpdater {
     }
   }
 
-  private async fetch(url: string, timeoutMs = 15_000): Promise<Response> {
-    const response = await this.options.fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
-    if (!response.ok) {
-      throw new Error(`Fork update request failed (${response.status})`)
-    }
-    return response
+  private fetchOk(url: string, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS): Promise<Response> {
+    return requireHomeUpdateResponse(this.options.fetch, url, timeoutMs)
   }
 
   private async readProtocol(release: HomeAppImageRelease): Promise<HomeProtocolMetadata> {
     try {
       const url = homeReleaseAssetUrl(release, 'orca-update-protocol.json')
-      const response = await this.fetch(url)
+      const response = await this.fetchOk(url)
       return homeProtocolMetadata.parse(await response.json())
     } catch {
       throw new Error(HOME_UPDATE_PROTOCOL_MESSAGE)
@@ -238,7 +237,7 @@ export class HomeAppImageUpdater {
 
   private async readProtocolFromTag(tag: string): Promise<HomeProtocolMetadata> {
     try {
-      const response = await this.fetch(
+      const response = await this.fetchOk(
         `https://github.com/karlorz/orca/releases/download/${tag}/orca-update-protocol.json`
       )
       return homeProtocolMetadata.parse(await response.json())
