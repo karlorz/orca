@@ -523,6 +523,16 @@ features:
       - src/shared/agent-hook-listener/grok-completed-update-result.ts
     wiki: projects/orca/work/2026-10-07-automation-outcome-reporting
 
+  - id: managed-orcad-listen-extras
+    title: Optional managed-orcad bindHost, pairingAddress, and mobilePairing on the SSH deployment sidecar
+    kind: product
+    status: landed
+    paths:
+      - src/shared/runtime-environments.ts
+      - src/main/ssh/orcad-remote-launch.ts
+      - src/main/ssh/orcad-tunneled-pairing.ts
+      - src/main/ssh/orcad-managed-runtime-context.ts
+
   - id: grok-bound-structured-session-controls
     title: Public exact-target Grok Follow up and Stop with durable receipts and negotiated CLI adapters
     kind: product

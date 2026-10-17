@@ -64,8 +64,24 @@ export type OrcadLaunchSpec = {
   /** Loopback by default; the client reaches it through an SSH local port-forward. */
   bindHost: string
   port: number
+  /** Advertised in pairing offers when different from the bind address. */
+  pairingAddress?: string
+  /** Mobile-scoped startup pairing offer. */
+  mobilePairing?: boolean
   /** The host's activation fence. Every SSH launch is client-managed, so every one may idle out. */
   activationRoot: string
+}
+
+/** Argv after the launcher entry; bind is always explicit so a future default cannot change posture. */
+export function orcadListenArgv(spec: OrcadLaunchSpec): string[] {
+  const args = ['--json', '--bind', spec.bindHost, '--port', String(spec.port)]
+  if (spec.mobilePairing === true) {
+    args.push('--mobile-pairing')
+  }
+  if (spec.pairingAddress) {
+    args.push('--pairing-address', spec.pairingAddress)
+  }
+  return args
 }
 
 /** Env a managed launch adds; an older orcad ignores both. */
@@ -146,7 +162,9 @@ export function orcadLaunchCommand(
           // Keep $! equal to the runtime PID rather than a waiting shell's PID.
           // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
           `exec nohup "$orcad_runtime" ${entry}`,
-          `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
+          orcadListenArgv(spec)
+            .map((arg) => shellEscape(arg))
+            .join(' '),
           `> ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
           ...(recordSession
@@ -178,7 +196,9 @@ function setsidLaunchTail(
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && shift && exec "$@"' orcad-launch ${pidFile}`,
     `"$orcad_runtime" ${entry}`,
-    `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
+    orcadListenArgv(spec)
+      .map((arg) => shellEscape(arg))
+      .join(' '),
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',

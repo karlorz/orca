@@ -7,10 +7,16 @@
  * Never throws. A server that cannot be started stays `unverifiable` with the reason, and is
  * never read as evidence that its terminals exited.
  */
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import {
+  getOrcadSshDeployment,
+  type KnownRuntimeEnvironment
+} from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
+import {
+  listenExtrasFromDeployment,
+  managedOrcadSlot
+} from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from './orcad-remote-context'
 import type { OrcadHostTransport } from './orcad-host-transport'
@@ -137,8 +143,14 @@ async function wakeIfStopped(
   const label = input.target.label
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
+    const deployment = getOrcadSshDeployment(input.environment)
     const wake = await wakeStoppedManagedOrcad(
-      managedOrcadSlot(context, input.remotePort),
+      managedOrcadSlot(
+        context,
+        input.remotePort,
+        undefined,
+        deployment ? listenExtrasFromDeployment(deployment) : undefined
+      ),
       onStarting
     )
     if (wake.outcome === 'started') {

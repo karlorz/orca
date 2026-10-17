@@ -71,11 +71,27 @@ export async function resolveLinkedOrcadContext(
   return resolveOrcadRemoteContext(target, sshOrcadHostTransport(connection), signal)
 }
 
+/** Optional listen extras from the environment sidecar; omitted means loopback. */
+export type ManagedOrcadListenExtras = {
+  bindHost?: string
+  pairingAddress?: string
+}
+
+export function listenExtrasFromDeployment(
+  deployment: Pick<OrcadSshDeploymentLink, 'bindHost' | 'pairingAddress'>
+): ManagedOrcadListenExtras {
+  return {
+    ...(deployment.bindHost ? { bindHost: deployment.bindHost } : {}),
+    ...(deployment.pairingAddress ? { pairingAddress: deployment.pairingAddress } : {})
+  }
+}
+
 /** The slot options every remote lifecycle step takes for this managed server. */
 export function managedOrcadSlot(
   context: OrcadRemoteContext<OrcadHostTarget>,
   port: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  listen?: ManagedOrcadListenExtras
 ) {
   return {
     conn: context.connection,
@@ -83,8 +99,9 @@ export function managedOrcadSlot(
     remoteHome: context.remoteHome,
     nodePath: MANAGED_ORCAD_LEGACY_NODE_PATH,
     userDataDir: context.userDataDir,
-    bindHost: ORCAD_BIND_HOST,
+    bindHost: listen?.bindHost ?? ORCAD_BIND_HOST,
     port,
+    ...(listen?.pairingAddress ? { pairingAddress: listen.pairingAddress } : {}),
     signal
   }
 }

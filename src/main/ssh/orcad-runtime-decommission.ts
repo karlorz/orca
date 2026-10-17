@@ -19,6 +19,7 @@ import { readOrcadActivationTransaction } from './orcad-activation-transaction-s
 import { reconcileOrcadDecommission } from './orcad-decommission-recovery'
 import { cancelRemoteOrcadManagedStop } from './orcad-managed-remote-stop'
 import {
+  listenExtrasFromDeployment,
   managedOrcadSlot,
   requireManagedOrcadInfrastructure,
   resolveLinkedOrcadContext
@@ -111,7 +112,12 @@ async function stopRemote(
   retried = false
 ): Promise<Stopped | Refusal> {
   const context = await resolveLinkedOrcadContext(environment, deployment, signal)
-  const slot = managedOrcadSlot(context, deployment.remotePort, signal)
+  const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    signal,
+    listenExtrasFromDeployment(deployment)
+  )
   const transaction = await readOrcadActivationTransaction(slot)
   if (transaction?.operation === 'decommission') {
     // An earlier stop was interrupted: its journal decides, so finish exactly that one.
@@ -188,7 +194,12 @@ export function cancelManagedOrcadStop(
   return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const { environment, deployment } = managed
     const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
-    const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+    const slot = managedOrcadSlot(
+      context,
+      deployment.remotePort,
+      args.signal,
+      listenExtrasFromDeployment(deployment)
+    )
     let result: OrcadManagedCancelStopResult
     try {
       result = await withStaleOrcadActivationRecoveryLock(slot, async (lock) => {

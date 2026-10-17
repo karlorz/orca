@@ -39,8 +39,19 @@ export const RuntimeSshTunnelLinkSchema = z.object({
 
 export type RuntimeSshTunnelLink = z.infer<typeof RuntimeSshTunnelLinkSchema>
 
+/** Listen extras for a managed SSH orcad only; not used by ordinary sshAccess links. */
+export const OrcadSshListenExtrasSchema = z.object({
+  bindHost: z.string().min(1).optional(),
+  pairingAddress: z.string().min(1).optional(),
+  mobilePairing: z.boolean().optional()
+})
+
+export type OrcadSshListenExtras = z.infer<typeof OrcadSshListenExtrasSchema>
+
 /** A server Orca deployed and owns over SSH; unlike sshAccess, it grants lifecycle ownership. */
-export const OrcadSshDeploymentLinkSchema = RuntimeSshTunnelLinkSchema.extend({
+export const OrcadSshDeploymentLinkSchema = RuntimeSshTunnelLinkSchema.merge(
+  OrcadSshListenExtrasSchema
+).extend({
   // Absent on disk: the sidecar persists SSH links without it, so older builds read them unchanged.
   kind: z.literal('ssh').optional()
 })

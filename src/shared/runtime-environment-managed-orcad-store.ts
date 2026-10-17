@@ -111,6 +111,9 @@ export function refreshManagedOrcadPairing(
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
   }
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
+  if (offer.scope === 'mobile') {
+    return current
+  }
   if (!current.orcadDeployment) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not managed.')
   }

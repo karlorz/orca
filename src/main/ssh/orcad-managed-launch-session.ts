@@ -14,6 +14,7 @@ import {
 } from './orcad-launch-ssh-session'
 import { withManagedOrcadLifecycle } from './orcad-runtime-maintenance'
 import {
+  listenExtrasFromDeployment,
   managedOrcadInstallDir,
   managedOrcadSlot,
   requireManagedOrcadEnvironment,
@@ -90,7 +91,12 @@ export function restartManagedOrcadEnvironment(
     if (census.liveSessions !== 0) {
       return { outcome: 'terminals-running', liveSessions: census.liveSessions }
     }
-    const slot = managedOrcadSlot(context, deployment.remotePort)
+    const slot = managedOrcadSlot(
+      context,
+      deployment.remotePort,
+      undefined,
+      listenExtrasFromDeployment(deployment)
+    )
     const stopped = await withOrcadActivationLock(
       slot,
       (lock) => stopRetiringIdleDaemon(slot, lock),

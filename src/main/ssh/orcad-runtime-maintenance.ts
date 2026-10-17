@@ -29,6 +29,7 @@ import {
 } from './orcad-managed-update-deferrals'
 import {
   isForceableOrcadDeferral,
+  listenExtrasFromDeployment,
   managedOrcadInstallDir,
   managedOrcadSlot,
   probeManagedOrcadReadiness,
@@ -113,7 +114,12 @@ export async function runManagedOrcadUpdate(
   const localOrcadDir =
     args.localOrcadDir ??
     (await materializeOrcadArtifact(context.serverTarget, { signal: args.signal }))
-  const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+  const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    args.signal,
+    listenExtrasFromDeployment(deployment)
+  )
   const result = await deployOrcad({
     ...slot,
     localOrcadDir,
@@ -210,7 +216,12 @@ export function rollbackManagedOrcadEnvironment(
               : 'Close the terminals running on this server before rolling it back.'
         }
       }
-      const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+      const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    args.signal,
+    listenExtrasFromDeployment(deployment)
+  )
       const targetDir = managedOrcadInstallDir(context, target)
       const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
       const result = await rollbackOrcad({
@@ -249,7 +260,12 @@ export function recoverManagedOrcadEnvironment(
     async ({ environment, deployment }) => {
       const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
       const result = await recoverInterruptedOrcadActivation({
-        ...managedOrcadSlot(context, deployment.remotePort, args.signal),
+        ...managedOrcadSlot(
+          context,
+          deployment.remotePort,
+          args.signal,
+          listenExtrasFromDeployment(deployment)
+        ),
         acceptChangedState: args.acceptChangedState === true
       })
       if (result.outcome !== 'recovered') {

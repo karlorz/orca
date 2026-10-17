@@ -22,7 +22,7 @@ import {
   writeRuntimeEnvironmentSidecarEntry
 } from './runtime-environment-sidecar'
 import { readPersistedEnvironmentStore } from './runtime-environment-store-file'
-import { getRuntimeSshAccess } from './runtime-environments'
+import { getPreferredPairingOffer, getRuntimeSshAccess } from './runtime-environments'
 import { shippedBuildRewrite } from './runtime-environment-shipped-store.test-fixture'
 
 const deployment = {
@@ -66,6 +66,34 @@ describe('managed orcad environment store', () => {
     expect(readFileSync(getRuntimeEnvironmentSidecarPath(userDataPath), 'utf8')).not.toContain(
       'private-device-token'
     )
+  })
+
+  it('round-trips optional listen extras on the sidecar deployment', () => {
+    const extras = {
+      ...deployment,
+      bindHost: '0.0.0.0',
+      pairingAddress: 'wss://example.test',
+      mobilePairing: true
+    }
+    add({ orcadDeployment: extras })
+    const [restored] = listEnvironments(userDataPath)
+    expect(restored?.orcadDeployment).toEqual(extras)
+    const persisted = readPersistedEnvironmentStore(userDataPath).environments[0]!
+    const sidecar = readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, persisted)
+    expect(sidecar?.orcadDeployment).toEqual(extras)
+  })
+
+  it('does not replace the desktop pairing with a mobile-scoped offer', () => {
+    add()
+    const mobile = encodePairingOffer({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:46768',
+      deviceToken: 'mobile-device-token',
+      publicKeyB64: Buffer.alloc(32, 2).toString('base64'),
+      scope: 'mobile'
+    })
+    const after = refreshManagedOrcadPairing(userDataPath, 'environment-1', mobile)
+    expect(getPreferredPairingOffer(after).deviceToken).toBe('private-device-token')
   })
 
   it('survives a downgraded build rewriting orca-environments.json', () => {

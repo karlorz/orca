@@ -1,5 +1,6 @@
 /** Opens a managed tunnel at the port orcad bound and keeps it only if orcad is what answers. */
 import {
+  getOrcadSshDeployment,
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
@@ -12,7 +13,10 @@ import {
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
+import {
+  listenExtrasFromDeployment,
+  managedOrcadSlot
+} from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from './orcad-remote-context'
 import type { SshConnection } from './ssh-connection'
@@ -43,7 +47,15 @@ async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Pr
   }
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
-    await wakeStoppedManagedOrcad(managedOrcadSlot(context, access.remotePort))
+    const deployment = getOrcadSshDeployment(input.environment)
+    await wakeStoppedManagedOrcad(
+      managedOrcadSlot(
+        context,
+        access.remotePort,
+        undefined,
+        deployment ? listenExtrasFromDeployment(deployment) : undefined
+      )
+    )
   } catch (error) {
     // The re-read and its identity check still decide; a failed wake only leaves the port as is.
     console.warn('[ssh] Could not start the managed Orca server behind a foreign answer:', error)
