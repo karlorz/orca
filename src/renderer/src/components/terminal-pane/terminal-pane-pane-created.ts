@@ -181,7 +181,6 @@ export function createTerminalPaneCreatedHandler(
       onQueuedResumeSpawnRejected: createQueuedAgentResumeFailureHandler(
         deps.tabId,
         ptyDeps.startup,
-        startupWithSetupSplitWait,
         startup
       ),
       ...(effectiveSpawnHints?.cwdPromise

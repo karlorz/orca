@@ -142,6 +142,7 @@ export class StructuredAgentSessionBoundControls {
               ...ctx,
               record: () => context.deps.store.getRecord(ctx.sessionId),
               childWork: () => context.readChildWork(ctx.sessionId),
+              childWorkOpen: () => context.childWorkOpen(ctx.sessionId),
               beforeDispatch: async () => beforePromptWrite(),
               beforePromptWrite
             },
