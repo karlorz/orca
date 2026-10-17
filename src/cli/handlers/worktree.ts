@@ -22,8 +22,10 @@ import {
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
+  resolveCurrentWorktreeSelection,
   resolveCurrentWorktreeSelector
 } from '../selectors'
+import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
@@ -104,7 +106,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       'worktree.ps',
       { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     const worktrees = result.result.worktrees.map(projectWorktreePsTerminalVerdict)
     printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
       formatWorktreePs(result.result)
@@ -118,7 +120,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         limit: getOptionalPositiveIntegerFlag(flags, 'limit')
       }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     printResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
@@ -158,7 +160,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       !noParent && !explicitParentWorkspace && !explicitParentWorktree
         ? getEnvParentWorkspace()
         : undefined
-    let cwdParentWorktree: string | undefined
+    let cwdParentWorktree: HostScopedWorktreeSelection | undefined
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
     if (
       (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
@@ -168,7 +170,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
         // inside an Orca worktree. Cwd keeps CLI-created children nestable and
         // lets create infer the repo for the common current-workspace case.
-        cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
+        cwdParentWorktree = await resolveCurrentWorktreeSelection(cwd, client)
       } catch {
         cwdParentWorktree = undefined
       }
@@ -202,7 +204,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
+      ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
       noParent,
       callerTerminalHandle,
       // Why: marks the workspace as CLI-created so the sidebar can badge and

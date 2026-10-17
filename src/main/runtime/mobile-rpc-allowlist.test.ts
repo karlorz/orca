@@ -193,6 +193,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.conversationCommand',
       'agentSession.commands',
       'agentSession.history',
+      'agentSession.currentRequests',
       'agentSession.subscribe',
       'agentSession.unsubscribe',
       'agentSession.subscribeStatus',

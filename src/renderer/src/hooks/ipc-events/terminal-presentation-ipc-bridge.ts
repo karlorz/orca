@@ -9,6 +9,7 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
+import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -38,6 +39,9 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         existingSessionOnly,
         flashFocusedPane,
         viewMode,
+        targetGroupId,
+        afterTabId,
+        shellOverride,
         title,
         ptyId,
         activate,
@@ -128,12 +132,15 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           const tab =
             reusedTab ??
             (ptyId
-              ? store.createTab(worktreeId, undefined, undefined, {
+              ? store.createTab(worktreeId, targetGroupId, shellOverride, {
                   initialPtyId: ptyId,
                   activate:
                     shouldActivate ||
                     agentLaunchViewer === 'focus-window' ||
                     agentLaunchViewer === 'focus-in-workspace',
+                  ...(surfaceOwner === false && terminalPresentation === 'background'
+                    ? { recordInteraction: false }
+                    : {}),
                   ...(launchAgent
                     ? {
                         launchAgent,
@@ -149,8 +156,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 })
               : store.createTab(
                   worktreeId,
-                  undefined,
-                  undefined,
+                  targetGroupId,
+                  shellOverride,
                   shouldActivate
                     ? cwd
                       ? { startupCwd: cwd }
@@ -161,6 +168,16 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                         ...(cwd ? { startupCwd: cwd } : {})
                       }
                 ))
+          if (afterTabId) {
+            const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
+            const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
+            const anchorUnified = unifiedTabs.find(
+              (item) => item.id === afterTabId || item.entityId === afterTabId
+            )?.id
+            if (createdUnified && anchorUnified) {
+              insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
+            }
+          }
           // Why: a reused tab whose id differs from the hint breaks the PTY's baked-in paneKey attribution; warn during dev.
           if (tabId !== undefined && tab.id !== tabId) {
             console.warn(

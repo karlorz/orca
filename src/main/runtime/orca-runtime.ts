@@ -1,7 +1,7 @@
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
-import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
+import { OrcaRuntimeWithWorkspaceActivityFacts } from './sidebar-inputs/orca-runtime-workspace-activity-facts'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -39,7 +39,7 @@ import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-la
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
+class OrcaRuntimeService extends OrcaRuntimeWithWorkspaceActivityFacts {
   private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
     const catalog = listReferenceWorkspaces(
       this.requireStore(),
@@ -93,7 +93,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWorkspaceActivityFacts>) {
     super(...args)
     // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
     registerDetectedWorktreeScanInvalidation()
@@ -279,8 +279,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
   }
 
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
-  applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
-    return applyWindowLayoutCommand(
+  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+    const reply = await applyWindowLayoutCommand(
       this.requireStore(),
       (worktreeId, tabId) => {
         if (tabId !== null) {
@@ -292,6 +292,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
       command,
       (move) => rekeyMovedPaneOwners(this, move)
     )
+    // Sent before the reply, so the window can wait for the frame that shows the change.
+    return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }
 
   /** This desktop's display-only copy of each paired server's layout (`layout.getRemoteSnapshots`). */

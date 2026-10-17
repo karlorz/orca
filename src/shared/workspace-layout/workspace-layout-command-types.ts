@@ -38,8 +38,11 @@ export type LayoutCommand =
       title?: string
       color?: string
       viewMode?: 'terminal' | 'chat'
+      /** When the window drew the tab, so a later save of it matches main's copy. */
+      createdAt?: number
       creation?: Partial<LayoutTerminalCreation>
       initial?: InitialSurfaceReason
+      split?: NewGroupSplit
     })
   | (On & {
       type: 'splitPane'
@@ -97,6 +100,8 @@ export type LayoutCommand =
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
+      /** The tab's agent launched and ended: a restore must not launch it again. */
+      clearLaunchAgent?: true
     })
   | (On & { type: 'setChatPane'; tabId: string; leafId: string | null })
   | (On & {
@@ -114,8 +119,26 @@ export type LayoutCommand =
       preview?: boolean
       /** Editor tabs whose view reported an unsaved draft: a preview among them is not replaced. */
       dirtyTabIds?: string[]
+      /** When the window drew the tab, so a later save of it matches main's copy. */
+      createdAt?: number
+      split?: NewGroupSplit
     })
   | (On & { type: 'promotePreviewTab'; tabId: string })
+  | (On & {
+      type: 'moveTabToWorkspace'
+      /** The workspace that owns the tabs' file, as the window resolved it; same partition. */
+      toWorkspace: string
+      /** In the order they join the group's end; ids change when they name the old owner. */
+      tabs: { tabId: string; newTabId: string; newEntityId: string }[]
+      groupId: string
+      /** The moved edit-mode file's record in its new workspace. */
+      file?: LayoutEditorFile
+    })
+  | (On & {
+      type: 'renameEditorFiles'
+      /** Under the window's ids; one workspace's files only. */
+      renames: EditorFileRename[]
+    })
   | (On & {
       type: 'openBrowserTab'
       profileId?: string | null
@@ -129,6 +152,10 @@ export type LayoutCommand =
       /** The window's own ids for a tab it drew: its tab-bar entry and its browser record. */
       tabId?: string
       browserTabId?: string
+      /** When the window drew the tab-bar entry and the browser record, so its later save matches. */
+      createdAt?: number
+      browserCreatedAt?: number
+      split?: NewGroupSplit
     })
   | (On & { type: 'openBrowserPage'; browserTabId: string; pageId: string })
   | (On & { type: 'closeBrowserPage'; browserTabId: string; pageId: string })
@@ -151,8 +178,15 @@ export type LayoutCommand =
     })
   | (On & { type: 'startPane'; paneKey: string })
   | (On & { type: 'restartPane'; paneKey: string })
-  | (On & { type: 'sleep'; paneKeys?: string[]; records: SleepingAgentSessionRecord[] })
-  | (On & { type: 'wake'; paneKeys?: string[] })
+  | (On & {
+      type: 'sleep'
+      paneKeys?: string[]
+      records: SleepingAgentSessionRecord[]
+      /** Records how each agent resumes and stops nothing: the window's live and quit captures. */
+      recordOnly?: true
+    })
+  /** `recordOnly`: drops the records and starts nothing. */
+  | (On & { type: 'wake'; paneKeys?: string[]; recordOnly?: true })
 
 /**
  * Why a workspace's first surface is asked for: `restore` at relaunch, `activation` when a user
@@ -162,7 +196,20 @@ export type InitialSurfaceReason = 'restore' | 'activation'
 
 export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, { type: T }>
 
+/** One open file the window renamed or moved; `record` when it is an edit-mode file. */
+export type EditorFileRename = {
+  fileId: string
+  newFileId: string
+  record?: { fromFilePath: string; file: LayoutEditorFile }
+}
+
 export type GroupSide = 'left' | 'right' | 'up' | 'down'
+
+/**
+ * An open into a new group, named by the command's `groupId`, split off `besideGroupId`: the
+ * group and its first tab are made in one step, so no empty group is ever stored.
+ */
+export type NewGroupSplit = { besideGroupId: string; direction: GroupSide }
 
 export type TabTitle =
   | { kind: 'custom' | 'generated'; title: string | null }
@@ -182,6 +229,7 @@ export type LayoutRefusalCode =
   | 'pane_already_bound'
   | 'workspace_exists'
   | 'tab_exists'
+  | 'group_exists'
   /** A window's drag-out: another tab holds the pane, or no copy binds the window's terminal. */
   | 'pane_in_other_tab'
   | 'pty_mismatch'
@@ -213,8 +261,15 @@ export type LayoutApplyOutcome =
   | { ok: true; result: LayoutCommandResult }
   | { ok: false; code: LayoutRefusalCode }
 
-/** `layout.apply`'s reply. `host_not_owned`: a paired server owns that workspace's layout. */
-export type LayoutApplyReply = LayoutApplyOutcome | { ok: false; code: 'host_not_owned' }
+/**
+ * `layout.apply`'s reply. `host_not_owned`: a paired server owns that workspace's layout.
+ * `other_partition`: a move's two workspaces are in different host partitions. `frameSeq`: the
+ * layout stream position whose frames hold the command's effect (absent from older hosts).
+ */
+export type LayoutApplyReply = (
+  | LayoutApplyOutcome
+  | { ok: false; code: 'host_not_owned' | 'other_partition' }
+) & { frameSeq?: number }
 
 export type LayoutContext = {
   mintId: () => string

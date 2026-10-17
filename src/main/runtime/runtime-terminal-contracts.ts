@@ -56,6 +56,18 @@ export type TerminalCreateOptions = {
    * and post-start delivery belongs to whoever owns the live PTY.
    */
   startupPrompt?: string
+  /**
+   * `draft` puts `startupPrompt` in the agent's composer unsent, through its draft flag or env.
+   * TEMPORARY (createAgentSession parity, removed by the PR that gives prompts and drafts one
+   * delivery policy): a draft skips the typed-line carry rule, as it did before this planner.
+   */
+  startupPromptDelivery?: 'auto-submit' | 'draft'
+  /**
+   * TEMPORARY (createAgentSession parity, removed by the PR that delivers uncarried prompts after
+   * start): `startupPrompt` rides the typed line at any size, and an agent that reads it only after
+   * start launches clean instead of being refused, as createAgentSession did before this planner.
+   */
+  startupPromptCarry?: 'force-line'
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
   /**
@@ -79,6 +91,8 @@ export type TerminalCreateOptions = {
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
+  /** Main-internal placement anchor; removed before PTY dispatch. */
+  afterTabId?: string
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** The surface that asked for this `startupAgent` launch; the runtime attributes every one it
