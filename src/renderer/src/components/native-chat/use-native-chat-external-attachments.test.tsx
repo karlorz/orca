@@ -429,12 +429,14 @@ describe('useNativeChatExternalAttachments', () => {
       expect(chips.resolve).toHaveBeenCalledExactlyOnceWith(
         'chip-1',
         '/srv/agent-session-attachments/u1/shot.png',
-        null
+        null,
+        undefined
       )
       expect(chips.drop).not.toHaveBeenCalled()
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }],
+        undefined
+      )
       // The client never reads its own disk for these paths: the server stores the bytes.
       expect(mocks.stat).not.toHaveBeenCalled()
     })
@@ -496,9 +498,10 @@ describe('useNativeChatExternalAttachments', () => {
           uploaded([['/Users/me/notes.md', '/srv/agent-session-attachments/u1/notes.md']])
         )
       )
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-1', path: '/srv/agent-session-attachments/u1/notes.md' }],
+        undefined
+      )
     })
 
     it('keeps each file operation ID through reference settlement, including removed chips', async () => {
@@ -524,10 +527,13 @@ describe('useNativeChatExternalAttachments', () => {
         )
       )
 
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [
+          { id: 'chip-1', path: '/srv/agent-session-attachments/u1/report.pdf' },
+          { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
+        ],
+        undefined
+      )
     })
 
     it('names, in one notice, each file that did not attach', async () => {
@@ -553,9 +559,10 @@ describe('useNativeChatExternalAttachments', () => {
       )
 
       expect(chips.drop).toHaveBeenCalledWith('chip-1')
-      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith([
-        { id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }
-      ])
+      expect(chips.attachReferences).toHaveBeenCalledExactlyOnceWith(
+        [{ id: 'chip-2', path: '/srv/agent-session-attachments/u2/notes.md' }],
+        undefined
+      )
       // The cause, the size limit here, rides in the same notice.
       expect(notices).toEqual([
         "Couldn't attach huge.mov. 'huge.mov' is 60 MB, over the 50 MB chat attachment limit."
