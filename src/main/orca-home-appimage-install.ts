@@ -121,17 +121,12 @@ export async function verifyInstalledHomeAppImage(
 ): Promise<HomeAppImageIdentity> {
   const image = join(root, HOME_APPIMAGE_NAME)
   const digest = await homeAppImageDigest(image)
-  const recorded = await readHomeImageIdentity(join(root, 'installed-release.json'))
   const pin = (await readFile(join(root, 'release-tag'), 'utf8').catch(() => '')).trim()
   const savedDigest = await readFile(join(root, 'appimage.sha256'), 'utf8').then(
     parseHomeAppImageChecksum,
     () => null
   )
-  if (
-    savedDigest !== digest ||
-    !validHomeReleaseTag(pin) ||
-    (recorded && (recorded.tag !== pin || recorded.sha256 !== digest))
-  ) {
+  if (savedDigest !== digest || !validHomeReleaseTag(pin)) {
     throw new Error('Saved image and release pin disagree')
   }
   const stat = await lstat(image)
@@ -155,9 +150,18 @@ export async function reconcileHomeAppImage(
     throw new Error('Installed AppImage is not executable')
   }
   const recorded = await readHomeImageIdentity(join(root, 'installed-release.json'))
+  const pin = (await readFile(join(root, 'release-tag'), 'utf8').catch(() => '')).trim()
+  const savedDigest = await readFile(join(root, 'appimage.sha256'), 'utf8').then(
+    parseHomeAppImageChecksum,
+    () => null
+  )
   let identity: HomeAppImageIdentity
   if (recorded?.sha256 === digest) {
     identity = recorded
+    await verifyHomeAppImageMarker(image, extract)
+  } else if (validHomeReleaseTag(pin) && savedDigest === digest) {
+    // Older bash installers rewrote pin+checksum without installed-release.json.
+    identity = { tag: pin, sha256: digest }
     await verifyHomeAppImageMarker(image, extract)
   } else if (recorded) {
     throw new Error(

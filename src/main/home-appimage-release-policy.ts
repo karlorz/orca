@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { compareHomeTags } from './orca-home-appimage-install'
+import { KARLORZ_FORK_RELEASE_FEED } from './updater-release-feeds'
 
 export const HOME_UPDATE_RUNBOOK =
   'https://github.com/karlorz/orca/blob/fork-main/docs/reference/linux-home-appimage-install.md#attended-daemon-protocol-update'
@@ -44,6 +45,47 @@ export function selectHomeAppImageRelease(
   return (
     candidates.find((release) => compareHomeReleaseTags(release.tag_name, currentTag) > 0) ?? null
   )
+}
+
+const HOME_RELEASE_ASSET_NAMES = [
+  'orca-linux.AppImage',
+  'SHA256SUMS.txt',
+  'orca-update-protocol.json'
+] as const
+
+export function parseHomeDesktopTagsFromAtom(xml: string): string[] {
+  const pattern = new RegExp(KARLORZ_FORK_RELEASE_FEED.tagHrefPattern.source, 'g')
+  const tags: string[] = []
+  const seen = new Set<string>()
+  for (const match of xml.matchAll(pattern)) {
+    const tag = match[1]
+    if (
+      !homeReleaseTag.safeParse(tag).success ||
+      !KARLORZ_FORK_RELEASE_FEED.desktopTagPattern.test(tag) ||
+      seen.has(tag)
+    ) {
+      continue
+    }
+    seen.add(tag)
+    tags.push(tag)
+  }
+  tags.sort((left, right) => compareHomeReleaseTags(right, left))
+  return tags
+}
+
+export function homeReleaseFromDesktopTag(tag: string): HomeAppImageRelease {
+  if (!homeReleaseTag.safeParse(tag).success) {
+    throw new Error('Expected a fork desktop release tag')
+  }
+  return {
+    tag_name: tag,
+    draft: false,
+    prerelease: true,
+    assets: HOME_RELEASE_ASSET_NAMES.map((name) => ({
+      name,
+      browser_download_url: `${KARLORZ_FORK_RELEASE_FEED.releaseDownloadBase}/${tag}/${name}`
+    }))
+  }
 }
 
 export function homeReleaseAssetUrl(release: HomeAppImageRelease, name: string): string {

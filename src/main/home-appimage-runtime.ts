@@ -1,9 +1,10 @@
-import { app, net } from 'electron'
+import { app } from 'electron'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getDaemonProvider } from './daemon/daemon-provider-state'
 import { getAllDaemonAdapters } from './daemon/daemon-provider-routing'
 import { HomeAppImageUpdater, type HomeAppImageUpdaterOptions } from './home-appimage-updater'
+import { getMainHttpClient } from './network/http-client'
 import {
   acquireHomeAppImageLock,
   commitHomeAppImage,
@@ -68,7 +69,7 @@ export function createHomeAppImageUpdater(
     ...callbacks,
     root,
     runningTag,
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: (url, init) => getMainHttpClient().fetch(url, init),
     liveProtocols: liveHomeDaemonProtocols,
     lock: () => acquireHomeAppImageLock(root),
     reconcile: () => reconcileHomeAppImage(root, runningTag, extractHomeAppImage),
