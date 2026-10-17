@@ -140,6 +140,11 @@ jobs:
           name: orcad-template
           path: out/orcad-template
 
+      - name: Require the orcad template to report this fork version
+        env:
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+        run: node config/scripts/orcad-template-app-version.mjs --assert-file out/orcad-template/out/package.json
+
       - name: Build Linux packages
         env:
           ORCA_FORK_VOICE_BUILD: '1'
@@ -249,6 +254,12 @@ jobs:
         with:
           name: orcad-template
           path: out/orcad-template
+
+      - name: Require the orcad template to report this fork version
+        shell: bash
+        env:
+          ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}
+        run: node config/scripts/orcad-template-app-version.mjs --assert-file out/orcad-template/out/package.json
 
       - name: Build unsigned Windows NSIS installer
         shell: pwsh

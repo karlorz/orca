@@ -528,7 +528,15 @@ jobs:
           node config/scripts/merge-orcad-prebuilds.mjs "$RUNNER_TEMP"/orcad-prebuild-lanes/*
           pnpm build:orcad-prebuilds --require-slots
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc217
-      - run: pnpm build:orcad-template
+      - name: Build the orcad template
+        env:
+          FORK_DESKTOP_TAG: ${{ github.ref_name }}
+        run: pnpm build:orcad-template
+      - name: Require fork-tag templates to stamp the desktop version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          FORK_DESKTOP_TAG: ${{ github.ref_name }}
+        run: node config/scripts/orcad-template-app-version.mjs --assert-file out/orcad-template/out/package.json
       - name: Bind validation template to exact source and run
         if: inputs.validation_source_sha != ''
         env:

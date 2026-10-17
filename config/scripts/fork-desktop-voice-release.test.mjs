@@ -46,6 +46,13 @@ describe('fork desktop voice release workflow', () => {
     expect(rawYaml).toContain('ORCA_FORK_VOICE_BUILD_VERSION: ${{ steps.version.outputs.version }}')
   })
 
+  it('requires the downloaded orcad template to report the fork desktop version', () => {
+    const rawYaml = releaseSource()
+    expect(rawYaml).toContain(
+      'orcad-template-app-version.mjs --assert-file out/orcad-template/out/package.json'
+    )
+  })
+
   it('builds both macOS architectures (x64 and arm64)', () => {
     const rawYaml = releaseSource()
     expect(rawYaml).not.toMatch(/electron-builder[^\n]*--mac[^\n]*--arm64/)

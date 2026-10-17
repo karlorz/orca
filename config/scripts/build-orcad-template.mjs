@@ -38,6 +38,10 @@ import {
 import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
 import { assertNotLayoutOwnerBuild } from '../layout-owner-build.cjs'
+import {
+  resolveOrcadTemplateAppVersion,
+  stampOrcadTemplatePackageJson
+} from './orcad-template-app-version.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const outputDir = join(root, 'out', 'orcad-template')
@@ -199,6 +203,10 @@ async function main() {
       }
     }
     copy(source, join(outputDir, ...filename.split('/')), isExecutable(filename))
+  }
+  const templateAppVersion = resolveOrcadTemplateAppVersion()
+  if (templateAppVersion) {
+    stampOrcadTemplatePackageJson(join(outputDir, 'out/package.json'), templateAppVersion)
   }
   const targets = Object.fromEntries(
     templateTargets.map((target) => [target, stageTarget(target, packages[target])])

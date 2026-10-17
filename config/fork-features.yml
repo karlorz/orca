@@ -519,6 +519,17 @@ features:
       - src/cli/handlers/agent-session-control.ts
     wiki: projects/openpets/work/2026-10-11-codex-overlay-card-followups
 
+  - id: orcad-template-fork-version-stamp
+    title: Stamp orcad-template out/package.json with the fork desktop version so managed servers report 1.4.227-N
+    kind: product
+    status: landed
+    paths:
+      - config/scripts/orcad-template-app-version.mjs
+      - config/scripts/build-orcad-template.mjs
+      - .github/workflows/node-server-tests.yml
+      - .github/workflows/fork-desktop-voice-release.yml
+      - .github/workflows/fork-mac-package.yml
+
   - id: managed-orcad-restore-hold
     title: Env-gated no-update/no-deploy path so managed-tunnel restore cannot mutate live orcad
     kind: product
