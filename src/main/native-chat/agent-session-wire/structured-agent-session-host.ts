@@ -25,7 +25,10 @@ import {
 } from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
-import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import {
+  structuredAgentSessionMutationDelegates,
+  type StructuredAgentSessionMutationContext
+} from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -294,6 +297,7 @@ export class StructuredAgentSessionHost {
     (...args) => this.clientDelivery.waitForSendSettlement(...args),
     (...args) => this.conversationCommands.send(...args)
   )
+  private readonly mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
   controlTarget = this.boundControls.controlTarget
   send = this.boundControls.send
 
