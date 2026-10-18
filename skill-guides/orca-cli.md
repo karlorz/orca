@@ -22,6 +22,25 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Verify launch placement
+
+For a named target, discover its full ID with `ORCA worktree list --json`, then
+inspect host, path, and branch (when Git) with `ORCA worktree show --worktree
+id:<full-id> --json`. Pass that exact selector to existing-workspace launches;
+select an exact repo before new-worktree creation in another project. For an
+existing terminal, verify its workspace with `terminal show` before sending work.
+Do not infer placement from cwd or absolute paths in a task prompt. In particular,
+orchestration `current` means the coordinator's recorded workspace and can differ
+from shell cwd or `worktree current`. Keep caller identity intact. Coordinator
+identity and Run notification routing live in the orchestration skill.
+
+Verify the launch receipt's workspace and returned handle before follow-ups; use
+`worktree show`, `terminal show`, or `orchestration worker-show` if needed. Require
+the receiving agent to verify cwd/workspace before its first edit, using Git
+top-level/branch only when Git applies. On mismatch, stop further work and use the
+appropriate recovery flow; confirm the original editor stopped before replacing
+it. Absolute-path edits are not a workaround for launching in the wrong workspace.
+
 ## Tasks inbox
 
 The desktop GitHub Tasks inbox (the screen labeled GitHub · Local Mac) is part of this skill. It is not an orchestration task, a wiki work item, or a Linear issue. Do not use `ORCA orchestration task-create` to list or open it.
@@ -119,7 +138,9 @@ Selectors:
 
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
+- `worktree current` reports the enclosing workspace; do not generalize its cwd
+  resolution to other commands. Orchestration `--worktree current` means the
+  coordinator's recorded workspace. Use verified exact IDs for named targets.
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
@@ -147,20 +168,21 @@ ORCA worktree create --name task --run-hooks --json
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
-- `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
+- `worktree create` makes a new checkout. For a fresh agent in an existing checkout, use `ORCA agent launch --agent codex --worktree id:<verified-full-workspace-id> --json`.
 
 ## Review and issue references
 
 ```text
 ORCA reference list --worktree name:api --json
 ORCA reference add https://github.com/acme/api/pull/5123 https://linear.app/acme/issue/STA-1234 --worktree name:api --json
+ORCA reference add ENG-123 --reference-site <jira-site-id> --worktree name:api --json
 ORCA reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
 ORCA reference remove --key <key-from-list> --worktree name:api --json
 ORCA worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
 ORCA reference find STA-1234 --json
 ```
 
-- Add/remove require explicit `--worktree`, including `current` or a folder selector. Writes accept full URLs; `remove --key` also accepts opaque keys from list for URL-less entries. Source-unknown legacy links cannot match exact URLs; stored native issue keys remain searchable. Duplicate adds and absent removals do nothing; unrelated links and selection survive concurrent edits. Unsupported older hosts refuse writes.
+- Add/remove require explicit `--worktree`, including `current` or a folder selector. Add and create accept full URLs or bare Jira keys. Keys resolve on the selected execution-host Jira site; use `--reference-site <id>` from `ORCA jira connection` to choose one. Other providers require full URLs, which need no Jira authentication. Every input must validate and each Jira key must resolve before writing. `remove --key` also accepts opaque keys from list for URL-less entries. Source-unknown legacy links cannot match exact URLs; stored native issue keys remain searchable. Duplicate adds and absent removals do nothing; unrelated links and selection survive concurrent edits. Unsupported older hosts refuse writes.
 - Repeat create `--reference` to seed links before setup/agent startup. Do not combine it with legacy `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, or `--gitlab-mr` flags. Legacy `worktree set --pr` still appends/selects; `linkedItems` remains the worktree output field.
 - Find accepts a full URL or native issue key such as `STA-1234`; no bare numbers or custom shorthand. It searches stored links across sources, not conversation text (`ORCA search`). Narrow with `--worktree` or `--repo`; optionally `--include-archived`, `--limit` (default 50 workspaces). Check `truncated` before assuming complete coverage. Remote selectors refer to the execution host; never use local `current` for a paired host.
 - Find returns all known agents in each matching workspace. `linked: true` requires recorded reference/session evidence; `linked: false` means ownership is unknown. Check `liveness` (`live`, `unverifiable`, `exited`) and choose the intended agent; never infer ownership merely from workspace membership.
@@ -226,6 +248,7 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.

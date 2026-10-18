@@ -5,6 +5,7 @@ import {
   ORCAD_READINESS_FILENAME,
   orcadLaunchCommand,
   orcadLivenessBlocksGc,
+  orcadLivenessProvenExited,
   orcadLivenessProbeCommand,
   OrcadRemoteLaunchUnsupportedError,
   parseOrcadLiveness,
@@ -43,7 +44,31 @@ const READY_LINE = JSON.stringify({
 
 describe('orcadLaunchCommand', () => {
   it('states the bind posture rather than inheriting the build default', () => {
-    expect(orcadLaunchCommand(posix, SPEC)).toContain("--bind '127.0.0.1'")
+    expect(orcadLaunchCommand(posix, SPEC)).toContain("'--bind' '127.0.0.1'")
+    expect(orcadLaunchCommand(posix, SPEC)).not.toContain('--pairing-address')
+    expect(orcadLaunchCommand(posix, SPEC)).not.toContain('--mobile-pairing')
+  })
+
+  it('appends advertised pairing flags only when the spec names them', () => {
+    const command = orcadLaunchCommand(posix, {
+      ...SPEC,
+      bindHost: '0.0.0.0',
+      pairingAddress: 'wss://example.test',
+      mobilePairing: true
+    })
+    expect(command).toContain("'--bind' '0.0.0.0'")
+    expect(command).toContain("'--pairing-address' 'wss://example.test'")
+    expect(command).toContain("'--mobile-pairing'")
+  })
+
+  it('omits mobile pairing when only bind and advertised address are set', () => {
+    const command = orcadLaunchCommand(posix, {
+      ...SPEC,
+      bindHost: '0.0.0.0',
+      pairingAddress: 'wss://example.test'
+    })
+    expect(command).toContain("'--pairing-address' 'wss://example.test'")
+    expect(command).not.toContain('--mobile-pairing')
   })
 
   it('truncates the readiness file, so a stale line cannot be activated on', () => {
@@ -100,11 +125,21 @@ describe('liveness', () => {
   it.each([
     ['LIVE', 'LIVE', true],
     ['DEAD', 'DEAD', false],
+    ['NEVER_LAUNCHED', 'NEVER_LAUNCHED', false],
     ['', 'UNKNOWN', true],
     ['garbage', 'UNKNOWN', true]
   ])('parses %s and blocks GC = %s', (output, expected, blocks) => {
     expect(parseOrcadLiveness(output)).toBe(expected)
     expect(orcadLivenessBlocksGc(parseOrcadLiveness(output))).toBe(blocks)
+  })
+
+  it.each([
+    ['DEAD', true],
+    ['NEVER_LAUNCHED', true],
+    ['LIVE', false],
+    ['UNKNOWN', false]
+  ] as const)('%s is proven exit = %s', (liveness, exited) => {
+    expect(orcadLivenessProvenExited(liveness)).toBe(exited)
   })
 })
 

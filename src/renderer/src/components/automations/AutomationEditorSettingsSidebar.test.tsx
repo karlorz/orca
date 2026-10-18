@@ -16,16 +16,15 @@ vi.mock('./AutomationPrecheckFields', () => ({ AutomationPrecheckFields: () => n
 vi.mock('./AutomationSetupDecisionField', () => ({ AutomationSetupDecisionField: () => null }))
 vi.mock('./AutomationDestinationField', () => ({ AutomationDestinationField: () => null }))
 vi.mock('./AutomationExtraAgentArgsField', () => ({ AutomationExtraAgentArgsField: () => null }))
-// Fork: the per-automation model field renders its own comboboxes.
 vi.mock('./AutomationModelField', () => ({ AutomationModelField: () => null }))
 
 const DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
   agentId: 'codex',
-  extraAgentArgs: '',
   model: '',
   agentFlags: '',
+  extraAgentArgs: '',
   projectId: '',
   workspaceMode: 'existing',
   workspaceId: '',
@@ -45,8 +44,6 @@ const DRAFT: AutomationDraft = {
 function renderSidebar(onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void) {
   return render(
     <AutomationEditorSettingsSidebar
-      isHermesTarget={false}
-      isHermesCreate={false}
       repos={[]}
       projectHostSetups={[]}
       automationYamlHooksByRepoKey={{}}

@@ -48,7 +48,7 @@ bash ~/.local/share/box-persist/install-orca-home-appimage.sh --latest
 bash ~/.local/share/box-persist/install-orca-home-appimage.sh --tag v1.4.222-1
 ```
 
-`--ensure` restores or repairs an existing install. First installation requires an explicit `--latest` or `--tag`. The app and installer share SHA256 and extracted-marker verification plus the image/pin transaction. `installed-release.json` binds the installed tag to its verified digest. Missing, corrupt, or stale pins are rebuilt from that identity only when the installed bytes match. A missing or damaged image is downloaded at the recorded tag. An existing image with no verifiable identity fails closed and requires an attended choice.
+`--ensure` restores or repairs an existing install. First installation requires an explicit `--latest` or `--tag`. The app and installer share SHA256 and extracted-marker verification plus the image/pin transaction. `commit` writes `release-tag`, `appimage.sha256`, and `installed-release.json` together. `installed-release.json` binds the installed tag to its verified digest. Missing, corrupt, or stale pins are rebuilt from that identity only when the installed bytes still match the recorded digest. A matching local pin and checksum is not enough to rewrite identity: missing or corrupt JSON, or a byte swap with an updated checksum, fails closed and needs an attended `--tag` or `--latest` reinstall. A missing or damaged image is downloaded at the recorded tag. Recopy the persist installer scripts from this tree after pulling; a leftover box copy of the older bash installer will not write the JSON identity on `--tag`.
 
 The transaction fsyncs staged bytes, journals the target tag/digest/staging path in `.install-pending`, renames the image, then atomically renames the checksum, pin, and identity record. A filesystem cannot rename several files in one operation: the durable journal makes interrupted switches recover forward to the verified target before any repair decision. Startup compares the running version with the verified disk identity. A newer disk image offers Restart to Update; an older disk image requires attended repair. A same-tag replacement with different bytes is rejected. Only a checksum- and marker-verified current image replaces the single previous image.
 
@@ -66,10 +66,10 @@ if [ ! -e "$persist/orca-box-ensure-deb.sh" ]; then
 fi
 cp config/scripts/install-orca-home-appimage.sh \
    config/scripts/orca-home-appimage-install-cli.mjs \
-   config/scripts/orca-home-appimage-install.ts \
-   config/scripts/orca-home-appimage-verification.ts \
    config/scripts/orca-home-launcher.sh \
    config/scripts/orca-box-ensure.sh "$persist/"
+cp src/main/orca-home-appimage-install.ts "$persist/orca-home-appimage-install.ts"
+cp src/main/orca-home-appimage-verification.ts "$persist/orca-home-appimage-verification.ts"
 chmod +x "$persist"/{install-orca-home-appimage,orca-home-launcher,orca-box-ensure}.sh
 bash "$persist/orca-box-ensure.sh" --install
 ```
@@ -89,7 +89,7 @@ Keep its existing background `--apply` branch. A saved home pin requires a verif
 
 `resources/package-type: AppImage` resolves to `non-root`. `resolveLinuxPackageDownloadedStatus` returns no package recovery for that classification. The deb/rpm **Manual Install Required → Copy Install Command** card therefore has no recovery to render for this install. Keep the artifact's original marker.
 
-The home launcher sets `ORCA_HOME_INSTALL_MANAGED=1`. Linux x64 processes with a `non-root` classification and an absolute `APPIMAGE` named `orca-linux.AppImage` inside HOME use the shared updater. This replaces the earlier suppression policy. Startup and daily checks read the bounded `karlorz/orca` releases feed, including published prereleases, and select newer numeric `vX.Y.Z-N` tags. Local-build and channel-switch requests are refused for this managed install. Downloads stage beside the destination, validate through the installer's shared SHA256/marker code, and commit the image and restore pin together. The existing renderer offers **Restart to Update**. Only an explicit user action relaunches the installed image; downloading, ordinary quit, and ensure never restart the app.
+The home launcher sets `ORCA_HOME_INSTALL_MANAGED=1`. Linux x64 processes with a `non-root` classification and an absolute `APPIMAGE` named `orca-linux.AppImage` inside HOME use the shared updater. This replaces the earlier suppression policy. Startup and daily checks read the bounded `karlorz/orca` GitHub releases API, including published prereleases, and select newer numeric `vX.Y.Z-N` tags. The request sends GitHub API headers, omits session cookies, and follows GitHub asset redirects on the main-process fetch. A failed API call falls back to `releases.atom` on github.com rather than `/releases/latest`, which would skip prereleases. Non-OK responses include the URL, status, and a short body snippet. Local-build and channel-switch requests are refused for this managed install. Downloads stage beside the destination, validate through the installer's shared SHA256/marker code, and commit the image and restore pin together. The existing renderer offers **Restart to Update**. `orca update check` and `orca update apply` call the same updater: check reports feed/select/status, and apply downloads and commits the pin. Neither CLI command relaunches Orca, and apply refuses when the selected tag is older than or equal to the installed or running pin. Only an explicit user action relaunches the installed image; downloading, ordinary quit, ensure, and `orca update apply` never restart the app.
 
 ### Release daemon protocol metadata
 
@@ -101,7 +101,7 @@ Each future fork desktop release carries `orca-update-protocol.json`:
 
 The release workflow derives `daemonProtocol` from the tagged source's `PROTOCOL_VERSION`, emits the asset before generating `SHA256SUMS.txt`, and publishes it with the existing assets. This is the only release-workflow addition. Published tags remain immutable. Older releases without metadata require attended installation.
 
-Check, download, pre-commit, and restart compare the required protocol with the adapters that successfully answer live daemon inventory requests. Every connected generation must match. Missing metadata, unknown live daemon state, or a mismatch blocks the in-app path and gives the attended runbook URL. A protocol constant from the running app alone cannot authorize installation. SSH-hosted update execution remains owned by that host; this managed desktop path leaves remote service update policy intact.
+Check, download, pre-commit, and restart compare the required protocol with the adapters that successfully answer live daemon inventory requests. Every connected generation must match. Missing metadata, unknown live daemon state, or a mismatch blocks the in-app path and `orca update apply`, and gives the attended runbook URL. A protocol constant from the running app alone cannot authorize installation. SSH-hosted update execution remains owned by that host; this managed desktop path leaves remote service update policy intact.
 
 ### Attended daemon protocol update
 

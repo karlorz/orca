@@ -69,6 +69,7 @@ describe('session owner PTY handle on the production reveal route', () => {
         ptyId: PTY_ID,
         existingSessionOnly: true,
         focus: true,
+        flashFocusedPane: true,
         expectedProcessIdentity: { terminalHandle: owner.handle, incarnationId: INCARNATION_ID }
       })
     )

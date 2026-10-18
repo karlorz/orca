@@ -17,14 +17,12 @@ export function useAutomationsPageEscape({
     externalDeleteTarget,
     isDetailOpen,
     selectedAutomationRunPageId,
-    selectedExternalRunPage,
     pageView,
     runPageOrigin,
     setPageView,
     setActivePaneTab,
     setIsDetailOpen,
-    setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage
+    setSelectedAutomationRunPageId
   } = local
   useEffect(() => {
     // Why: View run keeps this page mounted but hidden; Escape must stay with the terminal.
@@ -82,10 +80,6 @@ export function useAutomationsPageEscape({
 
       if (isDetailOpen) {
         event.preventDefault()
-        if (selectedExternalRunPage) {
-          setSelectedExternalRunPage(null)
-          return
-        }
         if (selectedAutomationRunPageId) {
           setSelectedAutomationRunPageId(null)
           return
@@ -118,11 +112,9 @@ export function useAutomationsPageEscape({
     pageView,
     runPageOrigin,
     selectedAutomationRunPageId,
-    selectedExternalRunPage,
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage,
     setPageView
   ])
 }

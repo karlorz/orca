@@ -40,7 +40,6 @@ export function useAutomationRunPageState({
     rerunRunIdsInFlight,
     selectedExternalKey,
     selectExternalKey,
-    setSelectedExternalRunPage,
     pageView,
     setPageView,
     isDetailOpen,
@@ -64,7 +63,6 @@ export function useAutomationRunPageState({
     }
     setIsDetailOpen(false)
     setSelectedAutomationRunPageId(null)
-    setSelectedExternalRunPage(null)
     setActivePaneTab('overview')
   }, [
     isDetailOpen,
@@ -76,8 +74,7 @@ export function useAutomationRunPageState({
     selectedRow,
     setActivePaneTab,
     setIsDetailOpen,
-    setSelectedAutomationRunPageId,
-    setSelectedExternalRunPage
+    setSelectedAutomationRunPageId
   ])
   useEffect(() => {
     if (!pendingAutomationRunNavigation || isLoading) {

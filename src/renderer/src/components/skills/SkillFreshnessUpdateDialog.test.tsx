@@ -819,9 +819,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain(
-      'Orca could not finish checking plugin-managed skills.'
-    )
+    expect(container?.textContent).toContain('Orca could not finish checking every skill location.')
     expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/locked')
     expect(container?.textContent).toContain('EACCES')
     expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
@@ -857,7 +855,7 @@ describe('SkillFreshnessUpdateDialog', () => {
 
       expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
       expect(container?.textContent).toContain(
-        'Orca could not finish checking plugin-managed skills.'
+        'Orca could not finish checking every skill location.'
       )
       // Why: the headline alone would pass with the folder list gone, leaving the user
       // told the scan stopped but never told where. Assert the diagnostic renders too.
@@ -889,9 +887,35 @@ describe('SkillFreshnessUpdateDialog', () => {
 
     expect(container?.textContent).toContain('All installed Orca skills are up to date.')
     expect(container?.textContent).not.toContain(
-      'Orca could not finish checking plugin-managed skills.'
+      'Orca could not finish checking every skill location.'
     )
     expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/deep')
     expect(container?.textContent).toContain('scan depth limit')
+  })
+
+  it('lists a repository scan limit as a folder issue, not a skill copy', async () => {
+    mocks.inventory = {
+      schemaVersion: 1,
+      installations: [placement('orca-cli', { status: 'current' })],
+      eligibleUpdateNames: [],
+      scanIssues: [
+        {
+          rootId: 'repo-scan-limit',
+          sourceLabel: 'Additional repositories',
+          path: '/home/projects/work/.agents/skills',
+          reason: 'repository-limit',
+          errorCode: null
+        }
+      ],
+      scannedAt: 2
+    }
+    await renderDialog()
+    await openViaRequest()
+
+    expect(container?.textContent).toContain('Orca could not finish checking every skill location.')
+    expect(container?.textContent).toContain('Additional repositories')
+    expect(container?.textContent).toContain('repository scan limit')
+    expect(container?.textContent).toContain('/home/projects/work/.agents/skills')
+    expect(container?.querySelector('[data-skill-row="orca-cli"]')).toBeNull()
   })
 })

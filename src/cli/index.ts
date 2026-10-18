@@ -40,7 +40,8 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
-    commandPath[0] === 'profile'
+    commandPath[0] === 'profile' ||
+    commandPath[0] === 'update'
   )
 }
 
@@ -185,9 +186,15 @@ export async function main(
     })
   } catch (error) {
     const worktreeSelector = parsed.flags.get('worktree')
+    const hostFlag = parsed.flags.get('host')
     reportCliError(error, json, {
       commandPath: parsed.commandPath,
-      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {})
+      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {}),
+      remoteServerSelected:
+        parsed.flags.has('environment') ||
+        parsed.flags.has('pairing-code') ||
+        (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
+        Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())
     })
     process.exitCode = 1
   }

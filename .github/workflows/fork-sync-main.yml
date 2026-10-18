@@ -14,7 +14,9 @@ name: Sync fork main from upstream
 #          Promise.all, then sequential build:speech-macos)
 #        mobile/src/terminal/terminal-webview-payload-hash.test.ts
 #          (recompute EXPECTED_* from live XTERM_HTML)
-#   6. Auto-cuts mobile-android-v<train>-0 on a new published mobile train (app.json bump first).
+#   6. Checks mobile/pnpm-lock.yaml specifiers and patchedDependencies
+#      (including the @react-native/codegen patch) before the mobile auto-cut.
+#   7. Auto-cuts mobile-android-v<train>-0 on a new published mobile train (app.json bump first).
 # Other merge conflicts fail closed. Extra mobile -1/-2 stay attended.
 # GitHub cron is UTC-only: 01:17 UTC = 09:17 HKT (UTC+8, no DST), timed after
 # upstream's usual evening-UTC release window. workflow_dispatch = manual invoke.
@@ -108,6 +110,11 @@ jobs:
         # --auto cuts v<base>-0 only when no fork tag covers that base yet;
         # otherwise it exits 0 with a skip line (daily no-op stays green).
         run: node config/scripts/fork-next-desktop-tag.mjs --auto
+
+      - name: Check mobile lockfile before auto-cut
+        # Local, no GitHub API. Fails closed when mobile/pnpm-lock.yaml
+        # specifiers or patchedDependencies drift, or the codegen patch is gone.
+        run: node config/scripts/fork-mobile-lockfile-precheck.mjs
 
       - name: Auto-cut fork mobile tag for new published train
         env:

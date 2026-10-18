@@ -118,6 +118,7 @@ export type SkillFreshnessScanIssueReason =
   | 'candidate-limit'
   | 'manifest-limit'
   | 'outside-root'
+  | 'repository-limit'
   | 'io-error'
   | 'issue-limit'
 
@@ -153,7 +154,8 @@ export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue)
 // early cannot be reported as proof every copy is up to date.
 const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
   'entry-limit',
-  'candidate-limit'
+  'candidate-limit',
+  'repository-limit'
 ])
 
 export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {

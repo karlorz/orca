@@ -2,7 +2,7 @@ import { withSpan } from '../../observability/tracer'
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { RpcContext } from './core'
 
-type TerminalCloseMethod = 'terminal.close' | 'terminal.closeTab'
+type TerminalCloseMethod = 'terminal.close' | 'terminal.closeTab' | 'terminal.gcClose'
 type TerminalCloseTargetKind = 'terminal' | 'terminal-tab'
 
 export function withTerminalCloseAttribution(

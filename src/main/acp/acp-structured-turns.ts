@@ -34,7 +34,12 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
   | { state: 'unknown'; reason: string }
 )
 
-type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+type Send = {
+  clientMessageId: string
+  prompt: ContentBlock[]
+  requestedAt: number
+  beforePromptWrite?: () => void
+}
 
 export type AcpStructuredTurnsDeps = {
   connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel'>
@@ -106,6 +111,10 @@ export class AcpStructuredTurns {
 
   dispatch(send: Send): void {
     this.unsettled.add(send.clientMessageId)
+    if (send.beforePromptWrite && (this.active || this.deps.lane.openTurnId !== null)) {
+      this.reject(send.clientMessageId, agentSessionFailureFact('providerRejected'))
+      return
+    }
     if (this.active) {
       this.steers.push(send)
       this.cancelForSteer()
@@ -156,7 +165,10 @@ export class AcpStructuredTurns {
   private withdrawSteers(): boolean {
     const withdrawn = this.steers.splice(0)
     for (const send of withdrawn) {
-      this.reject(send.clientMessageId, agentSessionFailureFact('cancelled'))
+      this.reject(
+        send.clientMessageId,
+        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
+      )
     }
     return withdrawn.length > 0
   }
@@ -178,6 +190,12 @@ export class AcpStructuredTurns {
 
   private start(send: Send): void {
     const { lane } = this.deps
+    try {
+      send.beforePromptWrite?.()
+    } catch {
+      this.reject(send.clientMessageId, agentSessionFailureFact('providerRejected'))
+      return
+    }
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)

@@ -1,3 +1,4 @@
+import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -7,16 +8,19 @@ import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
+  TerminalClose,
   TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
+  TerminalReveal,
   TerminalSleep,
   TerminalSplit,
   TerminalStop,
   TerminalStopExact,
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { closeTerminalFromRpc } from './terminal-gc-close'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
@@ -36,7 +40,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.create',
     permission: 'workspace',
     params: TerminalCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientId, clientKind }) => {
+    handler: async (params, context) => {
+      const { runtime, pairedDeviceId, clientId, clientKind } = context
       // A focused terminal create predates paired-client navigation. Keep the
       // authority boundary here so a remote caller cannot activate the host
       // renderer. This legacy RPC remains a background create for paired viewers;
@@ -55,6 +60,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           (canonicalWorktreeSelector, preAllocatedHandle) =>
             runtime.createTerminal(canonicalWorktreeSelector, {
               command: params.command,
+              terminalImageViewerSupported: terminalImageViewerSupported(context),
               ...(params.shell ? { shellOverride: params.shell } : {}),
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
@@ -73,7 +79,6 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               title: params.title,
               focus,
-              rendererBacked: params.rendererBacked === true,
               activate,
               presentation,
               tabId: params.tabId,
@@ -165,7 +170,33 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ? { expectedIncarnationId: params.expectedIncarnationId }
             : {}),
           navigateHost,
-          activateHostWindow: navigateHost && clientKind === undefined
+          activateHostWindow: navigateHost && clientKind === undefined,
+          flashFocusedPane: true
+        })
+      }
+    }
+  }),
+  defineMethod({
+    // Why a method of its own: terminal.focus resolves a handle on the host that runs the PTY, and a
+    // paired server has no window, so only the desktop showing its pane can reveal it (#24688).
+    name: 'terminal.reveal',
+    permission: 'workspace',
+    params: TerminalReveal,
+    handler: async (params, { runtime, clientKind }) => {
+      // Why local callers only: it moves this host's window, which terminal.focus lets a paired
+      // client do only by asking for host navigation, and a CLI or companion app here needs no more.
+      if (clientKind !== undefined) {
+        throw Object.assign(
+          new Error('terminal.reveal is available only to callers on this machine.'),
+          { code: 'forbidden' }
+        )
+      }
+      return {
+        reveal: await runtime.revealTerminalPane({
+          worktreeId: params.worktreeId,
+          tabId: params.tabId,
+          leafId: params.leafId ?? null,
+          executionHostId: params.executionHostId ?? null
         })
       }
     }
@@ -173,14 +204,28 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.close',
     permission: 'workspace',
-    params: TerminalHandle,
+    params: TerminalClose,
     handler: async (params, context) => ({
       close: await withTerminalCloseAttribution(
         'terminal.close',
         context,
         'terminal',
         params.terminal,
-        () => context.runtime.closeTerminal(params.terminal)
+        () => closeTerminalFromRpc(context.runtime, params)
+      )
+    })
+  }),
+  defineMethod({
+    name: 'terminal.gcClose',
+    permission: 'workspace',
+    params: TerminalClose,
+    handler: async (params, context) => ({
+      close: await withTerminalCloseAttribution(
+        'terminal.gcClose',
+        context,
+        'terminal',
+        params.terminal,
+        () => closeTerminalFromRpc(context.runtime, params)
       )
     })
   }),

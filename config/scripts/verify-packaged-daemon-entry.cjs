@@ -67,7 +67,9 @@ function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   console.log('[verify-packaged-daemon-entry] OK — packaged daemon-entry loads under plain Node')
 }
 
-const TERMINAL_HOST_BOOT_TIMEOUT_MS = 20_000
+// Why: Rosetta x64 first-exec of a freshly signed helper on GHA macos-15 spent
+// ~19s reaching the socket, then starved a 20s OK-42 wait. Keep this above that.
+const TERMINAL_HOST_BOOT_TIMEOUT_MS = 60_000
 // Arithmetic so the shell echoing the typed command cannot satisfy the check.
 const TERMINAL_HOST_BOOT_COMMAND = 'echo "OK $((6*7))" && exit'
 const TERMINAL_HOST_BOOT_OUTPUT = 'OK 42'

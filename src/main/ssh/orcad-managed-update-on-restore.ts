@@ -3,6 +3,7 @@
  * same update check a connect would, once per server per session and off the caller's path.
  */
 import type { SshManagedServerUpdateNote, SshTarget } from '../../shared/ssh-types'
+import { isManagedOrcadRestoreMutationHeld } from './managed-orcad-restore-hold'
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
@@ -27,6 +28,10 @@ export function updateManagedOrcadOnRestore(
   environmentId: string,
   createDeps: () => ManagedOrcadRestoreUpdateDeps
 ): Promise<void> | null {
+  // Why: a held restore must not start the once-per-session update, even if a caller forgot to skip.
+  if (isManagedOrcadRestoreMutationHeld()) {
+    return null
+  }
   if (checked.has(environmentId)) {
     return null
   }
@@ -64,6 +69,9 @@ export function redeployStoppedManagedOrcad(
   environmentId: string,
   createDeps: () => ManagedOrcadRestoreUpdateDeps
 ): Promise<boolean> {
+  if (isManagedOrcadRestoreMutationHeld()) {
+    return Promise.resolve(false)
+  }
   let attempt = redeploying.get(environmentId)
   if (!attempt) {
     attempt = runRedeploy(environmentId, createDeps).finally(() =>

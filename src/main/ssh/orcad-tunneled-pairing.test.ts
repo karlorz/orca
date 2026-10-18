@@ -40,9 +40,16 @@ describe('tunneledOrcadPairingCode', () => {
     })
   })
 
-  it('refuses a non-loopback offer', () => {
-    expect(() => tunneledOrcadPairingCode(readiness('wss://runtime.example.com'), 46_768)).toThrow(
-      'not loopback-only'
+  it('rewrites a public advertised endpoint onto the SSH local forward', () => {
+    const rewritten = parsePairingCode(
+      tunneledOrcadPairingCode(readiness('wss://runtime.example.com/runtime'), 46_768)
+    )
+    expect(rewritten?.endpoint).toBe('ws://127.0.0.1:46768/runtime')
+  })
+
+  it('refuses a non-WebSocket offer', () => {
+    expect(() => tunneledOrcadPairingCode(readiness('https://runtime.example.com'), 46_768)).toThrow(
+      'not a WebSocket URL'
     )
   })
 })

@@ -11,6 +11,7 @@ import {
   hasRenderableUsage,
   hasVisibleRenderableUsage,
   USAGE_PROVIDER_IDS,
+  DEFAULT_VISIBLE_USAGE_PROVIDERS,
   type AccountsSnapshot,
   type InactiveAccountUsage,
   type ProviderRateLimits,
@@ -38,6 +39,7 @@ function makeSnapshot(
     antigravityLimits?: ProviderRateLimits | null
     kimiLimits?: ProviderRateLimits | null
     grokLimits?: ProviderRateLimits | null
+    cursorLimits?: ProviderRateLimits | null
     claudeAccounts?: AccountsSnapshot['claude']['accounts']
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
@@ -64,6 +66,7 @@ function makeSnapshot(
       antigravity: overrides.antigravityLimits ?? null,
       kimi: overrides.kimiLimits ?? null,
       grok: overrides.grokLimits ?? null,
+      cursor: overrides.cursorLimits ?? null,
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
       inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
     }
@@ -272,6 +275,17 @@ describe('getActiveProviderRateLimits', () => {
     expect(getActiveProviderRateLimits(makeSnapshot({ grokLimits: grok }), 'grok')).toBe(grok)
   })
 
+  it('reads a display-only provider (cursor) via its descriptor field', () => {
+    const cursor = makeLimits({
+      provider: 'cursor',
+      status: 'ok',
+      session: window(15)
+    })
+    expect(getActiveProviderRateLimits(makeSnapshot({ cursorLimits: cursor }), 'cursor')).toBe(
+      cursor
+    )
+  })
+
   it('maps opencode-go wire id to the opencodeGo snapshot field', () => {
     const snapshot = makeSnapshot()
     const openCode = makeLimits({
@@ -311,6 +325,7 @@ describe('getActiveProviderRateLimits', () => {
     expect(getActiveProviderRateLimits(legacy, 'gemini')).toBeNull()
     expect(getActiveProviderRateLimits(legacy, 'antigravity')).toBeNull()
     expect(getActiveProviderRateLimits(legacy, 'minimax')).toBeNull()
+    expect(getActiveProviderRateLimits(legacy, 'cursor')).toBeNull()
   })
 })
 
@@ -433,10 +448,25 @@ describe('hasRenderableUsage for display-only providers', () => {
     expect(hasRenderableUsage(fetching, 'grok')).toBe(true)
     expect(hasRenderableUsage(error, 'grok')).toBe(true)
   })
+
+  it('is true for cursor when the system-default target has active usage', () => {
+    const snapshot = makeSnapshot({
+      cursorLimits: makeLimits({
+        provider: 'cursor',
+        status: 'ok',
+        monthly: window(18, 43200)
+      })
+    })
+    expect(hasRenderableUsage(snapshot, 'cursor')).toBe(true)
+  })
+
+  it('is false for cursor with no data, matching other display-only extras', () => {
+    expect(hasRenderableUsage(makeSnapshot(), 'cursor')).toBe(false)
+  })
 })
 
 describe('USAGE_PROVIDER_IDS', () => {
-  it('covers all eight providers in desktop status-bar order', () => {
+  it('covers all nine providers, with Cursor after Grok as a display-only extra', () => {
     expect(USAGE_PROVIDER_IDS).toEqual([
       'claude',
       'codex',
@@ -445,8 +475,15 @@ describe('USAGE_PROVIDER_IDS', () => {
       'opencode-go',
       'kimi',
       'minimax',
-      'grok'
+      'grok',
+      'cursor'
     ])
+  })
+
+  it('keeps Claude and Codex default-on and Cursor off until the operator enables it', () => {
+    expect(DEFAULT_VISIBLE_USAGE_PROVIDERS).toEqual(['claude', 'codex'])
+    expect(DEFAULT_VISIBLE_USAGE_PROVIDERS).not.toContain('cursor')
+    expect(DEFAULT_VISIBLE_USAGE_PROVIDERS).not.toContain('grok')
   })
 })
 
@@ -487,5 +524,19 @@ describe('hasVisibleRenderableUsage', () => {
 
   it('is false for an empty visible set regardless of snapshot data', () => {
     expect(hasVisibleRenderableUsage(grokSnapshot, new Set<UsageProviderKey>())).toBe(false)
+  })
+
+  it('is true when opted-in cursor has usage and default providers are empty', () => {
+    const snapshot = makeSnapshot({
+      cursorLimits: makeLimits({
+        provider: 'cursor',
+        status: 'ok',
+        monthly: window(18, 43200)
+      })
+    })
+    expect(hasVisibleRenderableUsage(snapshot, new Set<UsageProviderKey>(['cursor']))).toBe(true)
+    expect(
+      hasVisibleRenderableUsage(snapshot, new Set<UsageProviderKey>(['claude', 'codex']))
+    ).toBe(false)
   })
 })

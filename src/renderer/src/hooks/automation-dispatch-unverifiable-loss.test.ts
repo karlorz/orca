@@ -1,26 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
-
-const storeState = {
-  agentStatusByPaneKey: {} as Record<string, { providerSession?: { id?: string } }>,
-  sleepingAgentSessionsByPaneKey: {} as Record<string, { providerSession?: { id?: string } }>
-}
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => storeState,
+    getState: () => ({ agentStatusByPaneKey: {} }),
     subscribe: vi.fn(() => () => {})
   }
 }))
 
 const markDispatchResult = vi.fn<(result: AutomationDispatchResult) => Promise<void>>()
 const releaseTerminalOwnership = vi.fn()
-const finalizeTerminalOwnership = vi.fn(() => false)
+const finalizeTerminalOwnership = vi.fn<AutomationTerminalOwnership['finalize']>(async () => null)
 
-async function createCompletion(run: Record<string, unknown> = { id: 'run-1' }) {
+async function createCompletion() {
   const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
   const completion = createAutomationDispatchCompletion({
-    run: run as never,
+    run: { id: 'run-1' } as never,
     worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
     precheckResult: null,
     markDispatchResult,
@@ -42,10 +38,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     markDispatchResult.mockResolvedValue(undefined)
-    finalizeTerminalOwnership.mockReset()
-    finalizeTerminalOwnership.mockReturnValue(false)
-    storeState.agentStatusByPaneKey = {}
-    storeState.sleepingAgentSessionsByPaneKey = {}
+    finalizeTerminalOwnership.mockResolvedValue(null)
   })
 
   it('records no result, so the run keeps its non-final dispatched status', async () => {
@@ -66,7 +59,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
 
   it('still completes and finalizes a genuinely exited process', async () => {
     const completion = await createCompletion()
-    finalizeTerminalOwnership.mockReturnValue(true)
+    finalizeTerminalOwnership.mockResolvedValue('closed')
 
     completion.handleExit(0)
     await vi.waitFor(() => expect(finalizeTerminalOwnership).toHaveBeenCalledOnce())
@@ -109,27 +102,5 @@ describe('automation dispatch completion on an unverifiable loss', () => {
       )
     )
     warnSpy.mockRestore()
-  })
-
-  it('persists a provider session captured while the run tab closes', async () => {
-    const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
-    finalizeTerminalOwnership.mockImplementation(() => {
-      storeState.sleepingAgentSessionsByPaneKey[paneKey] = {
-        providerSession: { id: '01a0c3d8-91ef-7222-ae04-0025960f4ea4' }
-      }
-      return true
-    })
-    const completion = await createCompletion({ id: 'run-1', terminalPaneKey: paneKey })
-
-    completion.handleAgentDone()
-
-    await vi.waitFor(() =>
-      expect(markDispatchResult).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'completed',
-          providerSessionId: '01a0c3d8-91ef-7222-ae04-0025960f4ea4'
-        })
-      )
-    )
   })
 })

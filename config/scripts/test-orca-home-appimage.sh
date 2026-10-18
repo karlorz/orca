@@ -51,12 +51,16 @@ exit 99
 SUDO
 chmod +x "$TEMP/tools/gh" "$TEMP/tools/sudo"
 mkdir "$TEMP/installer"
-cp "$HERE"/{install-orca-home-appimage.sh,orca-home-appimage-install-cli.mjs,orca-home-appimage-install.ts,orca-home-appimage-verification.ts,orca-home-launcher.sh} "$TEMP/installer/"
+ROOT="$(cd -- "$HERE/../.." && pwd)"
+cp "$HERE"/{install-orca-home-appimage.sh,orca-home-appimage-install-cli.mjs,orca-home-launcher.sh} "$TEMP/installer/"
+cp "$ROOT/src/main/orca-home-appimage-install.ts" "$TEMP/installer/orca-home-appimage-install.ts"
+cp "$ROOT/src/main/orca-home-appimage-verification.ts" "$TEMP/installer/orca-home-appimage-verification.ts"
 run() { bash "$TEMP/installer/install-orca-home-appimage.sh" "$@"; }
 expect_failure() { if "$@"; then echo "unexpected success: $*" >&2; exit 1; fi; }
 
 run --latest
 [[ "$(cat "$ORCA_HOME_INSTALL_DIR/release-tag")" == v1.4.222-10 ]]
+grep -F '"tag":"v1.4.222-10"' "$ORCA_HOME_INSTALL_DIR/installed-release.json"
 [[ -x "$HOME/bin/orca-ide-newbie" ]]
 run --check
 : >"$CALLS"

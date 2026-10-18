@@ -11,7 +11,7 @@ import type { OrcadDaemonRetirementVerdict } from '../../shared/orcad-stop-reque
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import type {
   KnownRuntimeEnvironment,
-  OrcadDeploymentLink
+  OrcadSshDeploymentLink
 } from '../../shared/runtime-environments'
 import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
 import { withStaleOrcadActivationRecoveryLock } from './orcad-activation-lock'
@@ -19,6 +19,7 @@ import { readOrcadActivationTransaction } from './orcad-activation-transaction-s
 import { reconcileOrcadDecommission } from './orcad-decommission-recovery'
 import { cancelRemoteOrcadManagedStop } from './orcad-managed-remote-stop'
 import {
+  listenExtrasFromDeployment,
   managedOrcadSlot,
   requireManagedOrcadInfrastructure,
   resolveLinkedOrcadContext
@@ -106,12 +107,17 @@ export function forgetManagedOrcadEnvironment(
 async function stopRemote(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
-  deployment: OrcadDeploymentLink,
+  deployment: OrcadSshDeploymentLink,
   signal?: AbortSignal,
   retried = false
 ): Promise<Stopped | Refusal> {
   const context = await resolveLinkedOrcadContext(environment, deployment, signal)
-  const slot = managedOrcadSlot(context, deployment.remotePort, signal)
+  const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    signal,
+    listenExtrasFromDeployment(deployment)
+  )
   const transaction = await readOrcadActivationTransaction(slot)
   if (transaction?.operation === 'decommission') {
     // An earlier stop was interrupted: its journal decides, so finish exactly that one.
@@ -164,7 +170,7 @@ async function stopRemote(
 async function unlinkEnvironmentLocally(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
-  deployment: OrcadDeploymentLink,
+  deployment: OrcadSshDeploymentLink,
   policy: ManagedOrcadStopPolicy
 ): Promise<void> {
   // Environment first: a crash before the claim is released leaves a hidden target to resume,
@@ -188,7 +194,12 @@ export function cancelManagedOrcadStop(
   return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
     const { environment, deployment } = managed
     const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
-    const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+    const slot = managedOrcadSlot(
+      context,
+      deployment.remotePort,
+      args.signal,
+      listenExtrasFromDeployment(deployment)
+    )
     let result: OrcadManagedCancelStopResult
     try {
       result = await withStaleOrcadActivationRecoveryLock(slot, async (lock) => {

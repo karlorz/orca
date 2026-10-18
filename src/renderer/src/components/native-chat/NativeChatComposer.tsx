@@ -26,7 +26,7 @@ import type {
   NativeChatComposerProps
 } from './native-chat-composer-types'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
-import { useNativeChatHeldQueueComposerSend } from './use-native-chat-held-queue-composer-send'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
@@ -155,10 +155,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? [true, !canSend]
       : [targetPtyId !== null, targetPtyId === null || !canSend || inputOwnedByCard]
 
-    const syncCaret = useCallback((el: NativeChatComposerInput) => {
-      setCaret(el.selectionStart ?? el.value.length)
-    }, [])
-
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: draftScopeKey,
       allowWithoutTarget: Boolean(structuredTransport),
@@ -175,24 +171,30 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       attachments
     const imageBlock = nativeChatImageSendBlock(imageAttachments)
-    const sendHeld = disabled || structuredTransport?.sendOut === true || imageBlock.holdsSend
+    const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
+    const sendHeld =
+      disabled ||
+      structuredTransport?.sendOut === true ||
+      imageBlock.holdsSend ||
+      structuredTransport?.sendBlockedReason !== undefined
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
       : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
 
-    const { pickAttachments, resolveAttachmentOwner } = useNativeChatFileDrops({
-      paneKey,
-      draftScopeKey,
-      targetPtyId,
-      structuredTransport,
-      terminalTabId,
-      structuredWorktreeId: structuredTransport?.worktreeId,
-      structuredSession: structuredTransport,
-      disabled,
-      attachResolvedPaths,
-      pendingChips: attachments.pendingChips,
-      setNotice
-    })
+    const { pickAttachments, attachExternalPaths, captureCopiedFiles, resolveAttachmentOwner } =
+      useNativeChatFileDrops({
+        paneKey,
+        draftScopeKey,
+        targetPtyId,
+        structuredTransport,
+        terminalTabId,
+        structuredWorktreeId: structuredTransport?.worktreeId,
+        structuredSession: structuredTransport,
+        disabled,
+        attachResolvedPaths,
+        pendingChips: attachments.pendingChips,
+        setNotice
+      })
 
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
@@ -213,6 +215,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       disabled,
       resolveAttachmentOwner,
       attachResolvedPaths,
+      attachCopiedFiles: attachExternalPaths,
+      captureCopiedFiles,
       beginPendingImageAttachment: attachments.beginPendingImageAttachment,
       // Settles into the scope cache, which outlives a composer a prompt card unmounted.
       resolvePendingImageAttachment: attachments.pendingChips.resolve,
@@ -245,7 +249,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
     const sessionOptionsSnapshot = structuredTransport?.optionSnapshot ?? ptySessionOptionsSnapshot
 
-    const { send: sendStructured, fieldProps: queue } = useNativeChatHeldQueueComposerSend({
+    const sendStructured = useNativeChatStructuredComposerSend({
       agent,
       draftScopeKey,
       imageAttachments,
@@ -340,12 +344,13 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const handleDraftChange = useCallback(
       (value: string, element: NativeChatComposerInput) => {
+        const nextCaret = element.selectionStart ?? value.length
         setDraft(value)
-        syncCaret(element)
-        handleDraftOrCaretChange(value, element.selectionStart ?? value.length)
+        setCaret(nextCaret)
+        handleDraftOrCaretChange(value, nextCaret)
         setActiveSuggestion(0)
       },
-      [handleDraftOrCaretChange, setDraft, syncCaret]
+      [handleDraftOrCaretChange, setDraft]
     )
 
     return (
@@ -363,7 +368,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         imageAttachments={imageAttachments}
         attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
         sendButtonDisabled={sendButtonDisabled}
-        sendBlockedReason={imageBlock.reason}
+        sendBlockedReason={sendBlockedReason}
         isWorking={isWorking}
         isStopping={isStopping}
         afterStop={afterStop}
@@ -374,8 +379,10 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         imeEnterGesture={imeEnterGesture}
         onDraftChange={handleDraftChange}
         onTextareaSelect={(element) => {
-          syncCaret(element)
-          handleDraftOrCaretChange(element.value, element.selectionStart ?? element.value.length)
+          const value = element.value
+          const nextCaret = element.selectionStart ?? value.length
+          setCaret(nextCaret)
+          handleDraftOrCaretChange(value, nextCaret)
           setActiveSuggestion(0)
         }}
         onKeyDown={handleKeyDown}
@@ -399,7 +406,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         onDictationHoldEnd={dictation.stopHoldDictation}
         onSend={send}
         onStop={interrupt}
-        {...queue}
         sessionOptionsSurface={sessionOptionsSurface}
         sessionOptionsSnapshot={sessionOptionsSnapshot}
         contextUsage={contextUsageSummary}

@@ -21,6 +21,7 @@ export type TerminalCreateListenerPayload = {
   activate?: boolean
   focus?: boolean
   existingSessionOnly?: boolean
+  flashFocusedPane?: boolean
   presentation?: 'background' | 'focused'
   surfaceOwner?: false
   tabId?: string
@@ -147,6 +148,7 @@ export type TerminalCreateSurfacingScenario = Pick<
   >
   focusRuntimeTerminalSurface: Mock<() => boolean>
   focusTerminalTabSurface: SpyMock
+  activateTabAndFocusPane: SpyMock
   storeState: TerminalCreateSurfacingStore
   createTerminalListenerRef: ListenerRef<(data: TerminalCreateListenerPayload) => void>
   requestTerminalCreateListenerRef: ListenerRef<

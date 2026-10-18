@@ -7,7 +7,7 @@ import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environm
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
   KnownRuntimeEnvironmentSchema,
-  OrcadDeploymentLinkSchema,
+  OrcadSshDeploymentLinkSchema,
   RuntimeAccessEndpointSchema,
   RuntimeSshAccessLinkSchema,
   RuntimeSshAccessOperationSchema,
@@ -39,8 +39,9 @@ const SidecarEntrySchema = z.object({
   runtimeId: z.string().min(1).optional(),
   sshAccess: SidecarSshAccessSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
-  // The managed deployment's tunnel; its loopback endpoint is the persisted pairing itself.
-  orcadDeployment: OrcadDeploymentLinkSchema.optional(),
+  // The managed SSH deployment's tunnel, without a `kind` so older builds read it unchanged.
+  // WSL deployments live in wsl-host-deployment-store instead.
+  orcadDeployment: OrcadSshDeploymentLinkSchema.omit({ kind: true }).optional(),
   // A rollback to a snapshot older than this would discard the migrated catalog.
   orcadMigratedAt: z.string().datetime().optional(),
   // Keeps the overlaid pairing revision monotonic after the access that raised it is removed.

@@ -1,6 +1,8 @@
 import type { CommandHandler } from './dispatch'
 import { AGENT_HANDLER_GROUPS } from './agent-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { JIRA_HANDLER_GROUP } from './jira-handler-group'
+import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -13,15 +15,17 @@ export type HandlerGroup = {
 // Why: `keys` mirrors each group's exported record and is verified against the
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
-  {
-    name: 'reference',
-    keys: ['reference list', 'reference add', 'reference remove', 'reference find'],
-    load: async () => (await import('./handlers/reference.js')).REFERENCE_HANDLERS
-  },
+  JIRA_HANDLER_GROUP,
+  REFERENCE_HANDLER_GROUP,
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS
+  },
+  {
+    name: 'update',
+    keys: ['update check', 'update apply'],
+    load: async () => (await import('./handlers/update.js')).UPDATE_HANDLERS
   },
   {
     name: 'serve-restore',
@@ -96,7 +100,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'worktree current',
       'worktree create',
       'worktree set',
-      'worktree rm'
+      'worktree rm',
+      'worktree gc'
     ],
     load: async () => (await import('./handlers/worktree.js')).WORKTREE_HANDLERS
   },

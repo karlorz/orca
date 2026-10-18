@@ -9,6 +9,22 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: linux-home-appimage-update-check
+    title: Home AppImage update-check diagnostics, atom fallback, fail-closed identity, and skip fork agent-state-rules fetch
+    kind: product
+    status: landed
+    paths:
+      - src/main/home-appimage-updater.ts
+      - src/main/home-appimage-runtime.ts
+      - src/main/home-appimage-release-policy.ts
+      - src/main/home-appimage-release-request.ts
+      - src/main/home-appimage-release-discovery.ts
+      - src/main/home-appimage-electron-fetch.ts
+      - src/main/host/electron-proxy-login-fetch.ts
+      - src/main/orca-home-appimage-install.ts
+      - src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
+      - config/scripts/install-orca-home-appimage.sh
+      - docs/reference/linux-home-appimage-install.md
   - id: linux-home-appimage-install
     title: Home AppImage installer and protocol-gated in-app updater with shared pin-preserving verification
     kind: release
@@ -23,9 +39,23 @@ features:
       - src/main/home-appimage-updater.ts
       - src/main/home-appimage-runtime.ts
       - src/main/home-appimage-release-policy.ts
+      - src/main/orca-home-appimage-install.ts
+      - src/main/orca-home-appimage-verification.ts
       - src/main/linux-home-update-policy.ts
       - src/main/updater
       - docs/reference/linux-home-appimage-install.md
+  - id: linux-home-appimage-cli-update
+    title: CLI orca update check|apply for the home AppImage updater
+    kind: product
+    status: landed
+    paths:
+      - src/cli/home-appimage-cli-update.ts
+      - src/cli/home-appimage-cli-update-session.ts
+      - src/cli/home-appimage-cli-daemon-inventory.ts
+      - src/cli/handlers/update.ts
+      - src/cli/specs/update.ts
+      - src/main/orca-home-appimage-install.ts
+      - src/main/orca-home-appimage-verification.ts
   - id: fork-owned-entry-points
     title: Fork-owned skill installs, package metadata, and npm CLI launcher
     kind: release
@@ -35,6 +65,7 @@ features:
       - packages/orca-cli
       - .github/workflows/fork-npm-cli-release.yml
       - docs/fork-entry-points.md
+      - config/scripts/run-node-server-tests.mjs
   - id: cmd-j-recent-agent-activity
     title: Cmd+J recent chats and worktrees follow agent activity
     kind: product
@@ -102,6 +133,7 @@ features:
       - config/scripts/fork-next-desktop-tag.mjs
       - config/scripts/ci-dependency-download-cache.test.mjs
       - config/scripts/verify-fork-desktop-release-artifacts.mjs
+      - config/scripts/verify-packaged-daemon-entry.cjs
   - id: fork-desktop-orcad-template
     title: Fork desktop releases ship the managed SSH orcad template
     kind: release
@@ -143,6 +175,16 @@ features:
       - mobile/src/home/MobileHomeAccountUsageCards.tsx
       - mobile/src/storage/preferences.test.ts
     wiki: projects/orca/work/2026-08-26-orca-mobile-grok-account-usage
+  - id: mobile-cursor-account-usage
+    title: Mobile Account usage opt-in Cursor toggle, same display-only pattern as Grok
+    kind: product
+    status: landed
+    paths:
+      - mobile/src/components
+      - mobile/app/account-usage-settings.tsx
+      - mobile/src/home/MobileHomeAccountUsageCards.tsx
+      - mobile/app/h/[hostId]/accounts.tsx
+      - mobile/src/storage/preferences.test.ts
   - id: fork-live-status
     title: Tiny read-only Coolify operator status app for own-auth and official-relay
     kind: product
@@ -163,6 +205,16 @@ features:
       - config/scripts/fork-next-mobile-tag.mjs
       - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
+  - id: fork-mobile-lockfile-precheck
+    title: Local pre-tag check that mobile lockfile specifiers, patchedDependencies, and the codegen patch still match after fork-sync
+    kind: ci
+    status: landed
+    paths:
+      - config/scripts/fork-mobile-lockfile-precheck.mjs
+      - config/scripts/fork-mobile-lockfile-precheck.test.mjs
+      - config/scripts/fork-next-mobile-tag.mjs
+      - .github/workflows/fork-sync-main.yml
+      - docs/fork-entry-points.md
   - id: own-mobile-relay-overlay
     title: Packaged Sign in for Relay can default to sg01 own-auth/director (disabled until TLS hostname)
     kind: product
@@ -480,3 +532,87 @@ features:
       - src/shared/automation-agent-completion-result.ts
       - src/shared/agent-hook-listener/grok-completed-update-result.ts
     wiki: projects/orca/work/2026-10-07-automation-outcome-reporting
+
+  - id: managed-orcad-listen-extras
+    title: Optional managed-orcad bindHost, pairingAddress, and mobilePairing on the SSH deployment sidecar
+    kind: product
+    status: landed
+    paths:
+      - src/shared/runtime-environments.ts
+      - src/main/ssh/orcad-remote-launch.ts
+      - src/main/ssh/orcad-tunneled-pairing.ts
+      - src/main/ssh/orcad-managed-runtime-context.ts
+
+  - id: grok-bound-structured-session-controls
+    title: Public exact-target Grok Follow up and Stop with durable receipts and negotiated CLI adapters
+    kind: product
+    status: landed
+    paths:
+      - src/shared/agent-session-bound-control.ts
+      - src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.ts
+      - src/main/native-chat/agent-session-wire/structured-agent-session-control-target.ts
+      - src/main/acp/acp-structured-session-adapter.ts
+      - src/cli/handlers/agent-session-control.ts
+    wiki: projects/openpets/work/2026-10-11-codex-overlay-card-followups
+
+  - id: orcad-template-fork-version-stamp
+    title: Stamp orcad-template out/package.json with the fork desktop version so managed servers report 1.4.227-N
+    kind: product
+    status: landed
+    paths:
+      - config/scripts/orcad-template-app-version.mjs
+      - config/scripts/build-orcad-template.mjs
+      - .github/workflows/node-server-tests.yml
+      - .github/workflows/fork-desktop-voice-release.yml
+      - .github/workflows/fork-mac-package.yml
+
+  - id: managed-orcad-restore-hold
+    title: Env-gated no-update/no-deploy path so managed-tunnel restore cannot mutate live orcad
+    kind: product
+    status: landed
+    paths:
+      - src/main/ssh/managed-orcad-restore-hold.ts
+      - src/main/ssh/orcad-managed-update-on-restore.ts
+      - src/main/ipc/runtime-environment-managed-tunnel.ts
+    wiki: projects/orca/work/2026-10-14-pvelxc-shared-mobile-sessions
+
+  - id: pet-navigation-pane-flash
+    title: CLI session navigation (switch-origin/switch-session/terminal switch) flashes the focused pane like a notification click
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/hooks/ipc-events/terminal-presentation-ipc-bridge.ts
+      - src/main/runtime/orca-runtime-guarded-pty-reveal.ts
+      - src/main/runtime/orca-runtime-focus-terminal.ts
+      - src/main/runtime/terminal-originating-pane-navigation.ts
+      - src/main/runtime/terminal-originating-pane-navigation-types.ts
+      - src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods.ts
+      - src/main/runtime/runtime-notifier-contract.ts
+      - src/main/window/runtime-window-lifecycle.ts
+      - src/preload/api/ui-command-event-api.ts
+
+  - id: worktree-gc-cli
+    title: Native orca worktree gc with dry-run default and four removal rules
+    kind: product
+    status: landed
+    paths:
+      - src/cli/worktree-gc-model.ts
+      - src/cli/worktree-gc-git.ts
+      - src/cli/worktree-gc-eligibility.ts
+      - src/shared/worktree-gc-process-cwd.ts
+      - src/cli/worktree-gc-terminal-scope.ts
+      - src/cli/worktree-gc-apply.ts
+      - src/cli/worktree-gc-run.ts
+      - src/cli/handlers/worktree-gc.ts
+      - src/cli/specs/worktree-gc.ts
+
+  - id: skill-freshness-auto-check-noise
+    title: Skill update auto-check skips missing project provider folders and non-skill plugin cache links
+    kind: product
+    status: landed
+    paths:
+      - src/main/skills/skill-freshness-inventory.ts
+      - src/main/skills/skill-plugin-cache-scan.ts
+      - src/shared/skill-freshness.ts
+      - src/renderer/src/components/skills/skill-freshness-scan-issues.tsx
+      - src/renderer/src/components/skills/skill-freshness-summary-headline.tsx

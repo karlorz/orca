@@ -46,6 +46,7 @@ describe('fork-sync-main workflow', () => {
     expect(installIdx).toBeLessThan(mergeIdx)
     expect(scripts).toContain('fork-sync-upstream-tags.mjs')
     expect(scripts).toContain('fork-next-desktop-tag.mjs')
+    expect(scripts).toContain('fork-mobile-lockfile-precheck.mjs')
     expect(scripts).toContain('fork-next-mobile-tag.mjs')
     expect(scripts).not.toMatch(/MIRROR_BRANCH=fork-main/)
     expect(scripts).not.toMatch(/merge-upstream/)
@@ -63,6 +64,30 @@ describe('fork-sync-main workflow', () => {
     )
     expect(mobileCutStep.run).toContain('--auto')
     expect(mobileCutStep.run).not.toContain('--write')
+
+    const lockfilePrecheckIdx = job.steps.findIndex((step) =>
+      String(step.run ?? '').includes('fork-mobile-lockfile-precheck.mjs')
+    )
+    const mobileCutIdx = job.steps.findIndex((step) =>
+      String(step.run ?? '').includes('fork-next-mobile-tag.mjs')
+    )
+    expect(lockfilePrecheckIdx).toBeGreaterThan(mergeIdx)
+    expect(mobileCutIdx).toBeGreaterThan(lockfilePrecheckIdx)
+  })
+
+  it('records fork-mobile-lockfile-precheck as a landed ci feature', () => {
+    const registry = loadForkFeatures(featuresPath)
+    const entry = registry.features.find((f) => f.id === 'fork-mobile-lockfile-precheck')
+    expect(entry).toBeDefined()
+    expect(entry.kind).toBe('ci')
+    expect(entry.status).toBe('landed')
+    expect(entry.paths).toEqual(
+      expect.arrayContaining([
+        'config/scripts/fork-mobile-lockfile-precheck.mjs',
+        '.github/workflows/fork-sync-main.yml',
+        'docs/fork-entry-points.md'
+      ])
+    )
   })
 
   it('files a wiki own-relay follow-up from the captured merge SHA', () => {

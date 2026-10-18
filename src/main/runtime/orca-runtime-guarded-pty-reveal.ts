@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithWaitForLeafPtyId } from './orca-runtime-wait-for-leaf-pty-id'
+import { OrcaRuntimeWithWaitForLeafPtyId } from './terminal/view/renderer-terminal-snapshot'
 import type { RuntimeTerminalFocus } from '../../shared/runtime-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { getLatestPtyTitle } from './runtime-worktree-status-projection'
@@ -30,6 +30,7 @@ export type FocusTerminalOptions = {
   existingSessionOnly?: boolean
   verifySession?: () => boolean
   activateHostWindow?: boolean
+  flashFocusedPane?: boolean
 }
 
 export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafPtyId {
@@ -192,6 +193,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
           ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
           ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {}),
           ...(options.activateHostWindow === true ? { activateHostWindow: true } : {}),
+          ...(options.flashFocusedPane === true ? { flashFocusedPane: true } : {}),
           ...(options.existingSessionOnly
             ? {
                 existingSessionOnly: true,

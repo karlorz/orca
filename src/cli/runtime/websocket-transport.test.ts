@@ -1,3 +1,4 @@
+import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from '../../shared/agent-session-bound-control'
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
@@ -33,6 +34,7 @@ import {
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
+import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../shared/terminal-quick-command-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../shared/agent-session-background-task-child-views-capability'
 
 vi.mock('./launch', () => ({
@@ -87,10 +89,39 @@ describe('CLI remote WebSocket transport', () => {
           WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
           WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
           AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-          REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY
+          REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+          TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
         ]
       })
     )
+  })
+
+  it('negotiates bound control with the selected remote execution runtime without local fallback', async () => {
+    const runtime = await startTestRuntime('bound-remote')
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+    await expect(
+      client.call('agentSession.controlTarget', { provider: 'grok', nativeSessionId: 'native-1' })
+    ).rejects.toThrow('Unknown method')
+    expect(runtime.authFrames).toContainEqual(
+      expect.objectContaining({
+        clientCapabilities: expect.arrayContaining([
+          AGENT_SESSION_BOUND_CONTROL_CAPABILITY,
+          'agent-session.structured.v1'
+        ])
+      })
+    )
+    expect(runtime.requestMethods).toContain('agentSession.controlTarget')
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('rejects malformed remote pairing codes before local runtime lookup', () => {

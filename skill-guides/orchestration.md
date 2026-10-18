@@ -26,9 +26,10 @@ to that user names, per Task, its outcome, the evidence behind it, and any
 unresolved blocker.
 
 **Safe failure:** preserve work and authority and report the state as unknown or
-`unverifiable`. Only positive proof of exit authorizes stop, abandon, or retry,
-and only an accepted settlement authorizes release. Every other observation,
-absence included, is a checkpoint.
+`unverifiable`. Silence or missing status never authorizes stop, abandon, or
+retry. Explicit cancellation or a verified wrong-target launch permits stopping
+that exact attempt; require confirmed stop before replacement. Only an accepted
+settlement authorizes release. Other observations are checkpoints.
 
 ## Classify the role
 
@@ -97,16 +98,49 @@ precedence over the idle rule. Do not reuse the settled lifecycle IDs.
 
 ## Canonical supervised loop
 
-Confirm the runtime, bind one Run, and start the full independent wave before
-waiting. `worker-start --spec` creates the Task and its attempt in one call:
+Verify that the injected Orca session or `ORCA_TERMINAL_HANDLE` really belongs to
+this coordinator before `run-create` or `run-use`. Inspect its actual workspace;
+a shell inherited from another live session can carry that session's identity.
+Exact worker placement does not repair coordinator routing: Run notifications
+go to the bound coordinator handle/session. Cross-project coordination is valid
+when intentional, but do not borrow another live agent's identity. If the current
+environment names another session, keep inspection read-only, launch a dedicated
+coordinator in the verified target workspace, and have it bind the Run from its
+own terminal/session with `run-use --id`. Verify `run-show`'s coordinator binding
+before resuming; never spoof `--from` or environment variables. Current nonlegacy
+Run rebinding preserves worker assignments and fences the old consumer. For an
+adopted legacy Run, use the separate legacy recovery reference instead.
+
+Confirm the runtime and intended execution workspace before dispatch. For a named
+target, discover its full ID with `worktree list --json`, then verify host, path,
+and branch (when Git) with `worktree show`. Pass that exact `id:<full-id>` to each
+start. `--worktree current` (also the default when omitted) means the
+coordinator's recorded workspace, not shell cwd. Changing cwd, running
+`worktree current`, or putting absolute paths in a Task spec does not change that
+placement. Do not change caller identity to force a target workspace.
+
+Bind one Run and start the full independent wave before waiting.
+`worker-start --spec` creates the Task and its attempt in one call:
 
 ```text
 ORCA status --json
+ORCA worktree list --json
+ORCA worktree show --worktree id:<verified-full-workspace-id> --json
 ORCA orchestration run-create --objective "<objective>" --json
-ORCA orchestration worker-start --spec "<worker A task>" --worktree current --agent codex --json
-ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent claude --json
+ORCA orchestration worker-start --spec "<worker A task>" --worktree id:<verified-full-workspace-id> --agent codex --json
+ORCA orchestration worker-start --spec "<worker B task>" --worktree id:<verified-full-workspace-id> --agent claude --json
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
+
+Verify each receipt's resolved workspace/effects and returned agent handle; use
+`worker-show` if the receipt lacks placement detail. Include a pre-edit cwd and
+workspace check in each Task spec (Git top-level/branch only for Git workspaces).
+Require the worker to report the verified workspace, and to pause and ask on any
+mismatch before editing.
+If placement differs, do not accept cross-repository absolute-path edits as a
+workaround or launch a duplicate editor. Load recovery guidance, halt that
+attempt, and prove it stopped before replacement. `current` is appropriate only
+when the coordinator's recorded workspace has itself been verified as the target.
 
 If `worker-start` exits non-zero, do not relaunch. Read the receipt's
 `failedStage` and `residualResources`, then load
@@ -140,12 +174,14 @@ each row's `projection.attention` categories, `projection.attention.requiresActi
 Rows come newest first and page at 100: while `page.hasMore`, follow `page.nextCursor` with `--cursor <value>`.
 A `none` `nextAction` has no argv to run: read `liveness.reason` and keep waiting
 with `check --wait`. Absence never earns an argv; settlement and pending work still do.
-Leave the wait only on positive proof the agent stopped: `exited` liveness, the
+For stall recovery, leave the wait only on positive proof the agent stopped: `exited` liveness, the
 worker's own observation of process exit, or a transcript whose final agent turn
 sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose
 `worker-stop` or `worker-abandon` explicitly. `unverifiable` is absence,
 including when `worker-show` reports `agentWait` null. Absence never authorizes
 stop, abandon, retry, or release; keep waiting or inspect.
+Explicit cancellation or verified wrong-target placement follows the separate
+cancellation path in `references/recovery-and-cleanup.md`, not stall inference.
 
 `worker-start` is the normal path, composing placement, terminal readiness,
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves
@@ -155,7 +191,8 @@ an operator-created process unsupervised and is only for an expressiveness gap.
 
 Every Task spec must be self-contained and name:
 
-- **Target:** the files, component, or environment in scope.
+- **Target:** the execution host, exact workspace/path, and files or component in
+  scope; require the worker to verify cwd/workspace before its first edit.
 - **Change:** the concrete result to produce.
 - **Constraints:** invariants, compatibility rules, and do-not-touch boundaries.
 - **Ownership:** what this worker may edit and any coordination boundary.

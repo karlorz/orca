@@ -21,6 +21,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.rename', { terminal: 'term', title: null }, false],
   ['terminal.clearBuffer', { terminal: 'term' }, false],
   ['terminal.resetInputModes', { terminal: 'term' }, false],
+  ['terminal.readKittyFile', { terminal: 'term', path: '/tmp/image.png' }, false],
   ['terminal.send', { terminal: 'term', text: 'x' }, false],
   ['terminal.wait', { terminal: 'term', for: 'exit' }, false],
   ['terminal.create', {}, false],
@@ -31,7 +32,9 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.stopExact', { worktree: 'worktree', expectedPtyIds: ['pty'] }, false],
   ['terminal.resizeForClient', { terminal: 'term', mode: 'restore', clientId: 'client' }, false],
   ['terminal.focus', { terminal: 'term' }, false],
+  ['terminal.reveal', { worktreeId: 'worktree', tabId: 'tab' }, false],
   ['terminal.close', { terminal: 'term' }, false],
+  ['terminal.gcClose', { terminal: 'term' }, false],
   ['terminal.closeTab', { terminal: 'term' }, false],
   ['agentTeams.tmuxCompat', { teamId: 'team', token: 'token', envPane: 'pane', argv: [] }, false],
   ['agentTeams.prepareLaunch', { paneKey: 'pane' }, false],
@@ -82,11 +85,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(41)
+    expect(TERMINAL_METHODS).toHaveLength(44)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(41)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(44)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
@@ -113,7 +116,7 @@ describe('terminal RPC manifest characterization', () => {
       schemaFor('terminal.updateViewport').parse({
         terminal: 'term',
         client: { id: 'client' },
-        viewport: { cols: 1024, rows: 120 }
+        viewport: { cols: 1024, rows: 500 }
       })
     ).not.toThrow()
     expect(() =>

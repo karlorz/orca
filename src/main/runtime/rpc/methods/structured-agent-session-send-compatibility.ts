@@ -1,3 +1,4 @@
+import { requireBoundControlCapability } from './structured-agent-session-bound-control-gate'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
@@ -7,6 +8,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
 import type { RpcContext } from '../core'
 import { requireStructuredSessionHost, structuredCallerFor } from './structured-agent-session-gate'
+import { readsQueuedImageCards } from './structured-agent-session-queued-image-capability'
 
 /**
  * A send answers once the host accepts it. A client that predates that answer cannot show a
@@ -19,12 +21,20 @@ export async function sendStructuredAgentSessionForClient(
   params: Parameters<StructuredAgentSessionHost['send']>[1],
   context: RpcContext
 ) {
+  if (params.expectedControlTarget) {
+    requireBoundControlCapability(context)
+  }
   const host = requireStructuredSessionHost(context, params.envelope.sessionId)
-  // A client's own send: a restart or a close keeps it as a card if it never reached the agent.
-  const result = await host.send(structuredCallerFor(context), { ...params, userSend: true })
+  // Person provenance lets undelivered text recover as an ordinary queued card.
+  const result = await host.send(structuredCallerFor(context), {
+    ...params,
+    userSend: true,
+    queuedImageCards: readsQueuedImageCards(context)
+  })
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||
+    params.expectedControlTarget !== undefined ||
     // A queued answer only ever reaches a capable client, which renders it as-is.
     agentSessionSendSubmission(result.value)?.dispatchState !== 'pending' ||
     context.clientKind === undefined ||

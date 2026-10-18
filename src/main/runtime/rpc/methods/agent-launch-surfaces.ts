@@ -1,3 +1,4 @@
+import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 /**
  * How `agent.launch` builds the surface the executor decided on.
  *
@@ -131,7 +132,8 @@ export function agentLaunchSurfaceFactory(
       launchSource,
       paneKey,
       options,
-      viewMode
+      viewMode,
+      accountEnv
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
@@ -144,6 +146,7 @@ export function agentLaunchSurfaceFactory(
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
+        terminalImageViewerSupported: terminalImageViewerSupported(context),
         // Offered to that launcher's startup plan; it rides only when the typed line can carry it,
         // and the runtime reports which so an uncarried prompt is pasted once the agent is ready.
         ...(startupPrompt
@@ -162,6 +165,7 @@ export function agentLaunchSurfaceFactory(
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),
         ...(viewMode ? { viewMode } : {}),
+        ...(accountEnv ? { accountEnv: { ...accountEnv } } : {}),
         ...(presentation && (!movesHostWindow || !hasEarlyTab || presentation === 'background')
           ? { presentation: movesHostWindow ? presentation : ('background' as const) }
           : {}),

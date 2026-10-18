@@ -6,12 +6,19 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 
 const mocks = vi.hoisted(() => ({
-  useLocalImageSrc: vi.fn()
+  useLocalImageSrc: vi.fn(),
+  getConnectionIdForFile: vi.fn(() => {
+    throw new Error('Image preview fixtures must not resolve editor file connections')
+  })
 }))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, options?: Record<string, string>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => options?.[name] ?? '')
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 
 vi.mock('@/components/editor/useLocalImageSrc', () => ({
@@ -22,6 +29,8 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   mocks.useLocalImageSrc.mockReset()
+  expect(mocks.getConnectionIdForFile).not.toHaveBeenCalled()
+  mocks.getConnectionIdForFile.mockClear()
 })
 
 function renderPreview(
@@ -108,22 +117,13 @@ describe('NativeChatImageAttachmentPreview', () => {
     )
   })
 
-  it('shows a dropped file by name and kind while it uploads', () => {
+  it('shows a dropped file by name beside its spinner, with no kind icon, while it waits', () => {
     mocks.useLocalImageSrc.mockReturnValue(undefined)
     renderPreview({ id: 'a1', path: '', pending: true, pendingName: 'report.pdf' })
 
     expect(screen.getByRole('button', { name: 'Uploading report.pdf…' })).toBeTruthy()
     expect(screen.getByText('report.pdf')).toBeTruthy()
-    expect(document.querySelector('.lucide-file-text')).toBeTruthy()
-    expect(document.querySelector('.lucide-image')).toBeFalsy()
-  })
-
-  it('shows a dropped image as an image while it uploads', () => {
-    mocks.useLocalImageSrc.mockReturnValue(undefined)
-    renderPreview({ id: 'a1', path: '', pending: true, pendingName: 'shot.png' })
-
-    expect(screen.getByText('shot.png')).toBeTruthy()
-    expect(document.querySelector('.lucide-image')).toBeTruthy()
+    expect(document.querySelector('.lucide-file-text, .lucide-image')).toBeFalsy()
   })
 
   it('offers the full-size file, not the clipboard thumbnail, to the chat copy menu', () => {

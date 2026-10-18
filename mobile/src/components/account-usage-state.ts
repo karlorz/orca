@@ -39,6 +39,7 @@ export type UsageProviderKey =
   | 'kimi'
   | 'minimax'
   | 'grok'
+  | 'cursor'
 
 // Kept as an alias so existing switching call sites stay constrained to the
 // two managed providers.
@@ -55,6 +56,7 @@ type ProviderSnapshotField =
   | 'kimi'
   | 'minimax'
   | 'grok'
+  | 'cursor'
 
 export type UsageProviderDescriptor =
   | {
@@ -91,7 +93,8 @@ export const USAGE_PROVIDERS: readonly UsageProviderDescriptor[] = [
   },
   { id: 'kimi', label: 'Kimi', snapshotField: 'kimi', managed: false },
   { id: 'minimax', label: 'MiniMax', snapshotField: 'minimax', managed: false },
-  { id: 'grok', label: 'Grok', snapshotField: 'grok', managed: false }
+  { id: 'grok', label: 'Grok', snapshotField: 'grok', managed: false },
+  { id: 'cursor', label: 'Cursor', snapshotField: 'cursor', managed: false }
 ]
 
 export const USAGE_PROVIDER_IDS: readonly UsageProviderKey[] = USAGE_PROVIDERS.map((p) => p.id)

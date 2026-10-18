@@ -46,6 +46,7 @@ export async function setupTerminalCreateSurfacing(
   })
   const focusRuntimeTerminalSurface = vi.fn(() => false)
   const focusTerminalTabSurface = vi.fn()
+  const activateTabAndFocusPane = vi.fn()
   const storeState: TerminalCreateSurfacingStore = {
     setUpdateStatus: vi.fn(),
     createTab,
@@ -196,7 +197,7 @@ export async function setupTerminalCreateSurfacing(
     focusRuntimeTerminalSurface
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({
-    activateTabAndFocusPane: vi.fn()
+    activateTabAndFocusPane
   }))
   vi.stubGlobal(
     'window',
@@ -240,6 +241,7 @@ export async function setupTerminalCreateSurfacing(
     createWebRuntimeSessionTerminal,
     focusRuntimeTerminalSurface,
     focusTerminalTabSurface,
+    activateTabAndFocusPane,
     storeState,
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,

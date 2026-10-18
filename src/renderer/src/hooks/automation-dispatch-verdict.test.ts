@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AutomationTerminalOwnership } from '../lib/automation-terminal-ownership'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 
 const testState = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ vi.mock('./automation-session-history-flush', () => ({
 
 const persist = vi.fn()
 const release = vi.fn()
-const finalize = vi.fn(() => true)
+const finalize = vi.fn<AutomationTerminalOwnership['finalize']>(async () => null)
 const paneKey = 'tab:leaf'
 function createCompletion() {
   return createAutomationDispatchCompletion({

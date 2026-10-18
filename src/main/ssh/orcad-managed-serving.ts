@@ -7,10 +7,16 @@
  * Never throws. A server that cannot be started stays `unverifiable` with the reason, and is
  * never read as evidence that its terminals exited.
  */
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import {
+  getOrcadSshDeployment,
+  type KnownRuntimeEnvironment
+} from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
-import { managedOrcadSlot } from './orcad-managed-runtime-context'
+import {
+  listenExtrasFromDeployment,
+  managedOrcadSlot
+} from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from './orcad-remote-context'
 import type { OrcadHostTransport } from './orcad-host-transport'
@@ -27,6 +33,8 @@ export type OrcadManagedServingInput = {
   connection: OrcadHostTransport
   remotePort: number
   probe: (environment: KnownRuntimeEnvironment, timeoutMs: number) => Promise<boolean>
+  /** When this environment's ready control socket last heard from its server, if it has. */
+  answeredAt?: (environmentId: string) => number | null
 }
 
 /** A wake refused because another update, rollback or recovery holds the host; it clears itself. */
@@ -41,6 +49,9 @@ const PROBE_TIMEOUT_MS = 5_000
 // Why: a connect checks right after its fresh tunnel did; one verdict serves both, on that
 // transport and port only, so a kill, reboot or rebind is never answered from cache.
 const VERDICT_REUSE_MS = 5_000
+// Why: the control socket hears a pong every 10 s while healthy, and a kill, reboot, rebind or
+// stop closes it, so a recent answer on it proves serving without a fresh probe socket.
+const LIVE_ANSWER_PROOF_MS = 20_000
 
 type ServingTransport = { connection: OrcadHostTransport; generation: number; remotePort: number }
 // Why per transport: a check on a dropped connection fails, and a caller on the reconnected one
@@ -85,6 +96,12 @@ export function ensureManagedOrcadServing(
   ) {
     return entry.check
   }
+  const answeredAt = input.answeredAt?.(id) ?? null
+  const answerAge = answeredAt === null ? null : now() - answeredAt
+  // Why the lower bound: a wall clock set backwards must not stretch the proof.
+  if (answerAge !== null && answerAge >= 0 && answerAge < LIVE_ANSWER_PROOF_MS) {
+    return Promise.resolve({ state: 'serving' })
+  }
   const next: ServingCheck = { ...transport, check: checkAndStart(input) }
   checks.set(id, next)
   // A rejected check is never reused.
@@ -126,8 +143,14 @@ async function wakeIfStopped(
   const label = input.target.label
   try {
     const context = await resolveOrcadRemoteContext(input.target, input.connection)
+    const deployment = getOrcadSshDeployment(input.environment)
     const wake = await wakeStoppedManagedOrcad(
-      managedOrcadSlot(context, input.remotePort),
+      managedOrcadSlot(
+        context,
+        input.remotePort,
+        undefined,
+        deployment ? listenExtrasFromDeployment(deployment) : undefined
+      ),
       onStarting
     )
     if (wake.outcome === 'started') {

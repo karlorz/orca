@@ -11,7 +11,10 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import {
+  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
+  NATIVE_CHAT_SCRATCH_DIR_ENV
+} from '../native-chat/native-chat-visuals-delivery'
 
 const { isWindowsProcessStartTimeAvailable } = vi.hoisted(() => ({
   isWindowsProcessStartTimeAvailable: vi.fn(() => true)
@@ -37,10 +40,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
   }
 }
 
-function handleLink(
-  thread: string,
-  mintedAtFence: number
-): AgentSessionProviderHandleLink {
+function handleLink(thread: string, mintedAtFence: number): AgentSessionProviderHandleLink {
   return {
     linkId: `link-${thread}`,
     handle: codexProviderHandle(thread),
@@ -184,7 +184,7 @@ describe('codex structured launch resolution', () => {
         approvalsReviewer: 'user'
       },
       env: { CODEX_HOME: '/home/work/.codex' },
-      envToDelete: [NATIVE_CHAT_VISUALS_DIR_ENV]
+      envToDelete: [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
     })
   })
 
@@ -226,10 +226,7 @@ describe('codex structured launch resolution', () => {
   it('resumes the last thread this session actually proved, not one a caller names', async () => {
     const launch = await resolverFor(
       record({
-        providerHandleChain: [
-          handleLink('thread-old', 1),
-          handleLink('thread-current', 2)
-        ]
+        providerHandleChain: [handleLink('thread-old', 1), handleLink('thread-current', 2)]
       })
     )({ identity: IDENTITY })
 

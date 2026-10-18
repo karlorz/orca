@@ -1,11 +1,13 @@
 # Recovery and cleanup
 
 Load this reference only after a failed/stopped/unknown attempt, explicit retry
-decision, stop/abandon request, retention request, or uncertain release.
+decision, stop/abandon request, verified placement mismatch, retention request,
+or uncertain release.
 
 | Proven state            | Safe action                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
 | `ready` or active       | Keep waiting; optionally read bounded output                       |
+| Verified wrong-target launch or explicit cancellation | Stop the exact attempt; confirm it stopped before replacement |
 | `failed` or `stopped`   | Start a replacement with `--retry-of`; repeat placement explicitly |
 | `outcome_unknown`       | Inspect, then choose `worker-stop` or explicit `worker-abandon`    |
 | Accepted `worker_done`  | Reuse, retain, or release                                          |
@@ -51,7 +53,7 @@ verdict. Rows come newest first and past 100 the response pages, so follow
 
 ## Stall needs positive evidence
 
-Leave the wait only on positive proof the agent stopped: `exited` liveness, the
+For stall recovery, leave the wait only on positive proof the agent stopped: `exited` liveness, the
 worker's own observation of process exit, or a transcript whose final agent turn
 sent no `worker_done`. Only then choose `worker-stop` or `worker-abandon`.
 
@@ -70,6 +72,17 @@ transcript tail can return an EOF cursor that follows only newly appended record
 read `contentComplete`, `clipping`, and `warnings` before assuming omitted older
 records are pageable. Never guess a provider session ID, transcript path, or
 remote terminal handle.
+
+## Wrong-target placement and cancellation
+
+A receipt or execution-host observation that proves the worker is in a different
+workspace from the verified target is a placement error, not a liveness guess.
+Stop that exact attempt with `worker-stop`; do not wait for it to finish editing
+or work around the error with absolute paths. Explicit user cancellation follows
+the same path. Preserve partial edits and inspect the stop receipt. A fence,
+`stop_unknown`, or `worker-abandon` does not prove the editor stopped. Resolve
+that state through the owning execution host before starting a replacement with
+the verified exact workspace selector. Never stop unrelated workspace terminals.
 
 ## Was the mutation applied?
 
@@ -118,8 +131,11 @@ ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --work
 ```
 
 After three consecutive failures for one Task, its dispatch context
-circuit-breaks and the Task is failed. Do not route around that boundary with a
-new Run or an unrelated Dispatch.
+circuit-breaks and the Task is failed. Failed `worker-start` attempts count
+across `--retry-of`; a worker's own `failed` report does not. `--retry-of` a
+circuit-broken Dispatch is refused with `task_not_startable`: report the failure
+to the user instead. Do not route around that boundary with a new Run, Task, or
+unrelated Dispatch.
 
 For `outcome_unknown`, inspect first, then make an explicit choice:
 
@@ -160,6 +176,8 @@ user-taken-over, and unproven terminals are retained.
 A `worker-start` that failed before its agent was ready still owns the terminal
 it created. Its receipt names `worker-release`, and `worker-list` reports that
 row as `reclaimable`; release it there rather than closing the terminal by hand.
+A `--retry-of` replacement for a `failed` worker releases the terminal that
+worker still owns the same way.
 
 Never release because of timeout, TUI idle, heartbeat, status, question,
 escalation, or stale/rejected completion. If the receipt says `release_pending`

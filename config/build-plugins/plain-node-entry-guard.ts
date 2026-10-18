@@ -20,7 +20,13 @@ type OutputChunk = Rollup.OutputChunk
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
   'agent-hooks/managed-agent-hook-controls',
+  'daemon/daemon-pid-file-parse',
   'gitlab/project-ref-parser',
+  'home-appimage-release-policy',
+  'home-appimage-updater',
+  'linux-home-update-policy',
+  'orca-home-appimage-install',
+  'orca-home-appimage-verification',
   'orca-profiles/profile-index-store',
   'claude-accounts/keychain',
   ...[
@@ -64,6 +70,7 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'port-scan-command-worker-entry',
   'worker-thread-child-process-entry',
   'usage-scan-worker-entry',
+  'workspace-space-scan-worker-entry',
   'claude-profile-setup-worker-entry',
   'profile-state-backup-worker-entry',
   'profile-state-writer-worker-entry'

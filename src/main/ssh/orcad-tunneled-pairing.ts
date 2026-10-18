@@ -1,5 +1,4 @@
 import { encodePairingOffer, parsePairingCode } from '../../shared/pairing'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
 import type { ServeReadiness } from '../server/serve-readiness'
 
 export function tunneledOrcadPairingCode(readiness: ServeReadiness, localPort: number): string {
@@ -13,12 +12,11 @@ export function tunneledOrcadPairingCode(readiness: ServeReadiness, localPort: n
     throw new Error('The managed Orca server published an invalid pairing offer.')
   }
   const endpoint = new URL(offer.endpoint)
-  if (
-    (endpoint.protocol !== 'ws:' && endpoint.protocol !== 'wss:') ||
-    classifyRemotePairingHostname(endpoint.hostname) !== 'loopback'
-  ) {
-    throw new Error('The managed Orca server pairing endpoint is not loopback-only.')
+  if (endpoint.protocol !== 'ws:' && endpoint.protocol !== 'wss:') {
+    throw new Error('The managed Orca server pairing endpoint is not a WebSocket URL.')
   }
+  // Mac always uses the SSH local forward. Advertised host (LAN/public) is for other clients.
+  endpoint.protocol = 'ws:'
   endpoint.hostname = '127.0.0.1'
   endpoint.port = String(localPort)
   return encodePairingOffer({ ...offer, endpoint: endpoint.toString() })

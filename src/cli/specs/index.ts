@@ -1,9 +1,11 @@
+import { AGENT_SESSION_CONTROL_COMMAND_SPECS } from './agent-session-control'
 import type { CommandSpec } from '../args'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
 import { AUTOMATION_COMMAND_SPECS } from './automations'
 import { CORE_COMMAND_SPECS } from './core'
+import { UPDATE_COMMAND_SPECS } from './update'
 import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
@@ -16,6 +18,7 @@ import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 import { TERMINAL_DAEMON_COMMAND_SPECS } from './terminal-daemon'
 import { EMULATOR_COMMAND_SPECS } from './emulator'
 import { INTROSPECTION_COMMAND_SPECS } from './introspection'
+import { JIRA_COMMAND_SPECS } from './jira'
 import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { SKILL_COMMAND_SPECS } from './skills'
@@ -25,7 +28,9 @@ import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 
 export const COMMAND_SPECS: CommandSpec[] = [
+  ...AGENT_SESSION_CONTROL_COMMAND_SPECS,
   ...CORE_COMMAND_SPECS,
+  ...UPDATE_COMMAND_SPECS,
   ...REFERENCE_COMMAND_SPECS,
   ...ARTIFACT_COMMAND_SPECS,
   ...ACCOUNT_COMMAND_SPECS,
@@ -43,6 +48,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...INTROSPECTION_COMMAND_SPECS,
   ...ENVIRONMENT_COMMAND_SPECS,
   ...MANAGED_SERVER_COMMAND_SPECS,
+  ...JIRA_COMMAND_SPECS,
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,

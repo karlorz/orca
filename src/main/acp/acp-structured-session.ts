@@ -18,6 +18,7 @@ import type { AcpStructuredTurns } from './acp-structured-turns'
 
 export type AcpStructuredSession = {
   sessionId: string
+  nativeSessionId?: string
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
@@ -146,4 +147,24 @@ export function endAcpStructuredSession(
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt
   })
+}
+
+export function readAcpControlBinding(session: AcpStructuredSession | undefined) {
+  return session?.spec.agent === 'grok' &&
+    session?.nativeSessionId &&
+    !session.ended &&
+    session.journalClosed === null &&
+    !session.closeRequested
+    ? {
+        nativeSessionId: session.nativeSessionId,
+        acquisitionGeneration: session.acquisitionGeneration,
+        turnId: session.lane.openTurnId,
+        promptPending: session.prompts.size > 0,
+        canFollowUp:
+          !session.turns.running &&
+          session.lane.openTurnId === null &&
+          !session.turns.holdsSteers &&
+          !session.turns.stopped
+      }
+    : null
 }

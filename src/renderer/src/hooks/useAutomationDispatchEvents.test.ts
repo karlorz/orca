@@ -1,12 +1,12 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
 
 const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()
-const mockLaunchWorktreeBackgroundTerminals = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
 const mockSubmitPromptToAgentPty = vi.fn()
@@ -24,11 +24,6 @@ const mockStoreSubscribe = vi.fn((listener: () => void) => {
   latestStoreSubscriber = listener
   return () => {}
 })
-
-const setupLaunch = {
-  runnerScriptPath: '/tmp/setup.sh',
-  envVars: { ORCA_WORKTREE_PATH: '/repo/worktree' }
-}
 
 const createdWorktree = {
   id: 'wt-created',
@@ -130,10 +125,6 @@ vi.mock('@/lib/launch-agent-background-session', () => ({
   launchAgentBackgroundSession: mockLaunchAgentBackgroundSession
 }))
 
-vi.mock('@/lib/launch-worktree-background-terminals', () => ({
-  launchWorktreeBackgroundTerminals: mockLaunchWorktreeBackgroundTerminals
-}))
-
 vi.mock('@/lib/agent-paste-draft', () => ({
   submitPromptToAgentPty: mockSubmitPromptToAgentPty
 }))
@@ -185,10 +176,6 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('./automation-session-history-flush', () => ({
-  waitForAutomationSessionHistoryFlush: async () => undefined
-}))
-
 describe('useAutomationDispatchEvents setup launch', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -206,8 +193,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     latestStoreSubscriber = null
     state.allWorktrees.mockReturnValue([])
     state.getKnownWorktreeById.mockReturnValue(undefined)
-    mockCreateWorktree.mockResolvedValue({ worktree: createdWorktree, setup: setupLaunch })
-    mockLaunchWorktreeBackgroundTerminals.mockResolvedValue(undefined)
+    mockCreateWorktree.mockResolvedValue({ worktree: createdWorktree })
     mockLaunchAgentBackgroundSession.mockResolvedValue({
       tabId: 'agent-tab',
       paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -252,84 +238,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     ).toEqual([])
   })
 
-  it('starts setup terminal launch without waiting before launching the automation agent', async () => {
-    const order: string[] = []
-    let finishSetupLaunch: (() => void) | null = null
-    mockLaunchWorktreeBackgroundTerminals.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finishSetupLaunch = () => {
-            order.push('setup')
-            resolve()
-          }
-        })
-    )
-    mockLaunchAgentBackgroundSession.mockImplementation(async () => {
-      order.push('agent')
-      return { tabId: 'agent-tab', ptyId: 'agent-pty', startupPlan: {} }
-    })
-
-    await registerAndDispatch()
-
-    expect(mockCreateWorktree).toHaveBeenCalled()
-    expect(mockCreateWorktree.mock.calls[0][3]).toBe('run')
-    expect(mockLaunchWorktreeBackgroundTerminals).toHaveBeenCalledWith({
-      worktreeId: 'wt-created',
-      setup: setupLaunch,
-      defaultTabs: undefined
-    })
-    expect(state.setActiveView).not.toHaveBeenCalled()
-    expect(state.setActiveWorktree).not.toHaveBeenCalled()
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-created',
-        prompt: 'run this'
-      })
-    )
-    expect(order).toEqual(['agent'])
-    expect(finishSetupLaunch).not.toBeNull()
-    const completeSetupLaunch = finishSetupLaunch as unknown as () => void
-    completeSetupLaunch()
-    await Promise.resolve()
-    expect(order).toEqual(['agent', 'setup'])
-    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runId: 'run-1',
-        status: 'dispatched',
-        workspaceId: 'wt-created',
-        terminalSessionId: 'agent-tab'
-      })
-    )
-  })
-
-  it('launches setup and default tabs without activating the created worktree', async () => {
-    const defaultTabs = {
-      tabs: [{ title: 'Dev', command: 'pnpm dev' }],
-      runCommands: true
-    }
-    mockCreateWorktree.mockResolvedValue({
-      worktree: createdWorktree,
-      setup: setupLaunch,
-      defaultTabs
-    })
-
-    await registerAndDispatch()
-
-    expect(mockLaunchWorktreeBackgroundTerminals).toHaveBeenCalledWith({
-      worktreeId: 'wt-created',
-      setup: setupLaunch,
-      defaultTabs
-    })
-    expect(state.setActiveView).not.toHaveBeenCalled()
-    expect(state.setActiveWorktree).not.toHaveBeenCalled()
-    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'wt-created',
-        prompt: 'run this'
-      })
-    )
-  })
-
   it('defaults legacy automations without a setup choice to skipping setup', async () => {
     await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
 
@@ -350,30 +258,33 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('keeps launching the agent when background setup terminal launch fails', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    mockLaunchWorktreeBackgroundTerminals.mockRejectedValue(new Error('tab launch failed'))
-
-    try {
-      await registerAndDispatch()
-    } finally {
-      warnSpy.mockRestore()
-    }
+  it('passes per-automation model, effort and profile into the background launch', async () => {
+    await registerAndDispatch(
+      makeAutomation({
+        agentId: 'grok',
+        model: 'flash-max',
+        reasoningEffort: 'xhigh',
+        agentProfile: 'minimal'
+      })
+    )
 
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        worktreeId: 'wt-created',
-        prompt: 'run this'
+        agent: 'grok',
+        sessionOptions: buildAutomationModelLaunchPreferences(
+          'grok',
+          'flash-max',
+          'xhigh',
+          'minimal'
+        )
       })
     )
-    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runId: 'run-1',
-        status: 'dispatched',
-        workspaceId: 'wt-created',
-        terminalSessionId: 'agent-tab'
-      })
-    )
+  })
+
+  it('omits session options when the automation has no model pin', async () => {
+    await registerAndDispatch()
+
+    expect(mockLaunchAgentBackgroundSession.mock.calls[0]?.[0]).not.toHaveProperty('sessionOptions')
   })
 
   it('does not rerun setup for existing-worktree automations', async () => {
@@ -394,7 +305,6 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(mockCreateWorktree).not.toHaveBeenCalled()
-    expect(mockLaunchWorktreeBackgroundTerminals).not.toHaveBeenCalled()
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-existing',
@@ -440,7 +350,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
 
     expect(state.allWorktrees).not.toHaveBeenCalled()
-    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder' })
+    expect(mockSshConnect).toHaveBeenCalledWith({ targetId: 'ssh-folder', automatic: true })
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,
@@ -542,56 +452,79 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('finalizes a fresh non-reuse terminal only after completed result persistence', async () => {
-    const order: string[] = []
-    let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
-    mockMarkDispatchResult.mockImplementation(
-      async (result: Parameters<typeof window.api.automations.markDispatchResult>[0]) => {
+  it.each([
+    {
+      workspace: 'a shared workspace',
+      provenanceRunId: undefined,
+      retirement: 'closed',
+      cleared: { terminalSessionId: null, terminalPaneKey: null, terminalPtyId: null }
+    },
+    {
+      // Why: the slept pane still holds the run's session, so only its stopped process is dropped.
+      workspace: 'a workspace made for this run',
+      provenanceRunId: 'run-1',
+      retirement: 'hibernated',
+      cleared: { terminalPtyId: null }
+    }
+  ])(
+    'retires the terminal in $workspace only after completed result persistence',
+    async ({ provenanceRunId, retirement, cleared }) => {
+      const order: string[] = []
+      let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
+      mockCreateWorktree.mockResolvedValue({
+        worktree: provenanceRunId
+          ? { ...createdWorktree, automationProvenance: { automationRunId: provenanceRunId } }
+          : createdWorktree
+      })
+      mockMarkDispatchResult.mockImplementation(async (result: { status: string }) => {
         // The retirement clear reuses status 'completed' but nulls the terminal
         // identity; label it distinctly so ordering stays legible.
-        const clearsPty =
-          result.status === 'completed' &&
-          result.terminalPtyId === null &&
-          !Object.hasOwn(result, 'terminalPaneKey')
-        order.push(clearsPty ? 'clear-terminal-pty' : `persist:${result.status}`)
-      }
-    )
-    mockFinalizeTerminalOwnership.mockImplementation(() => {
-      order.push('finalize')
-      return true
-    })
-    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
-      launchArgs = args
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
+        order.push(
+          result.status === 'completed' && Object.hasOwn(result, 'terminalPtyId')
+            ? 'clear-terminal-identity'
+            : `persist:${result.status}`
+        )
+      })
+      mockFinalizeTerminalOwnership.mockImplementationOnce(async () => {
+        order.push('finalize')
+        return retirement
+      })
+      mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+        launchArgs = args
+        return {
+          tabId: 'agent-tab',
+          paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+          ptyId: 'agent-pty',
+          startupPlan: {},
+          terminalOwnership: {
+            finalize: mockFinalizeTerminalOwnership,
+            release: mockReleaseTerminalOwnership
+          }
         }
-      }
-    })
+      })
 
-    await registerAndDispatch()
-    launchArgs.onAgentStatus?.({ state: 'done' })
-    await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
+      await registerAndDispatch()
+      launchArgs.onAgentStatus?.({ state: 'done' })
+      await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
-    expect(order).toEqual([
-      'persist:dispatched',
-      'persist:completed',
-      'finalize',
-      'clear-terminal-pty'
-    ])
-    expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
-    // Why: drop only the dead PTY; paneKey stays so Resume can remount the closed tab.
-    expect(mockMarkDispatchResult).toHaveBeenLastCalledWith({
-      runId: expect.any(String),
-      status: 'completed',
-      terminalPtyId: null
-    })
-  })
+      expect(order).toEqual([
+        'persist:dispatched',
+        'persist:completed',
+        'finalize',
+        'clear-terminal-identity'
+      ])
+      expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
+      expect(mockFinalizeTerminalOwnership).toHaveBeenCalledWith({
+        preservePane: provenanceRunId !== undefined
+      })
+      // Why: the retired process is gone; "View run" must not dead-end on a pointer to it.
+      expect(mockMarkDispatchResult).toHaveBeenLastCalledWith({
+        runId: expect.any(String),
+        status: 'completed',
+        ...cleared
+      })
+    }
+  )
 
   it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
     let launchArgs: {
@@ -776,7 +709,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     expect(
       mockMarkDispatchResult.mock.calls.filter(
-        ([result]) => result.status === 'completed' && !Object.hasOwn(result, 'terminalPtyId')
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
       )
     ).toHaveLength(1)
     expect(mockReleaseTerminalOwnership).not.toHaveBeenCalled()
@@ -880,7 +813,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
     expect(
       mockMarkDispatchResult.mock.calls.filter(
-        ([result]) => result.status === 'completed' && !Object.hasOwn(result, 'terminalPtyId')
+        ([result]) => result.status === 'completed' && result.terminalPaneKey !== null
       )
     ).toHaveLength(1)
     errorSpy.mockRestore()

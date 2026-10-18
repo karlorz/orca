@@ -21,13 +21,15 @@ import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
 import { probeActiveOrcadReadiness } from './orcad-active-readiness'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from './orcad-daemon-protocol-crossing'
-import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { ensureOrcadManagedTunnel, rebuildOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import {
   clearManagedOrcadUpdateDeferral,
   recordManagedOrcadUpdateDeferral
 } from './orcad-managed-update-deferrals'
 import {
   isForceableOrcadDeferral,
+  listenExtrasFromDeployment,
   managedOrcadInstallDir,
   managedOrcadSlot,
   probeManagedOrcadReadiness,
@@ -112,7 +114,12 @@ export async function runManagedOrcadUpdate(
   const localOrcadDir =
     args.localOrcadDir ??
     (await materializeOrcadArtifact(context.serverTarget, { signal: args.signal }))
-  const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+  const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    args.signal,
+    listenExtrasFromDeployment(deployment)
+  )
   const result = await deployOrcad({
     ...slot,
     localOrcadDir,
@@ -138,6 +145,7 @@ export async function runManagedOrcadUpdate(
     return deferral
   }
   clearManagedOrcadUpdateDeferral(environment.id)
+  const started = result.outcome === 'already-active' && (await wakeAlreadyActiveOrcad(slot))
   const readiness = await probeManagedOrcadReadiness(
     context,
     localOrcadDir,
@@ -151,6 +159,10 @@ export async function runManagedOrcadUpdate(
     readiness
   })
   const updated = refreshPairing(userDataPath, environment, readiness, deployment.localPort)
+  if (started) {
+    // The started slot may have bound another port than the forward in use.
+    await rebuildOrcadManagedTunnel(userDataPath, environment.id)
+  }
   return {
     outcome: result.outcome === 'already-active' ? 'already-current' : 'updated',
     environment: redactRuntimeEnvironment(updated),
@@ -204,7 +216,12 @@ export function rollbackManagedOrcadEnvironment(
               : 'Close the terminals running on this server before rolling it back.'
         }
       }
-      const slot = managedOrcadSlot(context, deployment.remotePort, args.signal)
+      const slot = managedOrcadSlot(
+    context,
+    deployment.remotePort,
+    args.signal,
+    listenExtrasFromDeployment(deployment)
+  )
       const targetDir = managedOrcadInstallDir(context, target)
       const targetBuildHash = await readRemoteOrcadBuildHash(slot, targetDir)
       const result = await rollbackOrcad({
@@ -243,7 +260,12 @@ export function recoverManagedOrcadEnvironment(
     async ({ environment, deployment }) => {
       const context = await resolveLinkedOrcadContext(environment, deployment, args.signal)
       const result = await recoverInterruptedOrcadActivation({
-        ...managedOrcadSlot(context, deployment.remotePort, args.signal),
+        ...managedOrcadSlot(
+          context,
+          deployment.remotePort,
+          args.signal,
+          listenExtrasFromDeployment(deployment)
+        ),
         acceptChangedState: args.acceptChangedState === true
       })
       if (result.outcome !== 'recovered') {

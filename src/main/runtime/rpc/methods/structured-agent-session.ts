@@ -1,3 +1,9 @@
+import { AgentSessionControlTargetParams } from '../../../../shared/agent-session-bound-control'
+import { requireBoundControlCapability } from './structured-agent-session-bound-control-gate'
+import {
+  clientReadsCurrentRequests,
+  STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
+} from './structured-agent-session-current-requests'
 // `agentSession.*` — the structured session RPC surface.
 //
 // Every method here is gated on the client advertising
@@ -9,6 +15,10 @@ import {
   projectBackgroundTaskEvent,
   projectBackgroundTaskHistory
 } from './structured-agent-session-background-task-capability'
+import {
+  projectQueuedImageCardPublication,
+  projectQueuedImageCardHistory
+} from './structured-agent-session-queued-image-capability'
 import {
   projectTurnItemEvent,
   projectTurnItemHistory
@@ -58,8 +68,23 @@ import {
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  noteStructuredAgentSessionClose,
+  refusingStructuredAgentSessionCreatesClosedFirst
+} from './structured-agent-session-close-before-create'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
+  defineMethod({
+    name: 'agentSession.controlTarget',
+    permission: 'workspace',
+    params: AgentSessionControlTargetParams,
+    handler: async (params, ctx) => {
+      requireBoundControlCapability(ctx)
+      return requireStructuredCleanupHost(ctx).controlTarget(params)
+    }
+  }),
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
@@ -103,7 +128,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.create',
     permission: 'workspace',
     params: CreateParams,
-    handler: handleStructuredAgentSessionCreate
+    handler: ORCA_LAYOUT_OWNER_IS_MAIN
+      ? refusingStructuredAgentSessionCreatesClosedFirst(handleStructuredAgentSessionCreate)
+      : handleStructuredAgentSessionCreate
   }),
   defineMethod({
     name: 'agentSession.ensure',
@@ -121,7 +148,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.cancel',
     permission: 'workspace',
     params: CancelParams,
-    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
+    handler: async (params, ctx) => {
+      if (params.expectedControlTarget) {
+        requireBoundControlCapability(ctx)
+      }
+      return requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
+    }
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   defineMethod({
@@ -132,6 +164,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: OptionsParams,
     handler: async (params, ctx) => {
       const host = requireStructuredCleanupHost(ctx)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        noteStructuredAgentSessionClose(
+          params.sessionId,
+          host.deps.store.getRecord(params.sessionId) !== null
+        )
+      }
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
@@ -149,7 +187,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
-        projectBackgroundTaskHistory(await host.history(params), ctx),
+        projectQueuedImageCardHistory(
+          projectBackgroundTaskHistory(await host.history(params), ctx),
+          ctx
+        ),
         ctx,
         host.sessionAgent(params.sessionId)
       )
@@ -171,8 +212,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // Resolves once the conversation is open and the opening snapshot (or the missed batch) is
       // emitted; a close that raced the open disposes what it bound.
       dispose = await host.subscribe({
+        readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
+        projectQueuePublication: (publication) =>
+          projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
             projectTurnItemEvent(
@@ -181,7 +225,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
               host.sessionAgent(params.sessionId)
             )
           ),
-        ...(params.cursor ? { cursor: params.cursor } : {})
+        ...(params.cursor ? { cursor: params.cursor } : {}),
+        // Desktop snapshots require settled send echoes and independent current requests.
+        snapshotCatchUp:
+          ctx.clientKind === undefined ||
+          ctx.clientKind === 'mobile' ||
+          (ctx.clientCapabilities?.includes(AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY) ===
+            true &&
+            clientReadsCurrentRequests(ctx)),
+        // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
+        ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
       })
       if (stream.isClosed()) {
         dispose()
@@ -211,5 +264,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS,
+  ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

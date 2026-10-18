@@ -5,6 +5,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'accept-changed-state',
   'all',
   'allow-failed-archive-hook',
+  'apply',
   'attachments',
   'children',
   'comments',

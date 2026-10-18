@@ -94,25 +94,30 @@ describe('terminal focus navigation authority', () => {
 
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(1, 'term-1', {
       navigateHost: false,
-      activateHostWindow: false
+      activateHostWindow: false,
+      flashFocusedPane: true
     })
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(2, 'term-1', {
       navigateHost: true,
-      activateHostWindow: false
+      activateHostWindow: false,
+      flashFocusedPane: true
     })
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(3, 'term-1', {
       navigateHost: false,
-      activateHostWindow: false
+      activateHostWindow: false,
+      flashFocusedPane: true
     })
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(4, 'term-1', {
       navigateHost: true,
-      activateHostWindow: true
+      activateHostWindow: true,
+      flashFocusedPane: true
     })
     // Why: the local CLI switch (`orca terminal switch --terminal <handle>`) is the exact caller
     // that may raise the host window; a paired caller asking for the same host navigation may not.
     expect(runtime.focusTerminal).toHaveBeenNthCalledWith(5, 'term-1', {
       navigateHost: true,
-      activateHostWindow: true
+      activateHostWindow: true,
+      flashFocusedPane: true
     })
   })
 

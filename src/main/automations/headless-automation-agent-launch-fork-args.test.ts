@@ -28,15 +28,13 @@ function harness() {
       worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
       startupTerminal: { handle: 'term_new', tabId: 'tab-new', paneKey: 'tab-new:leaf-1' }
     })),
-    launchAgentTerminal: vi.fn(
-      async (_selector: string, _opts: LaunchAgentTerminalOpts) => ({
-        handle: 'term_existing',
-        tabId: 'tab-1',
-        paneKey: 'tab-1:leaf-1',
-        ptyId: 'pty-1',
-        worktreeId: 'wt-1'
-      })
-    ),
+    launchAgentTerminal: vi.fn(async (_selector: string, _opts: LaunchAgentTerminalOpts) => ({
+      handle: 'term_existing',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      ptyId: 'pty-1',
+      worktreeId: 'wt-1'
+    })),
     showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
     deliverStartupFollowup: vi.fn(async () => true)
   }
@@ -73,6 +71,7 @@ function spawnedCommand(args: LaunchAgentTerminalOpts): string | undefined {
     settings: {},
     platform: 'linux',
     isRemote: false,
+    shell: undefined,
     ...(args.extraAgentArgs ? { extraAgentArgs: args.extraAgentArgs } : {}),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch preferences are the session option map.
     ...(args.launchPreferences ? { sessionOptions: args.launchPreferences as never } : {})

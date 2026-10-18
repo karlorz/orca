@@ -175,6 +175,7 @@ describe('terminal-originating-pane-navigation', () => {
           : first.host.getRendererLeaf(tabId, leafId),
       focusTerminal: vi.fn(async (handle, options) => {
         expect(options.existingSessionOnly).toBe(true)
+        expect(options.flashFocusedPane).toBe(true)
         expect(options.verifySession?.()).toBe(true)
         const isSecond = handle === 'handle-2'
         return {

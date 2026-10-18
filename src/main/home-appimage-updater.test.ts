@@ -5,6 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HomeAppImageUpdater } from './home-appimage-updater'
 import type { UpdateStatus } from '../shared/update-status-types'
 import { HOME_UPDATE_PROTOCOL_MESSAGE } from './home-appimage-release-policy'
+import {
+  HOME_GITHUB_API_VERSION,
+  HOME_RELEASES_API_URL,
+  HOME_UPDATER_USER_AGENT
+} from './home-appimage-release-request'
+import { KARLORZ_FORK_RELEASE_FEED } from './updater-release-feeds'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -25,7 +31,7 @@ async function fixture(protocol = 44) {
     }))
   }
   const statuses: UpdateStatus[] = []
-  const fetch = vi.fn(async (url: string) => {
+  const fetch = vi.fn(async (url: string, _init?: RequestInit) => {
     if (url.includes('api.github.com')) {
       return Response.json([release])
     }
@@ -135,5 +141,107 @@ describe('managed home updater actions', () => {
     expect(f.fetch).not.toHaveBeenCalled()
     expect(f.statuses.at(-1)).toMatchObject({ state: 'error' })
     expect(f.unlock).toHaveBeenCalledOnce()
+  })
+  it('sends GitHub API headers, omits credentials, and follows redirects manually', async () => {
+    const f = await fixture()
+    await f.updater.check(true)
+    const api = f.fetch.mock.calls.find(([url]) => url === HOME_RELEASES_API_URL)
+    expect(api?.[0]).toBe(HOME_RELEASES_API_URL)
+    const headers = new Headers(api?.[1]?.headers)
+    expect(headers.get('User-Agent')).toBe(HOME_UPDATER_USER_AGENT)
+    expect(headers.get('Accept')).toBe('application/vnd.github+json')
+    expect(headers.get('X-GitHub-Api-Version')).toBe(HOME_GITHUB_API_VERSION)
+    expect(api?.[1]?.credentials).toBe('omit')
+    expect(api?.[1]?.redirect).toBe('manual')
+    expect(f.fetch.mock.calls.some(([url]) => url.includes('/releases/latest'))).toBe(false)
+  })
+  it('reports the failing URL, status and body snippet when the API and atom feed 404', async () => {
+    const f = await fixture()
+    f.fetch.mockImplementation(async (url: string) => {
+      if (url.includes('api.github.com')) {
+        return new Response('{"message":"Not Found"}', { status: 404 })
+      }
+      if (url === KARLORZ_FORK_RELEASE_FEED.repoAtomUrl) {
+        return new Response('Not Found', { status: 404 })
+      }
+      return new Response('miss', { status: 404 })
+    })
+    await f.updater.check(true)
+    const status = f.statuses.at(-1)
+    expect(status).toMatchObject({ state: 'error', retryable: true })
+    const message = status?.state === 'error' ? status.message : ''
+    expect(message).toContain(`Fork update request failed (404) ${HOME_RELEASES_API_URL}`)
+    expect(message).toContain('{"message":"Not Found"}')
+    expect(message).toContain('atom fallback failed')
+    expect(message).toContain(KARLORZ_FORK_RELEASE_FEED.repoAtomUrl)
+  })
+  it('falls back to the prerelease atom feed when the releases API 404s', async () => {
+    const f = await fixture()
+    const tag = 'v1.4.224-1'
+    const atom = `<?xml version="1.0"?><feed><entry><link rel="alternate" type="text/html" href="https://github.com/karlorz/orca/releases/tag/${tag}"/></entry></feed>`
+    f.fetch.mockImplementation(async (url: string) => {
+      if (url.includes('api.github.com')) {
+        return new Response('{"message":"Not Found"}', { status: 404 })
+      }
+      if (url === KARLORZ_FORK_RELEASE_FEED.repoAtomUrl) {
+        return new Response(atom)
+      }
+      if (url.endsWith('.json')) {
+        return Response.json({ schemaVersion: 1, tag, daemonProtocol: 44 })
+      }
+      if (url.endsWith('SHA256SUMS.txt')) {
+        return new Response('checksum fixture')
+      }
+      return new Response('miss', { status: 404 })
+    })
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)?.state).toBe('available')
+    expect(f.statuses.at(-1)).toMatchObject({ version: '1.4.224-1' })
+    expect(f.fetch.mock.calls.some(([url]) => url.includes('/releases/latest'))).toBe(false)
+  })
+  it('does not treat a 200 HTML atom body as an empty update feed', async () => {
+    const f = await fixture()
+    f.fetch.mockImplementation(async (url: string) => {
+      if (url.includes('api.github.com')) {
+        return new Response('{"message":"Not Found"}', { status: 404 })
+      }
+      if (url === KARLORZ_FORK_RELEASE_FEED.repoAtomUrl) {
+        return new Response('<html>proxy interstitial</html>')
+      }
+      return new Response('miss', { status: 404 })
+    })
+    await f.updater.check(true)
+    const status = f.statuses.at(-1)
+    expect(status?.state).toBe('error')
+    const message = status?.state === 'error' ? status.message : ''
+    expect(message).toContain(`Fork update request failed (404) ${HOME_RELEASES_API_URL}`)
+    expect(message).toContain('Invalid fork release atom feed')
+  })
+  it('follows a GitHub asset 302 when downloading the AppImage', async () => {
+    const f = await fixture()
+    await f.updater.check(true)
+    const asset = 'https://github.com/karlorz/orca/releases/download/v1.4.224-1/orca-linux.AppImage'
+    const storage = 'https://release-assets.githubusercontent.com/github-production-release-asset/1'
+    f.fetch.mockImplementation(async (url: string) => {
+      if (url.includes('api.github.com')) {
+        return Response.json([])
+      }
+      if (url.endsWith('.json')) {
+        return Response.json({ schemaVersion: 1, tag: 'v1.4.224-1', daemonProtocol: 44 })
+      }
+      if (url.endsWith('.txt')) {
+        return new Response('checksum fixture')
+      }
+      if (url === asset) {
+        return new Response(null, { status: 302, headers: { location: storage } })
+      }
+      if (url === storage) {
+        return new Response('AppImage bytes')
+      }
+      return new Response('miss', { status: 404 })
+    })
+    await f.updater.download()
+    expect(f.commit).toHaveBeenCalledTimes(1)
+    expect(f.fetch.mock.calls.map(([url]) => url)).toContain(storage)
   })
 })

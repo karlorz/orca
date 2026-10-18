@@ -12,7 +12,6 @@ import type {
   AutomationDispatchResult
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
-import type { AgentMainAgentVerdictSource } from '../../../shared/agent-main-agent-verdict'
 import {
   prepareAutomationDispatchWorkspace,
   resolveAutomationDispatchWorkspace
@@ -53,10 +52,10 @@ export async function handleAutomationDispatchRequest({
     terminalOwnership = null
     ownership?.release()
   }
-  const finalizeTerminalOwnership = async (): Promise<boolean> => {
+  const finalizeTerminalOwnership: AutomationTerminalOwnership['finalize'] = async (options) => {
     const ownership = terminalOwnership
     terminalOwnership = null
-    return ownership?.finalize() ?? false
+    return (await ownership?.finalize(options)) ?? null
   }
 
   if (!resolved.repo) {
@@ -119,13 +118,13 @@ export async function handleAutomationDispatchRequest({
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: AgentMainAgentVerdictSource): void => {
+              const handleReusableAgentStatus = (payload: { state: string }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
                   return
                 }
                 if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone(payload)
+                  completion.handleAgentDone()
                 }
               }
               const reuseCompletionStartedAt = Date.now()
@@ -136,10 +135,7 @@ export async function handleAutomationDispatchRequest({
                   runId: run.id,
                   onData: completion.appendOutput,
                   onAgentStatus: (payload) => {
-                    completion.captureAssistantMessage(
-                      payload.lastAssistantMessage,
-                      payload.lastAssistantMessageIsToolOutput
-                    )
+                    completion.captureAssistantMessage(payload.lastAssistantMessage)
                     handleReusableAgentStatus(payload)
                   },
                   onExit: completion.handleExit
@@ -169,9 +165,7 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
-    // Why the agent decides: the catalog is the only place a per-provider model
-    // flag is verified, so a provider without one keeps its configured default
-    // rather than receiving a guessed `--model` that would fail its launch.
+    // Fork: per-automation model/effort/profile and agent flags.
     const modelSessionOptions = buildAutomationModelLaunchPreferences(
       automation.agentId,
       automation.model,
@@ -183,21 +177,18 @@ export async function handleAutomationDispatchRequest({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
-      sessionOptions: modelSessionOptions,
+      ...(modelSessionOptions ? { sessionOptions: modelSessionOptions } : {}),
       ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
-        completion.captureAssistantMessage(
-          payload.lastAssistantMessage,
-          payload.lastAssistantMessageIsToolOutput
-        )
+        completion.captureAssistantMessage(payload.lastAssistantMessage)
         // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone(payload)
+        completion.handleAgentDone()
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

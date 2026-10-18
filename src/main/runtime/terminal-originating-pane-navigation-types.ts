@@ -66,6 +66,7 @@ export type TerminalOriginatingPaneHost = {
       existingSessionOnly?: boolean
       verifySession?: () => boolean
       activateHostWindow?: boolean
+      flashFocusedPane?: boolean
     }
   ): Promise<{
     navigated: boolean

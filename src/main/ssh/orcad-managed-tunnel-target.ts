@@ -1,5 +1,6 @@
 /** Opens a managed tunnel at the port orcad bound and keeps it only if orcad is what answers. */
 import {
+  getOrcadSshDeployment,
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
@@ -12,6 +13,12 @@ import {
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
+import {
+  listenExtrasFromDeployment,
+  managedOrcadSlot
+} from './orcad-managed-runtime-context'
+import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
+import { resolveOrcadRemoteContext } from './orcad-remote-context'
 import type { SshConnection } from './ssh-connection'
 import type { PortForwardEntry, SshPortForwardManager } from './ssh-port-forward'
 
@@ -19,11 +26,40 @@ export type OrcadManagedTunnelTargeting = {
   resolveRemotePort: (input: OrcadTunnelPortInput) => Promise<number>
   /** Checks the runtime the environment's pairing endpoint (the tunnel's local port) reaches. */
   verifyIdentity: (environment: KnownRuntimeEnvironment) => Promise<OrcadTunnelIdentity>
+  /** Starts the active slot only on proven exit, before a foreign answer re-reads the port. */
+  wakeStoppedServer?: (input: OrcadTunnelPortInput) => Promise<void>
 }
 
 export const MANAGED_ORCAD_TUNNEL_TARGETING: OrcadManagedTunnelTargeting = {
   resolveRemotePort: resolveManagedOrcadTunnelPort,
-  verifyIdentity: verifyManagedOrcadTunnelIdentity
+  verifyIdentity: verifyManagedOrcadTunnelIdentity,
+  wakeStoppedServer: wakeStoppedManagedOrcadForTunnel
+}
+
+/**
+ * A stopped slot's readiness still names the port it bound, which another runtime may hold by
+ * now; starting it moves it to a free port the re-read then follows.
+ */
+async function wakeStoppedManagedOrcadForTunnel(input: OrcadTunnelPortInput): Promise<void> {
+  const access = getRuntimeSshAccess(input.environment)
+  if (!access) {
+    return
+  }
+  try {
+    const context = await resolveOrcadRemoteContext(input.target, input.connection)
+    const deployment = getOrcadSshDeployment(input.environment)
+    await wakeStoppedManagedOrcad(
+      managedOrcadSlot(
+        context,
+        access.remotePort,
+        undefined,
+        deployment ? listenExtrasFromDeployment(deployment) : undefined
+      )
+    )
+  } catch (error) {
+    // The re-read and its identity check still decide; a failed wake only leaves the port as is.
+    console.warn('[ssh] Could not start the managed Orca server behind a foreign answer:', error)
+  }
 }
 
 /** Test default: the persisted port, and no identity round trip. */
@@ -62,7 +98,10 @@ export async function environmentForwardChecks(
 ): Promise<Required<Pick<VerifiedOrcadForwardArgs, 'remotePort' | 'rereadRemotePort' | 'verify'>>> {
   return {
     remotePort: await targeting.resolveRemotePort(input),
-    rereadRemotePort: () => targeting.resolveRemotePort(input),
+    rereadRemotePort: async () => {
+      await targeting.wakeStoppedServer?.(input)
+      return targeting.resolveRemotePort(input)
+    },
     verify: () => targeting.verifyIdentity(input.environment)
   }
 }
@@ -70,7 +109,8 @@ export async function environmentForwardChecks(
 /**
  * Null when `stillCurrent` turned false mid-setup; the forward is already removed then.
  * An answer from another runtime re-reads the port once, since orcad may have restarted onto a
- * new one, and throws if the port did not move or the new one is foreign too.
+ * new one or been started there by that re-read, and throws if the port did not move or the new
+ * one is foreign too.
  */
 export async function forwardToVerifiedOrcad(
   args: VerifiedOrcadForwardArgs

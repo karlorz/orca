@@ -9,6 +9,10 @@ import {
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { errorMessage } from '../../../../shared/error-message'
+import {
+  closeLegacyRelayPane,
+  isLegacyRelayBridgedPty
+} from '../../../ssh/legacy-relay-bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
@@ -24,9 +28,21 @@ function publishSyntheticExit(
   deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
 }
 
+function expectedIncarnationStillLive(
+  ptyId: string,
+  expectedIncarnationId: string | undefined
+): boolean {
+  if (!expectedIncarnationId) {
+    return true
+  }
+  const live = ptyIncarnationById.get(ptyId)
+  return live === expectedIncarnationId
+}
+
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  opts?: { expectedIncarnationId?: string }
 ): boolean {
   const {
     runtime,
@@ -38,6 +54,12 @@ export function killPtyFromRuntimeController(
   } = deps
   runtime?.markPtyStopRequested?.(ptyId)
   const connectionId = getPtySshConnectionId(ptyId)
+  // COMPAT(legacy-relay-bridge, revisit 2027-01-15): an older relay's shell stops through the
+  // bridge, which retires its lease only on the relay's proof; tombstoning it here would orphan it.
+  if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
+    void closeLegacyRelayPane(ptyId)
+    return true
+  }
   // Why: close runtime tails without clearing provider ownership, so
   // a retry can still target a PTY that survived the failed shutdown.
   const reportStopFailure = (err: unknown): void => {
@@ -49,6 +71,9 @@ export function killPtyFromRuntimeController(
     runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
   }
   const killWithCurrentProvider = (): boolean => {
+    if (!expectedIncarnationStillLive(ptyId, opts?.expectedIncarnationId)) {
+      return false
+    }
     let provider: IPtyProvider
     try {
       provider = getProviderForPty(ptyId)
@@ -134,7 +159,7 @@ export function retireRejectedPtyFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
 ): Promise<boolean> {
   const {
     runtime,
@@ -171,6 +196,9 @@ export async function stopAndWaitPtyFromRuntimeController(
     } else {
       await startupPromise
     }
+  }
+  if (!expectedIncarnationStillLive(ptyId, opts?.expectedIncarnationId)) {
+    return false
   }
   let provider: IPtyProvider
   try {

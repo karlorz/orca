@@ -392,7 +392,11 @@ describe('OrcaRuntimeService', () => {
       spawnIntent: 'automatic-restore'
     })
     expect(spawn).toHaveBeenLastCalledWith(
-      expect.objectContaining({ spawnIntent: 'automatic-restore' })
+      expect.objectContaining({
+        spawnIntent: 'automatic-restore',
+        // The spawn names the session it resumes, so the host can publish it before a hook.
+        resumeProviderSession: expect.objectContaining({ id: 'provider-session-intent' })
+      })
     )
 
     await runtime.ensureAgentSession({
@@ -706,9 +710,9 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
-    await expect(
-      runtime.createTerminal(undefined, { startupAgent: 'cursor', rendererBacked: true })
-    ).rejects.toThrow(/requires a workspace selector/)
+    await expect(runtime.createTerminal(undefined, { startupAgent: 'cursor' })).rejects.toThrow(
+      /requires a workspace selector/
+    )
   })
 
   // Why: folder workspaces have no repo, so command sniffing skipped them entirely

@@ -1,3 +1,4 @@
+import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus,
@@ -76,6 +77,8 @@ export type RuntimePtyController = {
     sessionId?: string
     /** Windows shell to spawn AS this PTY, instead of the host default. */
     shellOverride?: string
+    /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
+    launchRuntime?: AgentLaunchRuntime
     isNewSession?: boolean
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
@@ -126,11 +129,11 @@ export type RuntimePtyController = {
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
   attach?(ptyId: string): Promise<boolean>
-  kill(ptyId: string): boolean
+  kill(ptyId: string, opts?: { expectedIncarnationId?: string }): boolean
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

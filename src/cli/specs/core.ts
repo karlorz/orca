@@ -2,6 +2,7 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
+import { WORKTREE_GC_COMMAND_SPEC } from './worktree-gc'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
@@ -67,7 +68,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['reference'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url>...] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -82,6 +83,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'retry-launch',
       'base-branch',
       'reference',
+      'reference-site',
       'issue',
       'pr',
       'linear-issue',
@@ -95,7 +97,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'activate'
     ],
     notes: [
-      'Repeat --reference to attach full issue or review URLs before setup or agent startup. Cannot combine with legacy link flags.',
+      'Repeat --reference to attach full issue or review URLs, or Jira issue keys, before setup or agent startup. Use --reference-site to choose the Jira site for keys. Other providers require full URLs. Cannot combine with legacy link flags.',
       'This creates a new checkout. For a fresh agent in an existing worktree, use `orca agent launch` instead.',
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
@@ -126,6 +128,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   WORKTREE_SET_COMMAND_SPEC,
+  WORKTREE_GC_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
     // Why: agents reach for git's `remove`/`delete` verbs; accept them as
@@ -238,6 +241,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {

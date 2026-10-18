@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
+import { MANAGED_ORCAD_RESTORE_HOLD_ENV } from './managed-orcad-restore-hold'
 import {
   redeployStoppedManagedOrcad,
   resetManagedOrcadRestoreUpdatesForTests,
@@ -31,7 +32,14 @@ function deps(
 }
 
 describe('updating a managed server when the launch restores its tunnel', () => {
-  beforeEach(() => resetManagedOrcadRestoreUpdatesForTests())
+  beforeEach(() => {
+    resetManagedOrcadRestoreUpdatesForTests()
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
+
+  afterEach(() => {
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
 
   it('runs the same update check a connect runs, and publishes it', async () => {
     const d = deps({ outcome: 'updated', activeVersion: '0.1.0+b' })
@@ -105,10 +113,25 @@ describe('updating a managed server when the launch restores its tunnel', () => 
     expect(updateManagedOrcadOnRestore('env-3', () => unlinked)).toBeNull()
     expect(unlinked.autoUpdate).not.toHaveBeenCalled()
   })
+
+  it('does not start an update check on the restore hold path', async () => {
+    process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV] = '1'
+    const d = deps({ outcome: 'updated', activeVersion: '0.1.0+b' })
+    expect(updateManagedOrcadOnRestore('env-1', () => d)).toBeNull()
+    expect(d.autoUpdate).not.toHaveBeenCalled()
+    expect(d.publish).not.toHaveBeenCalled()
+  })
 })
 
 describe('redeploying a server another desktop stopped mid-session', () => {
-  beforeEach(() => resetManagedOrcadRestoreUpdatesForTests())
+  beforeEach(() => {
+    resetManagedOrcadRestoreUpdatesForTests()
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
+
+  afterEach(() => {
+    delete process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV]
+  })
 
   it('runs even after this session already checked the server, and reports activation', async () => {
     await updateManagedOrcadOnRestore('env-1', () =>
@@ -130,5 +153,12 @@ describe('redeploying a server another desktop stopped mid-session', () => {
     expect(d.autoUpdate).toHaveBeenCalledTimes(1)
     await redeployStoppedManagedOrcad('env-1', () => d)
     expect(d.autoUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not redeploy on the restore hold path', async () => {
+    process.env[MANAGED_ORCAD_RESTORE_HOLD_ENV] = '1'
+    const d = deps({ outcome: 'updated', activeVersion: '0.1.0+b' })
+    await expect(redeployStoppedManagedOrcad('env-1', () => d)).resolves.toBe(false)
+    expect(d.autoUpdate).not.toHaveBeenCalled()
   })
 })

@@ -61,7 +61,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     // lease machinery, and the in-process local provider streams without
     // attach. Attach-only and false-on-doubt: never creates or resizes.
     attach: (ptyId) => attachPtyFromRuntimeController(deps, ptyId),
-    kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
+    kill: (ptyId, opts) => killPtyFromRuntimeController(deps, ptyId, opts),
     retireRejectedPty: (ptyId, stopConfirmed) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),

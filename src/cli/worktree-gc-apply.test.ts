@@ -1,0 +1,633 @@
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { existsSync } from 'node:fs'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { WORKTREE_GC_IDLE_MS } from './worktree-gc-model'
+import { runGitCommand } from './worktree-gc-git'
+import { runWorktreeGc } from './worktree-gc-run'
+import type { WorktreeGcRuntime, WorktreeGcRuntimeWorktree } from './worktree-gc-model'
+import {
+  completeGcTerminalList,
+  mapRuntimeTerminalList,
+  terminalInventoryIsComplete
+} from './worktree-gc-terminal-scope'
+import { gitActivityStampTargets } from './worktree-gc-git-activity'
+
+const DAY_MS = WORKTREE_GC_IDLE_MS
+const NOW_MS = Date.parse('2026-10-15T08:00:00Z')
+
+async function stampMtime(target: string, mtimeMs: number): Promise<void> {
+  try {
+    await utimes(target, mtimeMs / 1000, mtimeMs / 1000)
+  } catch {
+    // Missing HEAD/index is normal for a gitfile worktree.
+  }
+}
+
+async function ageGitActivity(worktreePath: string, mtimeMs: number, branch = ''): Promise<void> {
+  for (const target of await gitActivityStampTargets(worktreePath, branch)) {
+    await stampMtime(target, mtimeMs)
+  }
+}
+
+async function git(cwd: string, args: string[]): Promise<string> {
+  const result = await runGitCommand(cwd, args)
+  if (result.code !== 0) {
+    throw new Error(`git ${args.join(' ')} failed: ${result.stderr || result.stdout}`)
+  }
+  return result.stdout
+}
+
+async function createMergedLinkedRepo(extraLinked = false): Promise<{
+  root: string
+  repo: string
+  linked: string
+  linkedB: string
+  journalDir: string
+}> {
+  const root = await mkdtemp(path.join(tmpdir(), 'orca-wt-gc-apply-'))
+  const repo = path.join(root, 'repo')
+  const bare = path.join(root, 'repo.git')
+  const linked = path.join(root, 'linked')
+  const linkedB = path.join(root, 'linked-b')
+  const journalDir = path.join(root, 'journal')
+  await mkdir(repo, { recursive: true })
+  await git(repo, ['init'])
+  await git(repo, ['config', 'user.email', 'gc@test.local'])
+  await git(repo, ['config', 'user.name', 'Gc Test'])
+  await git(repo, ['config', 'commit.gpgsign', 'false'])
+  await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  await writeFile(path.join(repo, 'README.md'), 'main\n')
+  await git(repo, ['add', 'README.md'])
+  await git(repo, ['commit', '-m', 'init'])
+  await git(repo, ['clone', '--bare', repo, bare])
+  await git(repo, ['remote', 'add', 'origin', bare])
+  await git(repo, ['push', '-u', 'origin', 'HEAD:main'])
+  await git(repo, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
+  await git(repo, ['worktree', 'add', '-b', 'feature/done', linked])
+  if (extraLinked) {
+    await git(repo, ['worktree', 'add', '-b', 'feature/done-b', linkedB])
+  }
+  await git(repo, ['config', 'receive.denyCurrentBranch', 'ignore'])
+  const idleMs = NOW_MS - DAY_MS * 2
+  await ageGitActivity(repo, idleMs, 'main')
+  await ageGitActivity(linked, idleMs, 'feature/done')
+  if (extraLinked) {
+    await ageGitActivity(linkedB, idleMs, 'feature/done-b')
+  }
+  return { root, repo, linked, linkedB, journalDir }
+}
+
+function worktreeRow(pathName: string, isMain: boolean): WorktreeGcRuntimeWorktree {
+  return {
+    id: `repo::${pathName}`,
+    path: pathName,
+    hostId: 'local',
+    lastActivityAt: NOW_MS - DAY_MS * 2,
+    isMainWorktree: isMain
+  }
+}
+
+function runtimeFor(
+  worktrees: WorktreeGcRuntimeWorktree[],
+  options: {
+    remove?: (input: { id: string; hostId: string }) => Promise<boolean>
+    closeTerminal?: WorktreeGcRuntime['closeTerminal']
+    terminals?: WorktreeGcRuntime['listTerminals']
+  } = {}
+): WorktreeGcRuntime {
+  return {
+    async listWorktrees() {
+      return { worktrees, truncated: false }
+    },
+    listTerminals: options.terminals ?? (async () => completeGcTerminalList()),
+    async readTerminalTail() {
+      return ''
+    },
+    closeTerminal: options.closeTerminal ?? (async () => true),
+    removeWorktree:
+      options.remove ??
+      (async () => {
+        throw new Error('worktree.rm should not run in this test')
+      })
+  }
+}
+
+describe('worktree gc apply revalidation', () => {
+  const roots: string[] = []
+
+  afterEach(async () => {
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  })
+
+  it('does not remove after new Git activity and an unpushed HEAD appear', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let scans = 0
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => {
+        scans += 1
+        if (scans === 2) {
+          await git(fixture.linked, ['commit', '--allow-empty', '-m', 'after-inventory'])
+        }
+        return { verdict: 'live', cwds: [] }
+      }
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons.some((reason) => reason.includes('UNPUSHED'))).toBe(true)
+  })
+
+  it('preserves the validated current branch tip, not the inventory head', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const inventoryHead = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    let scans = 0
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async () => {
+          const result = await runGitCommand(fixture.repo, ['worktree', 'remove', fixture.linked])
+          return result.code === 0
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['CLOSED'] }),
+      listProcessCwds: async () => {
+        scans += 1
+        if (scans === 2) {
+          await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pushed-after-inventory'])
+          await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+          await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+          await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
+        }
+        return { verdict: 'live', cwds: [] }
+      }
+    })
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('remove')
+    expect(linked?.head).not.toBe(inventoryHead)
+    expect(await git(fixture.repo, ['rev-parse', 'refs/orca-gc/feature/done'])).toBe(linked?.head)
+    expect(linked?.head).toBeDefined()
+  })
+
+  it('keeps a later candidate when a process appears in it during an earlier removal', async () => {
+    const fixture = await createMergedLinkedRepo(true)
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let scans = 0
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor(
+        [
+          worktreeRow(fixture.repo, true),
+          worktreeRow(fixture.linked, false),
+          worktreeRow(fixture.linkedB, false)
+        ],
+        {
+          remove: async (input) => {
+            removed.push(input.id)
+            return true
+          }
+        }
+      ),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => {
+        scans += 1
+        if (scans >= 3) {
+          return { verdict: 'live', cwds: [fixture.linkedB] }
+        }
+        return { verdict: 'live', cwds: [] }
+      }
+    })
+    expect(removed).toEqual([`repo::${fixture.linked}`])
+    expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('remove')
+    expect(report.worktrees.find((row) => row.path === fixture.linkedB)?.action).toBe('keep')
+    expect(report.worktrees.find((row) => row.path === fixture.linkedB)?.reasons).toContain(
+      'process-cwd-inside'
+    )
+  })
+
+  it('treats a complete global terminal inventory as complete after --repo filtering', () => {
+    const selected = worktreeRow('/repo-a', true)
+    const mapped = mapRuntimeTerminalList(
+      {
+        terminals: [
+          {
+            handle: 'term_a',
+            ptyId: 'pty-a',
+            worktreeId: selected.id,
+            worktreePath: selected.path,
+            branch: 'main',
+            tabId: 'tab-a',
+            leafId: 'leaf-a',
+            title: 'A',
+            connected: true,
+            writable: true,
+            lastOutputAt: 1,
+            preview: '',
+            incarnationId: 'inc-a',
+            executionHostId: LOCAL_EXECUTION_HOST_ID
+          },
+          {
+            handle: 'term_b',
+            ptyId: 'pty-b',
+            worktreeId: 'wt-b',
+            worktreePath: '/repo-b',
+            branch: 'main',
+            tabId: 'tab-b',
+            leafId: 'leaf-b',
+            title: 'B',
+            connected: true,
+            writable: true,
+            lastOutputAt: 1,
+            preview: '',
+            incarnationId: 'inc-b',
+            executionHostId: LOCAL_EXECUTION_HOST_ID
+          }
+        ],
+        totalCount: 2,
+        truncated: false,
+        hostScope: { hostIds: [LOCAL_EXECUTION_HOST_ID], omittedHostIds: [] }
+      },
+      [selected]
+    )
+    expect(mapped.terminals.map((terminal) => terminal.handle)).toEqual(['term_a'])
+    expect(terminalInventoryIsComplete(mapped)).toBe(true)
+  })
+
+  it('still removes an eligible selected-repo worktree when another repo has terminals', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          mapRuntimeTerminalList(
+            {
+              terminals: [
+                {
+                  handle: 'term_other',
+                  ptyId: 'pty-o',
+                  worktreeId: 'other',
+                  worktreePath: '/other-repo',
+                  branch: 'main',
+                  tabId: 'tab-o',
+                  leafId: 'leaf-o',
+                  title: 'other',
+                  connected: true,
+                  writable: true,
+                  lastOutputAt: 1,
+                  preview: '',
+                  incarnationId: 'inc-o',
+                  executionHostId: LOCAL_EXECUTION_HOST_ID
+                }
+              ],
+              totalCount: 1,
+              truncated: false,
+              hostScope: { hostIds: [LOCAL_EXECUTION_HOST_ID], omittedHostIds: [] }
+            },
+            [worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)]
+          ),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([`repo::${fixture.linked}`])
+    expect(report.worktrees.find((row) => row.path === fixture.linked)?.action).toBe('remove')
+  })
+
+  it('keeps a candidate when a process appears during its PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
+    const removed: string[] = []
+    let liveCwds: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => {
+        liveCwds = [fixture.linked]
+        return { ok: true, states: ['CLOSED'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: liveCwds })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('process-cwd-inside')
+  })
+
+  it('keeps a candidate when a terminal appears during its PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
+    const removed: string[] = []
+    let attachTerminal = false
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          attachTerminal
+            ? completeGcTerminalList([
+                {
+                  handle: 'term_live',
+                  title: 'live',
+                  worktreePath: fixture.linked,
+                  worktreeId: `repo::${fixture.linked}`,
+                  lastOutputAt: NOW_MS,
+                  incarnationId: 'inc-live',
+                  executionHostId: 'local'
+                }
+              ])
+            : completeGcTerminalList(),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      listPrStates: async () => {
+        attachTerminal = true
+        return { ok: true, states: ['CLOSED'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('terminal-attached')
+  })
+
+  it('keeps a candidate when HEAD moves during status and does not preserve the wrong tip', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const inventoryHead = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    const removed: string[] = []
+    const preserved: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === '--no-optional-locks' && args[1] === 'status') {
+          await git(fixture.linked, ['commit', '--allow-empty', '-m', 'during-status'])
+          await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+        }
+        if (args[0] === 'update-ref') {
+          preserved.push(args[2] ?? '')
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['CLOSED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(preserved).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('head-changed')
+    expect(linked?.head).toBe(inventoryHead)
+  })
+
+  it('keeps a terminal when close is refused', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          completeGcTerminalList([
+            {
+              handle: 'term_idle',
+              title: 'idle',
+              worktreePath: fixture.repo,
+              worktreeId: `repo::${fixture.repo}`,
+              lastOutputAt: NOW_MS - 3 * 60 * 60 * 1000,
+              incarnationId: 'inc-old',
+              executionHostId: 'local'
+            }
+          ]),
+        closeTerminal: async () => false,
+        remove: async () => true
+      }),
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(report.terminals[0]?.action).toBe('keep')
+    expect(report.terminals[0]?.why).toBe('gc-close-refused')
+  })
+
+  it('keeps a candidate when a terminal appears during the final HEAD read', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let attachTerminal = false
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        terminals: async () =>
+          attachTerminal
+            ? completeGcTerminalList([
+                {
+                  handle: 'term_live',
+                  title: 'live',
+                  worktreePath: fixture.linked,
+                  worktreeId: `repo::${fixture.linked}`,
+                  lastOutputAt: NOW_MS,
+                  incarnationId: 'inc-live',
+                  executionHostId: 'local'
+                }
+              ])
+            : completeGcTerminalList(),
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+          attachTerminal = true
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('terminal-attached')
+  })
+
+  it('keeps a candidate when a process appears during the final HEAD read', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    const removed: string[] = []
+    let liveCwds: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (cwd === fixture.linked && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+          liveCwds = [fixture.linked]
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async () => ({ ok: true, states: ['MERGED'] }),
+      listProcessCwds: async () => ({ verdict: 'live', cwds: liveCwds })
+    })
+    expect(removed).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('process-cwd-inside')
+  })
+
+  it('keeps a candidate that switches branch at the same hash during PR lookup', async () => {
+    const fixture = await createMergedLinkedRepo()
+    roots.push(fixture.root)
+    await git(fixture.linked, ['commit', '--allow-empty', '-m', 'pr-head'])
+    await git(fixture.linked, ['push', '-u', 'origin', 'HEAD'])
+    await ageGitActivity(fixture.linked, NOW_MS - DAY_MS * 2, 'feature/done')
+    await ageGitActivity(fixture.repo, NOW_MS - DAY_MS * 2, 'main')
+    const inventoryHead = await git(fixture.linked, ['rev-parse', 'HEAD'])
+    const removed: string[] = []
+    const preserved: string[] = []
+    const report = await runWorktreeGc({
+      apply: true,
+      nowMs: NOW_MS,
+      idleTermMin: 60,
+      coordHandle: null,
+      journalDir: fixture.journalDir,
+      runtime: runtimeFor([worktreeRow(fixture.repo, true), worktreeRow(fixture.linked, false)], {
+        remove: async (input) => {
+          removed.push(input.id)
+          return true
+        }
+      }),
+      runGit: async (cwd, args) => {
+        if (args[0] === 'update-ref') {
+          preserved.push(args[2] ?? '')
+        }
+        return runGitCommand(cwd, args)
+      },
+      listPrStates: async (cwd, branch) => {
+        if (branch === 'feature/done') {
+          await git(cwd, ['checkout', '-B', 'feature/new-open'])
+          return { ok: true, states: ['CLOSED'] }
+        }
+        return { ok: true, states: ['OPEN'] }
+      },
+      listProcessCwds: async () => ({ verdict: 'live', cwds: [] })
+    })
+    expect(removed).toEqual([])
+    expect(preserved).toEqual([])
+    expect(existsSync(fixture.linked)).toBe(true)
+    expect(await git(fixture.linked, ['rev-parse', 'HEAD'])).toBe(inventoryHead)
+    const linked = report.worktrees.find((row) => row.path === fixture.linked)
+    expect(linked?.action).toBe('keep')
+    expect(linked?.reasons).toContain('branch-changed')
+  })
+
+  it('refuses host GC removal when a terminal appears during acceptance wait', async () => {
+    const { enforceGcWorktreeRemovalAcceptance } =
+      await import('../shared/worktree-gc-removal-acceptance.js')
+    let attached = false
+    await expect(
+      enforceGcWorktreeRemovalAcceptance({
+        wait: async () => {
+          attached = true
+        },
+        examined: { path: '/wt', branch: 'feature/done', head: 'abc' },
+        readLive: async () => ({
+          path: '/wt',
+          branch: 'feature/done',
+          head: 'abc',
+          attached,
+          processCwds: { verdict: 'live', cwds: [] }
+        })
+      })
+    ).rejects.toThrow('gc_rm_refused:terminal-attached')
+  })
+})

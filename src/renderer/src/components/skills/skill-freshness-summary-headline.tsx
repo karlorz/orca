@@ -160,7 +160,7 @@ function SummaryHeadlineMain({
         <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
         {translate(
           'auto.components.skills.SkillFreshnessUpdateDialog.scanIncomplete',
-          'Orca could not finish checking plugin-managed skills.'
+          'Orca could not finish checking every skill location.'
         )}
       </div>
     )

@@ -54,7 +54,13 @@ const {
   orcadTemplateMacSignIgnore
 } = require('./scripts/packaged-orcad-template.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { assertNotLayoutOwnerBuild } = require('./layout-owner-build.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const {
+  appImageNodeRuntimeFpmArgs,
+  placeAppImageNodeRuntime,
+  verifyAppImageNodeRuntimeServesPty
+} = require('./scripts/appimage-node-runtime.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
@@ -225,7 +231,7 @@ const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
 // Why: the config must load on a host-only install without resolving unused Windows addons.
 // This is load-time tolerance only; beforePack enforces that the target's natives are installed.
 // Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
-// @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+// the @orca/windows-* addons are workspace links present on every host, so their presence proves nothing.
 const windowsRuntimeResources = existsSync(
   join(__dirname, '..', 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
 )
@@ -283,6 +289,8 @@ module.exports = {
     '!config{,/**/*}',
     // Release archives and other build staging are not runtime resources.
     '!.build{,/**/*}',
+    // Worktree-local Vite dependency caches are development inputs.
+    '!.cache/vite{,.lock}{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',
     '!native{,/**/*}',
@@ -369,6 +377,8 @@ module.exports = {
   // entries reached solely from the Electron main process stay packed, since
   // asar redirects their app.asar paths.
   // Why: `orca serve` runs the orcad selection entry under ELECTRON_RUN_AS_NODE too (#27307).
+  // Why out/web and out/mobile-web: their assets are opened by path, and opening a packed file
+  // reads a /tmp extract Electron makes once and never remakes, so a /tmp sweep broke them (#27976).
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -377,12 +387,16 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/claude-accounts/keychain.js',
+    'out/main/daemon/daemon-pid-file-parse.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',
     'out/main/gemini/**',
     'out/main/gitlab/project-ref-parser.js',
+    'out/main/home-appimage-*.js',
+    'out/main/orca-home-appimage-*.js',
+    'out/main/linux-home-update-policy.js',
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/orca-profiles/profile-index-store.js',
@@ -397,6 +411,8 @@ module.exports = {
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
     'out/main/chunks/**',
+    'out/web/**',
+    'out/mobile-web/**',
     'resources/**',
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
@@ -415,6 +431,7 @@ module.exports = {
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard
   ) => {
+    assertNotLayoutOwnerBuild([join(__dirname, '..', 'out', 'main')])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()
@@ -468,13 +485,15 @@ module.exports = {
     // Why after the prune: `pnpm install:release` widens the CPU set for cross-builds,
     // so an arm64 slice can still carry the x64 @parcel/watcher until
     // prunePackagedRuntimeNodeModules drops it.
+    let appImageNodeRuntime = null
     if (context.electronPlatformName === 'linux') {
+      const targetArch = { 1: 'x64', 3: 'arm64' }[context.arch]
+      // Before the floor gate, so the bundled Node is held to the same glibc floor.
+      appImageNodeRuntime = await placeAppImageNodeRuntime(resourcesDir, targetArch)
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
       finalizePackagedWaylandClipboard(resourcesDir)
-      verifyLinuxGlibcFloor(context.appOutDir, {
-        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
-      })
+      verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
@@ -499,6 +518,9 @@ module.exports = {
     }
     if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
+      if (appImageNodeRuntime) {
+        await verifyAppImageNodeRuntimeServesPty(resourcesDir, appImageNodeRuntime)
+      }
     } else {
       // Why: a cross-arch slice can't be booted by the host Node, but the
       // unpacked entry must still exist — its absence is a layout regression
@@ -583,6 +605,10 @@ module.exports = {
       {
         from: 'native/windows-cli-launcher/.build/orca.exe',
         to: 'bin/orca.exe'
+      },
+      {
+        from: 'native/windows-cli-launcher/.build/orca-administrator-restart.exe',
+        to: 'bin/orca-administrator-restart.exe'
       },
       // Why resources/bin: SignPath signs every unsigned PE under win-unpacked, and the hook
       // installer copies this signed file into ~/.orca/agent-hooks (#20913).
@@ -785,7 +811,9 @@ module.exports = {
     // GUI-triggered and can never run on a server, so without this the CLI is
     // unreachable from the shell on exactly the hosts that need it.
     afterInstall: 'resources/linux/packaging/after-install.sh',
-    afterRemove: 'resources/linux/packaging/after-remove.sh'
+    afterRemove: 'resources/linux/packaging/after-remove.sh',
+    // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
+    fpm: appImageNodeRuntimeFpmArgs
   },
   rpm: {
     packageName: 'orca-ide',
@@ -802,7 +830,9 @@ module.exports = {
     ],
     // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
     afterInstall: 'resources/linux/packaging/after-install.sh',
-    afterRemove: 'resources/linux/packaging/after-remove.sh'
+    afterRemove: 'resources/linux/packaging/after-remove.sh',
+    // Why: only an AppImage's files can vanish under a running daemon (see appimage-node-runtime.cjs).
+    fpm: appImageNodeRuntimeFpmArgs
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules

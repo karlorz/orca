@@ -183,6 +183,12 @@ export const WorktreeRemove = WorktreeSelector.extend({
   allowFailedArchiveHook: OptionalBoolean
 })
 
+export const WorktreeGcRemove = WorktreeRemove.extend({
+  gcExaminedPath: z.string().min(1),
+  gcExaminedBranch: z.string().min(1),
+  gcExaminedHead: z.string().min(1)
+})
+
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
   hostId: OptionalExecutionHostId,
   branchName: z

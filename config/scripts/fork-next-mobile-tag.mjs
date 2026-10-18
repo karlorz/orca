@@ -9,6 +9,7 @@ import {
   resolvePushRemote,
   assertSafePushRemoteUrl
 } from './fork-git-remote.mjs'
+import { assertMobileLockfile } from './fork-mobile-lockfile-precheck.mjs'
 
 const UPSTREAM_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)$/
 const FORK_MOBILE_TAG = /^mobile-android-v(\d+\.\d+\.\d+)-(\d+)$/
@@ -242,6 +243,7 @@ export function executeNextMobileTag({ cwd, write = false, auto = false } = {}) 
   }
 
   assertSafeWorkingTreeForTag({ cwd, pushRemote })
+  assertMobileLockfile({ cwd })
   const bump = applyMobileAppJsonTrainBump({ cwd, trainBase: plan.base })
   git(['add', 'mobile/app.json'], { cwd })
   git(

@@ -20,6 +20,7 @@ export function buildAgentResumeStartupPlan(args: {
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   agentArgs?: string | null
+  extraArgs?: string | null
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
   ompResumeFilePath?: string | null
@@ -58,6 +59,7 @@ export function buildAgentResumeStartupPlan(args: {
         platform: args.platform,
         shell,
         agentArgs: args.agentArgs,
+        extraArgs: args.extraArgs,
         sessionOptions: args.sessionOptions,
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote

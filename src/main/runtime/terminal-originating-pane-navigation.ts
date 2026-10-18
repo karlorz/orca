@@ -231,7 +231,8 @@ export async function switchOriginatingPaneWithHost(
       expectedIncarnationId: candidate.incarnationId,
       existingSessionOnly: true,
       verifySession: () => verifyOriginatingPaneIdentity(host, candidate),
-      activateHostWindow: options.activateHostWindow === true
+      activateHostWindow: options.activateHostWindow === true,
+      flashFocusedPane: true
     })
   } catch {
     throw new Error('session_navigation_unverifiable')

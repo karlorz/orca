@@ -13,7 +13,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { browserManager } from '../browser/browser-manager'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
@@ -26,6 +26,7 @@ import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-enviro
 import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
+import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
@@ -113,12 +114,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
-    prepareAiVaultSessionResume: (args) =>
-      prepareCodexAiVaultSessionResume(args, {
-        runtimeHome: state.codexRuntimeHome,
-        systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
-        preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
-      }),
+    prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({
+      runtimeHome: state.codexRuntimeHome,
+      systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+      preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
+    })),
     ...codexStructuredLaunchHomeResolvers,
     prepareCodexCatalogProbeHome: (homePath) =>
       state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
@@ -149,6 +149,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  runtime.workspaceActivityFacts.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
@@ -176,6 +177,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   )
   runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,

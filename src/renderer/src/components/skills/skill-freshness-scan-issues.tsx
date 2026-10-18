@@ -28,6 +28,11 @@ function issueDescription(issue: SkillFreshnessScanIssue): string {
         'auto.components.skills.SkillFreshnessUpdateDialog.scanOutsideRoot',
         'Orca skipped this plugin path because it points outside the plugin cache.'
       )
+    case 'repository-limit':
+      return translate(
+        'auto.components.skills.SkillFreshnessUpdateDialog.scanRepositoryLimit',
+        'Orca reached its repository scan limit before checking the rest of your projects.'
+      )
     case 'io-error':
       return issue.errorCode
         ? translate(
