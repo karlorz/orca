@@ -35,7 +35,7 @@ As of 2026-10-16 the published upstream trains and fork tags are:
 
 | Train          | Upstream release                                                                                 | Fork tag                   | Notes                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Desktop        | [`v1.4.227`](https://github.com/stablyai/orca/releases/tag/v1.4.227)                             | `v1.4.227-6`               | Published prerelease: Linux AppImage/deb/rpm, self-signed macOS DMG/ZIP, unsigned Windows NSIS. |
+| Desktop        | [`v1.4.227`](https://github.com/stablyai/orca/releases/tag/v1.4.227)                             | `v1.4.227-6`               | Published prerelease: Linux AppImage/deb/rpm, self-signed macOS DMG/ZIP, unsigned Windows NSIS.                        |
 | Mobile Android | [`mobile-android-v0.0.55`](https://github.com/stablyai/orca/releases/tag/mobile-android-v0.0.55) | `mobile-android-v0.0.55-8` | Published APK, expo `0.0.55`, versionCode 95. `-8` is the APK that checks `karlorz/orca`. Train string stays `0.0.55`. |
 
 The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is historical: merge `ce818bd5151a02937033752cb22cae2a522ba81b`, later run [`36764405538`](https://github.com/karlorz/orca/actions/runs/36764405538). Desktop retry `v1.4.217-1` published through [workflow run `36746061692`](https://github.com/karlorz/orca/actions/runs/36746061692) (no APK). Mobile on that train ended at `mobile-android-v0.0.50-8`.
@@ -45,17 +45,21 @@ The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is h
 1. The **Sync fork main from upstream** workflow fast-forwards `main` from
    `stablyai/orca`, merges upstream `main` into `fork-main`, mirrors upstream
    tags, and auto-cuts `v<base>-0` and `mobile-android-v<train>-0` when a new
-   train has no fork suffix. It runs on the daily schedule or by
-   `workflow_dispatch`.
+   train has no fork suffix. After the merge it runs
+   `node config/scripts/fork-mobile-lockfile-precheck.mjs` before the mobile
+   auto-cut. That local check fails closed when `mobile/pnpm-lock.yaml`
+   specifiers or `patchedDependencies` keys drift from `mobile/package.json`
+   and `mobile/pnpm-workspace.yaml`, or when the `@react-native/codegen` patch
+   is missing. It runs on the daily schedule or by `workflow_dispatch`.
 2. Desktop tags use `v<base>-N`, such as `v1.4.227-0`. Mobile tags use
    `mobile-android-v<train>-N`, such as `mobile-android-v0.0.55-1`. The two
    workflows have separate tag filters and release assets.
 3. An attended desktop cut runs from a clean, pushed `fork-main` with
    `node config/scripts/fork-next-desktop-tag.mjs --write`; the automatic sync
    path uses `--auto`. An attended mobile cut uses
-   `node config/scripts/fork-next-mobile-tag.mjs --write`, which advances
-   `mobile/app.json` to the published upstream train and never rewinds
-   `versionCode`.
+   `node config/scripts/fork-next-mobile-tag.mjs --write`, which runs the same
+   mobile lockfile precheck, advances `mobile/app.json` to the published
+   upstream train, and never rewinds `versionCode`.
 4. A desktop tag starts **Fork Desktop Release**. Its verify job checks the
    `v<x.y.z>-<N>` shape and reachability from `fork-main`. It then builds the
    orcad deployment template (the managed SSH server every host runs) and packs

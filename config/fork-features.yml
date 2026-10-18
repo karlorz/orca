@@ -216,6 +216,16 @@ features:
       - config/scripts/fork-next-mobile-tag.mjs
       - config/scripts/fork-upstream-trains.mjs
       - config/fork-features.yml
+  - id: fork-mobile-lockfile-precheck
+    title: Local pre-tag check that mobile lockfile specifiers, patchedDependencies, and the codegen patch still match after fork-sync
+    kind: ci
+    status: landed
+    paths:
+      - config/scripts/fork-mobile-lockfile-precheck.mjs
+      - config/scripts/fork-mobile-lockfile-precheck.test.mjs
+      - config/scripts/fork-next-mobile-tag.mjs
+      - .github/workflows/fork-sync-main.yml
+      - docs/fork-entry-points.md
   - id: own-mobile-relay-overlay
     title: Packaged Sign in for Relay can default to sg01 own-auth/director (disabled until TLS hostname)
     kind: product
