@@ -1,4 +1,4 @@
-import { collectLeafIds } from '@/components/terminal-pane/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import type { TerminalStoreGet } from './terminal-state'
 
 function worktreeIdForClosingTerminalTab(

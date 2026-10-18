@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
 
 describe('completed assistant output provenance', () => {
   it.each([true, false])(

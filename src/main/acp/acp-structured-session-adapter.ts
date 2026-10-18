@@ -170,7 +170,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     }
     await input.beforeDispatch?.()
     if (this.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
-      return this.rejected(session, 'providerExited')
+      return rejectedAcpDispatch(session)
     }
     session.turns.dispatch({
       clientMessageId: input.clientMessageId,
