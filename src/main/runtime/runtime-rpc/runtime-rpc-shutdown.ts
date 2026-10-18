@@ -43,6 +43,8 @@ export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
     }
     this.mobileSocketWiring?.dispose()
     this.mobileSocketWiring = null
+    this.detachPairedServerRows?.()
+    this.detachPairedServerRows = null
     this.detachWebSocketWiring = null
     if (this.petVoiceRelay) {
       this.runtime.setPetVoiceRelay?.(null)

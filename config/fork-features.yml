@@ -239,7 +239,7 @@ features:
     kind: product
     status: landed
     paths:
-      - src/main/runtime/relay
+      - src/main/runtime/mobile-cloud-relay
       - scripts/build-own-mobile-relay.mjs
     wiki: projects/orca/work/2026-08-27-own-relay-durable-security-state
 
@@ -252,7 +252,7 @@ features:
       - docs/reference/own-mobile-relay-key-expiry.md
       - src/main/orca-profiles/profile-cloud-auth-config.ts
       - src/main/orca-profiles/profile-cloud-session-store.ts
-      - src/main/runtime/relay
+      - src/main/runtime/mobile-cloud-relay
     wiki: projects/orca/work/2026-08-31-own-relay-durable-desktop-session
 
   - id: pet-voice-android-rate-step
@@ -425,10 +425,10 @@ features:
     kind: product
     status: landed
     paths:
-      - src/main/runtime/relay/own-mobile-relay-jwt-issuer.ts
-      - src/main/runtime/relay/own-mobile-relay-request-routes.ts
-      - src/main/runtime/relay/own-mobile-relay-http.ts
-      - src/main/runtime/relay/own-mobile-relay-main.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-jwt-issuer.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-request-routes.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-http.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-main.ts
       - config/docker/own-mobile-relay/Dockerfile
       - cloud/apps/relay/src/config.ts
       - cloud/apps/relay/src/credential-store.ts
@@ -451,7 +451,7 @@ features:
     kind: product
     status: landed
     paths:
-      - src/main/runtime/relay
+      - src/main/runtime/mobile-cloud-relay
       - src/main/ipc/orca-profiles.ts
       - src/preload/api
       - src/renderer/src/components/settings/MobilePairingConnectionOptions.tsx

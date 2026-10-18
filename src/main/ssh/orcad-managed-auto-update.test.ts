@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { emptyOrcadActivationRecord, type OrcadActivationRecord } from './orcad-activation-record'
+import {
+  emptyOrcadActivationRecord,
+  type OrcadActivationRecord
+} from '../managed-server/activation/orcad-activation-record'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 
 const mocks = vi.hoisted(() => {
@@ -100,7 +103,7 @@ describe('updating a managed orcad on connect', () => {
     autoUpdateManagedOrcadEnvironment('/user-data', {
       environmentId: 'env-1',
       appVersion: '1.5.0',
-      failedBefore: false,
+      failedBefore: () => false,
       onUpdating: vi.fn()
     })
 

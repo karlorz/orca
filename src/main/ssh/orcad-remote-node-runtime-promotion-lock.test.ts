@@ -1,4 +1,4 @@
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec-command'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,19 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadHostTransport } from './orcad-host-transport'
 import {
   ensureRemoteOrcadNodeRuntime,
-  NODE_RUNTIME_PROMOTE_TIMEOUT_MS,
+  NODE_RUNTIME_PROMOTE_TIMEOUT_MS
+} from './orcad-remote-node-runtime'
+import {
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY
-} from './orcad-remote-node-runtime'
+} from './orcad-remote-node-runtime-report'
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
-import { execCommand } from './ssh-relay-exec-command'
+import { execCommand } from './remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./ssh-relay-install-transfers', () => ({ uploadRelayDirectory: vi.fn(async () => {}) }))
+vi.mock('./remote-install-transfers', () => ({ uploadRelayDirectory: vi.fn(async () => {}) }))
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
 const conn = {} as OrcadHostTransport

@@ -33,8 +33,8 @@
   // This one test pins the shipped cloud verifier (cloud/apps/relay) whose
   // zod v3 + relay-contract dist type graph is not part of the root typecheck.
   "exclude": [
-    "../src/main/runtime/relay/own-mobile-relay-jwt-issuer.test.ts",
-    "../src/main/runtime/relay/own-mobile-relay-jwt-grant-isolation.test.ts"
+    "../src/main/runtime/mobile-cloud-relay/own-mobile-relay-jwt-issuer.test.ts",
+    "../src/main/runtime/mobile-cloud-relay/own-mobile-relay-jwt-grant-isolation.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

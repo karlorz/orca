@@ -28,7 +28,7 @@ import {
   startOrcadWithHost,
   type OrcadShutdownTrigger
 } from './orcad-lifecycle'
-import { ORCAD_USAGE, parseArgs } from './orcad-command-arguments'
+import { ORCAD_USAGE, parseArgs, resolveOrcadWebClientRoot } from './orcad-command-arguments'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
@@ -63,6 +63,8 @@ export type OrcadOptions = {
   projectRoot?: string
   /** Literal IP to bind. Defaults to loopback; see orcad-bind-address.ts. */
   bind?: string
+  /** The browser client's directory; the slot carries none, so `orca serve` passes the app's. */
+  webClientRoot?: string
 }
 
 export type OrcadHandle = {
@@ -297,7 +299,9 @@ async function startOrcadRuntime(
     agentHookServer,
     () => runtime
   )
-  registerCleanup(runtime.workspaceActivityFacts.attachAgentStatusStore(agentHookServer))
+  if (runtime.sidebarFacts) {
+    registerCleanup(runtime.sidebarFacts.attachSidebarAgentStatusStore(agentHookServer))
+  }
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
@@ -323,6 +327,8 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Hook rows hydrated and the PTY runtime registered: stored sort tiers can be checked.
+  void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
   // Runs after RPC stops (cleanups run reversed); later records save synchronously until exit.
   registerCleanup(() => runtime.closeNotificationDismissals())
@@ -349,6 +355,7 @@ async function startOrcadRuntime(
     // once a device has connected, so a loopback deployment would silently go wide one
     // restart after its first client paired.
     pinnedBindHost: bindHost,
+    webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
   // Stops first: no RPC may write while the rest of the runtime is torn down.

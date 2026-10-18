@@ -6,7 +6,7 @@ import process from 'node:process'
 
 const ROOT = join(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'dist-own-mobile-relay')
-const ENTRY = join(ROOT, 'src/main/runtime/relay/own-mobile-relay-main.ts')
+const ENTRY = join(ROOT, 'src/main/runtime/mobile-cloud-relay/own-mobile-relay-main.ts')
 const OUT_FILE = join(OUT_DIR, 'own-mobile-relay.cjs')
 
 mkdirSync(OUT_DIR, { recursive: true })

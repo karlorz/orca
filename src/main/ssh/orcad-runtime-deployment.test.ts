@@ -16,7 +16,7 @@ import {
   withDeactivatedVersion,
   withDeactivatedVersionCommitted,
   type OrcadActivationRecord
-} from './orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import type { OrcadDeployOptions } from './orcad-remote-deploy'
 
@@ -46,9 +46,13 @@ vi.mock('./ssh-target-registry', () => ({
   getSshTargetRegistryStore: () => mocks.state.store
 }))
 vi.mock('./orcad-remote-context', () => ({ resolveOrcadRemoteContext: mocks.resolveContext }))
-vi.mock('./orcad-activation-recovery', () => ({ recoverInterruptedOrcadActivation: mocks.recover }))
-vi.mock('./orcad-activation-record-store', () => ({ readOrcadActivationRecord: mocks.readRecord }))
-vi.mock('./orcad-activation-transaction-store', () => ({
+vi.mock('../managed-server/activation/orcad-activation-recovery', () => ({
+  recoverInterruptedOrcadActivation: mocks.recover
+}))
+vi.mock('../managed-server/activation/orcad-activation-record-store', () => ({
+  readOrcadActivationRecord: mocks.readRecord
+}))
+vi.mock('../managed-server/activation/orcad-activation-transaction-store', () => ({
   readOrcadActivationTransaction: mocks.readTransaction
 }))
 vi.mock('./orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
@@ -56,7 +60,7 @@ vi.mock('../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
-vi.mock('./orcad-activation-fence-hold', () => ({
+vi.mock('../managed-server/activation/orcad-activation-fence-hold', () => ({
   orcadActivationFenceRefusal: mocks.fenceRefusal
 }))
 vi.mock('./orcad-remote-build-hash', () => ({
@@ -84,8 +88,8 @@ vi.mock('./orcad-managed-tunnel', () => ({
   closeOrcadManagedTunnel: mocks.closeTunnel
 }))
 
-const { createManagedOrcadEnvironment, getManagedOrcadRuntimeStatus } =
-  await import('./orcad-runtime-lifecycle')
+const { createManagedOrcadEnvironment } = await import('./orcad-runtime-deployment')
+const { getManagedOrcadRuntimeStatus } = await import('./orcad-runtime-status')
 
 const VERSION = '0.1.0+abc123'
 const emptyRecord = { active: null, previous: null, activatedAt: null, snapshot: null }

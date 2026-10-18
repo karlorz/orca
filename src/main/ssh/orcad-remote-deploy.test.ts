@@ -1,4 +1,4 @@
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec-command'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import type * as RecordFile from './orcad-remote-record-file'
 import { tmpdir } from 'node:os'
@@ -6,18 +6,18 @@ import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
-vi.mock('./ssh-relay-install-lock', () => ({
+vi.mock('./remote-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
   RemoteInstallLockBusyError: class extends Error {},
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
-vi.mock('./ssh-relay-install-transfers', () => ({
+vi.mock('./remote-install-transfers', () => ({
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined),
   writeRelayFile: vi.fn().mockResolvedValue(undefined)
 }))
@@ -32,9 +32,9 @@ vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from './ssh-relay-exec-command'
-import { acquireInstallLock, isRelayInstallLockStale } from './ssh-relay-install-lock'
-import { uploadRelayDirectory } from './ssh-relay-install-transfers'
+import { execCommand } from './remote-exec-command'
+import { acquireInstallLock, isRelayInstallLockStale } from './remote-install-lock'
+import { uploadRelayDirectory } from './remote-install-transfers'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
 import { installOrcadBundle } from './orcad-remote-install'
@@ -49,14 +49,14 @@ import {
   withActivatedVersion,
   withDeactivatedVersionCommitted,
   type OrcadActivationRecord
-} from './orcad-activation-record'
+} from '../managed-server/activation/orcad-activation-record'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { isReadinessRead } from './orcad-activation-host-test-harness'
+import { isReadinessRead } from '../managed-server/activation/orcad-activation-host-test-harness'
 import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
-import { serializeOrcadActivationTransaction } from './orcad-activation-transaction'
-import { createOrcadActivationTransaction } from './orcad-activation-transaction-transitions'
+import { serializeOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction'
+import { createOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-transitions'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'

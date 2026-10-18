@@ -215,7 +215,7 @@ describe('fork-features registry', () => {
     expect(entry.kind).toBe('product')
     expect(entry.status).toBe('landed')
     expect(entry.paths).toEqual([
-      'src/main/runtime/relay',
+      'src/main/runtime/mobile-cloud-relay',
       'src/main/ipc/orca-profiles.ts',
       'src/preload/api',
       'src/renderer/src/components/settings/MobilePairingConnectionOptions.tsx'

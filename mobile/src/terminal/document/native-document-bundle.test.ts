@@ -311,9 +311,8 @@ describe('the bundled native document', () => {
     // that ships rather than about a bundle this case built for itself.
     const { script, inputs } = await terminalDocumentBundle()
     expect(inputs.filter((input) => input.includes('node_modules'))).toEqual([])
-    // 53: upstream split the terminal cell box, text-scale presets, and grid fit into shared leaf
-    // modules used by both the document and app without adding a runtime dependency.
-    expect(inputs).toHaveLength(53)
+    // 52: `cell-metrics` and `selection-mode` split out to break cycles.
+    expect(inputs).toHaveLength(52)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

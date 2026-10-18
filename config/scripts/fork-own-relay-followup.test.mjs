@@ -109,7 +109,7 @@ describe('own-relay follow-up planner', () => {
         {
           sha: '11111111aaaa',
           subject: 'feat: host proof',
-          paths: ['src/main/runtime/relay/relay-host-proof.ts']
+          paths: ['src/main/runtime/mobile-cloud-relay/relay-host-proof.ts']
         }
       ]
     })

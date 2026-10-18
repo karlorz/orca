@@ -5,17 +5,17 @@
  * command shape) runs beside it, as the two restores did on a real host.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import type * as ExecCommandModule from './remote-exec-command'
 import type * as RecordFile from './orcad-remote-record-file'
-import type * as InstallLock from './ssh-relay-install-lock'
+import type * as InstallLock from './remote-install-lock'
 import type * as VersionedInstall from './remote-versioned-install'
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
-vi.mock('./ssh-relay-install-lock', async (importOriginal) => ({
+vi.mock('./remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()
 }))
@@ -37,15 +37,20 @@ import {
   execCommand,
   SSH_EXEC_TIMEOUT_CODE,
   isUnconfirmedSshCommandTermination
-} from './ssh-relay-exec-command'
-import { acquireInstallLock } from './ssh-relay-install-lock'
+} from './remote-exec-command'
+import { acquireInstallLock } from './remote-install-lock'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
 import { deployOrcad } from './orcad-remote-deploy'
 import { rollbackOrcad } from './orcad-remote-rollback'
-import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
+import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadHostTransport } from './orcad-host-transport'
-import { BUILD_HASH, FakeOrcadHost, NEW, OLD } from './orcad-activation-host-test-harness'
+import {
+  BUILD_HASH,
+  FakeOrcadHost,
+  NEW,
+  OLD
+} from '../managed-server/activation/orcad-activation-host-test-harness'
 import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
 
 let host = new FakeOrcadHost()
@@ -127,9 +132,8 @@ beforeEach(() => {
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => exec(command))
   vi.mocked(acquireInstallLock).mockImplementation(async (_conn, dir, _host, options) => {
     if (!host.acquireFence(options)) {
-      const { RemoteInstallLockBusyError } = await vi.importActual<typeof InstallLock>(
-        './ssh-relay-install-lock'
-      )
+      const { RemoteInstallLockBusyError } =
+        await vi.importActual<typeof InstallLock>('./remote-install-lock')
       throw new RemoteInstallLockBusyError(dir, 0)
     }
   })

@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OpenDesktopPasswordPageResult } from '../../shared/orca-profiles'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { openDesktopPasswordPage } from '../runtime/relay/desktop-password-handoff'
+import { openDesktopPasswordPage } from '../runtime/mobile-cloud-relay/desktop-password-handoff'
 
 export function registerOrcaProfilePasswordPageHandler(): void {
   ipcMain.handle(

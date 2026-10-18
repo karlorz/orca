@@ -9,7 +9,7 @@
  * `powershell.exe -Command`, which both shells pass through intact. Anything else is refused
  * rather than encoded (docs/reference/windows-edr-posture.md).
  */
-import { currentOrcadFence } from './orcad-activation-fence-scope'
+import { currentOrcadFence } from '../managed-server/activation/orcad-activation-fence-scope'
 import { ORCAD_WINDOWS_FENCE_ARG } from './orcad-windows-host-fence-ops'
 import {
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
@@ -19,10 +19,10 @@ import {
 import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { randomUUID } from 'node:crypto'
 import type { OrcadHostTransport } from './orcad-host-transport'
-import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
-import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { execCommand, isUnconfirmedSshCommandTermination } from './remote-exec-command'
+import { RELAY_REMOTE_DIR } from './remote-frame-protocol'
 import { joinRemotePath, remoteDirname, type RemoteHostPlatform } from './ssh-remote-platform'
-import { powerShellLiteral } from './ssh-remote-powershell'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 import { ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE } from '../orcad/orcad-host-unavailable'
 import {
   ORCAD_WINDOWS_HOST_SCRIPT,

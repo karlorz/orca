@@ -8,10 +8,8 @@ import {
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
 import type {
@@ -48,7 +46,7 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      runtimeEnvironmentIdUnlessTwin(state, worktreeId)
     )
   })
 }

@@ -13,9 +13,9 @@ import type {
   KnownRuntimeEnvironment,
   OrcadSshDeploymentLink
 } from '../../shared/runtime-environments'
-import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
-import { withStaleOrcadActivationRecoveryLock } from './orcad-activation-lock'
-import { readOrcadActivationTransaction } from './orcad-activation-transaction-store'
+import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
+import { withStaleOrcadActivationRecoveryLock } from '../managed-server/activation/orcad-activation-lock'
+import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
 import { reconcileOrcadDecommission } from './orcad-decommission-recovery'
 import { cancelRemoteOrcadManagedStop } from './orcad-managed-remote-stop'
 import {
@@ -30,7 +30,7 @@ import { removeOrcadMigrationJournalsForDestination } from './orcad-migration-cu
 import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import { withManagedOrcadLifecycle } from './orcad-runtime-maintenance'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
-import { RemoteInstallLockBusyError } from './ssh-relay-install-lock'
+import { RemoteInstallLockBusyError } from './remote-install-lock'
 
 export type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean

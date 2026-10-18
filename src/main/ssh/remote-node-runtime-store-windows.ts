@@ -22,9 +22,10 @@ import {
   RUNTIME_STORE_TOMBSTONE_PREFIX,
   runtimeStoreInventoryCommand
 } from './remote-node-runtime-store-inventory'
-import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { RELAY_REMOTE_DIR } from './remote-frame-protocol'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { powerShellCommand } from './ssh-remote-powershell'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 
 const REPARSE = '[IO.FileAttributes]::ReparsePoint'
 

@@ -17,20 +17,22 @@ import {
   ensureRemoteOrcadNodeRuntime,
   posixNodeRuntimeExecutable,
   probeRemoteNodeRuntimeCommand,
-  REMOTE_NODE_RUNTIME_MISSING,
   remoteNodeRuntimeDir
 } from './orcad-remote-node-runtime'
+import {
+  REMOTE_NODE_RUNTIME_MISSING,
+  REMOTE_NODE_RUNTIME_VERIFIED_MARKER
+} from './orcad-remote-node-runtime-report'
 import {
   recordedNodeRuntimeProbeCommand,
   recordedRemoteNodeRuntimeProbeCommand,
   REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME
 } from './orcad-remote-node-runtime-recorded-probe'
-import { REMOTE_NODE_RUNTIME_VERIFIED_MARKER } from './orcad-remote-node-runtime-report'
-import { execCommand } from './ssh-relay-exec-command'
-import type * as ExecCommandModule from './ssh-relay-exec-command'
+import { execCommand } from './remote-exec-command'
+import type * as ExecCommandModule from './remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-vi.mock('./ssh-relay-exec-command', async (importOriginal) => ({
+vi.mock('./remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))

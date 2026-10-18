@@ -1,18 +1,18 @@
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
-const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
+const MAX_PENDING_WEB_WRITE_CODE_UNITS = 1_000_000
 const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
 const PENDING_WRITE_COMPACTION_DROPS = 1024
 
 export function createTerminalWebViewPendingMessages() {
   let pending: Array<TerminalWebViewCommand | null> = []
-  let pendingWriteBytes = 0
+  let pendingWriteCodeUnits = 0
   let pendingWriteCount = 0
   let pendingWriteDropCursor = 0
   let droppedWriteSlots = 0
 
   const resetQueueState = () => {
-    pendingWriteBytes = 0
+    pendingWriteCodeUnits = 0
     pendingWriteCount = 0
     pendingWriteDropCursor = 0
     droppedWriteSlots = 0
@@ -41,7 +41,7 @@ export function createTerminalWebViewPendingMessages() {
       // Why: splice shifts up to 4,096 slots per saturated write. Tombstones make
       // eviction O(1); periodic stable compaction preserves order and bounds memory.
       pending[dropIndex] = null
-      pendingWriteBytes -= dropped.data.length
+      pendingWriteCodeUnits -= dropped.data.length
       pendingWriteCount -= 1
       droppedWriteSlots += 1
       if (droppedWriteSlots >= PENDING_WRITE_COMPACTION_DROPS) {
@@ -58,10 +58,10 @@ export function createTerminalWebViewPendingMessages() {
       return
     }
 
-    pendingWriteBytes += msg.data.length
+    pendingWriteCodeUnits += msg.data.length
     pendingWriteCount += 1
     while (
-      pendingWriteBytes > MAX_PENDING_WEB_WRITE_BYTES ||
+      pendingWriteCodeUnits > MAX_PENDING_WEB_WRITE_CODE_UNITS ||
       pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES
     ) {
       if (!dropOldestWrite()) {
