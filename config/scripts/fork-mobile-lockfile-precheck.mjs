@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Fail closed when mobile/pnpm-lock.yaml drifts from package.json / workspace patches.
 
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, posix, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parse, parseAllDocuments } from 'yaml'
 
@@ -121,30 +122,91 @@ export function findMobileLockfileProblems({
   return problems
 }
 
-export function loadMobileLockfileInputs({ cwd } = {}) {
-  const root = cwd ?? process.cwd()
-  const mobileRoot = join(root, 'mobile')
-  const paths = {
-    manifest: join(mobileRoot, 'package.json'),
-    workspace: join(mobileRoot, 'pnpm-workspace.yaml'),
-    lockfile: join(mobileRoot, 'pnpm-lock.yaml')
+const MOBILE_INPUT_PATHS = {
+  manifest: 'mobile/package.json',
+  workspace: 'mobile/pnpm-workspace.yaml',
+  lockfile: 'mobile/pnpm-lock.yaml'
+}
+
+function gitMobilePath(rel) {
+  return posix.join('mobile', String(rel).split(/[\\/]/).join('/'))
+}
+
+function gitRun(args, cwd) {
+  return spawnSync('git', args, {
+    encoding: 'utf8',
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: 8 * 1024 * 1024
+  })
+}
+
+function gitShow(cwd, ref, gitPath) {
+  const result = gitRun(['show', `${ref}:${gitPath}`], cwd)
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim()
+    throw new Error(
+      `fork-mobile-lockfile-precheck: missing ${gitPath} at ${ref}${detail ? `: ${detail}` : ''}`
+    )
   }
-  for (const [label, path] of Object.entries(paths)) {
-    if (!existsSync(path)) {
-      throw new Error(`fork-mobile-lockfile-precheck: missing ${label} at ${path}`)
+  return result.stdout ?? ''
+}
+
+function gitPathExists(cwd, ref, gitPath) {
+  return gitRun(['cat-file', '-e', `${ref}:${gitPath}`], cwd).status === 0
+}
+
+function assembleMobileLockfileInputs({ exists, readText, missingAt }) {
+  for (const [label, rel] of Object.entries(MOBILE_INPUT_PATHS)) {
+    if (!exists(rel)) {
+      throw new Error(`fork-mobile-lockfile-precheck: missing ${label} at ${missingAt(rel)}`)
     }
   }
-  const manifest = JSON.parse(readFileSync(paths.manifest, 'utf8'))
-  const workspace = parse(readFileSync(paths.workspace, 'utf8'))
-  const lockfile = parseMobileLockfile(readFileSync(paths.lockfile, 'utf8'))
+  const manifest = JSON.parse(readText(MOBILE_INPUT_PATHS.manifest))
+  const workspace = parse(readText(MOBILE_INPUT_PATHS.workspace))
+  const lockfile = parseMobileLockfile(readText(MOBILE_INPUT_PATHS.lockfile))
   const declaredPatches = collectDeclaredPatches(manifest, workspace)
   const patchFiles = {}
   for (const rel of Object.values(declaredPatches)) {
     if (typeof rel === 'string' && rel.length > 0) {
-      patchFiles[rel] = existsSync(join(mobileRoot, rel))
+      patchFiles[rel] = exists(gitMobilePath(rel))
     }
   }
   return { manifest, workspace, lockfile, patchFiles }
+}
+
+export function loadMobileLockfileInputs({ cwd } = {}) {
+  const root = cwd ?? process.cwd()
+  return assembleMobileLockfileInputs({
+    exists: (rel) => existsSync(join(root, rel)),
+    readText: (rel) => readFileSync(join(root, rel), 'utf8'),
+    missingAt: (rel) => join(root, rel)
+  })
+}
+
+export function parseLockfilePrecheckRefArg(argv = []) {
+  const idx = argv.indexOf('--ref')
+  if (idx === -1) {
+    return undefined
+  }
+  const ref = argv[idx + 1]
+  if (!ref || String(ref).startsWith('-')) {
+    throw new Error('fork-mobile-lockfile-precheck: --ref requires a git ref')
+  }
+  return String(ref).trim()
+}
+
+export function loadMobileLockfileInputsFromGit({ cwd, ref } = {}) {
+  const root = cwd ?? process.cwd()
+  const spec = String(ref ?? '').trim()
+  if (!spec) {
+    throw new Error('fork-mobile-lockfile-precheck: git ref is required')
+  }
+  return assembleMobileLockfileInputs({
+    exists: (rel) => gitPathExists(root, spec, rel),
+    readText: (rel) => gitShow(root, spec, rel),
+    missingAt: (rel) => `${spec}:${rel}`
+  })
 }
 
 export function assertMobileLockfile({ cwd } = {}) {
@@ -160,9 +222,13 @@ export function assertMobileLockfile({ cwd } = {}) {
   }
 }
 
-export function main(root = resolve(import.meta.dirname, '../..')) {
+export function main(root = resolve(import.meta.dirname, '../..'), argv = process.argv.slice(2)) {
   try {
-    const problems = findMobileLockfileProblems(loadMobileLockfileInputs({ cwd: root }))
+    const ref = parseLockfilePrecheckRefArg(argv)
+    const inputs = ref
+      ? loadMobileLockfileInputsFromGit({ cwd: root, ref })
+      : loadMobileLockfileInputs({ cwd: root })
+    const problems = findMobileLockfileProblems(inputs)
     if (problems.length > 0) {
       console.error('mobile lockfile precheck failed:')
       for (const problem of problems) {
@@ -182,5 +248,5 @@ export function main(root = resolve(import.meta.dirname, '../..')) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main())
+  process.exit(main(process.cwd()))
 }

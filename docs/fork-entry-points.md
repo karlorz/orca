@@ -50,7 +50,8 @@ The 2026-10-01 sync that first landed `v1.4.217` / `mobile-android-v0.0.50` is h
    auto-cut. That local check fails closed when `mobile/pnpm-lock.yaml`
    specifiers or `patchedDependencies` keys drift from `mobile/package.json`
    and `mobile/pnpm-workspace.yaml`, or when the `@react-native/codegen` patch
-   is missing. It runs on the daily schedule or by `workflow_dispatch`.
+   is missing. Pass `--ref <tag>` to check a published tag's files without
+   checking the tag out. It runs on the daily schedule or by `workflow_dispatch`.
 2. Desktop tags use `v<base>-N`, such as `v1.4.227-0`. Mobile tags use
    `mobile-android-v<train>-N`, such as `mobile-android-v0.0.55-1`. The two
    workflows have separate tag filters and release assets.

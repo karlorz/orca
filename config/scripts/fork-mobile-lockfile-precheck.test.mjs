@@ -9,8 +9,10 @@ import {
   collectDeclaredPatches,
   findMobileLockfileProblems,
   loadMobileLockfileInputs,
+  loadMobileLockfileInputsFromGit,
   lockfileSpecifiers,
   main,
+  parseLockfilePrecheckRefArg,
   parseMobileLockfile
 } from './fork-mobile-lockfile-precheck.mjs'
 
@@ -59,6 +61,65 @@ function writeMobileTree(files) {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, body)
   }
+  return root
+}
+
+function gitIn(root, args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || args.join(' ')).trim())
+  }
+  return (result.stdout ?? '').trim()
+}
+
+function gitRefHasPath(cwd, ref, gitPath) {
+  return (
+    spawnSync('git', ['cat-file', '-e', `${ref}:${gitPath}`], { cwd, encoding: 'utf8' }).status ===
+    0
+  )
+}
+
+function fixtureLockfileYaml(reactSpecifier = '19.2.8') {
+  return `importers:
+  .:
+    dependencies:
+      react:
+        specifier: ${reactSpecifier}
+        version: ${reactSpecifier}
+patchedDependencies:
+  '${CODEGEN_KEY}': ${'a'.repeat(64)}
+  'react-native@0.83.10': ${'b'.repeat(64)}
+`
+}
+
+function fixtureMobileFiles({ lockfile = true, reactSpecifier = '19.2.8' } = {}) {
+  const files = {
+    'mobile/package.json': JSON.stringify(
+      { dependencies: { react: '19.2.8' }, patchedDependencies: { [CODEGEN_KEY]: PATCH_PATH } },
+      null,
+      2
+    ),
+    'mobile/pnpm-workspace.yaml': `patchedDependencies:
+  '${CODEGEN_KEY}': ${PATCH_PATH}
+  react-native@0.83.10: patches/react-native@0.83.10.patch
+`,
+    [`mobile/${PATCH_PATH}`]: 'diff --git a/x b/x\n',
+    'mobile/patches/react-native@0.83.10.patch': 'diff --git a/y b/y\n'
+  }
+  if (lockfile) {
+    files['mobile/pnpm-lock.yaml'] = fixtureLockfileYaml(reactSpecifier)
+  }
+  return files
+}
+
+function writeTaggedMobileTree(files, tag) {
+  const root = writeMobileTree(files)
+  gitIn(root, ['init', '-q'])
+  gitIn(root, ['config', 'user.email', 'lockfile-precheck@example.com'])
+  gitIn(root, ['config', 'user.name', 'lockfile-precheck'])
+  gitIn(root, ['add', '.'])
+  gitIn(root, ['commit', '-qm', 'mobile lockfile fixture'])
+  gitIn(root, ['tag', tag])
   return root
 }
 
@@ -216,4 +277,103 @@ describe('fork-sync runs the precheck after merge and before mobile auto-cut', (
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('mobile lockfile precheck: ok')
   })
+})
+
+describe('missing lockfile', () => {
+  it('fails closed when mobile/pnpm-lock.yaml is absent from the tree', () => {
+    const root = writeMobileTree(fixtureMobileFiles({ lockfile: false }))
+    expect(() => loadMobileLockfileInputs({ cwd: root })).toThrow(
+      /fork-mobile-lockfile-precheck: missing lockfile at .*pnpm-lock\.yaml/
+    )
+    expect(main(root)).toBe(1)
+  })
+
+  it('fails closed when a git tag is missing mobile/pnpm-lock.yaml', () => {
+    const tag = 'mobile-android-v0.0.55-missing'
+    const root = writeTaggedMobileTree(fixtureMobileFiles({ lockfile: false }), tag)
+    expect(() => loadMobileLockfileInputsFromGit({ cwd: root, ref: tag })).toThrow(
+      `fork-mobile-lockfile-precheck: missing lockfile at ${tag}:mobile/pnpm-lock.yaml`
+    )
+    expect(main(root, ['--ref', tag])).toBe(1)
+  })
+
+  it('rejects --ref without a git ref', () => {
+    expect(() => parseLockfilePrecheckRefArg(['--ref'])).toThrow(/--ref requires a git ref/)
+    expect(parseLockfilePrecheckRefArg([])).toBeUndefined()
+  })
+})
+
+describe('stale vs tag', () => {
+  it('fails when a tagged lockfile drifted from that tag package.json', () => {
+    const tag = 'mobile-android-v0.0.55-stale'
+    const root = writeTaggedMobileTree(fixtureMobileFiles({ reactSpecifier: '19.1.0' }), tag)
+    const problems = findMobileLockfileProblems(
+      loadMobileLockfileInputsFromGit({ cwd: root, ref: tag })
+    )
+    expect(problems).toEqual([
+      'mobile/pnpm-lock.yaml specifier for react is 19.1.0, expected 19.2.8 from mobile/package.json'
+    ])
+    expect(main(root, ['--ref', tag])).toBe(1)
+    const spawned = spawnSync(process.execPath, [scriptPath, '--ref', tag], {
+      cwd: root,
+      encoding: 'utf8'
+    })
+    expect(spawned.status).toBe(1)
+    expect(spawned.stderr).toContain('specifier for react is 19.1.0')
+  })
+
+  it.skipIf(!gitRefHasPath(projectDir, 'mobile-android-v0.0.55-0', 'mobile/pnpm-lock.yaml'))(
+    'fails on published mobile-android-v0.0.55-0 (outdated lockfile vs package.json)',
+    () => {
+      const problems = findMobileLockfileProblems(
+        loadMobileLockfileInputsFromGit({ cwd: projectDir, ref: 'mobile-android-v0.0.55-0' })
+      )
+      expect(problems.some((problem) => problem.includes('missing specifier markdown-it'))).toBe(
+        true
+      )
+      expect(main(projectDir, ['--ref', 'mobile-android-v0.0.55-0'])).toBe(1)
+    }
+  )
+
+  it.skipIf(!gitRefHasPath(projectDir, 'mobile-android-v0.0.55-1', 'mobile/pnpm-lock.yaml'))(
+    'fails on published mobile-android-v0.0.55-1 (codegen patch dropped from lockfile)',
+    () => {
+      const problems = findMobileLockfileProblems(
+        loadMobileLockfileInputsFromGit({ cwd: projectDir, ref: 'mobile-android-v0.0.55-1' })
+      )
+      expect(
+        problems.some((problem) => problem.includes('mobile patchedDependencies keys differ'))
+      ).toBe(true)
+      expect(main(projectDir, ['--ref', 'mobile-android-v0.0.55-1'])).toBe(1)
+    }
+  )
+})
+
+describe('clean', () => {
+  it('accepts a tagged tree whose lockfile matches package.json and patches', () => {
+    const tag = 'mobile-android-v0.0.55-clean'
+    const root = writeTaggedMobileTree(fixtureMobileFiles(), tag)
+    expect(
+      findMobileLockfileProblems(loadMobileLockfileInputsFromGit({ cwd: root, ref: tag }))
+    ).toEqual([])
+    expect(main(root, ['--ref', tag])).toBe(0)
+    const spawned = spawnSync(process.execPath, [scriptPath, '--ref', tag], {
+      cwd: root,
+      encoding: 'utf8'
+    })
+    expect(spawned.status).toBe(0)
+    expect(spawned.stdout).toContain('mobile lockfile precheck: ok')
+  })
+
+  it.skipIf(!gitRefHasPath(projectDir, 'mobile-android-v0.0.55-8', 'mobile/pnpm-lock.yaml'))(
+    'accepts published mobile-android-v0.0.55-8',
+    () => {
+      expect(
+        findMobileLockfileProblems(
+          loadMobileLockfileInputsFromGit({ cwd: projectDir, ref: 'mobile-android-v0.0.55-8' })
+        )
+      ).toEqual([])
+      expect(main(projectDir, ['--ref', 'mobile-android-v0.0.55-8'])).toBe(0)
+    }
+  )
 })
