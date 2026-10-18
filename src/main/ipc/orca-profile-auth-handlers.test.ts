@@ -61,7 +61,7 @@ vi.mock('../orca-profiles/profile-cloud-service', () => ({
   signOutCurrentOrcaProfile: signOutCurrentOrcaProfileMock
 }))
 
-vi.mock('../runtime/relay/desktop-password-handoff', () => ({
+vi.mock('../runtime/mobile-cloud-relay/desktop-password-handoff', () => ({
   openDesktopPasswordPage: openDesktopPasswordPageMock
 }))
 

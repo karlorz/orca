@@ -29,11 +29,13 @@ vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({ getProfileUserDataPath: () => '/tmp' }))
-vi.mock('../runtime/relay/desktop-relay-service', () => ({ DesktopRelayService: vi.fn() }))
-vi.mock('../runtime/relay/desktop-relay-service-installer', () => ({
+vi.mock('../runtime/mobile-cloud-relay/desktop-relay-service', () => ({
+  DesktopRelayService: vi.fn()
+}))
+vi.mock('../runtime/mobile-cloud-relay/desktop-relay-service-installer', () => ({
   createDesktopRelayServiceInstaller: () => ({ ensure: mocks.ensure, authChanged: vi.fn() })
 }))
-vi.mock('../runtime/relay/relay-retry-schedule', () => ({
+vi.mock('../runtime/mobile-cloud-relay/relay-retry-schedule', () => ({
   RelayRetrySchedule: vi.fn(() => {
     mocks.retryScheduleConstructed()
     return {}

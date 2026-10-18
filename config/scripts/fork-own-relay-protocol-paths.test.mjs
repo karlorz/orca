@@ -13,7 +13,10 @@ describe('own-relay protocol path allowlist', () => {
 
   it('matches host-proof, phone protocol, and rpc relay-transport', () => {
     expect(
-      pathMatchesOwnRelayProtocolAllowlist('src/main/runtime/relay/relay-host-proof.ts', config)
+      pathMatchesOwnRelayProtocolAllowlist(
+        'src/main/runtime/mobile-cloud-relay/relay-host-proof.ts',
+        config
+      )
     ).toBe(true)
     expect(
       pathMatchesOwnRelayProtocolAllowlist('src/shared/mobile-relay-phone-protocol.ts', config)
@@ -32,7 +35,7 @@ describe('own-relay protocol path allowlist', () => {
     )
     expect(
       pathMatchesOwnRelayProtocolAllowlist(
-        'src/main/runtime/relay/own-mobile-relay-http.ts',
+        'src/main/runtime/mobile-cloud-relay/own-mobile-relay-http.ts',
         config
       )
     ).toBe(false)

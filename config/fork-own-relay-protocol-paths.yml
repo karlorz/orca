@@ -3,7 +3,7 @@
 # own-mobile-relay-* is the sg01 server (follow-up *target*), not a trigger.
 
 include:
-  - src/main/runtime/relay/**
+  - src/main/runtime/mobile-cloud-relay/**
   - src/main/runtime/rpc/relay-transport.ts
   - src/main/runtime/rpc/relay-transport.test.ts
   - src/main/runtime/rpc/e2ee-crypto.ts
@@ -11,7 +11,7 @@ include:
   - src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts
   - src/shared/mobile-relay-*
   - src/shared/mobile-e2ee-v2-*
-  - src/shared/relay-retry-after-header.ts
+  - src/shared/retry-after-header.ts
   - src/main/orca-profiles/profile-cloud-pkce.ts
   - src/main/orca-profiles/profile-cloud-pkce.test.ts
   - src/main/orca-profiles/profile-cloud-auth-config.ts
