@@ -3,6 +3,7 @@ import { AGENT_HANDLER_GROUPS } from './agent-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
 import { ENVIRONMENT_HANDLER_GROUP } from './environment-handler-group'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
+import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
 export type HandlerGroup = {
@@ -17,6 +18,7 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
+  LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {
     name: 'core',
@@ -240,39 +242,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'environment forget'
     ],
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
-  },
-  {
-    name: 'linear',
-    keys: [
-      'linear save-issue',
-      'linear list-issues',
-      'linear relation add',
-      'linear relation remove',
-      'linear issue',
-      'linear search',
-      'linear team list',
-      'linear team members',
-      'linear team states',
-      'linear team labels',
-      'linear project list',
-      'linear list',
-      'linear status set',
-      'linear assignee set',
-      'linear assignee clear',
-      'linear priority set',
-      'linear priority clear',
-      'linear estimate set',
-      'linear estimate clear',
-      'linear due-date set',
-      'linear due-date clear',
-      'linear label add',
-      'linear label remove',
-      'linear label set',
-      'linear comment add',
-      'linear attach',
-      'linear create'
-    ],
-    load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
     name: 'vm',

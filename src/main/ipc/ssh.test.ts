@@ -11,7 +11,7 @@ vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
-vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+vi.mock('../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
@@ -92,7 +92,7 @@ describe('SSH IPC handlers', () => {
   })
 
   it('holds a raw connected the server decision causes', async () => {
-    const conn = {}
+    const conn = { hasCachedCredential: () => false }
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.getConnection.mockReturnValue(conn)
     let broadcastsDuringDecision: unknown[] = []

@@ -169,10 +169,6 @@ export function useMobileHomeData() {
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
     [sortedHosts, connections.hostStates]
   )
-  const primaryHost = connectedHosts[0] ?? null
-  const primaryTaskProviders = primaryHost
-    ? (taskProvidersByHost[primaryHost.id] ?? ['github'])
-    : []
   const hostConnections = useMemo(
     () => projectHomeHostConnections(connections.allClients),
     [connections.allClients]
@@ -184,13 +180,12 @@ export function useMobileHomeData() {
     connectedHosts,
     hostCatalog,
     hostConnections,
-    primaryHost,
-    primaryTaskProviders,
     resumeCard,
     router,
     setHostCatalog,
     sortedHostCatalog,
     stats,
+    taskProvidersByHost,
     worktreeInfo
   }
 }

@@ -6,7 +6,6 @@
 # this upstream ratchet after fork-owned tests existed; these entries preserve that census.
 src/account-usage-settings-route.test.ts
 src/accounts-route-display-provider.test.ts
-src/accounts-route-reset-credit.test.ts
 src/browser/browser-command-reply-schema.test.ts
 src/browser/mobile-browser-frameless-stream.test.tsx
 src/components/CodexResetCreditAction.test.ts
@@ -15,7 +14,6 @@ src/components/MobileHomeQuickActions.test.ts
 src/components/MobileHostCard-truthful-status.test.tsx
 src/components/MobileHostCard.test.ts
 src/components/MobileMarkdown.file-links.test.ts
-src/components/MobileRichMarkdownEditor.test.tsx
 src/components/NewWorktreeModal.test.tsx
 src/components/PickerModal.accessibility.test.ts
 src/components/VoiceModelList.test.tsx

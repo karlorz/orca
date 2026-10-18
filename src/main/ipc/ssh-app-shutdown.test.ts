@@ -11,10 +11,10 @@ vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
-vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+vi.mock('../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 const { shutdownTunnelsMock } = vi.hoisted(() => ({ shutdownTunnelsMock: vi.fn() }))
-vi.mock('../ssh/orcad-managed-tunnel', async (importOriginal) => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   shutdownOrcadManagedTunnels: shutdownTunnelsMock
 }))
@@ -109,7 +109,7 @@ describe('SSH IPC handlers', () => {
     for (let tick = 0; tick < 5; tick++) {
       await Promise.resolve()
     }
-    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+    expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { probe: true })
 
     quitTeardownStartGate.tryStart({ preventDefault() {} })
     const shutdown = beginSshShutdown()

@@ -38,7 +38,7 @@ import {
 import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
 import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
-import { assertNotLayoutOwnerBuild } from '../layout-owner-build.cjs'
+import { assertNotDarkBuild } from '../dark-build-switches.cjs'
 import {
   resolveOrcadTemplateAppVersion,
   stampOrcadTemplatePackageJson
@@ -185,7 +185,7 @@ function sameBytes(left, right) {
 
 async function main() {
   // The template is what releases ship as the server; a dark build must never become one.
-  assertNotLayoutOwnerBuild([])
+  assertNotDarkBuild([])
   const templateTargets = requestedTemplateTargets()
   rmSync(buildDir, { recursive: true, force: true })
   const packages = Object.fromEntries(
