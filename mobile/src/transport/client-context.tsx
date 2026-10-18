@@ -41,7 +41,6 @@ export {
 } from './host-client-hooks'
 export { useRpcClientContext } from './rpc-client-context'
 
-
 type StoreEntry = HostClientStoreEntry
 
 export function RpcClientProvider({ children }: { children: ReactNode }) {
