@@ -3,6 +3,8 @@ import { SQLITE_DATABASE_RUNTIME_INCLUDE } from './vitest-sqlite-database-runtim
 // Real SQLite fixtures keep Node publication and close semantics.
 export const SQLITE_RUNTIME_INCLUDE = [
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
+  'src/main/runtime/mobile-cloud-relay/own-mobile-relay-security-state-operator.test.ts',
+  'src/main/runtime/mobile-cloud-relay/own-mobile-relay-admin-users.test.ts',
   ...SQLITE_DATABASE_RUNTIME_INCLUDE,
   'src/main/ipc/repos/project-host-setup-wsl-move-fence.test.ts',
   'src/main/ipc/repos/repo-ipc-wsl-move-fence.test.ts',

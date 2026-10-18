@@ -20,6 +20,48 @@ features:
       - src/cli/specs/environment.ts
       - src/cli/handlers/environment.ts
       - skill-guides/orca-cli.md
+  - id: serve-cli-flag-aliases
+    title: Map legacy serve CLI flags into the shipped handler with modern flags winning
+    kind: product
+    status: landed
+    paths:
+      - src/cli/runtime/serve-cli-flag-aliases.ts
+      - src/cli/handlers/core.ts
+      - src/cli/specs/serve.ts
+      - src/shared/cli-argument-boundary.ts
+  - id: own-mobile-relay-password-origin
+    title: Reject present opaque Origin and foreign Referer on Relay password routes; 14-char password floor
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-password-origin.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-password-handler.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-password.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-admin-users-actions.ts
+  - id: own-mobile-relay-socket-identity
+    title: Throttle Relay operator/password by socket remoteAddress and redact Buffer payloads before audit JSON
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-client-identity.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-audit.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-operator-auth.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-auth-handlers.ts
+  - id: terminal-right-click-paste-mouse-tracking
+    title: Yield Herdr/xterm right-click paste while mouse tracking is active
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/components/terminal-pane/terminal-right-click-ownership.ts
+      - src/renderer/src/components/terminal-pane/terminal-right-click-paste-gesture.ts
+      - src/renderer/src/components/terminal-pane/use-terminal-context-menu-trigger.ts
+      - tests/e2e/terminal-right-click-mouse-tracking.spec.ts
+  - id: runtime-environment-unreachable-hint
+    title: Select WSL, managed SSH/tunnel, or ordinary network guidance without changing liveness
+    kind: product
+    status: landed
+    paths:
+      - src/main/ipc/runtime-environment-unreachable-hint.ts
   - id: linux-home-appimage-update-check
     title: Home AppImage update-check diagnostics, atom fallback, fail-closed identity, and skip fork agent-state-rules fetch
     kind: product

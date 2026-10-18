@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { LEGACY_SERVE_CLI_FLAGS } from '../runtime/serve-cli-flag-aliases'
 
 export const SERVE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -17,7 +18,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'project-root',
       'recipe-json',
       'supervise',
-      'force'
+      'force',
+      ...LEGACY_SERVE_CLI_FLAGS
     ],
     notes: [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
@@ -25,6 +27,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
+      'Older systemd units that passed `serve --serve --serve-port` still start: those flags are aliases for the unprefixed names.',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
       'Exits with code 3, without starting anything, when another Orca already serves this profile or cannot be shown to have stopped.',

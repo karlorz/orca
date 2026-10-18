@@ -231,8 +231,7 @@ describe('own mobile relay password management', () => {
           },
           body: dummyBody
         })
-        expect(resNullOrigin.status).not.toBe(403)
-        expect([200, 401]).toContain(resNullOrigin.status)
+        expect(resNullOrigin.status).toBe(403)
 
         // Origin evil.com should return 403 Forbidden (CSRF defense)
         const resWrongOrigin = await fetch(`${server.origin}/v1/desktop/auth/password`, {

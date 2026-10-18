@@ -11,6 +11,7 @@ import {
 import { bearerToken, sendJson } from './own-mobile-relay-http-utils'
 import type { OwnMobileRelayAuditLog } from './own-mobile-relay-audit'
 import { emitAudit } from './own-mobile-relay-audit-emit'
+import { clientIdentityAddress } from './own-mobile-relay-client-identity'
 
 const OPERATOR_SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
@@ -31,7 +32,7 @@ export async function loginOperatorAccount(
   password: string,
   context: OperatorAuthContext
 ): Promise<OperatorLoginResult> {
-  const remoteIp = request.socket?.remoteAddress
+  const remoteIp = clientIdentityAddress(request)
   const actor = email || 'unknown'
 
   if (context.throttle) {

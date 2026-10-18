@@ -4,7 +4,12 @@ import { rm } from 'node:fs/promises'
 import { listenOwnMobileRelay } from './own-mobile-relay-http'
 import { TEST_OPERATOR } from './own-mobile-relay-test-auth'
 import { createOwnMobileRelaySecurityStateSqlite } from './own-mobile-relay-security-state-sqlite'
-import { derivePasswordRecord, TEST_FAST_PASSWORD_POLICY } from './own-mobile-relay-password'
+import {
+  derivePasswordRecord,
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  TEST_FAST_PASSWORD_POLICY
+} from './own-mobile-relay-password'
 import { createOwnMobileRelayAuditMemory } from './own-mobile-relay-audit-memory'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -252,6 +257,22 @@ describe('OwnMobileRelay /admin/users Users Page', () => {
       })
       expect(idor404.status).toBe(404)
 
+      for (const action of ['activate', 'reset', 'disable']) {
+        const malformedId = await httpRequest({
+          port: server.boundPort,
+          path: `/admin/users/%E0%A4%A/${action}`,
+          method: 'POST',
+          headers: { cookie, origin: 'http://127.0.0.1' }
+        })
+        expect(malformedId.status).toBe(400)
+      }
+      const afterMalformedId = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/users',
+        headers: { cookie }
+      })
+      expect(afterMalformedId.status).toBe(200)
+
       // b) Admin cannot disable self -> 403
       const selfDisable = await httpRequest({
         port: server.boundPort,
@@ -279,6 +300,123 @@ describe('OwnMobileRelay /admin/users Users Page', () => {
         body: new URLSearchParams({ email: 'hacker@example.com' }).toString()
       })
       expect(csrfBadOrigin.status).toBe(403)
+    } finally {
+      await server.close()
+      await state.close()
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    }
+  })
+
+  it('returns 400 for an 8-13 character activate or reset password and keeps serving', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-admin-users-short-pw-'))
+    const dbPath = join(tempDir, 'security.db')
+    const state = createOwnMobileRelaySecurityStateSqlite({ dbPath, testMode: true })
+    const auditLog = createOwnMobileRelayAuditMemory()
+    const adminPw = await derivePasswordRecord('admin-pwd-12345', TEST_FAST_PASSWORD_POLICY)
+    await state.bootstrapAccount({
+      email: 'admin@example.com',
+      userId: 'usr_admin',
+      profileId: 'prf_admin',
+      organizationId: 'org_admin',
+      passwordRecord: adminPw
+    })
+    const invited = await state.inviteAccount({
+      email: 'shortpw@example.com',
+      userId: 'usr_short',
+      profileId: 'prf_short',
+      organizationId: 'org_admin'
+    })
+
+    const server = await listenOwnMobileRelay({
+      origin: 'http://127.0.0.1',
+      securityState: state,
+      auditLog,
+      passwordPolicy: TEST_FAST_PASSWORD_POLICY
+    })
+
+    try {
+      const login = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/login',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({
+          email: 'admin@example.com',
+          password: 'admin-pwd-12345'
+        }).toString()
+      })
+      expect(login.status).toBe(303)
+      const cookie = cookieFromSetCookie(login.headers['set-cookie'])
+
+      const nineChars = 'nine-chars'
+      expect(nineChars.length).toBeGreaterThanOrEqual(8)
+      expect(nineChars.length).toBeLessThan(MIN_PASSWORD_LENGTH)
+
+      const activateRes = await httpRequest({
+        port: server.boundPort,
+        path: `/admin/users/${encodeURIComponent(invited.accountId)}/activate`,
+        method: 'POST',
+        headers: {
+          cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({ password: nineChars }).toString()
+      })
+      expect(activateRes.status).toBe(400)
+      expect(await activateRes.text()).toContain(
+        `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`
+      )
+      expect((await state.getAccount({ accountId: invited.accountId }))?.status).toBe('invited')
+
+      const stillUp = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/users',
+        headers: { cookie }
+      })
+      expect(stillUp.status).toBe(200)
+
+      const activateOk = await httpRequest({
+        port: server.boundPort,
+        path: `/admin/users/${encodeURIComponent(invited.accountId)}/activate`,
+        method: 'POST',
+        headers: {
+          cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({ password: 'new-user-password-123' }).toString()
+      })
+      expect(activateOk.status).toBe(303)
+
+      const thirteenChars = 'thirteen-char'
+      expect(thirteenChars.length).toBe(13)
+      expect(thirteenChars.length).toBeLessThan(MIN_PASSWORD_LENGTH)
+      const resetRes = await httpRequest({
+        port: server.boundPort,
+        path: `/admin/users/${encodeURIComponent(invited.accountId)}/reset`,
+        method: 'POST',
+        headers: {
+          cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://127.0.0.1'
+        },
+        body: new URLSearchParams({ password: thirteenChars }).toString()
+      })
+      expect(resetRes.status).toBe(400)
+      expect(await resetRes.text()).toContain(
+        `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`
+      )
+
+      const afterReset = await httpRequest({
+        port: server.boundPort,
+        path: '/admin/users',
+        headers: { cookie }
+      })
+      expect(afterReset.status).toBe(200)
     } finally {
       await server.close()
       await state.close()

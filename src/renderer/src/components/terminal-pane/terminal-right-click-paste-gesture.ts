@@ -1,3 +1,5 @@
+import { hasActiveMouseTracking } from './terminal-right-click-ownership'
+
 type RightClickPasteMouseEvent = {
   button: number
   ctrlKey: boolean
@@ -6,15 +8,19 @@ type RightClickPasteMouseEvent = {
 }
 
 /**
- * Why: with "Right-click to paste" on, Orca owns the right button. xterm would
- * otherwise report the press to a mouse-tracking TUI, and Codex pastes the
- * clipboard on that report itself, so one click pasted twice (#25192).
- * Ctrl+right-click stays the app menu, so that press still reaches xterm.
+ * Why: with "Right-click to paste" on and no TUI mouse tracking, Orca owns the
+ * right button so xterm cannot also report the press (#25192). Active mouse
+ * tracking yields to the TUI: claiming the capture-phase press would swallow
+ * PTY mouse bytes. Ctrl+right-click stays the app menu.
  */
 export function isTerminalRightClickPasteGesture(
   event: Pick<RightClickPasteMouseEvent, 'button' | 'ctrlKey'>,
-  rightClickToPaste: boolean
+  rightClickToPaste: boolean,
+  mouseTrackingMode?: string
 ): boolean {
+  if (hasActiveMouseTracking(mouseTrackingMode)) {
+    return false
+  }
   return rightClickToPaste && event.button === 2 && !event.ctrlKey
 }
 

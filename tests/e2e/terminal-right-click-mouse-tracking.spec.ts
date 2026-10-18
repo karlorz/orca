@@ -112,6 +112,7 @@ test.describe('terminal right-click mouse tracking ownership', () => {
   test('macOS Option (Alt) override opens Orca context menu on active mouse tracking', async ({
     orcaPage
   }, testInfo) => {
+    test.skip(process.platform !== 'darwin', 'Option/Alt is the macOS override')
     const { ptyId, target } = await startMouseAwareTuiFixture(orcaPage, testInfo)
 
     await orcaPage.evaluate(
@@ -139,6 +140,41 @@ test.describe('terminal right-click mouse tracking ownership', () => {
     )
 
     // Orca context menu opens
+    await expect(orcaPage.getByText('Set Title…', { exact: true })).toBeVisible()
+
+    await sendToTerminal(orcaPage, ptyId, 'q')
+  })
+
+  test('Linux/Windows Shift override opens Orca context menu on active mouse tracking', async ({
+    orcaPage
+  }, testInfo) => {
+    test.skip(process.platform === 'darwin', 'Shift is the Linux/Windows override')
+    const { ptyId, target } = await startMouseAwareTuiFixture(orcaPage, testInfo)
+
+    await orcaPage.evaluate(
+      ({ x, y }) => {
+        const state = window.__store?.getState()
+        const worktreeId = state?.activeWorktreeId
+        const tabId = worktreeId ? state?.activeTabIdByWorktree?.[worktreeId] : null
+        const manager = tabId ? window.__paneManagers?.get(tabId) : null
+        const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+        const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen') ?? null
+        if (!screen) {
+          throw new Error('Screen element unavailable')
+        }
+        const event = new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          button: 2,
+          shiftKey: true
+        })
+        screen.dispatchEvent(event)
+      },
+      { x: target.x, y: target.y }
+    )
+
     await expect(orcaPage.getByText('Set Title…', { exact: true })).toBeVisible()
 
     await sendToTerminal(orcaPage, ptyId, 'q')

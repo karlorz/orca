@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_AUDIT_EVENTS,
+  omitRelaySecrets,
   sanitizeAuditFields,
   type OwnMobileRelayAuditEvent
 } from './own-mobile-relay-audit'
@@ -34,12 +35,58 @@ describe('own-mobile-relay-audit', () => {
         authorization: 'Basic abc',
         resumeToken: 'resume-123',
         ciphertext: 'encrypted-blob',
+        pairingUrl: 'https://relay.example.test/pairing?token=sentinel-token',
+        plaintext: 'e2ee-plain-bytes',
+        payload: 'ciphertext-payload',
+        e2eeFrame: 'sealed-frame',
         unknownCustomKey: 'some-value',
         rawObject: { nested: 'val' }
       }
       expect(sanitizeAuditFields(input)).toEqual({
         relayHostId: 'host-1'
       })
+    })
+
+    it('drops pairing URLs, passwords, tokens, and E2EE payload bytes from log and list helpers', () => {
+      const pairingUrl = 'https://relay.example.test/pairing?token=sentinel-pair-token'
+      const plaintextLeak = 'E2EE-PLAINTEXT-LEAK'
+      const sanitized = sanitizeAuditFields({
+        actor: pairingUrl,
+        sessionId: 'sess-1',
+        reason: 'pairing-disabled'
+      })
+      expect(sanitized).toEqual({ sessionId: 'sess-1', reason: 'pairing-disabled' })
+
+      const listed = omitRelaySecrets({
+        sessionId: 'sess-1',
+        accessToken: 'sentinel-access-token',
+        password: 'sentinel-password-14',
+        pairingUrl,
+        e2eePlaintext: Buffer.from('e2ee-plain-bytes'),
+        payload: new Uint8Array([1, 2, 3]),
+        frame: Buffer.from(plaintextLeak),
+        reason: 'restart-after-pairing-with-host'
+      })
+      const serialized = JSON.stringify(listed)
+      expect(listed).toEqual({
+        sessionId: 'sess-1',
+        reason: 'restart-after-pairing-with-host'
+      })
+      expect(serialized).not.toContain('sentinel-access-token')
+      expect(serialized).not.toContain('sentinel-password-14')
+      expect(serialized).not.toContain(pairingUrl)
+      expect(serialized).not.toContain('e2ee-plain-bytes')
+      expect(serialized).not.toContain(plaintextLeak)
+      expect(listed).not.toHaveProperty('frame')
+    })
+
+    it('drops a Buffer under a neutral key without waiting for a secret-shaped field name', () => {
+      const listed = omitRelaySecrets({
+        sessionId: 'sess-1',
+        frame: Buffer.from('E2EE-PLAINTEXT-LEAK')
+      })
+      expect(listed).toEqual({ sessionId: 'sess-1' })
+      expect(JSON.stringify(listed)).not.toContain('E2EE-PLAINTEXT-LEAK')
     })
 
     it('drops non-primitive values even for allowlisted keys', () => {

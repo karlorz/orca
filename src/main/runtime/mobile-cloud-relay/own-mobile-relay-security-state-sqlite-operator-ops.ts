@@ -13,6 +13,7 @@ import type { SqliteSessionRow } from './own-mobile-relay-security-state-sqlite-
 import type { SqliteGrantRow } from './own-mobile-relay-security-state-sqlite-grant-ops'
 import type { SqliteDeviceRow } from './own-mobile-relay-security-state-sqlite-device-ops'
 import { sqliteKeyExpiryDisabled } from './own-mobile-relay-security-state-sqlite-schema'
+import { omitRelaySecrets } from './own-mobile-relay-audit'
 
 export type SqliteOperatorSessionRow = {
   session_id: string
@@ -41,19 +42,21 @@ export function executeListAccessSessionsSqlite(
     `)
     .all(now) as SqliteSessionRow[]
 
-  return rows.map((row) => ({
-    sessionId: row.session_id,
-    accountId: row.account_id,
-    expiresAt: Number(row.expires_at),
-    createdAt: Number(row.created_at),
-    identity: {
-      userId: row.user_id,
-      profileId: row.profile_id,
-      organizationId: row.organization_id,
-      email: row.email,
-      cloudProfileId: row.cloud_profile_id
-    }
-  }))
+  return omitRelaySecrets(
+    rows.map((row) => ({
+      sessionId: row.session_id,
+      accountId: row.account_id,
+      expiresAt: Number(row.expires_at),
+      createdAt: Number(row.created_at),
+      identity: {
+        userId: row.user_id,
+        profileId: row.profile_id,
+        organizationId: row.organization_id,
+        email: row.email,
+        cloudProfileId: row.cloud_profile_id
+      }
+    }))
+  )
 }
 
 export function executeListRelayGrantsSqlite(
@@ -80,20 +83,22 @@ export function executeListRelayGrantsSqlite(
     `)
     .all(now, now) as (SqliteGrantRow & { key_expiry_disabled: number })[]
 
-  return rows.map((row) => ({
-    grantId: row.grant_id,
-    accountId: row.account_id,
-    parentSessionId: row.parent_session_id,
-    relayHostId: row.relay_host_id,
-    expiresAt: Number(row.expires_at),
-    createdAt: Number(row.created_at),
-    keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled),
-    identity: {
-      userId: row.user_id,
-      profileId: row.profile_id,
-      organizationId: row.organization_id
-    }
-  }))
+  return omitRelaySecrets(
+    rows.map((row) => ({
+      grantId: row.grant_id,
+      accountId: row.account_id,
+      parentSessionId: row.parent_session_id,
+      relayHostId: row.relay_host_id,
+      expiresAt: Number(row.expires_at),
+      createdAt: Number(row.created_at),
+      keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled),
+      identity: {
+        userId: row.user_id,
+        profileId: row.profile_id,
+        organizationId: row.organization_id
+      }
+    }))
+  )
 }
 
 export function executeListDeviceCredentialsSqlite(
@@ -109,17 +114,19 @@ export function executeListDeviceCredentialsSqlite(
     `)
     .all() as (SqliteDeviceRow & { key_expiry_disabled?: number | null })[]
 
-  return rows.map((row) => ({
-    relayHostId: row.relay_host_id,
-    relayDeviceId: row.relay_device_id,
-    lastInstallReqId: row.last_install_req_id,
-    currentVersion: Number(row.current_version),
-    resumeExpiresAt: Number(row.resume_expires_at),
-    authorizationMode: row.authorization_mode,
-    ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {}),
-    revoked: row.revoked_at !== null,
-    keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled)
-  }))
+  return omitRelaySecrets(
+    rows.map((row) => ({
+      relayHostId: row.relay_host_id,
+      relayDeviceId: row.relay_device_id,
+      lastInstallReqId: row.last_install_req_id,
+      currentVersion: Number(row.current_version),
+      resumeExpiresAt: Number(row.resume_expires_at),
+      authorizationMode: row.authorization_mode,
+      ...(row.grace_expires_at !== null ? { graceExpiresAt: Number(row.grace_expires_at) } : {}),
+      revoked: row.revoked_at !== null,
+      keyExpiryDisabled: sqliteKeyExpiryDisabled(row.key_expiry_disabled)
+    }))
+  )
 }
 
 export function executeIssueOperatorSessionSqlite(

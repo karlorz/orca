@@ -7,6 +7,7 @@ import {
   type PasswordRecord,
   type PasswordPolicy,
   MIN_SALT_LENGTH_BYTES,
+  MIN_PASSWORD_LENGTH,
   TEST_FAST_PASSWORD_POLICY
 } from './own-mobile-relay-password'
 
@@ -71,10 +72,13 @@ describe('own-mobile-relay-password', () => {
     }
   })
 
-  it('rejects empty or over-1024 passwords and accepts one or more code units without composition rules', async () => {
+  it('rejects empty or under-14 passwords, accepts 14 code units, and still rejects over-1024', async () => {
+    expect(MIN_PASSWORD_LENGTH).toBe(14)
     expect(validatePasswordCandidate('')).toBe(false)
-    expect(validatePasswordCandidate('a')).toBe(true)
-    expect(validatePasswordCandidate('short-pw')).toBe(true)
+    expect(validatePasswordCandidate('a')).toBe(false)
+    expect(validatePasswordCandidate('short-pw')).toBe(false)
+    expect(validatePasswordCandidate('a'.repeat(13))).toBe(false)
+    expect(validatePasswordCandidate('a'.repeat(14))).toBe(true)
 
     const longPassphrase = 'all lowercase passphrase without numbers or symbols is valid'
     expect(validatePasswordCandidate(longPassphrase)).toBe(true)

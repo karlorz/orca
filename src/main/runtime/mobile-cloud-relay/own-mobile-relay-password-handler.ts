@@ -15,6 +15,8 @@ import {
 import { PASSWORD_PAGE_HEADERS, renderPasswordChangePage } from './own-mobile-relay-password-page'
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import { bearerToken, readUrlEncodedBodySafely, ReadBodyError } from './own-mobile-relay-http-utils'
+import { clientIdentityAddress } from './own-mobile-relay-client-identity'
+import { isAllowedPasswordOrigin } from './own-mobile-relay-password-origin'
 
 export const PASSWORD_COOKIE_NAME = 'own_relay_password'
 export const PASSWORD_COOKIE_PATH = '/v1/desktop/auth/password'
@@ -102,61 +104,6 @@ function sendPasswordPageResponse(
   response.end(html)
 }
 
-function firstHeader(value: string | string[] | undefined): string | undefined {
-  const raw = Array.isArray(value) ? value[0] : value
-  if (typeof raw !== 'string') {
-    return undefined
-  }
-  const trimmed = raw.trim()
-  return !trimmed || trimmed.toLowerCase() === 'null' ? undefined : trimmed.replace(/\/$/, '')
-}
-
-function originFromUrl(url: string | undefined): string | undefined {
-  if (!url) {
-    return undefined
-  }
-  try {
-    return new URL(url).origin
-  } catch {
-    return undefined
-  }
-}
-
-function hostMatchesAllowed(
-  hostHeader: string | string[] | undefined,
-  allowedOrigins: string[]
-): boolean {
-  const host = firstHeader(hostHeader)
-  if (!host) {
-    return false
-  }
-  return allowedOrigins.some((origin) => {
-    try {
-      const allowed = new URL(origin)
-      return allowed.host === host || allowed.hostname === host.split(':')[0]
-    } catch {
-      return false
-    }
-  })
-}
-
-function isAllowedPasswordOrigin(
-  originHeader: string | string[] | undefined,
-  refererHeader: string | string[] | undefined,
-  hostHeader: string | string[] | undefined,
-  allowedOrigins: string[]
-): boolean {
-  const origin = firstHeader(originHeader)
-  if (origin && allowedOrigins.includes(origin)) {
-    return true
-  }
-  const refererOrigin = originFromUrl(firstHeader(refererHeader))
-  if (refererOrigin && allowedOrigins.includes(refererOrigin)) {
-    return true
-  }
-  return !origin && hostMatchesAllowed(hostHeader, allowedOrigins)
-}
-
 export async function handlePasswordPost(
   request: IncomingMessage,
   securityState: OwnMobileRelaySecurityState,
@@ -214,7 +161,7 @@ export async function handlePasswordPost(
   const currentPassword = body.get('currentPassword') ?? ''
   const newPassword = body.get('newPassword') ?? ''
   const confirmPassword = body.get('confirmPassword') ?? ''
-  const remoteIp = request.socket?.remoteAddress
+  const remoteIp = clientIdentityAddress(request)
 
   if (throttle) {
     const throttleCheck = throttle.check(email, remoteIp)

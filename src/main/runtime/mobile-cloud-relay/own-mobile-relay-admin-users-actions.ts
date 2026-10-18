@@ -5,6 +5,9 @@ import type { SecurityStateOperatorSession } from './own-mobile-relay-security-s
 import {
   CURRENT_PASSWORD_POLICY,
   derivePasswordRecord,
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  validatePasswordCandidate,
   type PasswordPolicy
 } from './own-mobile-relay-password'
 import { emitAudit } from './own-mobile-relay-audit-emit'
@@ -35,6 +38,25 @@ function redirect(
 ): void {
   response.writeHead(303, { location, ...extra })
   response.end()
+}
+
+async function sendPasswordPolicyError(
+  response: ServerResponse,
+  context: OwnMobileRelayOperatorRequestContext,
+  session: SecurityStateOperatorSession
+): Promise<void> {
+  const accounts = context.securityState.listAccounts
+    ? await context.securityState.listAccounts()
+    : []
+  sendHtml(
+    response,
+    400,
+    renderAdminUsers(
+      accounts,
+      session.accountId,
+      `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`
+    )
+  )
 }
 
 export async function handleAdminUsersGet(
@@ -114,7 +136,13 @@ export async function handleAdminUsersPost(
     return
   }
 
-  const targetAccountId = decodeURIComponent(match[1] ?? '')
+  let targetAccountId: string
+  try {
+    targetAccountId = decodeURIComponent(match[1] ?? '')
+  } catch {
+    sendHtml(response, 400, 'Bad request: invalid account ID')
+    return
+  }
   const action = match[2]
 
   const target = await context.securityState.getAccount({ accountId: targetAccountId })
@@ -151,19 +179,18 @@ export async function handleAdminUsersPost(
     return
   }
   const password = form.get('password') ?? ''
-  if (!password || password.length < 8) {
-    const accounts = context.securityState.listAccounts
-      ? await context.securityState.listAccounts()
-      : []
-    sendHtml(
-      response,
-      400,
-      renderAdminUsers(accounts, session.accountId, 'Password must be at least 8 characters')
-    )
+  if (!validatePasswordCandidate(password)) {
+    await sendPasswordPolicyError(response, context, session)
     return
   }
 
-  const pwRecord = await derivePasswordRecord(password, policy)
+  let pwRecord
+  try {
+    pwRecord = await derivePasswordRecord(password, policy)
+  } catch {
+    await sendPasswordPolicyError(response, context, session)
+    return
+  }
 
   if (action === 'activate') {
     if (target.status !== 'invited') {

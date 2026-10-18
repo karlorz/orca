@@ -12,17 +12,19 @@ import { SERVE_COMMAND_SPECS } from './specs/serve'
 // - pairing-code / environment: nothing in src/main reads them, so they ride through untouched.
 // - force: overrides the CLI's own pre-exec check; a direct `<binary> serve` launch has none to override.
 // - supervise: the CLI is the supervisor; a direct `<binary> serve` launch has no parent to restart it.
+// - serve: leftover `--serve` on `orca serve` from older systemd units; Electron already used `--serve`.
 const UNTRANSLATED_GLOBAL_FLAGS = new Set([
   'help',
   'pairing-code',
   'environment',
   'force',
-  'supervise'
+  'supervise',
+  'serve'
 ])
 
 const serveSpec = SERVE_COMMAND_SPECS.find((spec) => spec.path.join(' ') === 'serve')
 const translatedFlags = [...new Set(serveSpec?.allowedFlags ?? [])].filter(
-  (flag) => !UNTRANSLATED_GLOBAL_FLAGS.has(flag)
+  (flag) => !UNTRANSLATED_GLOBAL_FLAGS.has(flag) && flag !== 'serve' && !flag.startsWith('serve-')
 )
 
 describe('serve flag parity between the CLI spec and the Electron argv rewrite', () => {

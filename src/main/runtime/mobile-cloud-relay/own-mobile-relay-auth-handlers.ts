@@ -15,6 +15,7 @@ import {
 import type { AuthThrottle } from './own-mobile-relay-auth-throttle'
 import { readUrlEncodedBodySafely } from './own-mobile-relay-http-utils'
 import { validateAuthorizeParams, renderLoginForm } from './own-mobile-relay-auth-params'
+import { clientIdentityAddress } from './own-mobile-relay-client-identity'
 
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000
 const SESSION_TTL_MS = 60 * 60 * 1000
@@ -69,7 +70,7 @@ export async function handleAuthorizePost(
 
   const email = body.get('email') ?? ''
   const password = body.get('password') ?? ''
-  const remoteIp = request.socket?.remoteAddress
+  const remoteIp = clientIdentityAddress(request)
 
   if (throttle) {
     const throttleCheck = throttle.check(email, remoteIp)

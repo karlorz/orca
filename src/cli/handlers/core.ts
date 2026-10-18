@@ -6,6 +6,7 @@ import { stripElectronRunAsNode } from '../runtime/launch'
 import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeSuperviseValidationError } from '../runtime/serve-supervised-service'
 import { getOptionalServePort } from '../runtime/serve-port-flag'
+import { applyLegacyServeCliFlagAliases } from '../runtime/serve-cli-flag-aliases'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 
 function envRecord(): Record<string, string> {
@@ -85,6 +86,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatCliStatus)
   },
   serve: async ({ flags, json }) => {
+    applyLegacyServeCliFlagAliases(flags)
+    const jsonOutput = json || flags.get('json') === true
     const projectRootValue = flags.get('project-root')
     const projectRoot = typeof projectRootValue === 'string' ? projectRootValue : null
     const noPairing = flags.get('no-pairing') === true
@@ -110,7 +113,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const port = getOptionalServePort(flags)
     const pairingAddressValue = flags.get('pairing-address')
     const exitCode = await serveOrcaApp({
-      json,
+      json: jsonOutput,
       port,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,

@@ -17,7 +17,7 @@ function scryptPromise(
   })
 }
 
-export const MIN_PASSWORD_LENGTH = 1
+export const MIN_PASSWORD_LENGTH = 14
 export const MAX_PASSWORD_LENGTH = 1024
 export const MIN_SALT_LENGTH_BYTES = 16
 
@@ -121,7 +121,7 @@ export async function derivePasswordRecord(
     )
   }
 
-  const saltBytes = randomBytes(16)
+  const saltBytes = randomBytes(MIN_SALT_LENGTH_BYTES)
   const verifierBuffer = await scryptPromise(password, saltBytes, policy.params.keyLen, {
     N: policy.params.N,
     r: policy.params.r,

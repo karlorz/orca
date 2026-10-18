@@ -291,6 +291,27 @@ describe('validateCommandAndFlags', () => {
     expect(() => validateCommandAndFlags(specs, parsed)).toThrow(`Flag --${flag} requires a value.`)
   })
 
+  it('accepts leftover serve --serve --serve-port units from older AppImage installs', () => {
+    const parsed = parseArgs(
+      [
+        'serve',
+        '--serve',
+        '--serve-port',
+        '6768',
+        '--serve-pairing-address',
+        'wss://host.example',
+        '--serve-mobile-pairing',
+        '--serve-json'
+      ],
+      undefined,
+      COMMAND_SPECS
+    )
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
+    expect(parsed.flags.get('serve')).toBe(true)
+    expect(parsed.flags.get('serve-port')).toBe('6768')
+    expect(parsed.flags.get('serve-json')).toBe(true)
+  })
+
   it('still rejects unknown command-specific flags', () => {
     const parsed = parseArgs(['demo', '--bogus'])
 

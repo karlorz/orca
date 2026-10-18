@@ -1,5 +1,9 @@
 export type TerminalRightClickAction = 'orca-menu' | 'terminal-app' | 'paste-or-copy'
 
+export function hasActiveMouseTracking(mouseTrackingMode: string | undefined): boolean {
+  return mouseTrackingMode !== undefined && mouseTrackingMode !== 'none'
+}
+
 export type TerminalRightClickDecisionOptions = {
   fromTerminalContent: boolean
   mouseTrackingMode: string | undefined
@@ -20,9 +24,7 @@ export function resolveTerminalRightClickAction({
     return 'orca-menu'
   }
 
-  const hasMouseTracking = mouseTrackingMode !== undefined && mouseTrackingMode !== 'none'
-
-  if (hasMouseTracking) {
+  if (hasActiveMouseTracking(mouseTrackingMode)) {
     // macOS uses Option (altKey); Linux/Windows use Shift.
     const hasOverride = isMac ? event.altKey : event.shiftKey
     if (hasOverride) {

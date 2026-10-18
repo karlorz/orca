@@ -118,10 +118,19 @@ export function useTerminalContextMenuTrigger({
   }
 
   const onMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
-    if (!isTerminalRightClickPasteGesture(event, rightClickToPaste)) {
+    if (event.button !== 2 || event.ctrlKey || !rightClickToPaste) {
       return
     }
     const clickedPane = findClickedPane(event.target)
+    if (
+      !isTerminalRightClickPasteGesture(
+        event,
+        rightClickToPaste,
+        clickedPane?.terminal.modes.mouseTrackingMode
+      )
+    ) {
+      return
+    }
     if (clickedPane) {
       claimTerminalRightClickPasteMouseDown(event, clickedPane.terminal)
     }

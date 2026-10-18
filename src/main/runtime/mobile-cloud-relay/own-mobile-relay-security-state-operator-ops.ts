@@ -11,6 +11,7 @@ import { isSessionValid, isGrantValid } from './own-mobile-relay-security-state-
 import { sha256Base64Url } from './own-mobile-relay-security-state-device-cleanup'
 import { assertOpen, type MemoryStoreContext } from './own-mobile-relay-security-state-memory-ops'
 import { randomBytes } from 'node:crypto'
+import { omitRelaySecrets } from './own-mobile-relay-audit'
 
 export function listAccessSessionsMemory(
   ctx: MemoryStoreContext,
@@ -29,7 +30,7 @@ export function listAccessSessionsMemory(
       })
     }
   }
-  return result
+  return omitRelaySecrets(result)
 }
 
 export function listRelayGrantsMemory(
@@ -54,7 +55,7 @@ export function listRelayGrantsMemory(
       })
     }
   }
-  return result
+  return omitRelaySecrets(result)
 }
 
 export function listDeviceCredentialsMemory(
@@ -75,7 +76,7 @@ export function listDeviceCredentialsMemory(
       keyExpiryDisabled: dev.keyExpiryDisabled ?? true
     })
   }
-  return result
+  return omitRelaySecrets(result)
 }
 
 export function issueOperatorSessionMemory(
