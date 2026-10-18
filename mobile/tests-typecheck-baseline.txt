@@ -5,7 +5,6 @@
 # Fork adoption correction: merge 17dab63b357765c9a05673afb7024022189a9022 added
 # this upstream ratchet after fork-owned tests existed; these entries preserve that census.
 src/account-usage-settings-route.test.ts
-src/accounts-route-display-provider.test.ts
 src/browser/browser-command-reply-schema.test.ts
 src/browser/mobile-browser-frameless-stream.test.tsx
 src/components/CodexResetCreditAction.test.ts

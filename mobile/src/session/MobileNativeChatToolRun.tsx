@@ -249,7 +249,16 @@ export function ToolRun({
     { live },
     NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH
   )
-  const latestCall = live ? blocks.findLast(isToolCallBlock) : undefined
+  let latestCall: NativeChatToolCallBlock | undefined
+  if (live) {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const block = blocks[i]
+      if (isToolCallBlock(block)) {
+        latestCall = block
+        break
+      }
+    }
+  }
   const latestCallLabel = latestCall ? describeLatestToolCall(latestCall) : null
   const outcome = nativeChatToolRunOutcome(blocks, { activeTurnIsWorking })
   const headerIcon = nativeChatToolRunIconName(blocks.filter(isToolCallBlock))

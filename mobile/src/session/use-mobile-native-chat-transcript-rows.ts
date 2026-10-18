@@ -128,15 +128,23 @@ export function useMobileNativeChatTranscriptRows({
   )
   // Liveness is the turn's, not any one call's: the run at the frontier stays live
   // between its calls, and a run the agent has moved past is settled.
-  const trailingRunIndex = useMemo(
-    () =>
-      enabled
-        ? rows.findLastIndex((row) =>
-            nativeChatRowSpeaksOrActs(row, nativeChatRowRendersProse(row), receipts ?? NO_RECEIPTS)
-          )
-        : -1,
-    [enabled, receipts, rows]
-  )
+  const trailingRunIndex = useMemo(() => {
+    if (!enabled) {
+      return -1
+    }
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (
+        nativeChatRowSpeaksOrActs(
+          rows[i],
+          nativeChatRowRendersProse(rows[i]),
+          receipts ?? NO_RECEIPTS
+        )
+      ) {
+        return i
+      }
+    }
+    return -1
+  }, [enabled, receipts, rows])
   const workRuns = useMemo(
     () =>
       enabled
