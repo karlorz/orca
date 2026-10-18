@@ -342,11 +342,29 @@ describe('fork mobile voice release workflow safety contract', () => {
       (s) => s.uses === './.github/actions/install-node-dependencies'
     )
     expect(installNodeStep).toBeDefined()
+    expect(installNodeStep.with?.['cache-dependency-path']).toContain('mobile/pnpm-lock.yaml')
 
     const pnpmSetupStep = verifySteps.find(
       (s) => s.uses?.startsWith('pnpm/action-setup') || s.uses?.startsWith('pnpm/setup')
     )
     expect(pnpmSetupStep).toBeUndefined()
+  })
+
+  it('installs the mobile project through the shared frozen-lockfile action', () => {
+    const wf = readWorkflow()
+    const mobileAction = './.github/actions/install-mobile-dependencies'
+    expect(wf.jobs.verify.steps.some((step) => step.uses === mobileAction)).toBe(true)
+    expect(wf.jobs['build-android'].steps.some((step) => step.uses === mobileAction)).toBe(true)
+    for (const job of [wf.jobs.verify, wf.jobs['build-android']]) {
+      expect(
+        job.steps.some(
+          (step) =>
+            step['working-directory'] === 'mobile' &&
+            typeof step.run === 'string' &&
+            step.run.includes('pnpm install --frozen-lockfile')
+        )
+      ).toBe(false)
+    }
   })
 
   it('runs root reliability and code quality gates in verify job', () => {
@@ -453,5 +471,31 @@ describe('fork mobile voice release workflow safety contract', () => {
       /patchedDependencies:\n(?:  .+\n)*  '@react-native\/codegen@0\.83\.10': [0-9a-f]{64}\n/
     )
     expect(lockfile).toMatch(/'@react-native\/codegen@0\.83\.10\(patch_hash=[0-9a-f]{64}\)/)
+  })
+
+  it('keeps the mobile lockfile in sync with package.json and workspace patches', () => {
+    const workspace = parse(readFileSync(join(projectDir, 'mobile/pnpm-workspace.yaml'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(projectDir, 'mobile/package.json'), 'utf8'))
+    const lockfileText = readFileSync(join(projectDir, 'mobile/pnpm-lock.yaml'), 'utf8')
+    const documents = lockfileText.split(/^---$/m)
+    const projectLock = parse(documents[documents.length - 1] ?? '')
+    expect(Object.keys(projectLock.patchedDependencies ?? {}).sort()).toEqual(
+      Object.keys(workspace.patchedDependencies ?? {}).sort()
+    )
+
+    const importer = projectLock.importers?.['.']
+    expect(importer).toBeDefined()
+    const lockSpecifiers = {}
+    for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+      for (const [name, meta] of Object.entries(importer[kind] ?? {})) {
+        lockSpecifiers[name] = meta.specifier
+      }
+    }
+    const manifestSpecifiers = {
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+      ...manifest.optionalDependencies
+    }
+    expect(lockSpecifiers).toEqual(manifestSpecifiers)
   })
 })
