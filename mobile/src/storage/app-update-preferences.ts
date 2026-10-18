@@ -4,6 +4,7 @@ import { z } from 'zod'
 const LAST_CHECKED_AT_KEY = 'orca:appUpdate:lastCheckedAt'
 const LATEST_KEY = 'orca:appUpdate:latest'
 const DISMISSED_VERSION_KEY = 'orca:appUpdate:dismissedVersion'
+const REPO_OVERRIDE_KEY = 'orca:appUpdate:repoOverride'
 
 export type KnownAppUpdate = { readonly version: string; readonly url: string }
 
@@ -61,4 +62,23 @@ export async function saveAppUpdateCheck(checkedAt: number, latest: KnownAppUpda
 
 export async function saveDismissedAppUpdateVersion(version: string): Promise<void> {
   await AsyncStorage.setItem(DISMISSED_VERSION_KEY, version)
+}
+
+/** Development-only `owner/repo` the Android updater reads instead of the build default. */
+export async function loadAppUpdateRepoOverride(): Promise<string | null> {
+  try {
+    const raw = await AsyncStorage.getItem(REPO_OVERRIDE_KEY)
+    return raw ? raw : null
+  } catch {
+    return null
+  }
+}
+
+/** Stores the override, or clears it when `repo` is null (reset to the build default). */
+export async function saveAppUpdateRepoOverride(repo: string | null): Promise<void> {
+  if (repo === null) {
+    await AsyncStorage.removeItem(REPO_OVERRIDE_KEY)
+    return
+  }
+  await AsyncStorage.setItem(REPO_OVERRIDE_KEY, repo)
 }

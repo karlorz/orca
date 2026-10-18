@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
 import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
 import { TroubleshootView } from '../src/diagnostics/troubleshoot-view'
+import { UpdateRepoOverrideRow } from '../src/diagnostics/update-repo-override-row'
 import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-diagnostics'
 
 // Same guard as push-token.ts: `__DEV__` is undefined outside the React Native runtime. The import
@@ -26,6 +27,7 @@ export default function NativeTroubleshootRoute() {
         // The bundle probe stays development-only: it fetches.
         <>
           {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
+          {isDevelopmentBuild ? <UpdateRepoOverrideRow /> : null}
           <MobileWebShellUpdateFailureRow />
         </>
       }

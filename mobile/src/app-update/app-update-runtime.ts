@@ -4,13 +4,15 @@ import { useSyncExternalStore } from 'react'
 import { AppState, Platform } from 'react-native'
 import {
   loadAppUpdatePreferences,
+  loadAppUpdateRepoOverride,
   saveAppUpdateCheck,
   saveDismissedAppUpdateVersion
 } from '../storage/app-update-preferences'
 import { appStoreUpdateSource } from './app-store-update-source'
 import { createAppUpdateChecker, type AppUpdateState } from './app-update-checker'
 import type { AppUpdateSource } from './app-update-source'
-import { githubReleaseUpdateSource } from './github-release-update-source'
+import { createGithubReleaseUpdateSource } from './github-release-update-source'
+import { buildTimeMobileUpdateRepo, resolveMobileUpdateRepo } from './update-repo'
 
 /**
  * Invariant: this app does not use expo-updates, so `expoConfig` is the manifest embedded in the
@@ -18,6 +20,24 @@ import { githubReleaseUpdateSource } from './github-release-update-source'
  * removed `Constants.nativeAppVersion`; adopting expo-updates would make this the update's version.
  */
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
+
+// Same guard as app/troubleshoot.tsx: `__DEV__` is undefined outside the React Native runtime.
+const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__
+
+/**
+ * Android sideload channel. The repo is the build-time one (`EXPO_PUBLIC_MOBILE_UPDATE_REPO`, else
+ * the fork default); only a development build also honours the Troubleshooting override, so a
+ * release APK cannot be pointed at another repo from stored state.
+ */
+const githubReleaseUpdateSource = createGithubReleaseUpdateSource(
+  (input, init) => fetch(input, init),
+  () =>
+    resolveMobileUpdateRepo({
+      allowOverride: isDevelopmentBuild,
+      loadOverride: loadAppUpdateRepoOverride,
+      buildTimeRepo: buildTimeMobileUpdateRepo
+    })
+)
 
 /** The channel that installed this binary. */
 function resolveAppUpdateSource(): AppUpdateSource | null {

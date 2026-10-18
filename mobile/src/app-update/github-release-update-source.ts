@@ -1,11 +1,16 @@
 import { z } from 'zod'
 import { compareAppVersions } from '../../../src/shared/app-version'
-import { KARLORZ_FORK_REPO } from '../../../src/shared/release-channel'
 import type { AppUpdateCheckResult, AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'
+import {
+  DEFAULT_MOBILE_UPDATE_REPO,
+  mobileUpdateReleasesPage,
+  mobileUpdateRepoApi
+} from './update-repo'
 
-export const MOBILE_ANDROID_RELEASE_REPO_API = `https://api.github.com/repos/${KARLORZ_FORK_REPO}`
-export const MOBILE_ANDROID_RELEASES_PAGE = `https://github.com/${KARLORZ_FORK_REPO}/releases`
+/** The default repo's API and releases page; a check reads whichever repo it is handed. */
+export const MOBILE_ANDROID_RELEASE_REPO_API = mobileUpdateRepoApi(DEFAULT_MOBILE_UPDATE_REPO)
+export const MOBILE_ANDROID_RELEASES_PAGE = mobileUpdateReleasesPage(DEFAULT_MOBILE_UPDATE_REPO)
 // Why tag refs, not releases.atom or /releases?per_page=100: both are newest-first windows that a
 // run of desktop releases fills, pushing the newest mobile release out and reading as "current".
 // The release `prerelease` flag is not a filter: every mobile-android-v* release is published as one.
@@ -58,13 +63,20 @@ export function installableReleaseUrl(release: unknown): string | null {
     : null
 }
 
-export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSource {
+/**
+ * `resolveRepo` is asked once per check, so a changed developer override applies to the next check
+ * without rebuilding the source. It defaults to the fork repo, which keeps old callers unchanged.
+ */
+export function createGithubReleaseUpdateSource(
+  fetchImpl: Fetch,
+  resolveRepo: () => string | Promise<string> = () => DEFAULT_MOBILE_UPDATE_REPO
+): AppUpdateSource {
   return {
     async check(installedVersion, signal): Promise<AppUpdateCheckResult> {
-      const refsReply = await fetchImpl(
-        `${MOBILE_ANDROID_RELEASE_REPO_API}/git/matching-refs/tags/${TAG_PREFIX}`,
-        { signal }
-      )
+      const repoApi = mobileUpdateRepoApi(await resolveRepo())
+      const refsReply = await fetchImpl(`${repoApi}/git/matching-refs/tags/${TAG_PREFIX}`, {
+        signal
+      })
       if (!refsReply.ok) {
         throw new Error(`tag refs HTTP ${refsReply.status}`)
       }
@@ -74,7 +86,7 @@ export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSour
         .slice(0, MAX_RELEASE_PROBES)
       for (const version of candidates) {
         const releaseReply = await fetchImpl(
-          `${MOBILE_ANDROID_RELEASE_REPO_API}/releases/tags/${encodeURIComponent(`${TAG_PREFIX}${version}`)}`,
+          `${repoApi}/releases/tags/${encodeURIComponent(`${TAG_PREFIX}${version}`)}`,
           { signal }
         )
         if (releaseReply.status === 404) {
@@ -93,7 +105,3 @@ export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSour
     }
   }
 }
-
-export const githubReleaseUpdateSource = createGithubReleaseUpdateSource((input, init) =>
-  fetch(input, init)
-)

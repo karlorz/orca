@@ -10,4 +10,11 @@ const config = getDefaultConfig(projectRoot)
 // Metro only watches mobile/ by default, so make repo-root shared modules visible.
 config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), sharedRoot]))
 
+// Why: babel-preset-expo inlines EXPO_PUBLIC_MOBILE_UPDATE_REPO at transform time (see
+// `buildTimeMobileUpdateRepo`), but nothing Metro hashes into the transform cache key carries that
+// value, so a warm cache from another build could bake the wrong update repo into a release. Unset
+// keys as `default`, which is what a build without the variable always had.
+const updateRepoKey = process.env.EXPO_PUBLIC_MOBILE_UPDATE_REPO || 'default'
+config.cacheVersion = `${config.cacheVersion}-update-${updateRepoKey}`
+
 module.exports = config
