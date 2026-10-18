@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
+import type { MobilePairingOfferRpcContext } from '../rpc/core'
 import { ALL_RPC_METHODS } from '../rpc/methods'
 import type { RpcTransport } from '../rpc/transport'
 import type { WebSocket } from 'ws'
@@ -77,6 +78,7 @@ export class RuntimeRpcState {
   // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
+  protected mobilePairingOffers: MobilePairingOfferRpcContext | null = null
   // Why nullable: launch sets both for every runtime process; in-process test servers may not.
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null

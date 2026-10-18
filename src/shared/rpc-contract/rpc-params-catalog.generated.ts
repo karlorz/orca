@@ -26,6 +26,7 @@ import {
 } from '../desktop-browser-bridge-protocol'
 import { RegisterDeviceKeyParamsSchema } from '../device-key-registration-contract'
 import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
+import { PairingCreateMobileOfferParamsSchema } from '../mobile-pairing-offer-contract'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -614,9 +615,9 @@ import {
   WorktreeActivate,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
+  WorktreeGcRemove,
   WorktreeListParams,
   WorktreePsParams,
-  WorktreeGcRemove,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
@@ -1172,6 +1173,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
+  'pairing.createMobileOffer': PairingCreateMobileOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
@@ -1354,6 +1356,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
+  'worktree.gcRm': WorktreeGcRemove,
   'worktree.lineageList': null,
   'worktree.list': WorktreeListParams,
   'worktree.listRetiredNames': WorktreeDetectedListParams,
@@ -1362,7 +1365,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.ps': WorktreePsParams,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
-  'worktree.gcRm': WorktreeGcRemove,
   'worktree.rm': WorktreeRemove,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,

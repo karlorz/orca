@@ -10,6 +10,11 @@ import {
 import { listSshTargets } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
+import {
+  MOBILE_PAIRING_CREATE_OFFER_METHOD,
+  type PairingCreateMobileOfferAvailable,
+  type PairingCreateMobileOfferResult
+} from '../../shared/mobile-pairing-offer-contract'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
@@ -120,6 +125,67 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       formatEnvironment(value)
     )
   },
+  'pairing offer': async ({ client, flags, json }) => {
+    rejectRemoteSelectionFlags(
+      flags,
+      '`orca pairing offer`. It mints a mobile offer on this desktop, so a routed answer would pair a different machine.',
+      {
+        nextSteps: [
+          'Drop --environment and --pairing-code, then run `orca pairing offer --scope mobile --json` on the desktop you want the phone to pair with.'
+        ]
+      }
+    )
+    const scope = flags.get('scope')
+    if (scope !== 'mobile') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        scope === undefined
+          ? 'pairing offer requires --scope mobile'
+          : `Unknown --scope ${String(scope)}. pairing offer requires --scope mobile.`
+      )
+    }
+    const pairingAddress = flags.get('pairing-address')
+    if (
+      pairingAddress !== undefined &&
+      (typeof pairingAddress !== 'string' || pairingAddress.trim() === '')
+    ) {
+      throw new RuntimeClientError('invalid_argument', 'Flag --pairing-address requires a value.')
+    }
+    const rotate = flags.get('rotate') === true
+    const params = {
+      ...(typeof pairingAddress === 'string' ? { address: pairingAddress.trim() } : {}),
+      ...(rotate ? { rotate: true } : {})
+    }
+    let response: RuntimeRpcSuccess<PairingCreateMobileOfferResult>
+    try {
+      response = await client.call<PairingCreateMobileOfferResult>(
+        MOBILE_PAIRING_CREATE_OFFER_METHOD,
+        params
+      )
+    } catch (error) {
+      if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'This Orca desktop does not support CLI mobile pairing offers. Update the local desktop and try again.',
+          {
+            nextSteps: [
+              'Update Orca on this computer, then run `orca pairing offer --scope mobile --json` again.'
+            ]
+          }
+        )
+      }
+      throw error
+    }
+    const offer = response.result
+    if (!offer.available) {
+      throw new RuntimeClientError(
+        offer.reason,
+        offer.guidance,
+        offer.relayFailure ? { relayFailure: offer.relayFailure } : undefined
+      )
+    }
+    printResult({ ...response, result: offer }, json, formatMobilePairingOffer)
+  },
   'environment rm': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
     const removed = redactRuntimeEnvironment(removeEnvironment(getDefaultUserDataPath(), selector))
@@ -163,6 +229,15 @@ function rejectLocalPairingStoreRetargeting(
   rejectRemoteSelectionFlags(flags, suffix, {
     nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
   })
+}
+
+function formatMobilePairingOffer(result: PairingCreateMobileOfferAvailable): string {
+  const endpoint = result.endpoint ?? 'relay'
+  return [
+    'Mobile pairing offer — treat this URL as a credential. Do not put it in logs or reports.',
+    result.pairingUrl,
+    `device ${result.deviceId}  ${result.connectionMode}  ${endpoint}`
+  ].join('\n')
 }
 
 function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {

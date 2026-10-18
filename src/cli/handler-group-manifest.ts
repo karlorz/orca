@@ -1,6 +1,7 @@
 import type { CommandHandler } from './dispatch'
 import { AGENT_HANDLER_GROUPS } from './agent-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
+import { ENVIRONMENT_HANDLER_GROUP } from './environment-handler-group'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 
@@ -226,18 +227,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS
   },
-  {
-    name: 'environment',
-    keys: [
-      'host name',
-      'host list',
-      'environment add',
-      'environment list',
-      'environment show',
-      'environment rm'
-    ],
-    load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
-  },
+  ENVIRONMENT_HANDLER_GROUP,
   {
     name: 'managed-server',
     keys: [

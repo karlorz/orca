@@ -41,6 +41,10 @@ top-level/branch only when Git applies. On mismatch, stop further work and use t
 appropriate recovery flow; confirm the original editor stopped before replacing
 it. Absolute-path edits are not a workaround for launching in the wrong workspace.
 
+## Pair a phone to this desktop
+
+To use Orca Mobile with this computer's local workspaces and its configured remote servers, pair the phone to this desktop: Settings → Remote Orca Servers → Share this host → Pair a phone, then scan the mobile QR in Orca Mobile under Pair Desktop. Keep the desktop connected to the intended server and wait for Connected before opening its row on the phone; the desktop already publishes its remotes and relays supported requests. `orca pairing offer --scope mobile --json` creates the same kind of mobile offer on the local desktop; `--pairing-address` selects this desktop's advertised address and `--rotate` regenerates its pending offer. It uses automatic Relay pairing and reports failure instead of silently switching to LAN; use the desktop's LAN option when needed. This command cannot be routed with `--environment`, `--pairing-code`, or `--host`. Treat its output as a credential and keep it out of logs and reports. LXC `orca serve --mobile-pairing` pairs the phone directly to that LXC session; it does not provide this desktop's combined local-and-remote view.
+
 ## Tasks inbox
 
 The desktop GitHub Tasks inbox (the screen labeled GitHub · Local Mac) is part of this skill. It is not an orchestration task, a wiki work item, or a Linear issue. Do not use `ORCA orchestration task-create` to list or open it.

@@ -27,6 +27,10 @@ import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
 } from '../../../shared/device-key-registration-contract'
+import type {
+  PairingCreateMobileOfferParams,
+  PairingCreateMobileOfferResult
+} from '../../../shared/mobile-pairing-offer-contract'
 
 // Why: bound to the authenticated socket by the transport, so a caller can only re-key itself.
 export type DeviceSelfRpcContext = {
@@ -36,6 +40,10 @@ export type DeviceSelfRpcContext = {
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
+
+export type MobilePairingOfferRpcContext = {
+  create(params: PairingCreateMobileOfferParams): Promise<PairingCreateMobileOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -138,6 +146,8 @@ export type RpcContext = {
   // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Why: owner-only desktop hook; local Unix dispatch attaches it, WebSocket/serve never do.
+  mobilePairingOffers?: MobilePairingOfferRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Why: set only on a desktop that relays; it lists the configured servers it shows.
   mobileRelayHosts?: {

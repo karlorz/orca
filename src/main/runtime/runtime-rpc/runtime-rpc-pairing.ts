@@ -1,3 +1,4 @@
+import type { MobilePairingOfferRpcContext } from '../rpc/core'
 import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -85,6 +86,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
+  }
+
+  setMobilePairingOffers(hook: MobilePairingOfferRpcContext | null): void {
+    this.mobilePairingOffers = hook
   }
 
   setMobileRelayPairingProviderInstaller(install: (() => Promise<unknown>) | null): void {

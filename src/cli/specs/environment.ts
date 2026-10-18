@@ -30,6 +30,20 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca host list', 'orca host list --json']
   },
   {
+    path: ['pairing', 'offer'],
+    summary: 'Create a mobile pairing offer on this desktop',
+    usage: 'orca pairing offer --scope mobile [--pairing-address <address>] [--rotate] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'scope', 'pairing-address', 'rotate'],
+    notes: [
+      'Creates the same kind of mobile offer as Settings → Remote Orca Servers → Share this host → Pair a phone, on this desktop only.',
+      'Requires --scope mobile. --environment, --pairing-code, and --host cannot retarget this command.',
+      'Uses automatic Relay pairing. A Relay failure is reported instead of falling back to LAN; use the desktop UI for LAN-only.',
+      'The pairing URL is a credential. Print it only as this command’s result; do not copy it into logs or reports.',
+      '`orca serve --mobile-pairing` pairs a phone directly to that server and is a different session.'
+    ],
+    examples: ['orca pairing offer --scope mobile --json']
+  },
+  {
     path: ['environment', 'add'],
     summary: 'Save a remote Orca runtime environment from a pairing code',
     usage: 'orca environment add --name <name> --pairing-code <code> [--json]',

@@ -52,16 +52,16 @@
     {
       "name": "orca-cli",
       "sourcePath": "skills/orca-cli",
-      "packageDigest": "0736bcbbb69ed18f9a36a58ad2eda47b6db55b30509953cf5ba5f0032058c535",
+      "packageDigest": "3af5c4bc6345ef2add04c1e0d3702a34c9b371a63c764bef35e2831faceb62ec",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2372,
+          "size": 3422,
           "executable": false,
           "classification": "text",
-          "exactSha256": "aa76f86505010096e8ea9edda1705a78aae7af45e54485f3fe0460664c1d9e4a",
-          "textNormalizedSha256": "aa76f86505010096e8ea9edda1705a78aae7af45e54485f3fe0460664c1d9e4a",
-          "identitySha256": "aa76f86505010096e8ea9edda1705a78aae7af45e54485f3fe0460664c1d9e4a"
+          "exactSha256": "0abc3d8449c9891984814cf289562f3885b53eb9c5550358acd59b6793109256",
+          "textNormalizedSha256": "0abc3d8449c9891984814cf289562f3885b53eb9c5550358acd59b6793109256",
+          "identitySha256": "0abc3d8449c9891984814cf289562f3885b53eb9c5550358acd59b6793109256"
         }
       ]
     },
@@ -148,16 +148,16 @@
     {
       "name": "orchestration",
       "sourcePath": "skills/orchestration",
-      "packageDigest": "195f26431ecfb6df41b941b22958a2330b110bac7b7e97004e0b35fe586e41d9",
+      "packageDigest": "5872a4a6d5fc38ad2c83d94bfa1eccfe71f5a4c848c96fa2f9b927bba7106c27",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3671,
+          "size": 5116,
           "executable": false,
           "classification": "text",
-          "exactSha256": "cd1b364bf35781bad06bf75ab1766afa8d6cec69cb2060529691d89871a2098a",
-          "textNormalizedSha256": "cd1b364bf35781bad06bf75ab1766afa8d6cec69cb2060529691d89871a2098a",
-          "identitySha256": "cd1b364bf35781bad06bf75ab1766afa8d6cec69cb2060529691d89871a2098a"
+          "exactSha256": "65fbcee7b965c42fac2fd19d97c439b29fff579728c09be11c33a3229bc69d39",
+          "textNormalizedSha256": "65fbcee7b965c42fac2fd19d97c439b29fff579728c09be11c33a3229bc69d39",
+          "identitySha256": "65fbcee7b965c42fac2fd19d97c439b29fff579728c09be11c33a3229bc69d39"
         }
       ]
     }

@@ -6,6 +6,7 @@ import {
 } from '../persistence'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { registerMobileHandlers } from '../ipc/mobile'
+import { registerDesktopMobilePairingOffers } from '../runtime/mobile-pairing-offer'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
@@ -102,6 +103,7 @@ function installRuntimeRpc(
   })
   state.runtimeRpc = runtimeRpc
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
+  registerDesktopMobilePairingOffers(runtimeRpc, serveOptions)
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {

@@ -15,6 +15,7 @@ import { resolveAdvertisedPairingHostname } from '../runtime/pairing-endpoint'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { encodeMobilePairingQr, type MobilePairingQrResult } from '../runtime/mobile-pairing-qr'
+import { createDesktopMobilePairingOffer } from '../runtime/mobile-pairing-offer'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,
@@ -86,61 +87,24 @@ export function registerMobileHandlers(
         rotate?: boolean
       }
     ) => {
-      // Why: allow the caller to specify which network interface address to
-      // embed in the QR code. This supports overlay networks (Tailscale,
-      // ZeroTier) where the default LAN IP isn't reachable from the phone.
-      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
-      // Why: the local address is optional under Relay — the QR carries the relay invite, so a host
-      // with nothing auto-advertisable (only container bridges, or no interface at all) still pairs.
-      // The offer's endpoint then falls back to loopback, which is the phone's own device: the direct
-      // candidate loses the race by construction. LAN-only has no relay to fall back on, so it fails closed.
-      if (!ip && args?.connectionMode === 'local-only') {
-        return {
-          available: false as const,
-          reason: 'invalid_advertised_endpoint',
-          guidance:
-            'No reachable network address is available for pairing. Connect to Wi‑Fi or Tailscale, or pick an address manually.'
-        }
-      }
-
-      // Why: coalesce repeated QR regenerations onto a single never-scanned
-      // pending token so the copy-button flow doesn't accumulate orphaned
-      // device credentials forever. The token graduates to a real entry when
-      // a phone actually connects (lastSeenAt > 0). When the caller passes
-      // `rotate: true` (explicit "Regenerate" intent because the prior token
-      // may have been exposed), we discard any pending token and mint a fresh
-      // one so the new QR carries a different credential.
-      const offer = await rpcServer.createMobilePairingOffer({
-        address: ip,
+      const offer = await createDesktopMobilePairingOffer({
+        createOffer: (offerArgs) => rpcServer.createMobilePairingOffer(offerArgs),
+        address: args?.address,
         connectionMode: args?.connectionMode,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`
+        getDefaultRouteInterfaceNames
       })
       if (!offer.available) {
-        // Why: surface Relay mint failures (and other pairing unavailability)
-        // so the UI can refuse a silent LAN QR under the Relay label.
-        return {
-          available: false as const,
-          reason: offer.reason,
-          guidance: offer.guidance,
-          ...(offer.relayFailure ? { relayFailure: offer.relayFailure } : {})
-        }
+        return offer
       }
 
       const qr = await (dependencies.encodePairingQr ?? encodeMobilePairingQr)(offer.pairingUrl)
 
       return {
-        available: true as const,
+        ...offer,
         qrDataUrl: qr.ok ? qr.qrDataUrl : null,
         qrSize: qr.ok ? qr.qrSize : null,
-        ...(!qr.ok ? { qrError: qr.reason } : {}),
-        pairingUrl: offer.pairingUrl,
-        // Why: with nothing advertised the offer's endpoint is the loopback fallback, which points at
-        // whichever device scans the QR — never this host. Report no endpoint so the UI omits it
-        // instead of printing an address the phone can't reach.
-        endpoint: ip ? offer.endpoint : null,
-        deviceId: offer.deviceId,
-        connectionMode: offer.connectionMode
+        ...(!qr.ok ? { qrError: qr.reason } : {})
       }
     }
   )

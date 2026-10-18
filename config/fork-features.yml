@@ -9,6 +9,17 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: pairing-offer-cli
+    title: CLI orca pairing offer --scope mobile for desktop Share-this-host mobile QR
+    kind: product
+    status: landed
+    paths:
+      - src/shared/mobile-pairing-offer-contract.ts
+      - src/main/runtime/mobile-pairing-offer.ts
+      - src/main/runtime/rpc/methods/pairing.ts
+      - src/cli/specs/environment.ts
+      - src/cli/handlers/environment.ts
+      - skill-guides/orca-cli.md
   - id: linux-home-appimage-update-check
     title: Home AppImage update-check diagnostics, atom fallback, fail-closed identity, and skip fork agent-state-rules fetch
     kind: product

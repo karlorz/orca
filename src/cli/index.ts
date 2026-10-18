@@ -36,6 +36,8 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
     // so routing the other half produced one listing describing two machines at once.
     commandPath.join(' ') === 'host list' ||
+    // Why: the offer is minted on this desktop's local runtime; routing would pair a different machine.
+    commandPath.join(' ') === 'pairing offer' ||
     commandPath[0] === 'serve' ||
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||

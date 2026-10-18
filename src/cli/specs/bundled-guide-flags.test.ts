@@ -55,6 +55,14 @@ function collectGuideInvocations(): GuideInvocation[] {
 describe('bundled skill guides', () => {
   const invocations = collectGuideInvocations()
 
+  it('keeps the desktop-versus-LXC mobile pairing distinction in orca-cli', () => {
+    const guide = BUNDLED_SKILL_GUIDES.find((entry) => entry.name === 'orca-cli')
+    expect(guide?.markdown).toContain('Share this host')
+    expect(guide?.markdown).toContain('orca pairing offer --scope mobile')
+    expect(guide?.fullMarkdown).toContain('orca serve --mobile-pairing')
+    expect(guide?.fullMarkdown).toContain('combined local-and-remote view')
+  })
+
   // Why: the guides ship inside the binary, so an example the parser rejects is a shipped defect.
   it('only documents flags the CLI parser accepts', () => {
     expect(invocations.length).toBeGreaterThan(0)
