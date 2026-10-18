@@ -15,6 +15,10 @@ import {
 } from './fork-voice-release-metadata.mjs'
 import { packageDraftRelease } from './fork-voice-package-release.mjs'
 import { parseUpstreamMobileBase } from './fork-next-mobile-tag.mjs'
+import {
+  findMobileLockfileProblems,
+  loadMobileLockfileInputs
+} from './fork-mobile-lockfile-precheck.mjs'
 
 const require = createRequire(import.meta.url)
 const projectDir = resolve(import.meta.dirname, '../..')
@@ -474,28 +478,6 @@ describe('fork mobile voice release workflow safety contract', () => {
   })
 
   it('keeps the mobile lockfile in sync with package.json and workspace patches', () => {
-    const workspace = parse(readFileSync(join(projectDir, 'mobile/pnpm-workspace.yaml'), 'utf8'))
-    const manifest = JSON.parse(readFileSync(join(projectDir, 'mobile/package.json'), 'utf8'))
-    const lockfileText = readFileSync(join(projectDir, 'mobile/pnpm-lock.yaml'), 'utf8')
-    const documents = lockfileText.split(/^---$/m)
-    const projectLock = parse(documents[documents.length - 1] ?? '')
-    expect(Object.keys(projectLock.patchedDependencies ?? {}).sort()).toEqual(
-      Object.keys(workspace.patchedDependencies ?? {}).sort()
-    )
-
-    const importer = projectLock.importers?.['.']
-    expect(importer).toBeDefined()
-    const lockSpecifiers = {}
-    for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-      for (const [name, meta] of Object.entries(importer[kind] ?? {})) {
-        lockSpecifiers[name] = meta.specifier
-      }
-    }
-    const manifestSpecifiers = {
-      ...manifest.dependencies,
-      ...manifest.devDependencies,
-      ...manifest.optionalDependencies
-    }
-    expect(lockSpecifiers).toEqual(manifestSpecifiers)
+    expect(findMobileLockfileProblems(loadMobileLockfileInputs({ cwd: projectDir }))).toEqual([])
   })
 })

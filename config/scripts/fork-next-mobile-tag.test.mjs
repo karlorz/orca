@@ -96,4 +96,23 @@ describe('fork-sync auto-cuts mobile -0 on a new published train', () => {
     expect(autoCutStep.run).toContain('--auto')
     expect(autoCutStep.run).not.toContain('--write')
   })
+
+  it('runs the mobile lockfile precheck after merge and before --auto', () => {
+    const workflow = parse(readFileSync(workflowPath, 'utf8'))
+    const steps = workflow.jobs['sync-fork-main'].steps
+    const precheckIdx = steps.findIndex((step) =>
+      String(step.run ?? '').includes('fork-mobile-lockfile-precheck.mjs')
+    )
+    const autoCutIdx = steps.findIndex((step) =>
+      String(step.run ?? '').includes('fork-next-mobile-tag.mjs')
+    )
+    expect(precheckIdx).toBeGreaterThanOrEqual(0)
+    expect(autoCutIdx).toBeGreaterThan(precheckIdx)
+  })
+
+  it('gates attended and auto tag writes on the mobile lockfile precheck', () => {
+    const source = readFileSync(join(projectDir, 'config/scripts/fork-next-mobile-tag.mjs'), 'utf8')
+    expect(source).toContain("from './fork-mobile-lockfile-precheck.mjs'")
+    expect(source).toContain('assertMobileLockfile({ cwd })')
+  })
 })
