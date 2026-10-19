@@ -1,4 +1,5 @@
 import { expect } from 'vitest'
+import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from '../../../src/shared/agent-session-bound-control'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
@@ -26,6 +27,12 @@ export const STRUCTURED_CALLS: {
   clientCapability?: string
   result?: Record<string, unknown>
 }[] = [
+  {
+    method: 'agentSession.controlTarget',
+    hostMethod: 'controlTarget',
+    clientCapability: AGENT_SESSION_BOUND_CONTROL_CAPABILITY,
+    result: { supported: false, reason: 'unresolvable' }
+  },
   { method: 'agentSession.createSupport', hostMethod: null, result: { supported: true } },
   {
     method: 'agentSession.create',

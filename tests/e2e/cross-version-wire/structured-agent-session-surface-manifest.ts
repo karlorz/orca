@@ -123,6 +123,8 @@ export function sendParams(
 export function paramsFor(method: string): unknown {
   const fence = 1
   switch (method) {
+    case 'agentSession.controlTarget':
+      return { provider: 'grok', nativeSessionId: 'native-1' }
     case 'agentSession.createSupport':
       return { worktree: `id:${WORKSPACE}`, agent: 'codex' }
     case 'agentSession.create':
