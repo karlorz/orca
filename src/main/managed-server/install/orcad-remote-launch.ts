@@ -17,7 +17,7 @@ import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell, quotePosixShellUnlessPlain } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -159,9 +159,7 @@ export function orcadLaunchCommand(
           // Keep $! equal to the runtime PID rather than a waiting shell's PID.
           // Older clients identify the live PID by orcad.js; the pinned launcher loads the body in-place.
           `exec nohup "$orcad_runtime" ${entry}`,
-          orcadListenArgv(spec)
-            .map((arg) => quotePosixShell(arg))
-            .join(' '),
+          orcadListenArgv(spec).map(quotePosixShellUnlessPlain).join(' '),
           `> ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
           ...(recordSession
@@ -193,9 +191,7 @@ function setsidLaunchTail(
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && shift && exec "$@"' orcad-launch ${pidFile}`,
     `"$orcad_runtime" ${entry}`,
-    orcadListenArgv(spec)
-      .map((arg) => quotePosixShell(arg))
-      .join(' '),
+    orcadListenArgv(spec).map(quotePosixShellUnlessPlain).join(' '),
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,
     'do sleep 0.05; orcad_wait=$((orcad_wait + 1)); done;',
