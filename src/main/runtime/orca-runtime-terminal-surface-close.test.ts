@@ -8,6 +8,7 @@ import { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
+  INCARNATION_ID,
   LEAF_ID,
   PTY_ID,
   REPO_ID,
@@ -259,8 +260,10 @@ describe('CLI close of one pane in a split tab', () => {
       expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
       expect(harness.closeTerminalTab).not.toHaveBeenCalled()
       // The owed stop still goes out through the controller's kill, which records SSH pending kills.
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-      expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
+      expect(harness.kill).toHaveBeenCalledWith(PTY_ID, {
+        expectedIncarnationId: INCARNATION_ID
+      })
+      expect(harness.kill.mock.calls.map(([ptyId]) => ptyId)).not.toContain(SIBLING_PTY_ID)
       expect(receipt).toMatchObject({
         tabId: TAB_ID,
         ptyKilled: false,

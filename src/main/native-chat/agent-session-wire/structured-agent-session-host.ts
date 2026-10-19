@@ -19,10 +19,7 @@ import { StructuredAgentSessionHostRuntimeState } from './structured-agent-sessi
 import { structuredAgentSessionEntryDelegates } from './structured-agent-session-create'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import * as agentStart from './structured-agent-session-agent-start'
-import {
-  createStructuredAgentSessionConversationLifetime,
-  type StructuredAgentSessionConversationLifetime
-} from './structured-agent-session-conversation-lifetime'
+import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import {
@@ -77,7 +74,7 @@ export class StructuredAgentSessionHost {
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   private readonly restore: ReturnType<typeof reveal.createStructuredAgentSessionHostRestore>
-  private readonly lifetime: StructuredAgentSessionConversationLifetime
+  private readonly lifetime: lifetime.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
@@ -155,7 +152,7 @@ export class StructuredAgentSessionHost {
       childWorkOpen: this.clientDelivery.childWorkOpen,
       publishStatus: this.clientDelivery.publishStatusAndSettlement
     })
-    this.lifetime = createStructuredAgentSessionConversationLifetime({
+    this.lifetime = lifetime.createStructuredAgentSessionConversationLifetime({
       context: () => this.lifetimeContext(),
       sessions: this.sessions,
       serialize: (sessionId, task) => this.serialize(sessionId, task),
@@ -208,7 +205,7 @@ export class StructuredAgentSessionHost {
   }
   /** Releases a session's resources without ending the conversation; see the lifetime's close.
    *  `user-close` makes a turn it cuts short the user's cancellation; an `evict` leaves it news. */
-  close: StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
+  close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
     this.lifetime.close(sessionId, cause)
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>

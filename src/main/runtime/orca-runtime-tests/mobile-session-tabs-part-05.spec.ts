@@ -231,7 +231,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       ptyKilled: true
     })
-    expect(kill).toHaveBeenCalledWith('laptop-created-pty')
+    expect(kill).toHaveBeenCalledWith('laptop-created-pty', { expectedIncarnationId: undefined })
     expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
   })
 
@@ -484,7 +484,7 @@ describe('OrcaRuntimeService', () => {
       tabId: terminal.tabId,
       ptyKilled: true
     })
-    expect(kill).toHaveBeenCalledWith('floating-created-pty')
+    expect(kill).toHaveBeenCalledWith('floating-created-pty', { expectedIncarnationId: undefined })
     expect(closeTerminalTab).not.toHaveBeenCalled()
   })
 
