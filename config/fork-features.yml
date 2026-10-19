@@ -679,3 +679,12 @@ features:
       - src/main/automations/automation-run-result-capture.ts
       - src/main/automations/automation-run-agent-result-source.ts
       - src/renderer/src/components/automations/automation-run-output-snapshot.ts
+
+  - id: fork-required-pr-runners
+    title: Run the full required PR workflow on available GitHub-hosted fork runners
+    kind: ci
+    status: landed
+    paths:
+      - .github/workflows/pr.yml
+      - config/scripts/pr-workflow-parallelism.test.mjs
+      - config/scripts/pr-preflight-gates.test.mjs

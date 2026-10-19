@@ -27,8 +27,8 @@ jobs:
   code_paths:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: detect changes and check repository guards
-    # Start routing without waiting behind the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # The fork has no Blacksmith runner; retain upstream routing elsewhere.
+    runs-on: ${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -178,7 +178,7 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
     # Leave headroom for typechecking and overlapping checks.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-8vcpu-ubuntu-2404' }}
     outputs:
       shards: ${{ steps.unit-plan.outputs.shards }}
       managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
@@ -932,7 +932,7 @@ jobs:
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      runner: blacksmith-4vcpu-ubuntu-2404
+      runner: ${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}
       phase_diagnostics: true
       shards: ${{ needs.preflight.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
@@ -1578,8 +1578,8 @@ jobs:
       - package
       - package_windows
       - layout_oracle
-    # Report settled results without competing with the GitHub-hosted test queue.
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    # Use an available fork runner to publish the unchanged required aggregate.
+    runs-on: ${{ github.repository == 'karlorz/orca' && 'ubuntu-22.04' || 'blacksmith-2vcpu-ubuntu-2204' }}
     timeout-minutes: 5
 
     steps:
