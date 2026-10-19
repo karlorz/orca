@@ -123,6 +123,14 @@ describe('Grok completed update result', () => {
         { sessionId, promptId }
       )
     ).toBeUndefined()
+    writeUpdates([assistant('Older report'), completed('older-prompt')])
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, lastAssistantMessage: 'Older direct report' },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
   })
 
   it.each(['_x.ai/session_notification', 'x.ai/session_notification', 'x.ai/session/update'])(

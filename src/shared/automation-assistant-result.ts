@@ -44,18 +44,22 @@ export function readGrokAutomationAssistantResult(
 ): AutomationAssistantResult | undefined {
   const home = readGrokHomeEnvelope(envelope)
   const metadata = readGrokSessionMetadata(record, home)
+  let inheritedPrompt = false
   if (
     record.promptId === undefined &&
     record.prompt_id === undefined &&
     activeTurn?.sessionId === metadata?.sessionId
   ) {
     record = { ...record, promptId: activeTurn?.promptId }
+    inheritedPrompt = true
   }
   const prompt = normalizeGrokPromptId(record.promptId ?? record.prompt_id)
   if (!metadata || !prompt) {
     return undefined
   }
-  const direct = record.lastAssistantMessage ?? record.last_assistant_message
+  const direct = inheritedPrompt
+    ? undefined
+    : (record.lastAssistantMessage ?? record.last_assistant_message)
   const text =
     typeof direct === 'string' && direct.trim()
       ? direct
