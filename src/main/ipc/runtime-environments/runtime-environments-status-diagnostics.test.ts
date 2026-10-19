@@ -359,7 +359,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
         ok: false,
         error: {
-          message: expect.stringContaining('connect both devices to Tailscale'),
+          message: expect.stringMatching(
+            /Reconnect the SSH host in Settings.*LAN or Tailscale address/
+          ),
           data: { remoteControl: { state: 'reconnecting' } }
         }
       })

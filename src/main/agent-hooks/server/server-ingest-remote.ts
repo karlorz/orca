@@ -1,3 +1,4 @@
+import { boundedAutomationAssistantResult } from '../../../shared/automation-assistant-result'
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
@@ -269,6 +270,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       promptInteractionKey,
       hookEventName,
       providerPromptId,
+      automationAssistantResult:
+        envelope.isReplay !== true &&
+        effectiveSource === 'grok' &&
+        providerPromptId &&
+        (normalizedPayload.mainAgent?.state ?? normalizedPayload.state) === 'done'
+          ? boundedAutomationAssistantResult(envelope.automationAssistantResult)
+          : undefined,
       grokPromptBoundary,
       compactTrigger,
       toolUseId,

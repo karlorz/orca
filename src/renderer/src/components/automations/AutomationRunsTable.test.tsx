@@ -128,7 +128,7 @@ describe('AutomationRunsTable rows', () => {
     expect(row.textContent).toContain('Run 0')
     expect(row.textContent).toContain('Local Mac')
     expect(row.textContent).toContain('scheduled')
-    expect(row.textContent).toContain('Done')
+    expect(row.textContent).toContain('Session completed')
   })
 
   it('names the scope when the row carries no host label', () => {

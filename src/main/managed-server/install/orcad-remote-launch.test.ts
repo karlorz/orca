@@ -46,7 +46,7 @@ const READY_LINE = JSON.stringify({
 
 describe('orcadLaunchCommand', () => {
   it('states the bind posture rather than inheriting the build default', () => {
-    expect(orcadLaunchCommand(posix, SPEC)).toContain("'--bind' '127.0.0.1'")
+    expect(orcadLaunchCommand(posix, SPEC)).toContain('--bind 127.0.0.1')
     expect(orcadLaunchCommand(posix, SPEC)).not.toContain('--pairing-address')
     expect(orcadLaunchCommand(posix, SPEC)).not.toContain('--mobile-pairing')
   })
@@ -58,9 +58,9 @@ describe('orcadLaunchCommand', () => {
       pairingAddress: 'wss://example.test',
       mobilePairing: true
     })
-    expect(command).toContain("'--bind' '0.0.0.0'")
-    expect(command).toContain("'--pairing-address' 'wss://example.test'")
-    expect(command).toContain("'--mobile-pairing'")
+    expect(command).toContain('--bind 0.0.0.0')
+    expect(command).toContain('--pairing-address wss://example.test')
+    expect(command).toContain('--mobile-pairing')
   })
 
   it('omits mobile pairing when only bind and advertised address are set', () => {
@@ -69,7 +69,7 @@ describe('orcadLaunchCommand', () => {
       bindHost: '0.0.0.0',
       pairingAddress: 'wss://example.test'
     })
-    expect(command).toContain("'--pairing-address' 'wss://example.test'")
+    expect(command).toContain('--pairing-address wss://example.test')
     expect(command).not.toContain('--mobile-pairing')
   })
 

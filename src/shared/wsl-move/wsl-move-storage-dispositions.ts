@@ -98,6 +98,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
   'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
@@ -106,6 +107,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/runtime/mobile-cloud-relay/own-mobile-relay-security-state-sqlite-schema.ts':
+    'own-mobile-relay-security',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-legacy-contract-storage.ts': 'orchestration',
@@ -203,6 +206,20 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
     }),
     ...tables('profile-state', ['profile_state_meta'], notApplicableDisposition(62)),
     ...tables(
+      'own-mobile-relay-security',
+      [
+        'operator_account',
+        'access_sessions',
+        'relay_grants',
+        'device_credentials',
+        'operator_sessions',
+        'refresh_tokens',
+        'host_key_expiry',
+        'audit_events'
+      ],
+      notApplicableDisposition(62, 'Profile-global relay credentials and audit history stay local.')
+    ),
+    ...tables(
       'profile-state',
       ['${PROFILE_STATE_AUTOMATION_RUNS_TABLE}'],
       moveDisposition(19, { note: 'PersistedState.automationRuns.' })
@@ -219,7 +236,7 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
     ),
     ...tables(
       'ai-vault-parse-cache',
-      ['meta', 'rows'],
+      ['meta', 'rows', 'scope_cwds'],
       notApplicableDisposition(57, 'Session History parse cache; rebuilt from transcripts.')
     ),
     ...tables(

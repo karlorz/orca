@@ -13,13 +13,10 @@ import {
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import {
-  listenExtrasFromDeployment,
-  managedOrcadSlot
-} from './orcad-managed-runtime-context'
+import { listenExtrasFromDeployment, managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardEntry,
   SshPortForwardManager

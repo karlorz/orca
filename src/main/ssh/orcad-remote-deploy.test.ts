@@ -1,6 +1,7 @@
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import type * as RecordFile from '../managed-server/install/orcad-remote-record-file'
+import type * as ShellArgumentQuoting from '../../shared/shell-argument-quoting'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,10 @@ vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+vi.mock('../../shared/shell-argument-quoting', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellArgumentQuoting>()),
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../managed-server/install/remote-install-lock', () => ({
   acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false),
@@ -773,11 +777,13 @@ describe('deployOrcad', () => {
       activationRecord: ACTIVE_OLD,
       readiness: { [OLD_VERSION]: readyLine({ version: OLD_VERSION }) },
       log: [],
-      snapshotResult: 'tar: write failed'
+      snapshotResult: 'SNAPSHOT_FAILURE tar: Cannot write: No space left on device\nFAILED'
     }
     scriptHost(script)
 
-    await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
+    await expect(deployOrcad(options())).rejects.toThrow(
+      /activating \S+: tar: Cannot write: No space left on device\. .*incumbent was stopped/u
+    )
     expect(script.log).toEqual([
       'preflight',
       `stop:${OLD_VERSION}`,

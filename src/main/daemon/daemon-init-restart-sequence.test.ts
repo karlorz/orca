@@ -4,7 +4,7 @@ import type * as EndpointProbe from './daemon-endpoint-probe'
 const { recoverRetired } = vi.hoisted(() => ({ recoverRetired: vi.fn(async () => {}) }))
 vi.mock('./macos-retired-daemon-recovery', () => ({ recoverRetiredMacDaemonJobs: recoverRetired }))
 const { endpointProbe } = vi.hoisted(() => {
-  const state: { outcome: null | 'missing' | 'unknown' } = { outcome: null }
+  const state: { outcome: null | 'missing' | 'unknown' | 'connected' } = { outcome: null }
   return { endpointProbe: state }
 })
 vi.mock('./daemon-endpoint-probe', async (importOriginal) => {
@@ -150,7 +150,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(mod.getDaemonProvider()).not.toBe(originalAdapter)
   })
 
-  it.each(['unknown', null] as const)(
+  it.each(['unknown', 'connected'] as const)(
     'still refuses when another daemon may own the endpoint (probe %s)',
     async (outcome) => {
       const mod = await importFresh()

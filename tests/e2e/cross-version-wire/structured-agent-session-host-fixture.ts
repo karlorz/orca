@@ -19,6 +19,7 @@ export function structuredHostStub(
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
   return {
+    controlTarget: vi.fn(async () => ({ supported: false, reason: 'unresolvable' })),
     // The restart-resume surface hangs off a host MEMBER rather than the root, but its spies stay
     // flat here: callers iterate this map asserting every entry is a spy that did not run, and
     // `installableHost` below is what reassembles the member. Keeping them flat also lets the
@@ -76,6 +77,7 @@ export function structuredHostStub(
       value: { itemId: 'item-1', epoch: 'rewound-epoch' }
     })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [] })),
     revealSession: vi.fn(async () => ({
       sessionId,
       workspaceId,

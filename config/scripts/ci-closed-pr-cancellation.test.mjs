@@ -101,7 +101,10 @@ it('looks up exact PR groups without branch or head-SHA inference', async () => 
     'pi-owner-runtime-123',
     'git-command-termination-123',
     'skill-roundtrip-pull_request-123',
-    'ci-cache-warmup-123'
+    'ci-cache-warmup-123',
+    'fork-official-push-image-123',
+    'fork-own-mobile-relay-image-123',
+    'fork-official-relay-image-123'
   ])
   expect(
     request.mock.calls.every(

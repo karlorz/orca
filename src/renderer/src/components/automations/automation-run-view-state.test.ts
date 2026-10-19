@@ -76,7 +76,7 @@ describe('automation run view state', () => {
     })
   })
 
-  it('offers Resume workspace after the run tab is closed even if PTY identity remains', () => {
+  it('offers Open workspace after the run tab is closed even if PTY identity remains', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
@@ -85,7 +85,7 @@ describe('automation run view state', () => {
       })
     ).toMatchObject({
       availability: 'workspace',
-      actionLabel: 'Resume workspace',
+      actionLabel: 'Open workspace',
       canOpen: true
     })
   })

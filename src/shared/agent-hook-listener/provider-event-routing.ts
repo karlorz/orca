@@ -1,3 +1,4 @@
+import { readFirstString } from './interactive-tool'
 import type { AgentHookSource } from '../agent-hook-relay'
 import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
 import type { ToolSnapshot } from './listener-event'
@@ -217,4 +218,20 @@ export function extractToolFields(
     case 'kiro':
       return extractKiroToolFields(eventName, hookPayload)
   }
+}
+
+export function isProviderSessionOnlyEvent(
+  source: AgentHookSource,
+  eventName: unknown,
+  payload: Record<string, unknown>,
+  hasSession: boolean
+): boolean {
+  return (
+    hasSession &&
+    (((source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
+      eventName === 'session_start') ||
+      (source === 'grok' &&
+        !readFirstString(payload, ['subagentType', 'subagent_type']) &&
+        (eventName === 'SessionStart' || eventName === 'session_start')))
+  )
 }

@@ -10,6 +10,7 @@ import {
 } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
+  automationAssistantResult?: unknown
   paneKey: string
   tabId?: string
   worktreeId?: string

@@ -1,9 +1,8 @@
+import { registerMobileTerminalMountIpcBridge } from './mobile-terminal-mount-ipc-bridge'
 import { presentAgentLaunchTab } from '@/lib/agent-launch-tab-presentation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
 import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
@@ -318,30 +317,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
     )
   )
 
-  // Why: background-mount a mobile-subscribed tab's PTY without navigating the desktop (STA-1840).
-  unsubs.push(
-    window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
-      if (!worktreeId) {
-        return
-      }
-      // Why: synthetic pty handles need persisted-tab resolution; a miss must not mount every saved tab in a hidden worktree.
-      const mount = planMobileTerminalTabMount(
-        useAppStore.getState(),
-        {
-          worktreeId,
-          ...(tabId ? { tabId } : {}),
-          ...(ptyId ? { ptyId } : {})
-        },
-        {
-          isTabMounted: (tabId, targetWorktreeId) =>
-            hasRegisteredRuntimeTerminalTab(tabId, targetWorktreeId)
-        }
-      )
-      if (mount) {
-        requestBackgroundTerminalWorktreeMount(mount)
-      }
-    })
-  )
+  registerMobileTerminalMountIpcBridge(unsubs)
 
   // Why: CLI-driven terminal creation waits for the tabId reply so it can hand the caller a usable handle immediately.
 }

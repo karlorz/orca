@@ -49,7 +49,7 @@ export function createAutomationDispatchCompletion(args: {
   let terminalFinalizationStarted = false
   let contactLost = false
   let observedPaneKey = args.run.terminalPaneKey
-  const { readProviderSessionId, persistLateProviderSessionId, clearRetiredRunTerminalIdentity } =
+  const { readProviderSessionId, persistLateProviderSessionId } =
     createAutomationRunSessionPersistence({
       runId: args.run.id,
       getPaneKey: () => observedPaneKey,
@@ -126,7 +126,6 @@ export function createAutomationDispatchCompletion(args: {
     } catch (error) {
       console.error('[automations] Failed to clear retired terminal identity:', error)
     }
-    await clearRetiredRunTerminalIdentity()
   }
   const finishCompletionResult = async (
     providerSessionId: string | null,

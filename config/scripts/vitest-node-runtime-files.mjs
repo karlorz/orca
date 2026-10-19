@@ -2,6 +2,7 @@ import { SQLITE_RUNTIME_INCLUDE } from './vitest-sqlite-runtime-files.mjs'
 
 // SQLite publication, native bindings, worker IPC, socket liveness, and V8 retention use Node.
 export const NODE_RUNTIME_INCLUDE = [
+  'src/main/runtime/structured-agent-cli-writers.test.ts',
   'config/scripts/vitest-sqlite-runtime-boundary.test.ts',
   'config/scripts/cloud-security-history-workflow.test.mjs',
   'config/scripts/skill-recipe-shell.test.mjs',
@@ -21,8 +22,12 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/session-parse-cache-metadata-checkpoint.test.ts',
   'src/main/ai-vault/session-parse-cache-persistence.test.ts',
+  'src/main/ai-vault/session-scanner-scope-cwd-facts.test.ts',
+  'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // Bun's Request ignores credentials=omit; Electron main uses Node's Request.
+  'src/main/home-appimage-electron-fetch.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
@@ -64,6 +69,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/foreign-sqlite-readers/**/*.test.ts',
   'src/main/browser/*cookie*.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
+  'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
@@ -85,6 +91,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/right-sidebar/parent-pr-checks-projection-selector.test.ts',
   'src/renderer/src/store/github/cache-persistence.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-conversation-name.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',

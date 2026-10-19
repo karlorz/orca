@@ -1,3 +1,4 @@
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../shared/agent-status-types'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import type {
   AutomationAgentResultSource,
@@ -156,9 +157,30 @@ export class AutomationRunResultCapture {
       return current
     }
     const buffer = createHeadlessAutomationOutputSnapshotBuffer()
-    buffer.append(row.lastAssistantMessage)
-    const snapshot = buffer.snapshot()
-    if (!snapshot || current.outputSnapshot?.content === snapshot.content) {
+    const result = row.automationAssistantResult
+    const full =
+      result?.providerPromptId === row.providerPromptId &&
+      result?.providerSessionId === row.providerSession?.id &&
+      result?.content.startsWith(row.lastAssistantMessage)
+        ? result
+        : undefined
+    buffer.append(full?.content ?? row.lastAssistantMessage)
+    const captured = buffer.snapshot()
+    const snapshot = captured
+      ? {
+          ...captured,
+          truncated:
+            captured.truncated ||
+            (full
+              ? full.truncated
+              : row.lastAssistantMessage.length >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
+        }
+      : null
+    if (
+      !snapshot ||
+      (current.outputSnapshot?.content === snapshot.content &&
+        current.outputSnapshot.truncated === snapshot.truncated)
+    ) {
       return current
     }
     const written = await this.opts.writeSnapshot(current, snapshot)

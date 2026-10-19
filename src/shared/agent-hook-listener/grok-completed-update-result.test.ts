@@ -1,3 +1,7 @@
+import {
+  boundedAutomationAssistantResult,
+  readGrokAutomationAssistantResult
+} from '../automation-assistant-result'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,6 +59,33 @@ describe('Grok completed update result', () => {
     expect(readGrokCompletedUpdateResult(hook, home)).toBe('Provider refused this request.')
     expect(extractGrokToolFields('StopFailure', hook, home)).toEqual({
       lastAssistantMessage: 'Provider refused this request.'
+    })
+  })
+
+  it('recovers the full automation report only for the exact completed prompt', () => {
+    const content = 'R'.repeat(9379)
+    writeUpdates([assistant(content), completed()])
+    expect(readGrokAutomationAssistantResult(hook, { grokHome: home })).toEqual({
+      content,
+      providerSessionId: sessionId,
+      providerPromptId: promptId,
+      truncated: false
+    })
+    expect(
+      readGrokAutomationAssistantResult({ ...hook, promptId: 'other' }, { grokHome: home })
+    ).toBeUndefined()
+    expect(
+      boundedAutomationAssistantResult({
+        content: 'X'.repeat(300000),
+        truncated: false,
+        providerSessionId: sessionId,
+        providerPromptId: promptId
+      })
+    ).toEqual({
+      content: 'X'.repeat(256 * 1024),
+      truncated: true,
+      providerSessionId: sessionId,
+      providerPromptId: promptId
     })
   })
 

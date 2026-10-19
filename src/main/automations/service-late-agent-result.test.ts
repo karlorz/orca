@@ -79,6 +79,7 @@ describe('durable late automation result', () => {
       })
       await server.start({ env: 'production' })
       const env = server.buildPtyEnv()
+      const finalReport = 'R'.repeat(9379)
       const sessionId = 'session-1'
       const cwd = join(state.dir, 'workspace')
       const sessionDir = join(state.dir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
@@ -159,19 +160,47 @@ describe('durable late automation result', () => {
         publish.mockClear()
         writeFileSync(
           join(sessionDir, 'chat_history.jsonl'),
-          `${JSON.stringify({ type: 'assistant', content: 'Late final report.' })}\n`
+          `${JSON.stringify({ type: 'assistant', content: finalReport })}\n`
+        )
+        writeFileSync(
+          join(sessionDir, 'updates.jsonl'),
+          `${[
+            {
+              method: 'session/update',
+              params: {
+                sessionId,
+                update: {
+                  sessionUpdate: 'agent_message_chunk',
+                  content: { type: 'text', text: finalReport }
+                }
+              }
+            },
+            {
+              method: '_x.ai/session/update',
+              params: {
+                sessionId,
+                update: {
+                  sessionUpdate: 'turn_completed',
+                  prompt_id: 'p-1',
+                  stop_reason: 'end_turn'
+                }
+              }
+            }
+          ]
+            .map((row) => JSON.stringify(row))
+            .join('\n')}\n`
         )
         releaseDiscovery()
         await vi.waitFor(() =>
           expect(server.getStatusSnapshotForPane(paneKey)[0]?.lastAssistantMessage).toBe(
-            'Late final report.'
+            finalReport.slice(0, 8000)
           )
         )
-        await vi.waitFor(() => expect(read().outputSnapshot?.content).toBe('Late final report.'))
-        expect(read()).toMatchObject({ status, error, usage })
+        await vi.waitFor(() => expect(read().outputSnapshot?.content).toBe(finalReport))
+        expect(read()).toMatchObject({ status, error, usage, outputSnapshot: { truncated: false } })
         expect(publish).toHaveBeenCalledWith(expect.objectContaining({ reason: 'run' }))
         await service.markDispatchResult({ runId: run.id, status, error, terminalPtyId: null })
-        expect(read().outputSnapshot?.content).toBe('Late final report.')
+        expect(read().outputSnapshot?.content).toBe(finalReport)
       } finally {
         releaseDiscovery()
         service.stop()

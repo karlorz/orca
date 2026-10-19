@@ -74,6 +74,7 @@ it('qualifies the same source via the unchanged template matrix and same-run dow
   expect(step('Verify same-run template provenance').run).toContain('validation-provenance.json')
   expect(template.jobs.desktop_template.needs).toEqual([
     'persistence',
+    'mobile_web_bundle',
     'linux_glibc_floor',
     'linux_glibc217_compat',
     'linux_musl'
@@ -160,9 +161,10 @@ describe('actual both-slice evidence', () => {
     expect(() => requireForkSignature('Authority=Orca Fork (karlorz) attacker')).toThrow()
     expect(() => requireForkSignature('flags=0x2(adhoc)\nAuthority=Orca Fork (karlorz)')).toThrow()
   })
-  it('retains computed OK 42, 20-second deadline, signed helper clone, and required CI execution', () => {
+  it('retains computed OK 42, 60-second deadline, signed helper clone, and required CI execution', () => {
     const verifier = read('config/scripts/verify-packaged-daemon-entry.cjs')
-    expect(verifier).toContain('20_000')
+    expect(verifier).toContain('const TERMINAL_HOST_BOOT_TIMEOUT_MS = 60_000')
+    expect(verifier).toContain('deadline: Date.now() + TERMINAL_HOST_BOOT_TIMEOUT_MS')
     expect(verifier).toContain('OK 42')
     expect(verifier).toContain("['-cR', paths.bundle, clone]")
     expect(verifier).toContain('if (required)')

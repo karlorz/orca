@@ -1,3 +1,4 @@
+import { readGrokAutomationAssistantResult } from './automation-assistant-result'
 import { readAgentProcessIdentity } from './agent-process-presence'
 import { resolveAgentStatusIdentity } from './agent-status-identity'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
@@ -262,15 +263,10 @@ export function normalizeHookPayload(
     hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt,
-    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
+    previousOpenCodeMainAgent: options.previousOpenCodeMainAgent,
+    hasProviderSession: providerSession !== null
   })
-  const providerSessionOnly =
-    (((source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
-      eventName === 'session_start') ||
-      (source === 'grok' &&
-        !readFirstString(hookPayloadRecord, ['subagentType', 'subagent_type']) &&
-        (eventName === 'SessionStart' || eventName === 'session_start'))) &&
-    providerSession !== null
+  const { providerSessionOnly } = dispatched
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     dispatched.payload ??
@@ -304,13 +300,13 @@ export function normalizeHookPayload(
           : undefined
         : hasExplicitUserPrompt(
             source,
-            eventName,
+            dispatched.eventName,
             extractedPrompt,
             dispatched.resolvedPromptText,
             dispatched.hasTranscriptPromptEvidence
           ),
     promptInteractionKey: dispatched.promptInteractionKey,
-    hookEventName: typeof eventName === 'string' ? eventName : undefined,
+    hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
@@ -329,6 +325,10 @@ export function normalizeHookPayload(
       : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+    automationAssistantResult:
+      source === 'grok' && (transportPayload.mainAgent?.state ?? transportPayload.state) === 'done'
+        ? readGrokAutomationAssistantResult(hookPayloadRecord, record)
+        : undefined,
     payload: transportPayload
   }
 }

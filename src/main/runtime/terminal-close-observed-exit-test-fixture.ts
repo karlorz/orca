@@ -9,6 +9,8 @@ import { bindProviderListeners } from '../ipc/pty/provider/bind-listeners'
 import { finishPtyShutdown } from '../ipc/pty/provider/liveness'
 import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { shutdownProviderAndDetectExit } from '../ipc/pty/provider/shutdown-detect'
+import { ptyIncarnationById } from '../ipc/pty/provider/ownership-state'
+import { listProcessesFromRuntimeController } from '../ipc/pty/runtime/inventory-operations'
 import type { PtyRuntimeControllerDeps } from '../ipc/pty/runtime/controller-deps'
 import {
   killPtyFromRuntimeController,
@@ -21,7 +23,10 @@ export type ObservedExitSocketScenario =
   | 'unrelated-endpoint-gone'
   | 'physical-exit-observed'
 
-export async function runObservedExitSocketScenario(scenario: ObservedExitSocketScenario) {
+export async function runObservedExitSocketScenario(
+  scenario: ObservedExitSocketScenario,
+  recoverIncarnation = false
+) {
   const harness = await startLateExitHarness()
   const legacy = await startDaemonAdapterHarness(() => createMockSubprocess())
   const router = new DaemonPtyRouter({ current: harness.adapter, legacy: [legacy.adapter] })
@@ -44,17 +49,24 @@ export async function runObservedExitSocketScenario(scenario: ObservedExitSocket
     harness.runtime.setPtyController({
       write: () => true,
       getForegroundProcess: async () => null,
-      kill: (id) => {
+      kill: (id, opts) => {
         fallbackKills++
-        return killPtyFromRuntimeController(deps, id)
+        return killPtyFromRuntimeController(deps, id, opts)
       },
-      stopAndWait: (id) =>
-        stopAndWaitPtyFromRuntimeController(deps, id, { deadlineMs: Date.now() + 1_500 })
+      stopAndWait: (id, opts) =>
+        stopAndWaitPtyFromRuntimeController(deps, id, {
+          ...opts,
+          deadlineMs: Date.now() + 1_500
+        })
     })
     const list = await harness.runtime.listTerminals()
     const terminal = list.terminals.find((entry) => entry.ptyId === harness.id)
     if (!terminal) {
       throw new Error('Fixture terminal missing')
+    }
+    if (recoverIncarnation) {
+      ptyIncarnationById.delete(harness.id)
+      await listProcessesFromRuntimeController(deps, 'local')
     }
     if (scenario !== 'healthy') {
       await legacy.server.shutdown()

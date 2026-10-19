@@ -1,3 +1,4 @@
+import type * as ManagedRuntimeContext from './orcad-managed-runtime-context'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
@@ -23,7 +24,8 @@ vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
     run: (managed: unknown) => Promise<unknown>
   ) => run({ environment: { id: 'env-1' }, deployment: { remotePort: 7777 } })
 }))
-vi.mock('./orcad-managed-runtime-context', () => ({
+vi.mock('./orcad-managed-runtime-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof ManagedRuntimeContext>()),
   requireManagedOrcadEnvironment: () => ({
     environment: { id: 'env-1' },
     deployment: { remotePort: 7777 }

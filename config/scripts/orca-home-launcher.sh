@@ -23,7 +23,7 @@ cli=0
 case "${1:-}" in
   --help|-h|--version|-v|help|version|auth|env)
     cli=1 ;;
-  account|agent|agent-context|artifacts|automations|back|browser|capture|check|claude-teams|clear|click|clipboard|computer|console|cookie|dblclick|diagnostics|dialog|download|drag|emulator|environment|eval|exec|file|fill|find|focus|forward|full-screenshot|geolocation|get|goto|highlight|host|hover|inserttext|intercept|is|keypress|linear|mouse|network|open|open-url|orchestration|pdf|profile|project|reload|repo|screenshot|scroll|scrollintoview|search|select|select-all|set|skills|snapshot|status|storage|tab|terminal|type|uncheck|upload|viewport|vm|wait|worktree)
+  account|agent|agent-context|agent-session|artifacts|automations|back|browser|capture|check|claude-teams|clear|click|clipboard|computer|console|cookie|dblclick|diagnostics|dialog|download|drag|emulator|environment|eval|exec|file|fill|find|focus|forward|full-screenshot|geolocation|get|goto|highlight|host|hover|inserttext|intercept|is|keypress|jira|linear|mouse|network|open|open-url|orchestration|pairing|pdf|profile|project|reference|reload|repo|screenshot|scroll|scrollintoview|search|select|select-all|set|skills|snapshot|status|storage|tab|terminal|terminal-daemon|type|uncheck|update|upload|viewport|vm|wait|worktree)
     cli=1 ;;
 esac
 if [[ "${ORCA_HOME_USE_OPT_FALLBACK:-0}" == 1 || ! -x "$IMAGE" ]]; then
