@@ -1,3 +1,4 @@
+import type { AutomationAssistantResult } from '../automation-assistant-result'
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
@@ -6,6 +7,7 @@ import type { GrokSessionObservation } from '../grok-session-binding'
 import type { ClaudeSettledRequest } from './claude-settled-permission-requests'
 
 export type AgentHookEventPayload = {
+  automationAssistantResult?: AutomationAssistantResult
   grokEventAt?: number
   grokSessionObservation?: GrokSessionObservation
   paneKey: string

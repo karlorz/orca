@@ -53,6 +53,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         terminalHandle: _terminalHandle,
         grokSessionObservation: _grokSessionObservation,
         grokEventAt: _grokEventAt,
+        automationAssistantResult: _automationAssistantResult,
         hostTurnRevision: _hostTurnRevision,
         launchToken,
         ...persistedPayload

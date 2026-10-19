@@ -669,3 +669,13 @@ features:
       - src/shared/skill-freshness.ts
       - src/renderer/src/components/skills/skill-freshness-scan-issues.tsx
       - src/renderer/src/components/skills/skill-freshness-summary-headline.tsx
+
+  - id: automation-full-final-report
+    title: Preserve bounded same-turn final automation reports and label session completion
+    kind: product
+    status: landed
+    paths:
+      - src/shared/automation-assistant-result.ts
+      - src/main/automations/automation-run-result-capture.ts
+      - src/main/automations/automation-run-agent-result-source.ts
+      - src/renderer/src/components/automations/automation-run-output-snapshot.ts

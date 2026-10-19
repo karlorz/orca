@@ -48,6 +48,7 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'terminalHandle'
   | 'grokSessionObservation'
   | 'grokEventAt'
+  | 'automationAssistantResult'
 > & {
   launchTokenHash?: string
 }

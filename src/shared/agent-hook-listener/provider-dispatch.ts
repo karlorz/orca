@@ -7,7 +7,7 @@ import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
-import { isNewTurnEvent } from './provider-event-routing'
+import { isNewTurnEvent, isProviderSessionOnlyEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
 import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
@@ -32,6 +32,7 @@ import { normalizeJcodeEvent } from './providers/jcode-events'
 import { normalizeKiroEvent } from './providers/kiro-events'
 
 export type ProviderDispatchResult = {
+  providerSessionOnly: boolean
   payload: ParsedAgentStatusPayload | null
   resolvedPromptText: string
   promptInteractionKey?: string
@@ -49,6 +50,7 @@ export function normalizeProviderEvent(input: {
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
+  hasProviderSession?: boolean
 }): ProviderDispatchResult {
   const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
     input
@@ -213,5 +215,16 @@ export function normalizeProviderEvent(input: {
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
 
-  return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
+  return {
+    payload,
+    resolvedPromptText,
+    promptInteractionKey,
+    hasTranscriptPromptEvidence,
+    providerSessionOnly: isProviderSessionOnlyEvent(
+      source,
+      eventName,
+      hookPayload,
+      input.hasProviderSession === true
+    )
+  }
 }

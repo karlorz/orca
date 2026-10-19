@@ -81,7 +81,7 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
     case 'dispatched':
       return 'Launched'
     case 'completed':
-      return 'Done'
+      return 'Session completed'
     case 'skipped_precheck':
       return 'Precheck skipped'
     case 'skipped_missed':

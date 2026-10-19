@@ -130,6 +130,74 @@ describe('same-turn late automation output', () => {
     }
   )
 
+  it('preserves a 9379 character result and labels preview-only fallback honestly', async () => {
+    const content = 'R'.repeat(9379)
+    const state = setup({
+      lastAssistantMessage: content.slice(0, 8000),
+      automationAssistantResult: {
+        providerSessionId: 'session-1',
+        providerPromptId: 'prompt-1',
+        content,
+        truncated: false
+      }
+    })
+    await state.capture.refresh(state.finish('completed'))
+    expect(state.read()?.outputSnapshot).toMatchObject({ content, truncated: false })
+    state.capture.dispose()
+    const fallback = setup({ lastAssistantMessage: content.slice(0, 8000) })
+    await fallback.capture.refresh(fallback.finish('completed'))
+    expect(fallback.read()?.outputSnapshot).toMatchObject({
+      content: content.slice(0, 8000),
+      truncated: true
+    })
+    fallback.capture.dispose()
+  })
+
+  it.each(['session', 'prompt'])(
+    'rejects full prose with the wrong %s identity even when its prefix matches',
+    async (identity) => {
+      const state = setup({
+        lastAssistantMessage: 'preview',
+        automationAssistantResult: {
+          providerSessionId: identity === 'session' ? 'other' : 'session-1',
+          providerPromptId: identity === 'prompt' ? 'other' : 'prompt-1',
+          content: 'preview extended by another turn',
+          truncated: false
+        }
+      })
+      await state.capture.refresh(state.finish('completed'))
+      expect(state.read()?.outputSnapshot?.content).toBe('preview')
+      state.capture.dispose()
+    }
+  )
+
+  it('refuses mismatched full prose and preserves the result cap flag', async () => {
+    const state = setup({
+      lastAssistantMessage: 'same-turn preview',
+      automationAssistantResult: {
+        providerSessionId: 'session-1',
+        providerPromptId: 'prompt-1',
+        content: 'another turn',
+        truncated: false
+      }
+    })
+    await state.capture.refresh(state.finish('completed'))
+    expect(state.read()?.outputSnapshot?.content).toBe('same-turn preview')
+    state.capture.dispose()
+    const capped = setup({
+      lastAssistantMessage: 'report',
+      automationAssistantResult: {
+        providerSessionId: 'session-1',
+        providerPromptId: 'prompt-1',
+        content: 'report',
+        truncated: true
+      }
+    })
+    await capped.capture.refresh(capped.finish('completed'))
+    expect(capped.read()?.outputSnapshot?.truncated).toBe(true)
+    capped.capture.dispose()
+  })
+
   it('captures prose discovered before final persistence', async () => {
     const state = setup()
     state.publish({ lastAssistantMessage: 'Final report' })

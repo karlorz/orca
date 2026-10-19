@@ -218,6 +218,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     return this.buildStatusChangeNotification().providerSessions
   }
 
+  getAutomationResultRowsForPane(paneKey: string): EnrichedAgentHookEventPayload[] {
+    return this.combinedStatusEntries().filter((entry) => entry.paneKey === paneKey)
+  }
+
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const legacy = this.state.lastStatusByPaneKey.get(paneKey)
     if (legacy) {

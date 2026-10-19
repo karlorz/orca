@@ -1,8 +1,10 @@
+import type { AutomationAssistantResult } from '../../shared/automation-assistant-result'
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 
 export type AutomationAgentResultStatus = AgentStatusIpcPayload & {
+  automationAssistantResult?: AutomationAssistantResult
   providerPromptId?: string
   isReplay?: boolean
 }
@@ -16,18 +18,25 @@ export type AutomationAgentResultSource = {
 export function createAutomationAgentResultSource(
   server: Pick<
     AgentHookServer,
-    | 'getStatusSnapshotForPane'
+    | 'getAutomationResultRowsForPane'
     | 'subscribeEnrichedStatus'
     | 'subscribePaneStatusClear'
     | 'subscribeStatusDrop'
   >
 ): AutomationAgentResultSource {
   return {
-    readPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    readPane: (paneKey) =>
+      server.getAutomationResultRowsForPane(paneKey).map((event) => ({
+        ...toAgentStatusIpcPayload(event),
+        providerPromptId: event.providerPromptId,
+        automationAssistantResult: event.automationAssistantResult,
+        isReplay: event.isReplay
+      })),
     subscribe: (listener) =>
       server.subscribeEnrichedStatus((event) =>
         listener({
           ...toAgentStatusIpcPayload(event),
+          automationAssistantResult: event.automationAssistantResult,
           providerPromptId: event.providerPromptId,
           isReplay: event.isReplay
         })

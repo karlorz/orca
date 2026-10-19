@@ -1,3 +1,4 @@
+import type { AutomationAssistantResult } from './automation-assistant-result'
 import type { AgentProcessPresence } from './agent-process-presence'
 import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification
@@ -101,6 +102,7 @@ export type AgentHookRelayEnvelope = {
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
+  automationAssistantResult?: AutomationAssistantResult
   providerPromptId?: string
   /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */
   grokPromptBoundary?: true

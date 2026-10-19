@@ -1,3 +1,4 @@
+import { fitAutomationResultEnvelope } from './automation-result-envelope-budget'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_SHED_FIELDS_KEY,
@@ -182,7 +183,7 @@ export function publishAgentHookEnvelope(
   // frame a smaller later client forces us to shed. A single sink writes nothing when it rejects,
   // so there the attempt itself is the measurement — one encode instead of a probe plus a publish.
   const measureBeforePublish = clientIds.length > 1
-  let candidate = envelope
+  let candidate = fitAutomationResultEnvelope(dispatcher, envelope)
   const shedFields: string[] = []
   let step = 0
   for (;;) {
