@@ -40,6 +40,13 @@ describe('a runtime recovering daemon terminals from its local inventory', () =>
     }
   )
 
+  it('recovers a live daemon terminal before the new adapter has attached it', async () => {
+    const { provider } = installListing([row()])
+    vi.mocked(provider.hasPty).mockReturnValue(false)
+    await listProcessesFromRuntimeController({}, 'local')
+    expect(ptyIncarnationById.get(ID)).toBe(FIRST)
+  })
+
   it('keeps an incarnation recorded by a newer spawn while inventory was in flight', async () => {
     const { list } = installListing([])
     let finish: (rows: PtyProcessInfo[]) => void = () => {}

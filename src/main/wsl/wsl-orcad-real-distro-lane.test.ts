@@ -25,6 +25,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-co
 import { parsePairingCode } from '../../shared/pairing'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
+import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
@@ -393,6 +394,7 @@ async function waitForNoLiveTerminals(connection: WslOrcadConnection): Promise<v
 /** App updates (E1): N -> N+1 over a live terminal, N+2 idle, N+3 after a reboot. */
 async function updatePhase(distro: string): Promise<Receipt> {
   const result: Receipt = {}
+  receipt.update = result
   if (!supervisor) {
     throw new Error('supervisor missing')
   }
@@ -431,7 +433,14 @@ async function updatePhase(distro: string): Promise<Receipt> {
   await runInTerminal(forced, terminal, ':', `terminal kept across Force in ${distro}`)
 
   // No terminals: the next build lands on connect without asking.
-  await rpc(forced, 'terminal.close', { terminal })
+  const { close } = await rpc<{ close: RuntimeTerminalClose }>(forced, 'terminal.close', {
+    terminal
+  })
+  result.close = close
+  result.censusAfterClose = await requestOrcadTerminalCensus(pairedConnection(forced), 0)
+  expect(close, 'the recovered terminal close must confirm its stop').toMatchObject({
+    ptyKilled: true
+  })
   await waitForNoLiveTerminals(forced)
   templates.set(key, nextTemplate('n2'))
   started = performance.now()
@@ -640,7 +649,6 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
         pids[name] = typeof result.orcadPid === 'number' ? result.orcadPid : null
       }
       const update = await updatePhase(PLAIN)
-      receipt.update = update
       pids[PLAIN] = typeof update.orcadPid === 'number' ? update.orcadPid : null
       // Bridges and watches go; the holders must not.
       await supervisor.dispose()

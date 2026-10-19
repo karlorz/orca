@@ -26,8 +26,7 @@ async function listLocalProcesses(): Promise<PtyProcessInfo[]> {
         !process.exiting &&
         isPtyIncarnationId(process.incarnationId) &&
         !ptyIncarnationById.has(process.id) &&
-        resolvePtyExecutionHost(process.id) === LOCAL_EXECUTION_HOST_ID &&
-        provider.hasPty?.(process.id) === true
+        resolvePtyExecutionHost(process.id) === LOCAL_EXECUTION_HOST_ID
       ) {
         // Recovered daemon terminals need the same stop fence a fresh spawn records.
         setAdoptedPtyOwnership(process.id)
