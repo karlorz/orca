@@ -280,10 +280,14 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SleepWorkspaceParams = z.object({ workspaceId: z.string().min(1) }).strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
+
+/** `agentSession.subscribeAvailability` takes nothing: the snapshot is the host's. */
+export const AvailabilityParams = z.strictObject({})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.
@@ -348,9 +352,7 @@ export const RestartResumableParams = z
 
 /** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
  *  host re-derives eligibility, so an id a client invents is simply not in the set. */
-export const RestartResumeParams = z
-  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
-  .strict()
+export const RestartResumeParams = RestartResumableParams
 
 export const HistoryParams = z
   .object({

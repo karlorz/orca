@@ -21,6 +21,7 @@ import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import { safelyRevealWindow } from './focus-existing-window'
 import { isBackgroundLaunch } from './foreground-activation-policy'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -201,6 +202,7 @@ export function registerRuntimeWindowLifecycle(
     },
     renameTerminal: (tabId, title, options) =>
       send('ui:renameTerminal', { tabId, title, ...options }),
+    setPaneTitle: (tabId, leafId, title) => send('ui:setPaneTitle', { tabId, leafId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
@@ -259,6 +261,17 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
+  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
+  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? runtime.onClientEvent(
+        (event) => {
+          if (event.type === 'sidebarInputsChanged') {
+            send('runtime:sidebarInputsChanged', event)
+          }
+        },
+        { consumesTerminalSideEffects: false }
+      )
+    : null
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -275,6 +288,7 @@ export function registerRuntimeWindowLifecycle(
     rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
+    detachSidebarInputsNotices?.()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

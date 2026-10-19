@@ -18,11 +18,7 @@ import { providerSpawnedProcessIdentity } from '../provider-process/provider-spa
 import { AcpAgentError } from './acp-errors'
 import { acpPrivateTempConnect } from './acp-private-temp'
 import { acpAuthenticationRequired, acpSignInRequiredRefusal } from './acp-turn-failures'
-import {
-  ACP_REOPEN_FAILED,
-  acpReopenTakeover,
-  acpSessionNotRestoredRow
-} from './acp-session-reopen-failure'
+import * as reopening from './acp-session-reopen-failure'
 import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
@@ -225,7 +221,7 @@ export async function acquireAcpStructuredSession(input: {
     const resume = launch.resume
     let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
     let liveLane: AcpStructuredLane | null = null
-    let takeover: ReturnType<typeof acpReopenTakeover> | null = null
+    let takeover: ReturnType<typeof reopening.acpReopenTakeover> | null = null
     if (resume) {
       const attaching = makeLane(resume.sessionId, true)
       liveLane = attaching
@@ -239,10 +235,10 @@ export async function acquireAcpStructuredSession(input: {
         slot.reattaching = false
         attaching.translator.finishLoad()
       } catch (error) {
-        takeover = acpReopenTakeover(error, resume, {
+        takeover = reopening.acpReopenTakeover(error, resume, {
           over: connection.closed || acquire.signal?.aborted === true,
           now: now(),
-          warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
+          warn: (fields) => deps.logger?.warn(reopening.ACP_REOPEN_FAILED, { ...fields, sessionId })
         })
         // A new session takes the old one's place, with a new lane, so nothing of the failed
         // attach's window outlives it.
@@ -281,7 +277,6 @@ export async function acquireAcpStructuredSession(input: {
       ...takeover
     }
     session = {
-      events,
       sessionId,
       nativeSessionId: started.sessionId,
       fence: acquire.fence,
@@ -307,13 +302,16 @@ export async function acquireAcpStructuredSession(input: {
       exitObservedAt: null
     }
     const reading = liveLane
-    session.unbindReadingControl = events?.bindReadingControl?.({
+    const unbind = events?.bindReadingControl?.({
       pauseReading: () => connection.pauseReading(),
       resumeReading: () => {
         connection.resumeReading()
         reading.retry()
       }
     })
+    if (unbind) {
+      session.unbindReadingControl = unbind
+    }
     if (connection.exited || connection.closed) {
       throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
     }
@@ -323,7 +321,7 @@ export async function acquireAcpStructuredSession(input: {
       ...(takeover?.replaces ? [takeover.replaces.key] : [])
     ]
     for (const key of lost) {
-      liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
+      liveLane.apply(reopening.acpSessionNotRestoredRow(key, started.sessionId, agentName))
     }
     return { acquisition: { process, link, acquisitionGeneration: generation }, session }
   } catch (error) {

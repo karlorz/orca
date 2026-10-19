@@ -18,9 +18,10 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { runAutomationPrecheck } from './precheck-runner'
+import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
   AutomationRunCompletionWatcher,
@@ -50,6 +51,7 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly automationLanes = new Map<string, Promise<void>>()
   /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
@@ -182,19 +184,7 @@ export class AutomationService {
     }
     const target = resolveAutomationDispatchTarget(this.dispatchHost(), automation)
     if (!target.ok) {
-      return {
-        command: automation.precheck.command,
-        exitCode: null,
-        timedOut: false,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        error: target.error,
-        startedAt: Date.now(),
-        completedAt: Date.now()
-      }
+      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
     }
     return await runAutomationPrecheck({
       precheck: automation.precheck,
@@ -268,10 +258,15 @@ export class AutomationService {
     }
   }
 
+  runInAutomationLane<T>(automationId: string, operation: () => Promise<T>): Promise<T> {
+    return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
+  }
+
   private dispatchHost(): AutomationScheduledDispatchHost {
     return {
       store: this.store,
       runs: this.runs,
+      runInAutomationLane: (id, operation) => this.runInAutomationLane(id, operation),
       tickMs: this.tickMs,
       isStopped: () => this.stopped,
       dispatchGeneration: () => this.dispatchGeneration,

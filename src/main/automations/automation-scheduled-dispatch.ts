@@ -22,6 +22,7 @@ import type { AutomationRunCompletionWatcher } from './run-completion-watcher'
 
 export type AutomationScheduledDispatchHost = {
   store: Store
+  runInAutomationLane<T>(id: string, operation: () => Promise<T>): Promise<T>
   runs: AutomationRunWriter
   tickMs: number
   isStopped: () => boolean
@@ -58,21 +59,23 @@ export function dispatchAutomationRun(
   target: AutomationRunTargetResult,
   generation: number
 ): Promise<AutomationRun> {
-  return requestAutomationDispatch(
-    {
-      store: host.store,
-      runs: host.runs,
-      isActive: () => !host.isStopped() && generation === host.dispatchGeneration(),
-      getRenderer: () => (canDispatchAutomationToRenderer(host) ? host.webContents() : null),
-      headlessDispatcher: host.headlessDispatcher,
-      resolveTarget: (current) => resolveAutomationDispatchTarget(host, current),
-      runPrecheck: () => host.runPrecheck(automation.id, run.id),
-      markDispatchResult: (result) => host.markDispatchResult(result),
-      watchRun: (dispatched) => host.completionWatcher?.watch(dispatched)
-    },
-    automation,
-    run,
-    target
+  return host.runInAutomationLane(automation.id, () =>
+    requestAutomationDispatch(
+      {
+        store: host.store,
+        runs: host.runs,
+        isActive: () => !host.isStopped() && generation === host.dispatchGeneration(),
+        getRenderer: () => (canDispatchAutomationToRenderer(host) ? host.webContents() : null),
+        headlessDispatcher: host.headlessDispatcher,
+        resolveTarget: (current) => resolveAutomationDispatchTarget(host, current),
+        runPrecheck: () => host.runPrecheck(automation.id, run.id),
+        markDispatchResult: (result) => host.markDispatchResult(result),
+        watchRun: (dispatched) => host.completionWatcher?.watch(dispatched)
+      },
+      automation,
+      run,
+      target
+    )
   )
 }
 

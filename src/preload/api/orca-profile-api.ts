@@ -1,4 +1,5 @@
 import type {
+  OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
   CreateCloudLinkedOrcaProfileResult,
@@ -44,6 +45,12 @@ export type OrcaProfileApi = {
   ) => Promise<FindOrcaProfileProjectsByPathResult>
   connectCurrent: () => Promise<ConnectCurrentOrcaProfileResult>
   openPasswordPage: () => Promise<OpenDesktopPasswordPageResult>
+  signInProgress: () => Promise<OrcaCloudSignInProgress | null>
+  onSignInProgressChanged: (
+    callback: (progress: OrcaCloudSignInProgress | null) => void
+  ) => () => void
+  /** Stops waiting on the browser; the sign-in resolves as cancelled. */
+  cancelSignIn: () => Promise<void>
   refreshAuth: () => Promise<RefreshCurrentOrcaProfileAuthResult>
   signOutCurrent: () => Promise<SignOutCurrentOrcaProfileResult>
   selectOrg: (args: SelectOrcaProfileOrgArgs) => Promise<SelectOrcaProfileOrgResult>

@@ -6,7 +6,7 @@ include:
   - src/main/runtime/mobile-cloud-relay/**
   - src/main/runtime/rpc/relay-transport.ts
   - src/main/runtime/rpc/relay-transport.test.ts
-  - src/main/runtime/rpc/e2ee-crypto.ts
+  - src/shared/e2ee-crypto.ts
   - src/main/runtime/rpc/e2ee-crypto.test.ts
   - src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts
   - src/shared/mobile-relay-*

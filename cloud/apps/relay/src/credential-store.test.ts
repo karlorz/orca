@@ -412,6 +412,43 @@ describe('key expiry disabled (fork trusted-machine admission)', () => {
     await database.close()
   })
 
+  it.each([false, true])('keeps the trusted-machine policy on memory resume (enabled=%s)', async (keyExpiryDisabled) => {
+    let now = 100
+    const database = await openInMemoryRelayDatabase()
+    const store = new RelayCredentialStore(database, () => now, { keyExpiryDisabled })
+    const installed = await installDirect(store, {
+      relayDeviceId,
+      reqId: 'memory-install',
+      resumeToken: 'memory-resume-token'
+    })
+    now = installed.resumeExpiresAt + 1
+    const confirm = () => store.confirmMemoryResume({
+      ...identity,
+      relayDeviceId,
+      reqId: 'memory-confirm',
+      basisConnId: 'memory-basis',
+      acceptedCredentialVersion: 1,
+      acceptedAs: 'current'
+    })
+    await expect(store.lookupResume(identity.relayHostId, 'memory-resume-token')).resolves.toMatchObject({
+      outcome: keyExpiryDisabled ? 'resume' : 'refused'
+    })
+    if (keyExpiryDisabled) {
+      await expect(confirm()).resolves.toMatchObject({
+        renewed: true,
+        resumeExpiresAt: now + RELAY_PROTOCOL_LIMITS.resumeTtlMs
+      })
+    } else {
+      await expect(confirm()).rejects.toMatchObject({ code: 'reject-expired' })
+    }
+    await store.revoke(identity, relayDeviceId)
+    await expect(store.lookupResume(identity.relayHostId, 'memory-resume-token')).resolves.toEqual({ outcome: 'refused' })
+    await expect(confirm()).rejects.toMatchObject({ code: 'reject-revoked' })
+    await store.resumeAudit.flush()
+    store.resumeAudit.stop()
+    await database.close()
+  })
+
   it('still enforces invite expiry and sweeps it in cleanup', async () => {
     let now = 100
     const database = await openInMemoryRelayDatabase()

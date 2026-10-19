@@ -2,6 +2,7 @@ import { OrcaRuntimeWithSidebarProducers } from './orca-runtime-sidebar-producer
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -37,6 +38,10 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
@@ -205,6 +210,14 @@ class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
     return { acknowledged: true }
   }
 
+  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+
+  /** This host's agent health snapshot and every replacement, from first use; returns the release. */
+  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+    return this.structuredAgentAvailability.subscribe(read)
+  }
+
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
   canPublishAgentLaunchTab(): boolean {
     return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
@@ -280,18 +293,24 @@ class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
 
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
   async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
-    const reply = await applyWindowLayoutCommand(
-      this.requireStore(),
-      (worktreeId, tabId) => {
-        if (tabId !== null) {
-          return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-        }
-        const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-        return routed ? [routed] : []
-      },
-      command,
-      (move) => rekeyMovedPaneOwners(this, move)
-    )
+    const apply = (): Promise<LayoutApplyReply> =>
+      applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) => {
+          if (tabId !== null) {
+            return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+          }
+          const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+          return routed ? [routed] : []
+        },
+        command,
+        (move) => rekeyMovedPaneOwners(this, move)
+      )
+    // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
+    (command.type === 'sleep' || command.type === 'wake')
+      ? this.inResumeRecordOrder(apply)
+      : apply())
     // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }

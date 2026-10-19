@@ -57,7 +57,8 @@ export function useWorktreeJumpPaletteWorktrees({
   hostedReviewCache,
   settings,
   issueCache,
-  workspacePortScan
+  workspacePortScan,
+  lastVisitedAtByWorktreeId
 }: WorktreeJumpPaletteWorktreesInput) {
   const hasQuery = paletteSearchQuery.length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
@@ -238,10 +239,12 @@ export function useWorktreeJumpPaletteWorktrees({
         repoMap,
         repoMapByHostIdentity: repoByHostIdentity,
         checksReviewByWorktree,
-        context: paletteSearchContext
+        context: paletteSearchContext,
+        lastVisitedAtByWorktreeId
       }),
     [
       checksReviewByWorktree,
+      lastVisitedAtByWorktreeId,
       paletteSearchQuery,
       paletteSearchContext,
       repoByHostIdentity,
