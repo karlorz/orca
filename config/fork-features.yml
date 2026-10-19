@@ -689,3 +689,11 @@ features:
       - .github/workflows/pr.yml
       - config/scripts/pr-workflow-parallelism.test.mjs
       - config/scripts/pr-preflight-gates.test.mjs
+
+  - id: agent-operation-ledger-nul-readback
+    title: Preserve complete caller and operation keys when Node SQLite reloads replay receipts
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/agent-session-record-rows.ts
+      - src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.test.ts

@@ -76,6 +76,7 @@ export async function openBoundControlRig() {
   }))
   const adapter: StructuredAgentSessionAdapter = {
     acquire,
+    open: async () => ({ reportedOptions: {} }),
     dispatch,
     cancelTurn,
     answerPrompt: async ({ commit }) => commit(),

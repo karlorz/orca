@@ -7,9 +7,9 @@ import { StructuredConversationCommandController } from './structured-conversati
 // only through `conversation`, which opens it at rest; an agent is started only by work that needs
 // it, and the idle sweep is the one thing that puts it to rest.
 
+import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
-import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import * as providerSupport from './structured-agent-session-provider-support'
 import * as reveal from './structured-agent-session-reveal'
@@ -22,10 +22,7 @@ import * as lifetime from './structured-agent-session-conversation-lifetime'
 import { createStructuredAgentSessionHostMutationContext } from './structured-agent-session-host-mutation-wiring'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
-import {
-  structuredAgentSessionMutationDelegates,
-  type StructuredAgentSessionMutationContext
-} from './structured-agent-session-host-mutations'
+import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -109,17 +106,17 @@ export class StructuredAgentSessionHost {
     })
     this.conversationDelivery = conversation.createStructuredAgentSessionConversationDelivery({
       deps,
+      acquireAborts: this.runtimeState.acquireAborts,
       sessions: this.sessions,
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       // Quit drains a delivery start before it evicts, so the child it produces is stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
-      ensureProviderChild: (sessionId, startedFor) =>
-        agentStart.ensureStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
+      startProviderChild: (sessionId, startedFor) =>
+        agentStart.claimStructuredAgentSessionAgent(this.attachContext(), sessionId, startedFor),
       deliveryOrder: this.runtimeState.deliveryOrder,
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Put to rest like an idle agent: the stop writes nothing, and the next start is new.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
-      mutationContext: () => this.mutationContext(),
       clientDelivery: this.clientDelivery
     })
     this.restore = reveal.createStructuredAgentSessionHostRestore(deps, {
@@ -128,8 +125,7 @@ export class StructuredAgentSessionHost {
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       hasSession: this.hasSession,
-      // Site 10: cannot overwrite a live entry — the restorer returns early on
-      // `hasSession` inside the same serialized step as this `set`.
+      // The restorer returns on `hasSession` in this same step, so this never overwrites a live entry.
       onReadable: this.conversationDelivery.adoptOpened,
       onUnopened: (sessionId) => this.tabs.markUnopened(sessionId)
     })
@@ -159,7 +155,9 @@ export class StructuredAgentSessionHost {
       sessions: this.sessions,
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       open: (sessionId) => this.conversationDelivery.open(sessionId),
-      deliveryActive: (sessionId) => this.conversationDelivery.loop.isRunning(sessionId),
+      // A start in flight is execution under way, even before the loop or an operation sees a child.
+      deliveryActive: (id) =>
+        this.conversationDelivery.loop.isRunning(id) || this.runtimeState.startFlights.has(id),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
       childWorkOpen: this.clientDelivery.childWorkOpen
     })
@@ -218,7 +216,9 @@ export class StructuredAgentSessionHost {
         tasks: this.tasks,
         lifetime: this.lifetime,
         sessions: this.sessions,
-        deliveryRunning: (sessionId) => this.conversationDelivery.loop.isRunning(sessionId),
+        // A start registered after the stop is newer work, as a running delivery is.
+        deliveryRunning: (id) =>
+          this.conversationDelivery.loop.isRunning(id) || this.runtimeState.startFlights.has(id),
         childWorkIncomplete: this.clientDelivery.childWorkIncomplete
       },
       workspaceId
@@ -301,7 +301,6 @@ export class StructuredAgentSessionHost {
     (...args) => this.clientDelivery.waitForSendSettlement(...args),
     (...args) => this.conversationCommands.send(...args)
   )
-  private readonly mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
   controlTarget = this.boundControls.controlTarget
   send = this.boundControls.send
 
@@ -344,8 +343,8 @@ export class StructuredAgentSessionHost {
 
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
-  settleLateDispatch = this.mutations.settleLateDispatch
-  releaseUnansweredDispatches = this.mutations.releaseUnansweredDispatches
+  settleLateDispatch = this.boundControls.settleLateDispatch
+  releaseUnansweredDispatches = this.boundControls.releaseUnansweredDispatches
   /** What the live child holds changed with no row: every reader re-derives current work. */
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
 
