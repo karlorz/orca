@@ -7,14 +7,14 @@ on:
     paths:
       - config/docker/own-mobile-relay/**
       - scripts/build-own-mobile-relay.mjs
-      - src/main/runtime/relay/own-mobile-relay-*.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-*.ts
       - .github/workflows/fork-own-mobile-relay-image.yml
   pull_request:
     branches: [fork-main]
     paths:
       - config/docker/own-mobile-relay/**
       - scripts/build-own-mobile-relay.mjs
-      - src/main/runtime/relay/own-mobile-relay-*.ts
+      - src/main/runtime/mobile-cloud-relay/own-mobile-relay-*.ts
       - .github/workflows/fork-own-mobile-relay-image.yml
 
 permissions:

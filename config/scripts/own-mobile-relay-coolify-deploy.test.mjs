@@ -142,6 +142,8 @@ describe('own-mobile-relay Coolify deploy channel', () => {
     expect(raw).not.toContain('stablyai/orca')
     expect(raw).not.toContain('docker compose up')
     expect(raw).toContain('config/docker/own-mobile-relay/Dockerfile')
+    expect(raw).toContain('src/main/runtime/mobile-cloud-relay/own-mobile-relay-*.ts')
+    expect(raw).not.toContain('src/main/runtime/relay/own-mobile-relay-*.ts')
     expect(raw).toContain('cache-from: type=gha')
   })
 
