@@ -1,8 +1,42 @@
-import { getPtyIdsForHost } from '../provider/ownership-state'
-import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
+import {
+  getPtyIdsForHost,
+  ptyIncarnationById,
+  restorePtyIncarnation,
+  setAdoptedPtyOwnership
+} from '../provider/ownership-state'
+import {
+  getProvider,
+  localProvider,
+  registeredPtyProviders,
+  resolvePtyExecutionHost
+} from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+
+type InventoryDeps = Pick<PtyRuntimeControllerDeps, 'runtime'>
+
+async function listLocalProcesses(): Promise<PtyProcessInfo[]> {
+  const provider = localProvider
+  const processes = await provider.listProcesses()
+  if (provider === localProvider) {
+    for (const process of processes) {
+      if (
+        !process.exiting &&
+        isPtyIncarnationId(process.incarnationId) &&
+        !ptyIncarnationById.has(process.id) &&
+        resolvePtyExecutionHost(process.id) === LOCAL_EXECUTION_HOST_ID &&
+        provider.hasPty?.(process.id) === true
+      ) {
+        // Recovered daemon terminals need the same stop fence a fresh spawn records.
+        setAdoptedPtyOwnership(process.id)
+        restorePtyIncarnation(process.id, process.incarnationId)
+      }
+    }
+  }
+  return processes
+}
 
 function markSshInventoryUnverifiable(
   runtime: PtyRuntimeControllerDeps['runtime'],
@@ -16,7 +50,7 @@ function markSshInventoryUnverifiable(
 }
 
 export async function listProcessesWithHostScopeFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
+  deps: InventoryDeps,
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
   const providerSessions = await Promise.all(
@@ -24,7 +58,7 @@ export async function listProcessesWithHostScopeFromRuntimeController(
       const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
       try {
         return {
-          processes: await (isLocal ? provider.listProcesses() : provider.listProcesses(opts)),
+          processes: await (isLocal ? listLocalProcesses() : provider.listProcesses(opts)),
           hostId
         }
       } catch (error) {
@@ -44,12 +78,12 @@ export async function listProcessesWithHostScopeFromRuntimeController(
 }
 
 export async function listProcessesFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
+  deps: InventoryDeps,
   hostId?: ExecutionHostId,
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ) {
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
-    return localProvider.listProcesses()
+    return listLocalProcesses()
   }
   if (hostId !== undefined) {
     try {
