@@ -19,8 +19,6 @@ import {
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
-import { getWorkspaceLastActiveAt } from '../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,
   HighlightedText,
@@ -54,15 +52,7 @@ export function WorktreeJumpPaletteWorktreeRow({
     activeWorktreeId,
     controller.activeWorkspaceExecutionHostId
   )
-  const sessionAge = formatPaletteSessionAge(
-    controller.hasQuery
-      ? entry.match.lastActiveAt
-      : getWorkspaceLastActiveAt(
-          worktree.lastActivityAt,
-          getWorktreeVisitTimestamp(controller.lastVisitedAtByWorktreeId, worktree)
-        ),
-    controller.paletteNowMs
-  )
+  const sessionAge = formatPaletteSessionAge(entry.match.lastActiveAt, controller.paletteNowMs)
   const sshConnectionId =
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId) ? repo.connectionId : null
   const sshStatus = sshConnectionId

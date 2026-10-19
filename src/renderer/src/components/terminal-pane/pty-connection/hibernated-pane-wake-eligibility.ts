@@ -9,3 +9,7 @@ export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): 
     !(record.origin === 'live' && agentTurnEndedUncleanly(record))
   )
 }
+
+export function noteNeedsExplicitHibernatedPaneWake(record: SleepingAgentSessionRecord): boolean {
+  return record.state === 'done' && record.origin !== 'quit' && record.origin !== 'live'
+}

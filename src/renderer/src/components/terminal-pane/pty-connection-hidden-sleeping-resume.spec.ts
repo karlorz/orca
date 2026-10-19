@@ -140,21 +140,24 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('waits for the reveal before resuming a hidden pane that has no PTY to reattach', async () => {
-      seedSleepingPane(null)
-      const { transport, binding, isVisibleRef } = connectHiddenPane(null)
-      await flushAsyncTicks(10)
+    it.each(['working', 'done'] as const)(
+      'waits for reveal before resuming a hidden quit record (%s)',
+      async (state) => {
+        seedSleepingPane(null, { state })
+        const { transport, binding, isVisibleRef } = connectHiddenPane(null)
+        await flushAsyncTicks(10)
 
-      expect(transport.connect).not.toHaveBeenCalled()
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
+        expect(transport.connect).not.toHaveBeenCalled()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
 
-      isVisibleRef.current = true
-      binding.noteVisibilityResume()
-      await flushAsyncTicks(10)
+        isVisibleRef.current = true
+        binding.noteVisibilityResume()
+        await flushAsyncTicks(10)
 
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-      expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
-    })
+        expect(transport.connect).toHaveBeenCalledTimes(1)
+        expect(resumeCommands(transport)[0]).toContain("'resume' 'codex-session-1'")
+      }
+    )
 
     it('holds a hidden reattach the host reports gone, then reattaches it on reveal', async () => {
       seedSleepingPane(DEAD_SESSION_ID)
@@ -305,9 +308,12 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       await flushAsyncTicks(10)
 
       expect(isPaneSpawnDeferred(PANE_KEY)).toBe(false)
-      // The in-session wake is still armed, so the reveal resumes the pane again.
+      // Completed output stays passive on reveal; an explicit wake resumes it.
       isVisibleRef.current = true
       binding.noteVisibilityResume()
+      await flushAsyncTicks(10)
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks(10)
       expect(transport.connect).toHaveBeenCalledTimes(2)
     })

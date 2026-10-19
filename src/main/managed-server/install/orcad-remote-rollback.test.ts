@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RecordFile from './orcad-remote-record-file'
 import type * as InstallLock from './remote-install-lock'
 import type * as TerminalBarrier from '../lifecycle/orcad-rollback-terminal-barrier'
+import type * as ShellArgumentQuoting from '../../../shared/shell-argument-quoting'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../../shared/shell-argument-quoting', () => ({
+vi.mock('../../../shared/shell-argument-quoting', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellArgumentQuoting>()),
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('./remote-install-transfers', () => ({

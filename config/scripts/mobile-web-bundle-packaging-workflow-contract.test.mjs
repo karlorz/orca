@@ -12,6 +12,7 @@ const workflowsDir = fileURLToPath(new URL('../../.github/workflows', import.met
 const BUNDLE_PRODUCING_SCRIPTS = [
   'build',
   'build:desktop',
+  'build:desktop:ci',
   'build:release',
   'build:release:parallel',
   'build:unpack',

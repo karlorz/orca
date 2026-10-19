@@ -26,6 +26,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-scope-walk.test.ts',
   // Electron main bridges streams with Node's implementation.
   'src/main/host/electron-http-client.test.ts',
+  // Bun's Request ignores credentials=omit; Electron main uses Node's Request.
+  'src/main/home-appimage-electron-fetch.test.ts',
   'src/main/daemon/daemon-init-provider-installation.test.ts',
   'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
@@ -89,6 +91,7 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/right-sidebar/parent-pr-checks-projection-selector.test.ts',
   'src/renderer/src/store/github/cache-persistence.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
+  'src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-conversation-name.test.ts',
   'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',

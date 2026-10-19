@@ -2305,9 +2305,6 @@
           "ed753624c0": "Delete Cloud package",
           "linkCopied": "Share link copied"
         },
-        "SkillFreshnessUpdateDialog": {
-          "scanIncomplete": "Orca could not finish checking plugin-managed skills."
-        },
         "SkillInstallDialog": {
           "4a00d133c5": "Orca verifies access and package identity before changing the selected machine."
         },

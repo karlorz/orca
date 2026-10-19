@@ -4,6 +4,10 @@ import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-even
 import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
 
+vi.mock('./automation-session-history-flush', () => ({
+  waitForAutomationSessionHistoryFlush: vi.fn(async () => {})
+}))
+
 const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()

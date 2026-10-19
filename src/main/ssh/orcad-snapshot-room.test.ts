@@ -3,12 +3,16 @@ import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import type * as RecordFile from '../managed-server/install/orcad-remote-record-file'
 import type * as InstallLock from '../managed-server/install/remote-install-lock'
 import type * as VersionedInstall from '../managed-server/install/remote-versioned-install'
+import type * as ShellArgumentQuoting from '../../shared/shell-argument-quoting'
 
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../shared/shell-argument-quoting', () => ({ quotePosixShell: (s: string) => `'${s}'` }))
+vi.mock('../../shared/shell-argument-quoting', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellArgumentQuoting>()),
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../managed-server/install/remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()

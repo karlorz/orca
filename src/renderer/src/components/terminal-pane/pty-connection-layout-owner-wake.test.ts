@@ -35,7 +35,7 @@ function sleepingRecord(paneKey: string, id: string): SleepingAgentSessionRecord
     state: 'done',
     capturedAt: 1,
     updatedAt: 1,
-    origin: 'worktree-sleep'
+    origin: 'live'
   }
 }
 
@@ -112,6 +112,11 @@ describe('wake through main in a layout-owner build', () => {
     expect(mocks.wake).toHaveBeenCalledTimes(1)
     expect(mocks.wake).toHaveBeenCalledWith(expect.anything(), 'wt-1', paneKey)
     expect(recordHeldAtWake).toBe(true)
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey).not.toHaveProperty(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+      providerSession: { id: 'sess-shown' }
+    })
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[otherPaneKey]).toMatchObject({
+      providerSession: { id: 'sess-other' }
+    })
   })
 })

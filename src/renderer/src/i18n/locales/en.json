@@ -4955,7 +4955,7 @@
           "stop": "Stop",
           "stopping": "Stopping…",
           "stoppingHeadline": "Stopping the update…",
-          "scanIncomplete": "Orca could not finish checking plugin-managed skills.",
+          "scanIncomplete": "Orca could not finish checking every skill location.",
           "scanDepthLimit": "Orca reached its plugin scan depth limit before checking this folder.",
           "scanEntryLimit": "Orca reached its plugin scan entry limit before checking the rest of this cache.",
           "scanCandidateLimit": "Orca found more same-named skill folders than it can safely inspect.",

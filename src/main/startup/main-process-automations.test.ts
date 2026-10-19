@@ -19,7 +19,13 @@ const mocks = vi.hoisted(() => {
     ) {
       return { start: vi.fn(), stop: vi.fn() }
     }),
-    state: { store: {}, runtime, claudeUsage: {}, codexUsage: {}, isServeMode: true }
+    state: {
+      store: { listAutomationRuns: vi.fn(() => []) },
+      runtime,
+      claudeUsage: {},
+      codexUsage: {},
+      isServeMode: true
+    }
   }
 })
 

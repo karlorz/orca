@@ -4,6 +4,7 @@ import type * as RecordFile from '../install/orcad-remote-record-file'
 import type * as InstallLock from '../install/remote-install-lock'
 import type * as VersionedInstall from '../install/remote-versioned-install'
 import type * as Crypto from 'node:crypto'
+import type * as ShellArgumentQuoting from '../../../shared/shell-argument-quoting'
 
 const uuid = vi.hoisted((): { fixed: string | null } => ({ fixed: null }))
 vi.mock('node:crypto', async (importOriginal) => {
@@ -15,7 +16,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../../shared/shell-argument-quoting', () => ({
+vi.mock('../../../shared/shell-argument-quoting', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellArgumentQuoting>()),
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('../install/remote-install-lock', async (importOriginal) => ({

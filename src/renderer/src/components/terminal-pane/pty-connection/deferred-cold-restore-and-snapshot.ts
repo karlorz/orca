@@ -43,12 +43,6 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      const record = startup.sleepingRecordEntry.record
-      // Why: Resume workspace can remount this pane again after the tab is closed.
-      // Consuming a finished explicit-resume record made the second click a dead workspace toast.
-      if (isPassiveCompletedHibernationEvidence(record) || record.restoreOnTabOpenOnly === true) {
-        return
-      }
       // Switch point: main records the wake of this pane alone, the one this window resumed.
       // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -57,6 +51,12 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           session.deps.worktreeId,
           session.cacheKey
         )
+      }
+      const record = startup.sleepingRecordEntry.record
+      // Why: Resume workspace can remount this pane again after the tab is closed.
+      // Consuming a finished explicit-resume record made the second click a dead workspace toast.
+      if (isPassiveCompletedHibernationEvidence(record) || record.restoreOnTabOpenOnly === true) {
+        return
       }
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),

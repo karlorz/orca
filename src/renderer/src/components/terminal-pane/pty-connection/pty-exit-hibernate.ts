@@ -1,4 +1,7 @@
-import { noteArmsHibernatedPaneWake } from './hibernated-pane-wake-eligibility'
+import {
+  noteArmsHibernatedPaneWake,
+  noteNeedsExplicitHibernatedPaneWake
+} from './hibernated-pane-wake-eligibility'
 export { noteArmsHibernatedPaneWake } from './hibernated-pane-wake-eligibility'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -149,7 +152,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     // Why: View run keeps completed hibernation output frozen; mobile wake is explicit.
-    if (!opts?.forceWake && target.record.origin !== 'live') {
+    if (!opts?.forceWake && noteNeedsExplicitHibernatedPaneWake(target.record)) {
       return null
     }
     const claimKey = getProviderSessionClaimKey(target.record)

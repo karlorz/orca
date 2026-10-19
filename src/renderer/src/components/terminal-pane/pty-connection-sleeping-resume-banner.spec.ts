@@ -283,6 +283,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
+        wakeHibernatedAgentIfArmed: () => string | null
       }
       await flushAsyncTicks(10)
 
@@ -299,6 +300,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(10)
       isVisibleRef.current = true
       binding.noteVisibilityResume()
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks(10)
 
       expect(connectCount).toBeGreaterThan(1)
