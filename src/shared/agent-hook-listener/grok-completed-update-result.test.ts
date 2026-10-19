@@ -96,6 +96,43 @@ describe('Grok completed update result', () => {
     ).toEqual({ lastAssistantMessage: 'direct' })
   })
 
+  it('borrows a missing shutdown prompt only from the same provider session', () => {
+    writeUpdates([assistant('Final report'), completed()])
+    const shutdown = { sessionId, cwd: hook.cwd }
+    expect(
+      readGrokAutomationAssistantResult(shutdown, { grokHome: home }, { sessionId, promptId })
+    ).toMatchObject({ content: 'Final report', providerPromptId: promptId })
+    expect(
+      readGrokAutomationAssistantResult(
+        shutdown,
+        { grokHome: home },
+        { sessionId: 'other-session', promptId }
+      )
+    ).toBeUndefined()
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, promptId: 'other-prompt' },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, promptId: null },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
+    writeUpdates([assistant('Older report'), completed('older-prompt')])
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, lastAssistantMessage: 'Older direct report' },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
+  })
+
   it.each(['_x.ai/session_notification', 'x.ai/session_notification', 'x.ai/session/update'])(
     'accepts existing Grok completion dialect %s',
     (method) => {
