@@ -1,4 +1,4 @@
-import type { AutomationAssistantResult } from '../../shared/automation-assistant-result'
+import type { AutomationAssistantResult } from '../../shared/automation-assistant-result-types'
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'

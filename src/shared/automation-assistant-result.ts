@@ -1,3 +1,4 @@
+import type { AutomationAssistantResult } from './automation-assistant-result-types'
 import { isSafeGrokSessionId } from './grok-session-paths'
 import { normalizeGrokPromptId } from './agent-hook-listener/listener-limits'
 import { readGrokCompletedUpdateResult } from './agent-hook-listener/grok-completed-update-result'
@@ -7,12 +8,6 @@ import {
 } from './agent-hook-listener/grok-result-discovery'
 
 export const AUTOMATION_ASSISTANT_RESULT_MAX_CHARS = 256 * 1024
-export type AutomationAssistantResult = {
-  content: string
-  truncated: boolean
-  providerSessionId: string
-  providerPromptId: string
-}
 
 export function boundedAutomationAssistantResult(
   value: unknown

@@ -26,8 +26,12 @@ afterEach(() => setBuildRepo(undefined))
 
 /** A fetch that answers "no mobile tags" and records every URL it was asked for. */
 function recordingFetch() {
-  const fetchImpl = vi.fn<typeof fetch>(async () => new Response('[]', { status: 200 }))
-  const urls = () => fetchImpl.mock.calls.map(([input]) => String(input))
+  const calls: string[] = []
+  const fetchImpl: typeof fetch = async (input) => {
+    calls.push(String(input))
+    return new Response('[]', { status: 200 })
+  }
+  const urls = () => calls
   return { fetchImpl, urls }
 }
 
@@ -178,8 +182,10 @@ describe('GitHub release source with a repo resolver (fetch mocked)', () => {
   })
 
   it('probes release tags on the overridden repo too', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+    const urls: string[] = []
+    const fetchImpl: typeof fetch = async (input) => {
       const url = String(input)
+      urls.push(url)
       if (url.endsWith('/git/matching-refs/tags/mobile-android-v')) {
         return new Response(JSON.stringify([{ ref: 'refs/tags/mobile-android-v0.0.58-0' }]))
       }
@@ -191,14 +197,14 @@ describe('GitHub release source with a repo resolver (fetch mocked)', () => {
           assets: [{ name: 'orca-mobile.apk' }]
         })
       )
-    })
+    }
     const source = createGithubReleaseUpdateSource(fetchImpl, () => 'karlorz/orca-staging-test')
     await expect(source.check('0.0.57', signal)).resolves.toEqual({
       kind: 'available',
       version: '0.0.58',
       url: 'https://github.com/karlorz/orca-staging-test/releases/tag/mobile-android-v0.0.58-0'
     })
-    expect(fetchImpl.mock.calls.map(([input]) => String(input))).toEqual([
+    expect(urls).toEqual([
       'https://api.github.com/repos/karlorz/orca-staging-test/git/matching-refs/tags/mobile-android-v',
       'https://api.github.com/repos/karlorz/orca-staging-test/releases/tags/mobile-android-v0.0.58-0'
     ])

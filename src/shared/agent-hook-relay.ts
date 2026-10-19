@@ -1,4 +1,4 @@
-import type { AutomationAssistantResult } from './automation-assistant-result'
+import type { AutomationAssistantResult } from './automation-assistant-result-types'
 import type { AgentProcessPresence } from './agent-process-presence'
 import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Why: defines the wire shape carried by the JSON-RPC `agent.hook` notification

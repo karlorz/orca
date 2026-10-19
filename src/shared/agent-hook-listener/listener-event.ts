@@ -1,4 +1,4 @@
-import type { AutomationAssistantResult } from '../automation-assistant-result'
+import type { AutomationAssistantResult } from '../automation-assistant-result-types'
 import type { AgentProcessPresence } from '../agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
