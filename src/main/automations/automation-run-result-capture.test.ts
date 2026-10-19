@@ -232,6 +232,29 @@ describe('same-turn late automation output', () => {
     state.capture.dispose()
   })
 
+  it.each(['prompt', 'clear'])(
+    'does not capture a different turn after %s during the completion wait',
+    async (change) => {
+      const state = setup({ lastAssistantMessage: 'R'.repeat(8000) })
+      const completion = state.capture.refresh(state.finish('completed'))
+      if (change === 'clear') {
+        state.clear()
+      }
+      state.publish({
+        providerPromptId: 'new-prompt',
+        automationAssistantResult: {
+          providerSessionId: 'session-1',
+          providerPromptId: 'new-prompt',
+          content: 'R'.repeat(9000),
+          truncated: false
+        }
+      })
+      await completion
+      expect(state.write).not.toHaveBeenCalled()
+      state.capture.dispose()
+    }
+  )
+
   it.each([
     { turnStartedAt: Date.now() + 1 },
     { providerPromptId: 'prompt-2' },

@@ -8,6 +8,7 @@ import { selectFreshExplicitAgentStatusRow } from '../runtime/runtime-hook-agent
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { Store } from '../persistence'
 import type { AutomationRunWriter } from './automation-run-writer'
+import { isGrokAutomationResultPending } from '../../shared/agent-hook-listener/grok-result-retry'
 
 const MAX_TRACKED_RESULT_PANES = 128
 
@@ -121,6 +122,31 @@ export class AutomationRunResultCapture {
   }
 
   async refresh(run: AutomationRun): Promise<AutomationRun> {
+    const binding = run.terminalPaneKey ? this.bindings.get(run.terminalPaneKey) : undefined
+    // Why: Grok flushes turn_completed after its Stop hook returns; retirement must wait for that bounded retry.
+    for (
+      let attempt = 0;
+      binding?.run.id === run.id &&
+      this.bindings.get(run.terminalPaneKey ?? '') === binding &&
+      !this.disposed &&
+      attempt < 6;
+      attempt += 1
+    ) {
+      const row = this.readBindingRow(binding)
+      if (
+        (run.status !== 'completed' && run.status !== 'dispatch_failed') ||
+        !row ||
+        !isGrokAutomationResultPending({
+          payload: row,
+          providerSession: row.providerSession,
+          providerPromptId: row.providerPromptId,
+          automationAssistantResult: row.automationAssistantResult
+        })
+      ) {
+        break
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
     return this.refreshCurrent(run, this.opts.readRun(run.automationId, run.id))
   }
 

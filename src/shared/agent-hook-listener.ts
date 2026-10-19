@@ -327,7 +327,7 @@ export function normalizeHookPayload(
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     automationAssistantResult:
       source === 'grok' && (transportPayload.mainAgent?.state ?? transportPayload.state) === 'done'
-        ? readGrokAutomationAssistantResult(hookPayloadRecord, record)
+        ? readGrokAutomationAssistantResult(hookPayloadRecord, record, grokActiveTurn)
         : undefined,
     payload: transportPayload
   }

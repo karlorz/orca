@@ -23,6 +23,7 @@ import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { shouldClearAssistantMessageRetry } from '../../../shared/agent-hook-listener/grok-result-retry'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -253,11 +254,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       return held
     }
-    if (
-      effectivePayload.payload.state !== 'done' ||
-      (effectivePayload.payload.lastAssistantMessage &&
-        effectivePayload.payload.lastAssistantMessageIsToolOutput !== true)
-    ) {
+    if (shouldClearAssistantMessageRetry(effectivePayload)) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
     onAccepted?.()

@@ -19,7 +19,10 @@ import {
 import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
 import { agentHookResultRetryMatchesTurn } from '../shared/agent-hook-result-retry-identity'
-import { recoverGrokHookResult } from '../shared/agent-hook-listener/grok-result-retry'
+import {
+  isGrokAutomationResultPending,
+  recoverGrokHookResult
+} from '../shared/agent-hook-listener/grok-result-retry'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -161,10 +164,11 @@ export class AgentHookResultRetryScheduler {
     discoveryReady = false
   ): void {
     if (
-      (original.payload.lastAssistantMessage &&
-        original.payload.lastAssistantMessageIsToolOutput !== true) ||
-      !hasPendingAgentResultText(source, body) ||
-      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS ||
+      (!isGrokAutomationResultPending(original) &&
+        ((original.payload.lastAssistantMessage &&
+          original.payload.lastAssistantMessageIsToolOutput !== true) ||
+          !hasPendingAgentResultText(source, body)))
     ) {
       return
     }
@@ -228,7 +232,8 @@ export class AgentHookResultRetryScheduler {
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
       (current.payload.lastAssistantMessage &&
-        current.payload.lastAssistantMessageIsToolOutput !== true)
+        current.payload.lastAssistantMessageIsToolOutput !== true &&
+        !isGrokAutomationResultPending(current))
     ) {
       return
     }
@@ -251,6 +256,17 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    this.host.applyEvent(event, source, env, version)
+    const updated = this.host.applyEvent(event, source, env, version)
+    if (updated && isGrokAutomationResultPending(updated)) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        updated,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal
+      )
+    }
   }
 }
