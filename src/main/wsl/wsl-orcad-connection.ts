@@ -25,7 +25,7 @@ import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
 import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
 import {
-  listenWslOrcadStdioBridgeWithFallback,
+  listenWslOrcadStdioBridgeOnPreferredPort,
   type WslOrcadStdioBridgeOptions
 } from './wsl-orcad-stdio-bridge'
 
@@ -258,7 +258,7 @@ export class WslOrcadConnectionManager {
       trackWslOrcadHostEnvironment(current.connection, null)
       this.dependencies.onChange?.(distro, null, status.pending)
     }
-    const forward = await listenWslOrcadStdioBridgeWithFallback(
+    const forward = await listenWslOrcadStdioBridgeOnPreferredPort(
       transport,
       {
         environmentId,

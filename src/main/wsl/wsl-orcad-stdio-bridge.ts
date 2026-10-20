@@ -41,14 +41,16 @@ export function listenWslOrcadStdioBridge(
   )
 }
 
+type WslOrcadStdioBridgeListen = (
+  transport: OrcadHostTransport,
+  options: WslOrcadStdioBridgeOptions
+) => Promise<StartedPortForward>
+
 /** A persisted local port may be taken by now; a free one beats no connection. */
-export async function listenWslOrcadStdioBridgeWithFallback(
+export async function listenWslOrcadStdioBridgeOnPreferredPort(
   transport: OrcadHostTransport,
   options: WslOrcadStdioBridgeOptions,
-  listen: (
-    transport: OrcadHostTransport,
-    options: WslOrcadStdioBridgeOptions
-  ) => Promise<StartedPortForward> = listenWslOrcadStdioBridge
+  listen: WslOrcadStdioBridgeListen = listenWslOrcadStdioBridge
 ): Promise<StartedPortForward> {
   try {
     return await listen(transport, options)
