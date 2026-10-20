@@ -47,6 +47,27 @@ describe('tunneledOrcadPairingCode', () => {
     expect(rewritten?.endpoint).toBe('ws://127.0.0.1:46768/runtime')
   })
 
+  it('keeps the enrolled grant when startup pairing is unavailable', () => {
+    const pairedOffer = {
+      v: PAIRING_OFFER_VERSION,
+      endpoint: 'wss://runtime.example.com/runtime?mode=paired#fragment',
+      deviceToken: 'enrolled-token',
+      publicKeyB64: 'enrolled-key',
+      pairedDeviceId: 'enrolled-device'
+    }
+    const unavailable: ServeReadiness = {
+      ...readiness(),
+      pairing: { available: false, reason: 'disabled_by_operator', guidance: 'Already enrolled' }
+    }
+
+    const rewritten = parsePairingCode(tunneledOrcadPairingCode(unavailable, 46_768, pairedOffer))
+
+    expect(rewritten).toEqual({
+      ...pairedOffer,
+      endpoint: 'ws://127.0.0.1:46768/runtime?mode=paired#fragment'
+    })
+  })
+
   it('refuses a non-WebSocket offer', () => {
     expect(() =>
       tunneledOrcadPairingCode(readiness('https://runtime.example.com'), 46_768)
