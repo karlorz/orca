@@ -48,6 +48,12 @@ describe('real orcad executable help', () => {
       expect(result.stderr).toBe('')
       expect(result.stdout).toContain('Usage: orcad [options]')
       expect(result.stdout).toContain('--bind <ip>')
+      expect(result.stdout).toContain(
+        "An operator's explicit port must be available or startup fails."
+      )
+      expect(result.stdout).toContain(
+        'A client-managed launch may fall back if its port is unavailable.'
+      )
       expect(result.stdout).not.toContain('"type":"orca_server_ready"')
       await expect(readdir(dataRoot)).rejects.toMatchObject({ code: 'ENOENT' })
     }

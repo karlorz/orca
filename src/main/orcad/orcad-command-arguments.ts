@@ -13,6 +13,8 @@ Usage: orcad [options]
 Options:
   --port <n>               WebSocket port, 0-65535; 0 picks a free port.
                            Defaults to ${DEFAULT_WS_PORT}, with a fallback if unavailable.
+                           An operator's explicit port must be available or startup fails.
+                           A client-managed launch may fall back if its port is unavailable.
   --bind <ip>              Literal IP to bind (default ${ORCAD_LOOPBACK_BIND_HOST}, local only).
                            Use an SSH port-forward or a network IP for remote access.
   --pairing-address <addr> Address advertised in pairing offers when different
