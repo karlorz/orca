@@ -9,6 +9,13 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: linux-home-appimage-generic-relaunch
+    title: Restart the canonical managed home AppImage instead of its cached executable
+    kind: product
+    status: landed
+    paths:
+      - src/main/app-relaunch.ts
+      - src/main/app-relaunch.test.ts
   - id: linux-home-appimage-cached-launch-updater
     title: Recover the managed updater from cached launches and report inactive checks accurately
     kind: product
