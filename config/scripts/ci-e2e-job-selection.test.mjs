@@ -224,7 +224,9 @@ it('classifies job outputs from a sparse checkout that only has the selector', a
       timeoutMs: 10000
     })
     expect(hints.code, hints.stderr).toBe(0)
-    expect(hints.stdout).toBe('e2e_run_changed=false\ne2e_needs_build=false\n')
+    expect(hints.stdout).toBe(
+      'e2e_run_changed=false\ne2e_needs_build=false\ne2e_ssh_shards=["1/2","2/2"]\n'
+    )
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

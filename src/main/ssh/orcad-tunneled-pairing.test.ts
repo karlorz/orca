@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import {
+  encodePairingOffer,
+  parsePairingCode,
+  PAIRING_OFFER_VERSION,
+  type PairingOffer
+} from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 
@@ -48,7 +53,7 @@ describe('tunneledOrcadPairingCode', () => {
   })
 
   it('keeps the enrolled grant when startup pairing is unavailable', () => {
-    const pairedOffer = {
+    const pairedOffer: PairingOffer = {
       v: PAIRING_OFFER_VERSION,
       endpoint: 'wss://runtime.example.com/runtime?mode=paired#fragment',
       deviceToken: 'enrolled-token',
