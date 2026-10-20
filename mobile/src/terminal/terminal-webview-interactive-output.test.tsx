@@ -5,7 +5,10 @@ import {
   type TerminalWebViewTransport
 } from './use-terminal-webview-controller'
 
-vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active' },
+  Platform: { OS: 'android' }
+}))
 
 vi.mock('./terminal-webview-engine-error-state', () => ({
   useTerminalWebViewEngineErrorState: () => ({
