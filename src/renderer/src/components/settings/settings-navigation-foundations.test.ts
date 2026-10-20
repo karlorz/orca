@@ -48,9 +48,7 @@ describe('hasReadyVoiceModel', () => {
       }
     } as unknown as GlobalSettings
 
-    const states: SpeechModelState[] = [
-      { id: 'whisper-base', status: 'ready' }
-    ]
+    const states: SpeechModelState[] = [{ id: 'whisper-base', status: 'ready' }]
 
     expect(hasReadyVoiceModel(settings, states)).toBe(true)
   })

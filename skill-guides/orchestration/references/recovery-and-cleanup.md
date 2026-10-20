@@ -4,16 +4,16 @@ Load this reference only after a failed/stopped/unknown attempt, explicit retry
 decision, stop/abandon request, verified placement mismatch, retention request,
 or uncertain release.
 
-| Proven state            | Safe action                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| `ready` or active       | Keep waiting; optionally read bounded output                       |
-| Verified wrong-target launch or explicit cancellation | Stop the exact attempt; confirm it stopped before replacement |
-| `failed` or `stopped`   | Start a replacement with `--retry-of`; repeat placement explicitly |
-| `outcome_unknown`       | Inspect, then choose `worker-stop` or explicit `worker-abandon`    |
-| Accepted `worker_done`  | Reuse, retain, or release                                          |
-| Remote contact lost     | Preserve `unverifiable`; do not stop or retry from absence alone   |
-| `unverifiable` liveness | Keep waiting or inspect; never stop, abandon, retry, or release    |
-| Proven `exited` agent   | Enumerate with `worker-list`; follow its `nextAction`              |
+| Proven state                                          | Safe action                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| `ready` or active                                     | Keep waiting; optionally read bounded output                       |
+| Verified wrong-target launch or explicit cancellation | Stop the exact attempt; confirm it stopped before replacement      |
+| `failed` or `stopped`                                 | Start a replacement with `--retry-of`; repeat placement explicitly |
+| `outcome_unknown`                                     | Inspect, then choose `worker-stop` or explicit `worker-abandon`    |
+| Accepted `worker_done`                                | Reuse, retain, or release                                          |
+| Remote contact lost                                   | Preserve `unverifiable`; do not stop or retry from absence alone   |
+| `unverifiable` liveness                               | Keep waiting or inspect; never stop, abandon, retry, or release    |
+| Proven `exited` agent                                 | Enumerate with `worker-list`; follow its `nextAction`              |
 
 ## Inspect before acting
 

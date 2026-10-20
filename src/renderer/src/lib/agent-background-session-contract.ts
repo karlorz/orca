@@ -26,4 +26,6 @@ export type LaunchAgentBackgroundSessionResult = {
   ptyId: string
   startupPlan: AgentStartupPlan
   terminalOwnership: AutomationTerminalOwnership | null
+  /** Ends a remote runtime's exit wait and data stream; a no-op for local/SSH PTYs. */
+  releaseRuntimeObservers: () => void
 }

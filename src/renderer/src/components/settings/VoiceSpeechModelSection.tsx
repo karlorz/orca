@@ -66,12 +66,7 @@ export function VoiceSpeechModelSection({
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isLocked}
-            className="shrink-0 gap-1.5"
-          >
+          <Button variant="outline" size="sm" disabled={isLocked} className="shrink-0">
             {selectedModel && selectedIsReady
               ? selectedModel.label
               : translate('auto.components.settings.VoicePane.fbe5990716', 'Select Model')}

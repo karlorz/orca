@@ -15,6 +15,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/nat
 import { NATIVE_CHAT_STREAMING_ID } from '../../../src/shared/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
+import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -132,6 +133,7 @@ export function useMobileNativeChatTurnDisclosure({
   scopeKey: string
 }): {
   active: NativeChatTurnStatus | null
+  presentation: MobileNativeChatRunPresentation
   /** The live turn's provider activity copy, for the footer row. */
   activeActivityText: string | null
   onToggleTurn: (turnKey: string) => void
@@ -233,6 +235,10 @@ export function useMobileNativeChatTurnDisclosure({
     expandedTurnKeys: expandedTurnIds,
     liveReasoningId
   })
+  const presentation = useMemo(
+    () => ({ rows, workRuns, turnKeys, receipts }),
+    [rows, workRuns, turnKeys, receipts]
+  )
   // Why a reverse loop: Hermes lacks the ES2023 last-match array helper (fork ES2023 ban).
   const latestAssistantId = useMemo(() => {
     const rows = waiting.listMessages
@@ -322,6 +328,7 @@ export function useMobileNativeChatTurnDisclosure({
 
   return {
     active,
+    presentation,
     activeActivityText,
     /** Stable for a given chat scope, so it never disturbs a row's memo. */
     onToggleTurn: toggleExpandedTurn,

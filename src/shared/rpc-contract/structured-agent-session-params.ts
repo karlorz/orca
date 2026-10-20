@@ -14,12 +14,14 @@ import {
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
+  ProviderHandle,
   SessionId
 } from './structured-agent-session-identifiers'
 export {
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
+  ProviderHandle,
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
@@ -58,17 +60,6 @@ export const MutationEnvelope = z
       .regex(/^[0-9a-f]{64}$/, 'Payload fingerprint must be a sha256 hex digest')
   })
   .strict()
-
-export const ProviderHandle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
-  z
-    .object({
-      kind: z.literal('claude'),
-      sessionId: Identifier('Invalid provider session id'),
-      leafUuid: Identifier('Invalid leaf uuid').nullable()
-    })
-    .strict()
-])
 
 /** Any agent a host may register. The host refuses one it did not register; a client sends one
  *  beyond Claude and Codex only to a host advertising the registered-agents capability. */
@@ -149,6 +140,8 @@ export const SendParams = z
     /** The composer's choices for the turn this message starts, kept with the message until it is
      *  dispatched. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
+    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
+    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
     body: SendBody
   })
   .strict()
