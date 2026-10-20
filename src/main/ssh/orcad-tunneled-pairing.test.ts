@@ -47,6 +47,20 @@ describe('tunneledOrcadPairingCode', () => {
     expect(rewritten?.endpoint).toBe('ws://127.0.0.1:46768/runtime')
   })
 
+  it('keeps an enrolled offer when startup no longer offers pairing', () => {
+    const previous = readiness('wss://runtime.example.com/runtime')
+    if (!previous.pairing.available) {
+      throw new Error('Expected fixture pairing offer')
+    }
+    const pairedOffer = parsePairingCode(previous.pairing.url)
+    const current: ServeReadiness = {
+      ...previous,
+      pairing: { available: false, reason: 'disabled_by_operator', guidance: 'disabled' }
+    }
+    const rewritten = parsePairingCode(tunneledOrcadPairingCode(current, 46_768, pairedOffer))
+    expect(rewritten).toEqual({ ...pairedOffer, endpoint: 'ws://127.0.0.1:46768/runtime' })
+  })
+
   it('refuses a non-WebSocket offer', () => {
     expect(() =>
       tunneledOrcadPairingCode(readiness('https://runtime.example.com'), 46_768)
