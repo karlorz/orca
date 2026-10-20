@@ -13,10 +13,7 @@ import {
 } from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { orcadBoundPort } from './orcad-managed-bound-port'
-import {
-  listenExtrasFromDeployment,
-  managedOrcadSlot
-} from './orcad-managed-runtime-context'
+import { listenExtrasFromDeployment, managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'

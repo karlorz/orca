@@ -29,9 +29,7 @@ describe('fork desktop build versioning', () => {
   })
 
   it('rejects invalid tag shapes', () => {
-    expect(() => parseForkDesktopTag('desktop-v1.4.178-0')).toThrow(
-      /not a valid fork desktop tag/
-    )
+    expect(() => parseForkDesktopTag('desktop-v1.4.178-0')).toThrow(/not a valid fork desktop tag/)
     expect(() => parseForkDesktopTag('v1.4.190')).toThrow(/not a valid fork desktop tag/)
     expect(() => parseForkDesktopTag('v1.4.190-rc.0')).toThrow(/not a valid fork desktop tag/)
     expect(() => parseForkDesktopTag('mobile-android-v0.0.44-0')).toThrow(

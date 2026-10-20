@@ -95,7 +95,10 @@ export function getSettingsNavGroupDefinitionsForSearch(
   })
 }
 
-import { effectiveSttModel, isMacSpeechSelected } from '../../../../shared/voice-dictation-selection'
+import {
+  effectiveSttModel,
+  isMacSpeechSelected
+} from '../../../../shared/voice-dictation-selection'
 
 export function hasReadyVoiceModel(
   settings: GlobalSettings,

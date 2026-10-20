@@ -42,10 +42,7 @@ export function VoiceMacSpeechSection({
       </div>
       <Switch
         checked={checked}
-        aria-label={translate(
-          'auto.components.settings.VoicePane.useMacSpeech',
-          'Use Mac speech'
-        )}
+        aria-label={translate('auto.components.settings.VoicePane.useMacSpeech', 'Use Mac speech')}
         disabled={disabled}
         onCheckedChange={(nextChecked) => {
           onUpdateVoiceSettings(resolveMacSpeechToggleUpdates(voiceSettings, nextChecked))

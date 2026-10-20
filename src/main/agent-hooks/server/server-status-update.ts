@@ -24,6 +24,7 @@ import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 import { shouldClearAssistantMessageRetry } from '../../../shared/agent-hook-listener/grok-result-retry'
+import { isLateGrokSessionStart } from '../../../shared/agent-hook-listener/grok-session-start-order'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -86,6 +87,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    if (isLateGrokSessionStart(previous, payload)) {
+      return previous
+    }
     const rowBefore = mutationBefore ?? previous
     const terminalHandle =
       payload.terminalHandle ??

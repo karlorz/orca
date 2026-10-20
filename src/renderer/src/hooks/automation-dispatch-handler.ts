@@ -7,6 +7,7 @@ import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { buildAutomationModelLaunchPreferences } from '../../../shared/automation-model'
 import { useAppStore } from '@/store'
+import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -42,6 +43,7 @@ export async function handleAutomationDispatchRequest({
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
+    selection: captureWorkspaceSelection(state),
     activeTabId: state.activeTabId,
     activeTabType: state.activeTabType
   }
@@ -198,6 +200,7 @@ export async function handleAutomationDispatchRequest({
       throw new Error('Unable to build an agent launch plan.')
     }
     terminalOwnership = result.terminalOwnership
+    completion.setSessionObserver(result.releaseRuntimeObservers)
     if (automation.reuseSession) {
       // Why: the first fresh launch is the seed for later reuse and must
       // survive completion under the same policy as an already-reused tab.
@@ -230,7 +233,7 @@ export async function handleAutomationDispatchRequest({
       currentState.activeWorktreeId === worktree.id
     ) {
       currentState.setActiveView(focusBeforeDispatch.activeView)
-      currentState.setActiveWorktree(focusBeforeDispatch.activeWorktreeId)
+      restoreWorkspaceSelection(currentState, focusBeforeDispatch.selection)
       if (focusBeforeDispatch.activeTabId) {
         currentState.setActiveTab(focusBeforeDispatch.activeTabId)
       }
