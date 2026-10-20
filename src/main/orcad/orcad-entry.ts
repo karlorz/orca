@@ -21,6 +21,7 @@ import {
   runOrcadQuitHandlers
 } from './orcad-host-adapters'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
+import { warnIfSiblingProfileRuntimeLive } from '../runtime/sibling-profile-runtime-warning'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
@@ -342,6 +343,7 @@ async function startOrcadRuntime(
   // Stops first: no RPC may write while the rest of the runtime is torn down.
   registerCleanup(() => rpc.stop())
   await rpc.start()
+  warnIfSiblingProfileRuntimeLive({ thisUserDataPath: runtimeUserDataPath })
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,

@@ -15,6 +15,11 @@ import {
   type PairingCreateMobileOfferAvailable,
   type PairingCreateMobileOfferResult
 } from '../../shared/mobile-pairing-offer-contract'
+import {
+  RUNTIME_PAIRING_CREATE_OFFER_METHOD,
+  type PairingCreateRuntimeOfferAvailable,
+  type PairingCreateRuntimeOfferResult
+} from '../../shared/runtime-pairing-offer-contract'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
@@ -128,20 +133,20 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   'pairing offer': async ({ client, flags, json }) => {
     rejectRemoteSelectionFlags(
       flags,
-      '`orca pairing offer`. It mints a mobile offer on this desktop, so a routed answer would pair a different machine.',
+      '`orca pairing offer`. It mints an offer on this machine, so a routed answer would pair a different host.',
       {
         nextSteps: [
-          'Drop --environment and --pairing-code, then run `orca pairing offer --scope mobile --json` on the desktop you want the phone to pair with.'
+          'Drop --environment and --pairing-code, then run `orca pairing offer --scope mobile|runtime --json` on the machine you want to pair with.'
         ]
       }
     )
     const scope = flags.get('scope')
-    if (scope !== 'mobile') {
+    if (scope !== 'mobile' && scope !== 'runtime') {
       throw new RuntimeClientError(
         'invalid_argument',
         scope === undefined
-          ? 'pairing offer requires --scope mobile'
-          : `Unknown --scope ${String(scope)}. pairing offer requires --scope mobile.`
+          ? 'pairing offer requires --scope mobile or --scope runtime'
+          : `Unknown --scope ${String(scope)}. pairing offer requires --scope mobile or --scope runtime.`
       )
     }
     const pairingAddress = flags.get('pairing-address')
@@ -155,6 +160,34 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     const params = {
       ...(typeof pairingAddress === 'string' ? { address: pairingAddress.trim() } : {}),
       ...(rotate ? { rotate: true } : {})
+    }
+    if (scope === 'runtime') {
+      let response: RuntimeRpcSuccess<PairingCreateRuntimeOfferResult>
+      try {
+        response = await client.call<PairingCreateRuntimeOfferResult>(
+          RUNTIME_PAIRING_CREATE_OFFER_METHOD,
+          params
+        )
+      } catch (error) {
+        if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+          throw new RuntimeClientError(
+            'incompatible_runtime',
+            'This Orca server does not support CLI runtime pairing offers. Update serve/orcad on this host and try again.',
+            {
+              nextSteps: [
+                'Update Orca on this host, then run `orca pairing offer --scope runtime --json` again.'
+              ]
+            }
+          )
+        }
+        throw error
+      }
+      const offer = response.result
+      if (!offer.available) {
+        throw new RuntimeClientError(offer.reason, offer.guidance)
+      }
+      printResult({ ...response, result: offer }, json, formatRuntimePairingOffer)
+      return
     }
     let response: RuntimeRpcSuccess<PairingCreateMobileOfferResult>
     try {
@@ -237,6 +270,14 @@ function formatMobilePairingOffer(result: PairingCreateMobileOfferAvailable): st
     'Mobile pairing offer — treat this URL as a credential. Do not put it in logs or reports.',
     result.pairingUrl,
     `device ${result.deviceId}  ${result.connectionMode}  ${endpoint}`
+  ].join('\n')
+}
+
+function formatRuntimePairingOffer(result: PairingCreateRuntimeOfferAvailable): string {
+  return [
+    'Runtime pairing offer — treat this URL as a credential. Do not put it in logs or reports.',
+    result.pairingUrl,
+    `device ${result.deviceId}  ${result.endpoint}`
   ].join('\n')
 }
 

@@ -83,12 +83,35 @@ describe('orca pairing offer', () => {
   it('rejects an unknown scope before any RPC', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['pairing', 'offer', '--scope', 'runtime', '--json'], '/tmp/repo')
+    await main(['pairing', 'offer', '--scope', 'phone', '--json'], '/tmp/repo')
 
     const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(printed.ok).toBe(false)
-    expect(printed.error.message).toMatch(/Unknown --scope runtime/)
+    expect(printed.error.message).toMatch(/Unknown --scope phone/)
     expect(callMock).not.toHaveBeenCalled()
+    process.exitCode = 0
+  })
+
+  it('mints a runtime-scope offer through pairing.createOffer', async () => {
+    callMock.mockResolvedValue(availableOffer())
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['pairing', 'offer', '--scope', 'runtime', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('pairing.createOffer', {})
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.pairingUrl).toBe(SENTINEL)
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toContain(SENTINEL)
+    process.exitCode = 0
+  })
+
+  it('passes --rotate on a runtime-scope offer', async () => {
+    callMock.mockResolvedValue(availableOffer())
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['pairing', 'offer', '--scope', 'runtime', '--rotate', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('pairing.createOffer', { rotate: true })
     process.exitCode = 0
   })
 
@@ -208,6 +231,27 @@ describe('orca pairing offer', () => {
     expect(printed.ok).toBe(false)
     expect(printed.error.code).toBe('incompatible_runtime')
     expect(printed.error.message).toMatch(/Update the local desktop/)
+    process.exitCode = 0
+  })
+
+  it('turns an unknown runtime method into serve/orcad update guidance', async () => {
+    const { RuntimeRpcFailureError } = await import('./runtime/types.js')
+    callMock.mockRejectedValue(
+      new RuntimeRpcFailureError({
+        id: 'req',
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: pairing.createOffer' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['pairing', 'offer', '--scope', 'runtime', '--json'], '/tmp/repo')
+
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.ok).toBe(false)
+    expect(printed.error.code).toBe('incompatible_runtime')
+    expect(printed.error.message).toMatch(/Update serve\/orcad/)
     process.exitCode = 0
   })
 

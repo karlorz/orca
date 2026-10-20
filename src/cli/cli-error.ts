@@ -24,6 +24,9 @@ type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown
 const STALE_HANDLE_SERVER_HINT =
   'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
 
+const STALE_HANDLE_WRONG_RUNTIME_HINT =
+  'This handle is unknown on the selected server. Two Orca runtimes on one host each have their own terminals. Run `orca environment list --json`, match runtimeId, and retry with that --environment.'
+
 function contextRecovery(
   code: string | undefined,
   context: CliErrorContext
@@ -39,12 +42,13 @@ function contextRecovery(
     })
   }
   // Why: a paired server's handle sent to this machine reads as a dead terminal, not a missing flag.
-  if (
-    code === 'terminal_handle_stale' &&
-    context.commandPath?.[0] === 'terminal' &&
-    context.remoteServerSelected === false
-  ) {
-    return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
+  if (code === 'terminal_handle_stale' && context.commandPath?.[0] === 'terminal') {
+    if (context.remoteServerSelected === false) {
+      return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
+    }
+    if (context.remoteServerSelected === true) {
+      return { nextSteps: [STALE_HANDLE_WRONG_RUNTIME_HINT] }
+    }
   }
   return undefined
 }

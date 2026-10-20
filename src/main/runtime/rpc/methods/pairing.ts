@@ -14,6 +14,11 @@ import {
   MOBILE_PAIRING_OFFER_UNAVAILABLE_CODE,
   PairingCreateMobileOfferParamsSchema
 } from '../../../../shared/mobile-pairing-offer-contract'
+import {
+  PairingCreateRuntimeOfferParamsSchema,
+  RUNTIME_PAIRING_CREATE_OFFER_METHOD,
+  RUNTIME_PAIRING_OFFER_UNAVAILABLE_CODE
+} from '../../../../shared/runtime-pairing-offer-contract'
 
 export const PAIRING_METHODS = [
   defineMethod({
@@ -21,7 +26,7 @@ export const PAIRING_METHODS = [
     permission: 'pairing-admin',
     params: PairingGetEndpointsParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.getEndpoints) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.getEndpoints(params)
@@ -35,7 +40,7 @@ export const PAIRING_METHODS = [
       if (!ctx.mobilePairingOffers) {
         throw Object.assign(
           new Error(
-            'Mobile pairing offers are available only on the local desktop runtime. Use the desktop app, not `orca serve` or a remote host.'
+            'Mobile pairing offers are available only on the local desktop runtime. Use the desktop app for a phone QR, or run `orca pairing offer --scope runtime` on this host.'
           ),
           { code: MOBILE_PAIRING_OFFER_UNAVAILABLE_CODE }
         )
@@ -44,11 +49,27 @@ export const PAIRING_METHODS = [
     }
   }),
   defineMethod({
+    name: RUNTIME_PAIRING_CREATE_OFFER_METHOD,
+    permission: 'pairing-admin',
+    params: PairingCreateRuntimeOfferParamsSchema,
+    handler: (params, ctx) => {
+      if (!ctx.pairing?.createOffer) {
+        throw Object.assign(
+          new Error(
+            'Runtime pairing offers are minted on the host that is serving. Run `orca pairing offer --scope runtime` on that machine after updating it.'
+          ),
+          { code: RUNTIME_PAIRING_OFFER_UNAVAILABLE_CODE }
+        )
+      }
+      return ctx.pairing.createOffer(params)
+    }
+  }),
+  defineMethod({
     name: 'pairing.provisionRelay',
     permission: 'pairing-admin',
     params: PairingProvisionRelayParamsSchema,
     handler: async (params, ctx) => {
-      if (!ctx.pairing) {
+      if (!ctx.pairing?.provisionRelay) {
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairing.provisionRelay(params)

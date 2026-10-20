@@ -269,12 +269,14 @@ describe('stale terminal handle recovery', () => {
     log.mockRestore()
   })
 
-  it('stays silent once a server was already selected', () => {
-    expect(
-      formatCliError(staleHandle(), {
-        commandPath: ['terminal', 'send'],
-        remoteServerSelected: true
-      })
-    ).toBe('terminal_handle_stale')
+  it('points a selected-server stale handle at environment list', () => {
+    const output = formatCliError(staleHandle(), {
+      commandPath: ['terminal', 'send'],
+      remoteServerSelected: true
+    })
+
+    expect(output).toContain('terminal_handle_stale')
+    expect(output).toContain('orca environment list --json')
+    expect(output).toContain('runtimeId')
   })
 })

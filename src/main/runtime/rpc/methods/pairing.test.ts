@@ -122,4 +122,53 @@ describe('pairing RPC methods', () => {
       }
     })
   })
+
+  it('names the runtime-scope CLI path when the desktop mobile hook is missing', async () => {
+    await expect(dispatchPairing('pairing.createMobileOffer', {})).resolves.toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringMatching(/pairing offer --scope runtime/)
+      }
+    })
+  })
+
+  it('forwards owner runtime-offer params to createOffer', async () => {
+    const createOffer = vi.fn().mockReturnValue({
+      available: true,
+      pairingUrl: 'orca://pair#test-sentinel-runtime-offer',
+      endpoint: 'ws://192.168.1.24:6768',
+      deviceId: 'device-1',
+      webClientUrl: null
+    })
+
+    await expect(
+      dispatchPairing(
+        'pairing.createOffer',
+        { address: '192.168.1.24', rotate: true },
+        { pairing: { createOffer } }
+      )
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { available: true, deviceId: 'device-1', endpoint: 'ws://192.168.1.24:6768' }
+    })
+    expect(createOffer).toHaveBeenCalledWith({ address: '192.168.1.24', rotate: true })
+  })
+
+  it('rejects unknown keys on pairing.createOffer', async () => {
+    const createOffer = vi.fn()
+    await expect(
+      dispatchPairing('pairing.createOffer', { deviceId: 'attacker' }, { pairing: { createOffer } })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(createOffer).not.toHaveBeenCalled()
+  })
+
+  it('returns a stable error when createOffer is missing', async () => {
+    await expect(dispatchPairing('pairing.createOffer', {})).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_pairing_offer_unavailable',
+        message: expect.stringMatching(/pairing offer --scope runtime/)
+      }
+    })
+  })
 })

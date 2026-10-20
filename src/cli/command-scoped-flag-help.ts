@@ -61,11 +61,11 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     read: '--read                 Mark the workspace read, clearing the unread dot'
   },
   'pairing offer': {
-    scope: '--scope mobile           Required. Only mobile pairing offers are supported',
+    scope:
+      '--scope mobile|runtime   Required. mobile = phone QR on this desktop; runtime = headless remint',
     'pairing-address':
-      '--pairing-address <addr> This desktop’s advertised hostname, IP, or ws(s):// endpoint',
-    rotate:
-      '--rotate                Mint a new pending mobile offer instead of reusing the current one'
+      '--pairing-address <addr> This host’s advertised hostname, IP, or ws(s):// endpoint',
+    rotate: '--rotate                Mint a new pending offer instead of reusing the current one'
   },
   search: {
     query: '--query <text>         Search text; also accepted as the positional argument',

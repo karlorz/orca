@@ -1,4 +1,4 @@
-import type { MobilePairingOfferRpcContext } from '../rpc/core'
+import type { MobilePairingOfferRpcContext, PairingRpcContext } from '../rpc/core'
 import type { RuntimeDeviceGrant } from '../rpc/rpc-caller-scope'
 import type { DeviceRegistry, DeviceScope, TokenDeviceEntry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
@@ -30,6 +30,18 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  protected override ownerRuntimePairingContext(): PairingRpcContext {
+    return {
+      createOffer: (params) => {
+        const offer = this.createPairingOffer({ ...params, scope: 'runtime' })
+        if (!offer.available) {
+          return { available: false, reason: offer.reason, guidance: offer.guidance }
+        }
+        return offer
+      }
+    }
+  }
+
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
   }

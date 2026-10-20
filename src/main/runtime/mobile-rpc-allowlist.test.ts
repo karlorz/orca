@@ -143,6 +143,10 @@ describe('mobile RPC allowlist', () => {
     }
   })
 
+  it('does not let mobile credentials mint runtime pairing offers', () => {
+    expect(mobileRpcAllowlist().has('pairing.createOffer')).toBe(false)
+  })
+
   it('allows every RPC method used by the mobile app', () => {
     // Why: mobile-scoped runtime tokens are checked before dispatch. A mobile
     // feature can compile and still fail at runtime if its method is missing here.

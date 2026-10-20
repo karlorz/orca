@@ -36,6 +36,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
 
     try {
+      const ownerPairing = this.ownerRuntimePairingContext()
       return await this.dispatcher.dispatch(request, {
         signal:
           longPoll ||
@@ -44,6 +45,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
             ? context?.signal
             : undefined,
         callerScope,
+        ...(ownerPairing ? { pairing: ownerPairing } : {}),
         ...(this.mobilePairingOffers ? { mobilePairingOffers: this.mobilePairingOffers } : {})
       })
     } finally {

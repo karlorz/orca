@@ -31,6 +31,10 @@ import type {
   PairingCreateMobileOfferParams,
   PairingCreateMobileOfferResult
 } from '../../../shared/mobile-pairing-offer-contract'
+import type {
+  PairingCreateRuntimeOfferParams,
+  PairingCreateRuntimeOfferResult
+} from '../../../shared/runtime-pairing-offer-contract'
 
 // Why: bound to the authenticated socket by the transport, so a caller can only re-key itself.
 export type DeviceSelfRpcContext = {
@@ -38,8 +42,9 @@ export type DeviceSelfRpcContext = {
 }
 
 export type PairingRpcContext = {
-  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
-  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getEndpoints?(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay?(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  createOffer?(params: PairingCreateRuntimeOfferParams): PairingCreateRuntimeOfferResult
 }
 
 export type MobilePairingOfferRpcContext = {

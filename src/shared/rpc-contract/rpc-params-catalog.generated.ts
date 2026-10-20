@@ -638,6 +638,7 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import { PairingCreateRuntimeOfferParamsSchema } from '../runtime-pairing-offer-contract'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
@@ -1198,6 +1199,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
   'pairing.createMobileOffer': PairingCreateMobileOfferParamsSchema,
+  'pairing.createOffer': PairingCreateRuntimeOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,

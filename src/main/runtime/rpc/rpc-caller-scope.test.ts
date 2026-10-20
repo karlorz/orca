@@ -48,6 +48,7 @@ describe('every RPC method declares a known permission', () => {
     expect(permissionOf('skills.share')).toBe('skills-admin')
     expect(permissionOf('pairing.provisionRelay')).toBe('pairing-admin')
     expect(permissionOf('pairing.createMobileOffer')).toBe('pairing-admin')
+    expect(permissionOf('pairing.createOffer')).toBe('pairing-admin')
     expect(permissionOf('ssh.connect')).toBe('host-admin')
     expect(permissionOf('network.browserTunnel')).toBe('host-admin')
   })
@@ -80,6 +81,7 @@ describe('paired runtime clients', () => {
     'pairing.provisionRelay',
     'pairing.getEndpoints',
     'pairing.createMobileOffer',
+    'pairing.createOffer',
     'notifications.registerPush'
   ])('are refused pairing and push administration: %s', async (method) => {
     const response = await dispatchAs(PAIRED, method, {})
@@ -102,6 +104,11 @@ describe('the owner', () => {
     const response = await dispatchAs(undefined, 'pairing.createMobileOffer', {})
     expect(errorCode(response)).toBe('mobile_pairing_offer_unavailable')
   })
+
+  it('reaches pairing.createOffer as owner', async () => {
+    const response = await dispatchAs(undefined, 'pairing.createOffer', {})
+    expect(errorCode(response)).toBe('runtime_pairing_offer_unavailable')
+  })
 })
 
 describe('mobile callers', () => {
@@ -109,6 +116,14 @@ describe('mobile callers', () => {
     'cannot mint owner mobile offers: %j',
     async (scope) => {
       const response = await dispatchAs(scope, 'pairing.createMobileOffer', {})
+      expect(errorCode(response)).toBe('forbidden')
+    }
+  )
+
+  it.each([{ kind: 'mobile' as const }, { kind: 'mobile' as const, delegated: true }])(
+    'cannot mint runtime pairing offers: %j',
+    async (scope) => {
+      const response = await dispatchAs(scope, 'pairing.createOffer', {})
       expect(errorCode(response)).toBe('forbidden')
     }
   )

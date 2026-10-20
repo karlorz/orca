@@ -20,6 +20,17 @@ features:
       - src/cli/specs/environment.ts
       - src/cli/handlers/environment.ts
       - skill-guides/orca-cli.md
+  - id: pairing-offer-runtime-scope
+    title: CLI orca pairing offer --scope runtime remints a headless pairing URL
+    kind: product
+    status: landed
+    paths:
+      - src/shared/runtime-pairing-offer-contract.ts
+      - src/main/runtime/rpc/methods/pairing.ts
+      - src/cli/handlers/environment.ts
+      - src/cli/cli-error.ts
+      - src/main/runtime/sibling-profile-runtime-warning.ts
+      - skill-guides/orca-cli.md
   - id: serve-cli-flag-aliases
     title: Map legacy serve CLI flags into the shipped handler with modern flags winning
     kind: product

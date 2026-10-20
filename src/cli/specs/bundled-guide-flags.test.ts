@@ -59,6 +59,7 @@ describe('bundled skill guides', () => {
     const guide = BUNDLED_SKILL_GUIDES.find((entry) => entry.name === 'orca-cli')
     expect(guide?.markdown).toContain('Share this host')
     expect(guide?.markdown).toContain('orca pairing offer --scope mobile')
+    expect(guide?.markdown).toContain('orca pairing offer --scope runtime')
     expect(guide?.fullMarkdown).toContain('orca serve --mobile-pairing')
     expect(guide?.fullMarkdown).toContain('combined local-and-remote view')
   })

@@ -5,6 +5,7 @@ import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
 import { buildServePairingReadiness, servePublishMode } from '../server/serve-pairing-readiness'
 import { mainProcessState as state } from './main-process-state'
 import { getServeOptions, type ServeOptions } from './serve-options'
+import { warnIfSiblingProfileRuntimeLive } from '../runtime/sibling-profile-runtime-warning'
 
 export { getServeOptions, type ServeOptions }
 
@@ -30,6 +31,7 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
     output
   )
   notifyServeSupervisorReady(runtime.getRuntimeId())
+  warnIfSiblingProfileRuntimeLive({ thisUserDataPath: app.getPath('userData') })
   // Why: a serve that got this far proves this environment can launch it after all.
   clearServeAbortPark(app.getPath('userData'))
 }
