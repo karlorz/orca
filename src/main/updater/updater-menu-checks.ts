@@ -112,7 +112,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
         if (launchResult === false) {
           return
         }
-        this.handleSettledUpdateCheckPromise(attemptId)
+        this.handleSettledUpdateCheckPromise(attemptId, launchResult)
       })
       .catch((err) => {
         if (!this.isActiveUpdateCheckAttempt(attemptId)) {

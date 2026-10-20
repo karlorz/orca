@@ -276,7 +276,7 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     this.markUpdateCheckLaunched(attemptId)
     void autoUpdater
       .checkForUpdates()
-      .then(() => this.handleSettledUpdateCheckPromise(attemptId))
+      .then((result) => this.handleSettledUpdateCheckPromise(attemptId, result))
       .catch((err) => {
         if (!this.isActiveUpdateCheckAttempt(attemptId)) {
           return

@@ -1,14 +1,21 @@
 import path from 'node:path'
+import {
+  appImageNamespaceKey,
+  readAppImageSourceOfNamespace,
+  resolveAppImageGenerationOfExecutable
+} from '../shared/appimage-cache-identity'
 
-/** Only the managed home image uses the shared pin-preserving updater. */
-export function isEnsureManagedHomeAppImage(input: {
+type HomeAppImageInput = {
   platform: string
   architecture?: string
   packageType: string
   managed: string | undefined
   appImagePath: string | undefined
   homeDirectory: string
-}): boolean {
+}
+
+/** Only the managed home image uses the shared pin-preserving updater. */
+export function isEnsureManagedHomeAppImage(input: HomeAppImageInput): boolean {
   if (
     input.platform !== 'linux' ||
     (input.architecture !== undefined && input.architecture !== 'x64') ||
@@ -28,4 +35,43 @@ export function isEnsureManagedHomeAppImage(input: {
     !relative.startsWith(`..${path.sep}`) &&
     !path.isAbsolute(relative)
   )
+}
+
+/** Cached desktop launches can lose the launcher's opt-in and AppImage environment. */
+export function resolveEnsureManagedHomeAppImage(
+  input: HomeAppImageInput & { execPath: string }
+): string | null {
+  if (isEnsureManagedHomeAppImage(input)) {
+    return input.appImagePath ?? null
+  }
+  if (
+    input.platform !== 'linux' ||
+    (input.architecture !== undefined && input.architecture !== 'x64') ||
+    input.packageType !== 'non-root' ||
+    (input.managed !== undefined && input.managed !== '1')
+  ) {
+    return null
+  }
+  const generation = resolveAppImageGenerationOfExecutable(input.execPath)
+  if (!generation) {
+    return null
+  }
+  const source = readAppImageSourceOfNamespace(generation.cacheRootPath, generation.namespaceKey)
+  const defaultImage = path.join(
+    input.homeDirectory,
+    '.local',
+    'opt',
+    'orca',
+    'orca-linux.AppImage'
+  )
+  // Only the canonical home install may recover a missing opt-in from its cache namespace.
+  const image =
+    source ?? (generation.namespaceKey === appImageNamespaceKey(defaultImage) ? defaultImage : null)
+  if (!image || (input.managed !== '1' && image !== defaultImage)) {
+    return null
+  }
+  if (input.appImagePath && input.appImagePath !== image) {
+    return null
+  }
+  return isEnsureManagedHomeAppImage({ ...input, managed: '1', appImagePath: image }) ? image : null
 }

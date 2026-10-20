@@ -54,15 +54,12 @@ async function liveHomeDaemonProtocols(): Promise<readonly number[] | null> {
 }
 
 export function createHomeAppImageUpdater(
+  image: string,
   callbacks: Pick<
     HomeAppImageUpdaterOptions,
     'sendStatus' | 'prepareRestart' | 'restart' | 'restartAborted' | 'recordCheck'
   >
 ): HomeAppImageUpdater {
-  const image = process.env.APPIMAGE
-  if (!image) {
-    throw new Error('Managed home AppImage has no runtime image path')
-  }
   const root = path.dirname(image)
   const runningTag = `v${app.getVersion()}`
   return new HomeAppImageUpdater({
@@ -79,10 +76,11 @@ export function createHomeAppImageUpdater(
   })
 }
 
-export function relaunchHomeAppImage(): void {
-  const image = process.env.APPIMAGE
-  if (!image) {
-    throw new Error('Managed home AppImage has no restart executable')
+export function relaunchHomeAppImage(image: string): void {
+  // A cached launch has no FUSE runtime environment to carry into the replacement image.
+  if (!process.env.APPIMAGE) {
+    process.env.APPIMAGE_EXTRACT_AND_RUN = '1'
+    process.env.ORCA_HOME_INSTALL_MANAGED = '1'
   }
   app.relaunch({ execPath: image, args: process.argv.slice(1) })
   app.quit()

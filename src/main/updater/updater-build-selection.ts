@@ -71,8 +71,8 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       updater.setFeedURL({ provider: 'generic', url: feed.url })
       const attemptId = this.beginUpdateCheckAttempt()
       this.markUpdateCheckLaunched(attemptId)
-      await updater.checkForUpdates()
-      this.handleSettledUpdateCheckPromise(attemptId)
+      const result = await updater.checkForUpdates()
+      this.handleSettledUpdateCheckPromise(attemptId, result)
     } catch (error) {
       this.userInitiatedCheck = false
       this.sendLocalBuildErrorAndRestore(String((error as Error)?.message ?? error), true)
@@ -158,8 +158,8 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       this.availableReleaseUrl = target.feedUrl
       const attemptId = this.beginUpdateCheckAttempt()
       this.markUpdateCheckLaunched(attemptId)
-      await updater.checkForUpdates()
-      this.handleSettledUpdateCheckPromise(attemptId)
+      const result = await updater.checkForUpdates()
+      this.handleSettledUpdateCheckPromise(attemptId, result)
     } catch (error) {
       this.userInitiatedCheck = false
       this.clearAvailableUpdateContext()

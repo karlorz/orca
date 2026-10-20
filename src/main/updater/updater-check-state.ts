@@ -243,8 +243,28 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     this.sendSettledCheckStatus({ state: 'not-available', userInitiated })
   }
 
-  protected handleSettledUpdateCheckPromise(attemptId: number): void {
+  protected handleSettledUpdateCheckPromise(attemptId: number, result: unknown): void {
     if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      return
+    }
+    // electron-updater returns null when disabled, without checking a release or emitting events.
+    if (result === null) {
+      const userInitiated = this.getSettledCheckUserInitiated()
+      this.clearBackgroundCheckLaunchPending()
+      this.backgroundCheckPromotedToUserInitiated = false
+      this.userInitiatedCheck = false
+      this.clearAvailableUpdateContext()
+      this.deferPendingUpdateNudgeUntilRetry()
+      this.sendSettledCheckStatus({
+        state: 'error',
+        message:
+          'The updater is inactive for this launch. Reopen Orca from the installed application and try again.',
+        userInitiated
+      })
+      this.restoreReleaseUpdateSource()
+      if (!userInitiated) {
+        this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+      }
       return
     }
     this.clearUpdateCheckSilentSettleTimer()

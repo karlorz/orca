@@ -97,7 +97,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     }
     const run = this.pinDefaultReleaseFeed().then(launch)
     void Promise.resolve(run)
-      .then(() => this.handleSettledUpdateCheckPromise(attemptId))
+      .then((result) => this.handleSettledUpdateCheckPromise(attemptId, result))
       .catch((err) => {
         if (!this.isActiveUpdateCheckAttempt(attemptId)) {
           return
