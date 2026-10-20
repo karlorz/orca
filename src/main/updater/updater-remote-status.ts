@@ -25,7 +25,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         reason: 'unpackaged-build'
       }
     }
-    if (!this.autoUpdaterInitialized) {
+    if (!this.autoUpdaterInitialized && !this.homeAppImageUpdater) {
       return {
         installMode: this.updateInstallMode,
         automatic: false,
@@ -35,6 +35,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     const linuxPackageType = getLinuxPackageType()
     if (
       this.updateInstallMode === 'unsupported-headless-serve' ||
+      (this.homeInstallManaged && this.updateInstallMode !== 'interactive') ||
       linuxPackageType === 'deb' ||
       linuxPackageType === 'rpm' ||
       linuxPackageType === 'unusable'

@@ -1,5 +1,6 @@
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { resolveAppImageGenerationOfExecutable } from '../../shared/appimage-cache-identity'
 import { is } from '@electron-toolkit/utils'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from '../updater-release-build-cache'
@@ -14,7 +15,7 @@ import type {
   RemoteServerUpdateSupport
 } from '../../shared/remote-server-update'
 import { getLinuxPackageType } from '../linux-update-package-type'
-import { isEnsureManagedHomeAppImage } from '../linux-home-update-policy'
+import { resolveEnsureManagedHomeAppImage } from '../linux-home-update-policy'
 import { createUpdaterDiagnosticLogger } from '../linux-package-install-diagnostic'
 import { registerAutoUpdaterHandlers } from '../updater-events'
 import { KARLORZ_FORK_RELEASE_FEED, selectReleaseFeed } from '../updater-prerelease-feed'
@@ -145,23 +146,28 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       return
     }
 
-    this.homeInstallManaged =
-      process.env.ORCA_HOME_INSTALL_MANAGED === '1' &&
-      isEnsureManagedHomeAppImage({
-        platform: process.platform,
-        architecture: process.arch,
-        packageType: getLinuxPackageType(),
-        managed: process.env.ORCA_HOME_INSTALL_MANAGED,
-        appImagePath: process.env.APPIMAGE,
-        homeDirectory: app.getPath('home')
-      })
-    if (this.homeInstallManaged) {
+    const homeImage =
+      process.platform === 'linux' &&
+      (process.env.ORCA_HOME_INSTALL_MANAGED === '1' ||
+        resolveAppImageGenerationOfExecutable(process.execPath))
+        ? resolveEnsureManagedHomeAppImage({
+            platform: process.platform,
+            architecture: process.arch,
+            packageType: getLinuxPackageType(),
+            managed: process.env.ORCA_HOME_INSTALL_MANAGED,
+            appImagePath: process.env.APPIMAGE,
+            homeDirectory: app.getPath('home'),
+            execPath: process.execPath
+          })
+        : null
+    this.homeInstallManaged = homeImage !== null
+    if (homeImage) {
       if (this.homeAppImageUpdater) {
         return
       }
       void import('../home-appimage-runtime')
         .then(({ createHomeAppImageUpdater, relaunchHomeAppImage }) => {
-          this.homeAppImageUpdater = createHomeAppImageUpdater({
+          this.homeAppImageUpdater = createHomeAppImageUpdater(homeImage, {
             sendStatus: (status) => this.sendStatus(status),
             recordCheck: () => this.recordCompletedUpdateCheck(),
             restartAborted: () => {
@@ -172,7 +178,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
               this.quittingForUpdate = true
               await this.runBeforeUpdateQuitCleanup()
             },
-            restart: async () => relaunchHomeAppImage()
+            restart: async () => relaunchHomeAppImage(homeImage)
           })
           void this.homeAppImageUpdater.check()
           this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)

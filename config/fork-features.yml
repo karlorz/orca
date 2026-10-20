@@ -9,6 +9,16 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: linux-home-appimage-cached-launch-updater
+    title: Recover the managed updater from cached launches and report inactive checks accurately
+    kind: product
+    status: landed
+    paths:
+      - src/main/linux-home-update-policy.ts
+      - src/main/home-appimage-runtime.ts
+      - src/main/updater/updater-setup.ts
+      - src/main/updater/updater-check-state.ts
+      - src/main/updater/updater-remote-status.ts
   - id: pairing-offer-cli
     title: CLI orca pairing offer --scope mobile for desktop Share-this-host mobile QR
     kind: product

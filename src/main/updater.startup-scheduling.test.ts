@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { appImageNamespaceKey } from '../shared/appimage-cache-identity'
 
 const {
   appMock,
@@ -90,6 +91,10 @@ describe('updater', () => {
 
     updater.setupAutoUpdater(mainWindow as never)
     await vi.waitFor(() => expect(homeUpdaterMock.check).toHaveBeenCalled())
+    expect(updater.getRemoteServerUpdateSupport()).toMatchObject({
+      automatic: true,
+      reason: 'available'
+    })
     updater.checkForUpdates()
     updater.checkForUpdatesFromMenu()
     expect(homeUpdaterMock.check).toHaveBeenCalledWith(true)
@@ -107,6 +112,50 @@ describe('updater', () => {
     expect(fetchNudgeMock).not.toHaveBeenCalled()
     expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', retryable: false })
     expect(updater.getUpdateStatus()).not.toHaveProperty('recovery')
+
+    for (const installMode of [
+      'supervised-headless-serve',
+      'unsupported-headless-serve'
+    ] as const) {
+      updater.setupAutoUpdater(null, { installMode })
+      expect(updater.getRemoteServerUpdateSupport()).toMatchObject({
+        automatic: false,
+        reason: 'manual-service-update-required'
+      })
+    }
+  })
+
+  it('recovers the home updater after a cached desktop launch loses launcher environment', async () => {
+    managedHome = mkdtempSync(path.join(tmpdir(), 'orca-updater-home-'))
+    const image = path.join(managedHome, '.local', 'opt', 'orca', 'orca-linux.AppImage')
+    const namespace = path.join(
+      managedHome,
+      '.cache',
+      'orca',
+      'appimage',
+      appImageNamespaceKey(image)
+    )
+    mkdirSync(namespace, { recursive: true })
+    writeFileSync(path.join(namespace, 'source-appimage'), image)
+    vi.stubGlobal('process', {
+      ...process,
+      platform: 'linux',
+      arch: 'x64',
+      execPath: path.join(namespace, 'a'.repeat(24), 'orca-ide')
+    })
+    Object.defineProperty(appMock, 'getPath', {
+      configurable: true,
+      value: vi.fn(() => managedHome)
+    })
+    appMock.getVersion.mockReturnValue('1.4.229-10')
+    const updater = await loadUpdaterModule()
+    updater.setupAutoUpdater(null)
+
+    await vi.waitFor(() => expect(homeUpdaterMock.check).toHaveBeenCalled())
+    updater.checkForUpdatesFromMenu()
+    expect(homeUpdaterMock.check).toHaveBeenCalledWith(true)
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.on).not.toHaveBeenCalled()
   })
 
   it('runs a startup check immediately when the last background check is stale', async () => {
