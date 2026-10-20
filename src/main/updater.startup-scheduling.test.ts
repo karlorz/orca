@@ -53,7 +53,6 @@ describe('updater', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
-    Reflect.deleteProperty(appMock, 'getPath')
     if (managedHome) {
       rmSync(managedHome, { recursive: true, force: true })
       managedHome = undefined
@@ -82,10 +81,7 @@ describe('updater', () => {
     vi.stubEnv('USERPROFILE', managedHome)
     vi.stubEnv('APPIMAGE', path.join(managedHome, '.local', 'opt', 'orca', 'orca-linux.AppImage'))
     vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64' })
-    Object.defineProperty(appMock, 'getPath', {
-      configurable: true,
-      value: vi.fn(() => managedHome)
-    })
+    appMock.getPath.mockReturnValue(managedHome)
     const mainWindow = { webContents: { send: vi.fn() } }
     const updater = await loadUpdaterModule()
 
@@ -143,10 +139,7 @@ describe('updater', () => {
       arch: 'x64',
       execPath: path.join(namespace, 'a'.repeat(24), 'orca-ide')
     })
-    Object.defineProperty(appMock, 'getPath', {
-      configurable: true,
-      value: vi.fn(() => managedHome)
-    })
+    appMock.getPath.mockReturnValue(managedHome)
     appMock.getVersion.mockReturnValue('1.4.229-10')
     const updater = await loadUpdaterModule()
     updater.setupAutoUpdater(null)

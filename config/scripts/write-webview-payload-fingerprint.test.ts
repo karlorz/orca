@@ -6,6 +6,9 @@ it.skipIf(!process.env.WEBVIEW_FINGERPRINT_OUT)(
   'writes the composed WebView payload fingerprint for fork-sync',
   async () => {
     const out = process.env.WEBVIEW_FINGERPRINT_OUT
+    if (!out) {
+      throw new Error('WEBVIEW_FINGERPRINT_OUT is required')
+    }
     const { XTERM_HTML } = await import('../../mobile/src/terminal/terminal-webview-html')
     writeFileSync(
       out,

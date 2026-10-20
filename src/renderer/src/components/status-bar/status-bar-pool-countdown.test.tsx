@@ -13,7 +13,7 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/lib/agent-catalog-icon', () => ({ AgentIcon: () => null }))
 
 const START = Date.UTC(2026, 9, 8, 12)
 const MINUTE = 60_000

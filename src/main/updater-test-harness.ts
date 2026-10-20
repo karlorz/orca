@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import {
@@ -32,6 +34,7 @@ type AutoUpdaterMock = {
 type AppMock = {
   isPackaged: boolean
   getVersion: Mock<() => string>
+  getPath: Mock<(name: 'home') => string>
   on: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
   prependListener: Mock<(event: string, handler: (...args: unknown[]) => void) => AppMock>
   emit: (event: string, ...args: unknown[]) => void
@@ -196,6 +199,7 @@ export function createUpdaterMocks(): UpdaterMocks {
   const appMock: AppMock = {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
+    getPath: vi.fn(() => join(tmpdir(), 'orca-updater-test-home')),
     on: appOn,
     prependListener: appPrependListener,
     emit: appEmit,
@@ -272,6 +276,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     browserWindowMock.getAllWindows.mockReturnValue([])
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
+    appMock.getPath.mockReset().mockReturnValue(join(tmpdir(), 'orca-updater-test-home'))
     appMock.quit.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
