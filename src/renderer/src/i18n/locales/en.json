@@ -3690,6 +3690,8 @@
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
+            "pairingRefusedTitle": "This host no longer accepts this computer",
+            "pairingRefusedBody": "Orca couldn't pair with it again over SSH. Nothing on the host was stopped. Reconnect to try again.",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
@@ -4163,7 +4165,11 @@
             "97957ad3a3": "Connect your AI provider accounts to see their usage in real time and easily switch between accounts.",
             "9a542f46c7": "Hide from status bar",
             "84c3b15dca": "Agent usage limits",
-            "d663430cf9": "Configure usage tracking"
+            "d663430cf9": "Configure usage tracking",
+            "remoteLabel": "No usage on {{host}}",
+            "remoteTitle": "Usage on {{host}}",
+            "remoteBody": "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
+            "remoteOpenAccounts": "Open {{host}} accounts"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Updating skills",
@@ -4341,6 +4347,10 @@
             "f8b8dbed85": "Usage unavailable",
             "remoteOwnerUnreachable": "Usage unavailable — cannot reach {{server}}",
             "remoteOwnerNoUsage": "Usage unavailable — {{server}} does not report usage. Update Orca on that host.",
+            "remoteOwnerNotConfigured": "Not configured on {{server}}",
+            "claudeNoUsageFromHost": "No usage from {{server}}",
+            "claudeUnknownOnHost": "Claude usage isn't available from {{server}}. It may not be signed in there, or it may use API-key billing.",
+            "remoteOwnerSignInSavedHere": "Its sign-in is saved on this computer only.",
             "3d3c9c0c1f": "Claude usage will refresh after the live Claude terminal rotates its credentials.",
             "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
             "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
@@ -4474,6 +4484,8 @@
             "access_revoked": "Access revoked",
             "access_revoked_summary": "This server revoked access for this computer",
             "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "managed_access_revoked_explanation": "Orca couldn't pair with it again over SSH. Connect to try again.",
+            "connect_access_revoked_explanation": "Connect to try again.",
             "update_required": "Update required",
             "update_required_summary": "Orca versions are not compatible",
             "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
@@ -8653,6 +8665,7 @@
           "e57dde9d93": "Unsaved changes"
         },
         "RuntimeAccessGrantList": {
+          "sshAccessCaveat": "Revoking here doesn't stop someone with SSH access to this computer from pairing again. To cut them off, remove their SSH access.",
           "8b82879581": "Anyone with an active grant can connect until you revoke it. Revoking shared access disconnects active clients immediately.",
           "68ec21309f": "Revoke access",
           "6f6d5188ed": "Revoke {{value0}}",
@@ -8763,6 +8776,8 @@
           "cloudVmWorkflow": "Cloud VM",
           "cloudVmWorkflowHelp": "Manage recipe-created cloud machines",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "managedAccessRevoked": "{{value0}} no longer accepts this computer, and Orca couldn't pair with it again over SSH. Connect to try again.",
+          "connectAccessRevoked": "{{value0}} no longer accepts this computer. Connect to try again.",
           "repair": "Re-pair…",
           "serverAccessRevoked": "Access revoked",
           "orcaVersionLastSeen": "Orca v{{value0}} (last seen)"
@@ -18482,6 +18497,8 @@
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "couldNotStart": "{{agent}} couldn't start.",
         "couldNotRestart": "{{agent}} couldn't restart.",
+        "startTimedOut": "{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).",
+        "startTimedOutKeepsHappening": "If this keeps happening, the computer running this chat may be overloaded.",
         "codexCliTooOld": "Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
         "notSignedIn": "{{agent}} is not signed in.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
@@ -20590,9 +20607,9 @@
     }
   },
   "workspaceSpace": {
-    "deleteOne": "Delete {{value0}}",
     "table": {
-      "lastActive": "Last active"
+      "lastActive": "Last active",
+      "actions": "Actions"
     },
     "breakdown": {
       "viewAll": "Show more folder details"
@@ -20627,6 +20644,26 @@
     "window": {
       "errorTitle": "Space hit an error.",
       "errorDescription": "Close and reopen Space to try again."
-    }
+    },
+    "changes": {
+      "count": "Changed files ({{count}})",
+      "description": "Uncommitted files · Click a file to view its changes in Orca.",
+      "search": "Filter changed files",
+      "conflict": "Conflict",
+      "staged": "Staged",
+      "untracked": "Untracked",
+      "unstaged": "Unstaged",
+      "empty": "No matching files.",
+      "unavailable": "The workspace owner is no longer available.",
+      "stale": "This file is no longer in the uncommitted changes. Refresh Space to update the list.",
+      "openFailed": "Could not open changes"
+    },
+    "delete": {
+      "pending": "Deletion is in progress.",
+      "main": "The main worktree is protected.",
+      "unmanaged": "This workspace is no longer managed by Orca.",
+      "unavailable": "This workspace is protected or unavailable."
+    },
+    "rowActions": "Actions for {{name}}"
   }
 }

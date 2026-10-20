@@ -3416,6 +3416,8 @@
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "正在重新连接到远程运行时",
+            "pairingRefusedTitle": "此主机不再接受这台电脑",
+            "pairingRefusedBody": "Orca 无法通过 SSH 重新与其配对。主机上没有任何内容被停止。请重新连接以重试。",
             "disconnectedTitle": "远程运行时已断开连接",
             "retryingBody": "Orca 正在自动重试。如果连接恢复，此终端将恢复。",
             "disconnectedBody": "自动重试已停止。重新连接以恢复此终端会话。",
@@ -3906,7 +3908,11 @@
             "97957ad3a3": "连接 AI 提供商账户，即可实时查看使用量并在账户间快速切换。",
             "9a542f46c7": "从状态栏隐藏",
             "84c3b15dca": "智能体用量限制",
-            "d663430cf9": "设置用量跟踪"
+            "d663430cf9": "设置用量跟踪",
+            "remoteLabel": "{{host}} 上没有用量",
+            "remoteTitle": "{{host}} 上的用量",
+            "remoteBody": "此工作区运行在 {{host}} 上，因此状态栏显示的是该主机的用量。请在该主机上登录智能体，或切换到本地工作区以查看这台电脑的用量。",
+            "remoteOpenAccounts": "打开 {{host}} 的账户"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "更新失败。单击以展开。",
@@ -4093,7 +4099,11 @@
                 "label": "登录已过期",
                 "message": "Claude 用量已过期。请在此账户中启动 Claude 以刷新。"
               }
-            }
+            },
+            "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
+            "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上。",
+            "claudeNoUsageFromHost": "{{server}} 无用量数据",
+            "claudeUnknownOnHost": "无法从 {{server}} 获取 Claude 用量。可能未在那里登录，或使用的是 API 密钥计费。"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -4197,6 +4207,8 @@
             "access_revoked": "Access revoked",
             "access_revoked_summary": "This server revoked access for this computer",
             "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "managed_access_revoked_explanation": "Orca 无法通过 SSH 重新与其配对。请连接以重试。",
+            "connect_access_revoked_explanation": "请连接以重试。",
             "update_required": "Update required",
             "update_required_summary": "Orca versions are not compatible",
             "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
@@ -8281,6 +8293,7 @@
           "e57dde9d93": "未保存的更改"
         },
         "RuntimeAccessGrantList": {
+          "sshAccessCaveat": "在此撤销并不能阻止拥有这台电脑 SSH 访问权限的人重新配对。要彻底阻止，请移除其 SSH 访问权限。",
           "8b82879581": "任何拥有有效授权的人都可以连接，直到您撤销授权为止。撤销共享访问会立即断开活动客户端的连接。",
           "68ec21309f": "撤销访问权限",
           "6f6d5188ed": "撤销 {{value0}}",
@@ -8391,6 +8404,8 @@
           "serverRuntimeUnavailableDescription": "SSH 传输已连接，但 Orca 运行时未应答。主机可能仍在运行。",
           "serverReconnecting": "重新连接",
           "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "managedAccessRevoked": "{{value0}} 不再接受这台电脑，且 Orca 无法通过 SSH 重新与其配对。请连接以重试。",
+          "connectAccessRevoked": "{{value0}} 不再接受这台电脑。请连接以重试。",
           "repair": "Re-pair…",
           "serverAccessRevoked": "Access revoked",
           "orcaVersionLastSeen": "Orca v{{value0}} (last seen)"
@@ -18065,6 +18080,8 @@
         "couldNotStart": "{{agent}} 无法启动。",
         "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
+        "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）。",
+        "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重。",
         "codexCliTooOld": "Codex {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "notSignedIn": "{{agent}} 尚未登录。",
         "claudeSystemNotSignedIn": "Claude 尚未登录。请运行 `{{loginCommand}}`，或在 Claude 账户设置中选择账户。",
