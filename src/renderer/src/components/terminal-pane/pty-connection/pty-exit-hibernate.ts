@@ -1,3 +1,8 @@
+import {
+  noteArmsHibernatedPaneWake,
+  noteNeedsExplicitHibernatedPaneWake
+} from './hibernated-pane-wake-eligibility'
+export { noteArmsHibernatedPaneWake } from './hibernated-pane-wake-eligibility'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -9,8 +14,6 @@ import {
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
-import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 import {
   createGitBashConsoleCapacityDetector,
   type GitBashConsoleCapacityDetector
@@ -23,15 +26,6 @@ import { armRestartReplacement } from './restart-replacement-on-show'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
 import { closeExitedSplitPaneThroughLayoutOwner } from './exited-split-pane-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-
-// Why live+done arms too: kept from #16308's wake-sweep widening; hibernation itself only writes worktree-sleep notes.
-export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): boolean {
-  return (
-    record.state === 'done' &&
-    record.origin !== 'quit' &&
-    !(record.origin === 'live' && agentTurnEndedUncleanly(record))
-  )
-}
 
 /** A tab's sole pane keeps a dead terminal it freshly spawned and the user never typed into. */
 function keepsUntouchedFreshPane(session: ConnectPanePtySession, ptyId: string): boolean {
@@ -158,7 +152,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     // Why: View run keeps completed hibernation output frozen; mobile wake is explicit.
-    if (!opts?.forceWake && target.record.origin !== 'live') {
+    if (!opts?.forceWake && noteNeedsExplicitHibernatedPaneWake(target.record)) {
       return null
     }
     const claimKey = getProviderSessionClaimKey(target.record)

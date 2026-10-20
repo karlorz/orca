@@ -17,10 +17,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function fixture(protocol = 44) {
+async function fixture(protocol = 44, runningTag = 'v1.4.224-0', tag = 'v1.4.224-1') {
   const root = await mkdtemp(path.join(os.tmpdir(), 'orca-home-updater-'))
   roots.push(root)
-  const tag = 'v1.4.224-1'
   const release = {
     tag_name: tag,
     draft: false,
@@ -40,7 +39,7 @@ async function fixture(protocol = 44) {
     }
     return new Response(url.endsWith('.txt') ? 'checksum fixture' : 'AppImage bytes')
   })
-  let installed = 'v1.4.224-0'
+  let installed = runningTag
   const reconcile = vi.fn(async () => ({ tag: installed }))
   const commit = vi.fn(async (stage: string, next: string) => {
     expect(await readFile(path.join(stage, 'orca-linux.AppImage'), 'utf8')).toBe('AppImage bytes')
@@ -77,6 +76,16 @@ async function fixture(protocol = 44) {
 }
 
 describe('managed home updater actions', () => {
+  it('offers 230-1 to a running 229-10 build across the numeric fork suffixes', async () => {
+    const f = await fixture(44, 'v1.4.229-10', 'v1.4.230-1')
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'available',
+      version: '1.4.230-1',
+      releaseUrl: 'https://github.com/karlorz/orca/releases/tag/v1.4.230-1'
+    })
+    expect(f.statuses.some((status) => status.state === 'not-available')).toBe(false)
+  })
   it('checks, stages, commits and waits for an explicit restart action', async () => {
     const f = await fixture()
     await f.updater.check(true)

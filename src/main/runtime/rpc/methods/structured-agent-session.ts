@@ -54,20 +54,11 @@ import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-a
 import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './structured-agent-session-thread-goal'
 import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './structured-agent-session-conversation-outline'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './structured-agent-session-options-read'
-import {
-  AttachParams,
-  CancelParams,
-  ConversationCommandParams,
-  CreateParams,
-  CreateSupportParams,
-  HistoryParams,
-  OptionsParams,
-  RewindParams,
-  SendParams,
-  SubscribeParams,
-  UnsubscribeParams
-} from './structured-agent-session-schemas'
+import * as sessionParams from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -88,7 +79,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
-    params: RewindParams,
+    params: sessionParams.RewindParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
       await ensureHostInstalled(ctx)
@@ -98,7 +89,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.conversationCommand',
     permission: 'workspace',
-    params: ConversationCommandParams,
+    params: sessionParams.ConversationCommandParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
       await ensureHostInstalled(ctx)
@@ -110,7 +101,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.createSupport',
     permission: 'workspace',
-    params: CreateSupportParams,
+    params: sessionParams.CreateSupportParams,
     handler: async (params, ctx) => {
       requireStructuredCreateSupportAdmission(ctx, params.agent)
       const support = await ctx.runtime.getStructuredAgentSessionCreateSupport(
@@ -127,7 +118,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.create',
     permission: 'workspace',
-    params: CreateParams,
+    params: sessionParams.CreateParams,
     handler: ORCA_LAYOUT_OWNER_IS_MAIN
       ? refusingStructuredAgentSessionCreatesClosedFirst(handleStructuredAgentSessionCreate)
       : handleStructuredAgentSessionCreate
@@ -135,19 +126,19 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.ensure',
     permission: 'workspace',
-    params: AttachParams,
+    params: sessionParams.AttachParams,
     handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
   }),
   defineMethod({
     name: 'agentSession.send',
     permission: 'workspace',
-    params: SendParams,
+    params: sessionParams.SendParams,
     handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
     name: 'agentSession.cancel',
     permission: 'workspace',
-    params: CancelParams,
+    params: sessionParams.CancelParams,
     handler: async (params, ctx) => {
       if (params.expectedControlTarget) {
         requireBoundControlCapability(ctx)
@@ -161,7 +152,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     // same session can be attached again. Only the provider child and the in-memory entry go.
     name: 'agentSession.close',
     permission: 'workspace',
-    params: OptionsParams,
+    params: sessionParams.OptionsParams,
     handler: async (params, ctx) => {
       const host = requireStructuredCleanupHost(ctx)
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -179,11 +170,57 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       return { ok: true as const }
     }
   }),
+  defineMethod({
+    name: 'agentSession.sleepWorkspace',
+    permission: 'workspace',
+    params: sessionParams.SleepWorkspaceParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      const installed = getStructuredAgentSessionHost()
+      if (installed) {
+        return installed.sleepWorkspace(params.workspaceId)
+      }
+      let store: Awaited<ReturnType<typeof ctx.runtime.openAgentSessionRecordStore>>
+      try {
+        store = await ctx.runtime.openAgentSessionRecordStore()
+      } catch (error) {
+        const appeared = getStructuredAgentSessionHost()
+        if (appeared) {
+          return appeared.sleepWorkspace(params.workspaceId)
+        }
+        console.warn('[agent-session] workspace sleep record inventory unavailable', error)
+        return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
+      }
+      const appeared = getStructuredAgentSessionHost()
+      if (appeared) {
+        return appeared.sleepWorkspace(params.workspaceId)
+      }
+      try {
+        const records = store
+          .listRecords()
+          .filter(
+            (record) =>
+              record.location.workspaceId === params.workspaceId &&
+              record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
+          )
+        const stoppedSessionIds = records
+          .filter(structuredSessionNeverStarted)
+          .map((record) => record.sessionId)
+        const failures = records
+          .filter((record) => !structuredSessionNeverStarted(record))
+          .map((record) => ({ sessionId: record.sessionId, reason: 'stop-unverifiable' as const }))
+        return failures.length > 0 ? { stoppedSessionIds, failures } : { stoppedSessionIds }
+      } catch (error) {
+        console.warn('[agent-session] workspace sleep record inventory failed', error)
+        return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
+      }
+    }
+  }),
   ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS,
   defineMethod({
     name: 'agentSession.history',
     permission: 'workspace',
-    params: HistoryParams,
+    params: sessionParams.HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
@@ -199,7 +236,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribe',
     permission: 'workspace',
-    params: SubscribeParams,
+    params: sessionParams.SubscribeParams,
     handler: async (params, ctx, emit) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
       const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
@@ -244,7 +281,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.unsubscribe',
     permission: 'workspace',
-    params: UnsubscribeParams,
+    params: sessionParams.UnsubscribeParams,
     handler: async (params, ctx) => {
       requireStructuredCleanupHost(ctx)
       const base = subscriptionBaseFor(ctx, params.sessionId)

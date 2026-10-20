@@ -108,14 +108,16 @@ export function createIntentParams(): Record<string, unknown> {
 export function sendParams(
   text: string,
   fence: number,
-  sentDelivery?: 'queue-if-active'
+  sentDelivery?: 'queue-if-active',
+  options?: Readonly<Record<string, string>>
 ): Record<string, unknown> {
   return structuredAgentSessionMessageSendMutation({
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     body: structuredAgentSessionSendBody(text, []),
-    ...(sentDelivery ? { delivery: sentDelivery } : {})
+    ...(sentDelivery ? { delivery: sentDelivery } : {}),
+    ...(options ? { options } : {})
   })
 }
 
@@ -123,6 +125,8 @@ export function sendParams(
 export function paramsFor(method: string): unknown {
   const fence = 1
   switch (method) {
+    case 'agentSession.controlTarget':
+      return { provider: 'grok', nativeSessionId: 'native-1' }
     case 'agentSession.createSupport':
       return { worktree: `id:${WORKSPACE}`, agent: 'codex' }
     case 'agentSession.create':
@@ -178,6 +182,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.sleepWorkspace':
+      return { workspaceId: WORKSPACE }
     case 'agentSession.currentRequests':
       return { sessionId: SESSION, version: '00000000-0000-4000-8000-000000000001' }
     case 'agentSession.acknowledgeAttention':
@@ -190,6 +196,7 @@ export function paramsFor(method: string): unknown {
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }
     case 'agentSession.agents':
+    case 'agentSession.subscribeAvailability':
     case 'agentSession.restartResumable':
     case 'agentSession.restartResumableDismiss':
     case 'agentSession.restartResume':

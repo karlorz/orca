@@ -1,3 +1,4 @@
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../shared/agent-status-types'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import type {
   AutomationAgentResultSource,
@@ -7,6 +8,7 @@ import { selectFreshExplicitAgentStatusRow } from '../runtime/runtime-hook-agent
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { Store } from '../persistence'
 import type { AutomationRunWriter } from './automation-run-writer'
+import { isGrokAutomationResultPending } from '../../shared/agent-hook-listener/grok-result-retry'
 
 const MAX_TRACKED_RESULT_PANES = 128
 
@@ -120,6 +122,31 @@ export class AutomationRunResultCapture {
   }
 
   async refresh(run: AutomationRun): Promise<AutomationRun> {
+    const binding = run.terminalPaneKey ? this.bindings.get(run.terminalPaneKey) : undefined
+    // Why: Grok flushes turn_completed after its Stop hook returns; retirement must wait for that bounded retry.
+    for (
+      let attempt = 0;
+      binding?.run.id === run.id &&
+      this.bindings.get(run.terminalPaneKey ?? '') === binding &&
+      !this.disposed &&
+      attempt < 6;
+      attempt += 1
+    ) {
+      const row = this.readBindingRow(binding)
+      if (
+        (run.status !== 'completed' && run.status !== 'dispatch_failed') ||
+        !row ||
+        !isGrokAutomationResultPending({
+          payload: row,
+          providerSession: row.providerSession,
+          providerPromptId: row.providerPromptId,
+          automationAssistantResult: row.automationAssistantResult
+        })
+      ) {
+        break
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
     return this.refreshCurrent(run, this.opts.readRun(run.automationId, run.id))
   }
 
@@ -156,9 +183,30 @@ export class AutomationRunResultCapture {
       return current
     }
     const buffer = createHeadlessAutomationOutputSnapshotBuffer()
-    buffer.append(row.lastAssistantMessage)
-    const snapshot = buffer.snapshot()
-    if (!snapshot || current.outputSnapshot?.content === snapshot.content) {
+    const result = row.automationAssistantResult
+    const full =
+      result?.providerPromptId === row.providerPromptId &&
+      result?.providerSessionId === row.providerSession?.id &&
+      result?.content.startsWith(row.lastAssistantMessage)
+        ? result
+        : undefined
+    buffer.append(full?.content ?? row.lastAssistantMessage)
+    const captured = buffer.snapshot()
+    const snapshot = captured
+      ? {
+          ...captured,
+          truncated:
+            captured.truncated ||
+            (full
+              ? full.truncated
+              : row.lastAssistantMessage.length >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
+        }
+      : null
+    if (
+      !snapshot ||
+      (current.outputSnapshot?.content === snapshot.content &&
+        current.outputSnapshot.truncated === snapshot.truncated)
+    ) {
       return current
     }
     const written = await this.opts.writeSnapshot(current, snapshot)

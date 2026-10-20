@@ -19,7 +19,10 @@ import {
 import { AgentTranscriptPollScheduler } from '../shared/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/claude-owed-notification-expiry-timers'
 import { agentHookResultRetryMatchesTurn } from '../shared/agent-hook-result-retry-identity'
-import { recoverGrokHookResult } from '../shared/agent-hook-listener/grok-result-retry'
+import {
+  isGrokAutomationResultPending,
+  recoverGrokHookResult
+} from '../shared/agent-hook-listener/grok-result-retry'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -43,7 +46,7 @@ export type AgentHookResultRetryHost = {
     source: AgentHookSource,
     env?: string,
     version?: string
-  ) => void
+  ) => AgentHookEventPayload | undefined
 }
 
 export class AgentHookResultRetryScheduler {
@@ -138,17 +141,17 @@ export class AgentHookResultRetryScheduler {
     }
     const event =
       source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original)
+        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
         : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }
     const update = transcriptPollUpdate(source, original, event)
-    const next = update ?? original
-    if (update) {
-      this.host.applyEvent(update, source, env, version)
+    // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
+    const next = update ? this.host.applyEvent(update, source, env, version) : original
+    if (next) {
+      this.scheduleTranscriptPoll(source, body, next, env, version)
     }
-    this.scheduleTranscriptPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(
@@ -161,10 +164,11 @@ export class AgentHookResultRetryScheduler {
     discoveryReady = false
   ): void {
     if (
-      (original.payload.lastAssistantMessage &&
-        original.payload.lastAssistantMessageIsToolOutput !== true) ||
-      !hasPendingAgentResultText(source, body) ||
-      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS ||
+      (!isGrokAutomationResultPending(original) &&
+        ((original.payload.lastAssistantMessage &&
+          original.payload.lastAssistantMessageIsToolOutput !== true) ||
+          !hasPendingAgentResultText(source, body)))
     ) {
       return
     }
@@ -228,7 +232,8 @@ export class AgentHookResultRetryScheduler {
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
       (current.payload.lastAssistantMessage &&
-        current.payload.lastAssistantMessageIsToolOutput !== true)
+        current.payload.lastAssistantMessageIsToolOutput !== true &&
+        !isGrokAutomationResultPending(current))
     ) {
       return
     }
@@ -251,6 +256,17 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    this.host.applyEvent(event, source, env, version)
+    const updated = this.host.applyEvent(event, source, env, version)
+    if (updated && isGrokAutomationResultPending(updated)) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        updated,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal
+      )
+    }
   }
 }

@@ -65,13 +65,16 @@ export async function handleRefreshPost(
   const newAccessToken = randomBytes(32).toString('base64url')
   const newRefreshToken = randomBytes(32).toString('base64url')
 
-  const issued = await securityState.rotateRefreshToken({
-    oldRawRefreshToken: oldRefreshToken,
-    newRawRefreshToken: newRefreshToken,
-    newRawAccessToken: newAccessToken,
-    accessTtlMs: SESSION_TTL_MS,
-    refreshTtlMs: null
-  }, now)
+  const issued = await securityState.rotateRefreshToken(
+    {
+      oldRawRefreshToken: oldRefreshToken,
+      newRawRefreshToken: newRefreshToken,
+      newRawAccessToken: newAccessToken,
+      accessTtlMs: SESSION_TTL_MS,
+      refreshTtlMs: null
+    },
+    now
+  )
 
   if (!issued) {
     response.writeHead(401, { 'content-type': 'application/json' })

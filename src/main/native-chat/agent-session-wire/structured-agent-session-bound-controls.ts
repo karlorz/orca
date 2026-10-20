@@ -26,7 +26,8 @@ import {
 import { StructuredAgentSessionControlTargets } from './structured-agent-session-control-target'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { openForWrite } from './structured-agent-session-send-preparation'
-import { handOverSubmission, performSend } from './structured-agent-session-turns'
+import { performSend } from './structured-agent-session-turns'
+import { beginSubmissionHandover } from './structured-agent-session-handover'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import type { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
@@ -137,17 +138,31 @@ export class StructuredAgentSessionBoundControls {
               )
             }
           }
-          await handOverSubmission(
+          const pending = await beginSubmissionHandover(
             {
               ...ctx,
+              acquireAborts: context.acquireAborts,
               record: () => context.deps.store.getRecord(ctx.sessionId),
               childWork: () => context.readChildWork(ctx.sessionId),
               childWorkOpen: () => context.childWorkOpen(ctx.sessionId),
               beforeDispatch: async () => beforePromptWrite(),
               beforePromptWrite
             },
-            sent.value.submission
+            sent.value.submission,
+            () =>
+              !this.targets.validateIdentity(
+                target,
+                this.targets.read(target.sessionId, envelope.clientOperationId)
+              )
           )
+          if (pending) {
+            try {
+              const resolve = await pending.dispatch()
+              await resolve()
+            } finally {
+              pending.release?.()
+            }
+          }
           return { ok: true, value: { ...sent.value, controlReceipt: accepted } }
         },
         replay: (ctx, prior) => {

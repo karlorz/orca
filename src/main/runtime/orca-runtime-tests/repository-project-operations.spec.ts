@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_REPO_BADGE_COLOR,
@@ -120,7 +121,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
+    const tempRoot = await mkdtemp(join(await realpath(tmpdir()), 'orca-runtime-project-setup-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -130,7 +131,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -207,7 +208,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [...repos] as never,
       addRepo: (repo: Record<string, unknown>) => repos.push(repo),
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
         if (!repo) {
           return null
@@ -259,7 +260,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [...repos] as never,
       addRepo: (repo: Record<string, unknown>) => repos.push(repo),
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
         if (!repo) {
           return null
@@ -267,7 +268,7 @@ describe('OrcaRuntimeService', () => {
         Object.assign(repo, updates)
         return { ...repo } as never
       },
-      removeProjectForHost: (id: string) => {
+      removeProjectForHost: ({ id }: { id: string }) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)
@@ -309,7 +310,7 @@ describe('OrcaRuntimeService', () => {
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
-      removeProjectForHost: (id: string) => {
+      removeProjectForHost: ({ id }: { id: string }) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)
@@ -338,7 +339,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps existing-folder imports split by runtime host on the same normalized path', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-host-'))
+    const tempRoot = await mkdtemp(join(await realpath(tmpdir()), 'orca-runtime-project-host-'))
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
     const runtimeStore = {
@@ -348,7 +349,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -465,7 +466,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -506,7 +507,7 @@ describe('OrcaRuntimeService', () => {
           repos.push(repo)
         },
         getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-        updateRepo: (id: string, updates: Record<string, unknown>) => {
+        updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
           const index = repos.findIndex((repo) => repo.id === id)
           if (index === -1) {
             return null
@@ -539,7 +540,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null

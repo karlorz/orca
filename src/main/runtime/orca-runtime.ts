@@ -1,12 +1,8 @@
+import { OrcaRuntimeWithSidebarProducers } from './orca-runtime-sidebar-producers'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
-import {
-  OrcaRuntimeWithSidebarTemporal,
-  sidebarFactsRuntime
-} from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -42,83 +38,13 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
-import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
-import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
-import { getMainHttpClient } from '../network/http-client'
-import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import { CollapseWriteOrder } from './workspace-view-collapse-writes'
-import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
-import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
-import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
-import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
-
-// Switch point: a window-fed build keeps no sidebar facts layer.
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithMigrationCatalog = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithMigrationCatalog
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
-  /** This runtime as its sidebar facts layer; null unless built with ORCA_SIDEBAR_INPUTS=main. */
-  get sidebarFacts() {
-    return sidebarFactsRuntime(this)
-  }
-  // Switch point. Idle until relay hosts attach; the fallback refresh runs while a window shows the sidebar or a phone reads the feed.
-  readonly pairedServerRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new PairedServerRowsProducer({
-        hasDemand: () =>
-          this.sidebarInputsFeed?.subscribed === true ||
-          (this.authoritativeWindowId !== null &&
-            this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-            this.store?.getUI?.().sidebarOpen !== false),
-        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.getClientSettings())
-      })
-    : null
-  // Switch point: the phone's icon source.
-  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
-        // Why not the shared desktop client: its net.fetch rejects every manual redirect.
-        fetch: (url, init) => {
-          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
-          return manualRedirectFetch
-            ? manualRedirectFetch(url, init)
-            : getMainHttpClient().fetch(url, init)
-        },
-        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
-      })
-    : null
-  // Switch point: the per-writer ordering behind ui.setCollapsed.
-  readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
-  // Switch point: this host's workspace rows, from the listing worktree.ps reads.
-  readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new WorkspaceRowsProducer({
-        store: this.store,
-        // Merged fresh (git scans keep their own cache): the window's metadata writes emit no
-        // client event, so the shared listing may predate them.
-        listVisibleWorktrees: async () =>
-          this.visibleResolvedWorktreeSnapshot(await this.computeResolvedWorktrees()),
-        onClientEvent: (listener, options) => this.onClientEvent(listener, options)
-      })
-    : null
-  // Switch point: the phone's feed of the producers above; idle until this host's own phone reads.
-  readonly sidebarInputsFeed = ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? new SidebarInputsFeed(
-        () =>
-          sidebarInputsFeedDomains({
-            facts: requireSwitchedOn(this.sidebarFacts),
-            pairedServerRows: requireSwitchedOn(this.pairedServerRows),
-            workspaceCreations: requireSwitchedOn(this.workspaceCreations),
-            workspaceRows: requireSwitchedOn(this.workspaceRows),
-            store: () => this.store,
-            onClientEvent: (listener, options) => this.onClientEvent(listener, options)
-          }),
-        (event) => this.emitClientEvent(event)
-      )
-    : null
-
+class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
   private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
     const catalog = listReferenceWorkspaces(
       this.requireStore(),
@@ -172,7 +98,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithSidebarProducers>) {
     super(...args)
     // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
     registerDetectedWorktreeScanInvalidation()
@@ -284,6 +210,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return { acknowledged: true }
   }
 
+  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+
+  /** This host's agent health snapshot and every replacement, from first use; returns the release. */
+  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+    return this.structuredAgentAvailability.subscribe(read)
+  }
+
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
   canPublishAgentLaunchTab(): boolean {
     return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
@@ -359,18 +293,24 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
   async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
-    const reply = await applyWindowLayoutCommand(
-      this.requireStore(),
-      (worktreeId, tabId) => {
-        if (tabId !== null) {
-          return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-        }
-        const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-        return routed ? [routed] : []
-      },
-      command,
-      (move) => rekeyMovedPaneOwners(this, move)
-    )
+    const apply = (): Promise<LayoutApplyReply> =>
+      applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) => {
+          if (tabId !== null) {
+            return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+          }
+          const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+          return routed ? [routed] : []
+        },
+        command,
+        (move) => rekeyMovedPaneOwners(this, move)
+      )
+    // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
+    (command.type === 'sleep' || command.type === 'wake')
+      ? this.inResumeRecordOrder(apply)
+      : apply())
     // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }
@@ -397,47 +337,4 @@ const OrcaRuntimeServiceExport: {
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 
-export type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
-export type {
-  RuntimeAutomationCreateInput,
-  RuntimeAutomationUpdateInput
-} from './runtime-automation-controller'
-export type { SubscriptionRegistration } from './runtime-subscription-registry'
-export type {
-  OrchestrationCompatibilityCallerAuthority,
-  OrchestrationCompatibilityTerminalAuthority,
-  RuntimeTerminalAgentStatusEvent
-} from './runtime-terminal-contracts'
-export type { MessageWaitResult } from './runtime-message-waiters'
-export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
-export type {
-  MobileNotificationDispatchEvent,
-  MobileNotificationDismissEvent,
-  MobileNotificationEvent
-} from './runtime-mobile-notification-controller'
-export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
-export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
-export {
-  computeTerminalTailWaitState,
-  tailGainedNewerBlockedReason,
-  type TerminalTailWaitState
-} from './terminal-wait-tail-state'
-export { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
-export { buildPreview } from './terminal-tail-state'
-export { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
-export { projectTerminalTailLines } from './orca-runtime-terminal-projection'
-export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
-export type {
-  RuntimeWorktreeLifecycleEvent,
-  DriverState,
-  PtyLayoutTarget,
-  PtyLayoutState,
-  ApplyLayoutResult,
-  RuntimeRendererReloadFence
-} from './orca-runtime-core'
-export {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
-  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
-} from './orca-runtime-postlude'
+export * from './runtime-service-compat-exports'

@@ -52,7 +52,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
+    it('disarms input modes and keeps completed output until an explicit wake', async () => {
       // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
@@ -81,6 +81,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
+        wakeHibernatedAgentIfArmed: () => string | null
         dispose: () => void
       }
       await flushAsyncTicks()
@@ -103,6 +104,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
       binding.noteVisibilityResume()
+      await flushAsyncTicks()
+      expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks()
 
       expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
@@ -450,7 +454,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       deferredSpawn.resolve('pty-resumed')
       await flushAsyncTicks()
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        providerSession: { id: 'sess-hibernated-inflight' }
+      })
     })
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
@@ -547,7 +554,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         state: 'done',
         capturedAt: 1,
         updatedAt: 1,
-        origin: 'worktree-sleep'
+        origin: 'live'
       }
 
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {

@@ -21,7 +21,7 @@ import {
 } from '../../managed-server/install/orcad-remote-launch'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   forbiddenToolActions,
   type HostileHostCellCore,
@@ -43,7 +43,12 @@ export async function proveManagedOrcadCell(
     const context = await resolveOrcadRemoteContext(sshTarget, conn)
     expect(context.serverTarget).toBe(expected.runtime)
     const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT)
-    const deploy = deployOrcad({ ...slot, target: context.serverTarget, census: EMPTY_CENSUS })
+    const deploy = deployOrcad({
+      ...slot,
+      target: context.serverTarget,
+      census: EMPTY_CENSUS,
+      recountCensus: async () => EMPTY_CENSUS
+    })
     if (expected.outcome === 'unavailable') {
       const failure = await deploy.then(
         (deployed) => new Error(`deploy did not fail: ${JSON.stringify(deployed)}`),
@@ -62,7 +67,7 @@ export async function proveManagedOrcadCell(
     }
     const toolLog = await hostExec(
       target,
-      `cat ${shellEscape(target.forbiddenToolLog)} 2>/dev/null || true`
+      `cat ${quotePosixShell(target.forbiddenToolLog)} 2>/dev/null || true`
     )
     expect(forbiddenToolActions(toolLog)).toEqual([])
   } finally {

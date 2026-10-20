@@ -1,3 +1,4 @@
+import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
 import { OrcaRuntimeWithFocusTerminal } from '../terminal/focus/focus-terminal'
 import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from '../orca-runtime-core'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
@@ -18,7 +19,8 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
   ): Promise<Set<string> | null>
   protected abstract getLivePtyIdsForWorktree(
     worktreeId: string,
-    freshPtyIds?: ReadonlySet<string>
+    freshPtyIds?: ReadonlySet<string>,
+    hostFence?: WorktreePtyHostFence
   ): Set<string>
   protected abstract getTerminalHandlesForPtyId(ptyId: string): string[]
   protected abstract getRecordedTerminalSleepHandles(

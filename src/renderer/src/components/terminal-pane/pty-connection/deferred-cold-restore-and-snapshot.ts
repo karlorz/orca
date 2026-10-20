@@ -21,6 +21,7 @@ import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
+import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -42,12 +43,6 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      const record = startup.sleepingRecordEntry.record
-      // Why: Resume workspace can remount this pane again after the tab is closed.
-      // Consuming a finished explicit-resume record made the second click a dead workspace toast.
-      if (isPassiveCompletedHibernationEvidence(record) || record.restoreOnTabOpenOnly === true) {
-        return
-      }
       // Switch point: main records the wake of this pane alone, the one this window resumed.
       // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -56,6 +51,12 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           session.deps.worktreeId,
           session.cacheKey
         )
+      }
+      const record = startup.sleepingRecordEntry.record
+      // Why: Resume workspace can remount this pane again after the tab is closed.
+      // Consuming a finished explicit-resume record made the second click a dead workspace toast.
+      if (isPassiveCompletedHibernationEvidence(record) || record.restoreOnTabOpenOnly === true) {
+        return
       }
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
@@ -81,7 +82,12 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
     session.applyColdRestoreAgentResumeStartup(startup)
-    return session.startFreshSpawn(startup, options)
+    const spawned = session.startFreshSpawn(startup, options)
+    // Switch point: main's layout shows this pane unbound while the start runs.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+    }
+    return spawned
   }
   session.startFreshColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),

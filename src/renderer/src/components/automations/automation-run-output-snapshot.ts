@@ -1,3 +1,4 @@
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../../../shared/agent-status-types'
 import type { AutomationRunOutputSnapshot } from '../../../../shared/automations-types'
 import {
   stripAnsiEscapeSequences,
@@ -35,7 +36,12 @@ export function selectAutomationRunOutputSnapshot(
 ): AutomationRunOutputSnapshot | null {
   // Why: raw hidden-PTY captures include full-screen TUI redraws; hook
   // transcript text is the user-facing automation result when available.
-  return createAutomationRunOutputSnapshotFromText(assistantMessage ?? '') ?? terminalSnapshot
+  return (
+    createAutomationRunOutputSnapshotFromText(
+      assistantMessage ?? '',
+      (assistantMessage?.length ?? 0) >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    ) ?? terminalSnapshot
+  )
 }
 
 function stripTerminalControls(value: string): string {

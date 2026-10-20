@@ -34,17 +34,6 @@ export function createAutomationRunSessionPersistence(args: {
       } catch (error) {
         console.error('[automations] Failed to persist late provider session:', error)
       }
-    },
-    clearRetiredRunTerminalIdentity: async (): Promise<void> => {
-      try {
-        await args.markDispatchResult({
-          runId: args.runId,
-          status: 'completed',
-          terminalPtyId: null
-        })
-      } catch (error) {
-        console.error('[automations] Failed to clear retired terminal identity:', error)
-      }
     }
   }
 }

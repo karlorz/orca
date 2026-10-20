@@ -58,6 +58,7 @@ function launch(runtime: ReturnType<typeof harness>, overrides: Record<string, u
         ...overrides
       } as never,
       run: RUN,
+      runs: [],
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
       target: TARGET as never
     }

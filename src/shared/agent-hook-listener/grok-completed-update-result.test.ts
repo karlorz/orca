@@ -1,3 +1,7 @@
+import {
+  boundedAutomationAssistantResult,
+  readGrokAutomationAssistantResult
+} from '../automation-assistant-result'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -58,11 +62,75 @@ describe('Grok completed update result', () => {
     })
   })
 
+  it('recovers the full automation report only for the exact completed prompt', () => {
+    const content = 'R'.repeat(9379)
+    writeUpdates([assistant(content), completed()])
+    expect(readGrokAutomationAssistantResult(hook, { grokHome: home })).toEqual({
+      content,
+      providerSessionId: sessionId,
+      providerPromptId: promptId,
+      truncated: false
+    })
+    expect(
+      readGrokAutomationAssistantResult({ ...hook, promptId: 'other' }, { grokHome: home })
+    ).toBeUndefined()
+    expect(
+      boundedAutomationAssistantResult({
+        content: 'X'.repeat(300000),
+        truncated: false,
+        providerSessionId: sessionId,
+        providerPromptId: promptId
+      })
+    ).toEqual({
+      content: 'X'.repeat(256 * 1024),
+      truncated: true,
+      providerSessionId: sessionId,
+      providerPromptId: promptId
+    })
+  })
+
   it('does not replace direct hook final text', () => {
     writeUpdates([assistant('streamed'), completed()])
     expect(
       extractGrokToolFields('StopFailure', { ...hook, lastAssistantMessage: 'direct' }, home)
     ).toEqual({ lastAssistantMessage: 'direct' })
+  })
+
+  it('borrows a missing shutdown prompt only from the same provider session', () => {
+    writeUpdates([assistant('Final report'), completed()])
+    const shutdown = { sessionId, cwd: hook.cwd }
+    expect(
+      readGrokAutomationAssistantResult(shutdown, { grokHome: home }, { sessionId, promptId })
+    ).toMatchObject({ content: 'Final report', providerPromptId: promptId })
+    expect(
+      readGrokAutomationAssistantResult(
+        shutdown,
+        { grokHome: home },
+        { sessionId: 'other-session', promptId }
+      )
+    ).toBeUndefined()
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, promptId: 'other-prompt' },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, promptId: null },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
+    writeUpdates([assistant('Older report'), completed('older-prompt')])
+    expect(
+      readGrokAutomationAssistantResult(
+        { ...shutdown, lastAssistantMessage: 'Older direct report' },
+        { grokHome: home },
+        { sessionId, promptId }
+      )
+    ).toBeUndefined()
   })
 
   it.each(['_x.ai/session_notification', 'x.ai/session_notification', 'x.ai/session/update'])(

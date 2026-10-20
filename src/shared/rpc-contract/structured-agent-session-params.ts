@@ -14,12 +14,14 @@ import {
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
+  ProviderHandle,
   SessionId
 } from './structured-agent-session-identifiers'
 export {
   Identifier,
   JournalCursor,
   MAX_ID_LENGTH,
+  ProviderHandle,
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
@@ -58,17 +60,6 @@ export const MutationEnvelope = z
       .regex(/^[0-9a-f]{64}$/, 'Payload fingerprint must be a sha256 hex digest')
   })
   .strict()
-
-export const ProviderHandle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
-  z
-    .object({
-      kind: z.literal('claude'),
-      sessionId: Identifier('Invalid provider session id'),
-      leafUuid: Identifier('Invalid leaf uuid').nullable()
-    })
-    .strict()
-])
 
 /** Any agent a host may register. The host refuses one it did not register; a client sends one
  *  beyond Claude and Codex only to a host advertising the registered-agents capability. */
@@ -146,9 +137,11 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    /** The composer's model and effort for the turn this send starts; the host records them on the
-     *  chat. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
+    /** The composer's choices for the turn this message starts, kept with the message until it is
+     *  dispatched. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
+    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
+    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
     body: SendBody
   })
   .strict()
@@ -280,10 +273,14 @@ export const SetOptionParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const SleepWorkspaceParams = z.object({ workspaceId: z.string().min(1) }).strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
+
+/** `agentSession.subscribeAvailability` takes nothing: the snapshot is the host's. */
+export const AvailabilityParams = z.strictObject({})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.
@@ -348,9 +345,7 @@ export const RestartResumableParams = z
 
 /** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
  *  host re-derives eligibility, so an id a client invents is simply not in the set. */
-export const RestartResumeParams = z
-  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
-  .strict()
+export const RestartResumeParams = RestartResumableParams
 
 export const HistoryParams = z
   .object({

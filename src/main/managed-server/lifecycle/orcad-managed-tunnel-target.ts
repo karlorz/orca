@@ -5,6 +5,7 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
 import {
+  readManagedOrcadPublishedPort,
   resolveManagedOrcadTunnelPort,
   type OrcadTunnelPortInput
 } from './orcad-managed-bound-port'
@@ -13,13 +14,10 @@ import {
   verifyManagedOrcadTunnelIdentity,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import {
-  listenExtrasFromDeployment,
-  managedOrcadSlot
-} from './orcad-managed-runtime-context'
+import { listenExtrasFromDeployment, managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardEntry,
   SshPortForwardManager
@@ -31,12 +29,15 @@ export type OrcadManagedTunnelTargeting = {
   verifyIdentity: (environment: KnownRuntimeEnvironment) => Promise<OrcadTunnelIdentity>
   /** Starts the active slot only on proven exit, before a foreign answer re-reads the port. */
   wakeStoppedServer?: (input: OrcadTunnelPortInput) => Promise<void>
+  /** The port the host's readiness names now, or null; a tunnel that stopped answering follows it. */
+  readPublishedPort?: (input: OrcadTunnelPortInput) => Promise<number | null>
 }
 
 export const MANAGED_ORCAD_TUNNEL_TARGETING: OrcadManagedTunnelTargeting = {
   resolveRemotePort: resolveManagedOrcadTunnelPort,
   verifyIdentity: verifyManagedOrcadTunnelIdentity,
-  wakeStoppedServer: wakeStoppedManagedOrcadForTunnel
+  wakeStoppedServer: wakeStoppedManagedOrcadForTunnel,
+  readPublishedPort: readManagedOrcadPublishedPort
 }
 
 /**

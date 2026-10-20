@@ -19,7 +19,10 @@ import {
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
 import { agentHookResultRetryMatchesTurn } from '../../../shared/agent-hook-result-retry-identity'
-import { recoverGrokHookResult } from '../../../shared/agent-hook-listener/grok-result-retry'
+import {
+  isGrokAutomationResultPending,
+  recoverGrokHookResult
+} from '../../../shared/agent-hook-listener/grok-result-retry'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -83,7 +86,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     const normalized =
       source === 'codex'
-        ? pollCodexTranscriptStatus(this.state, original)
+        ? pollCodexTranscriptStatus(this.state, original, body, this.env)
         : normalizeHookPayload(this.state, source, body, this.env)
     if (!normalized) {
       return
@@ -103,10 +106,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     discoveryReady = false
   ): void {
     if (
-      (original.payload.lastAssistantMessage &&
-        original.payload.lastAssistantMessageIsToolOutput !== true) ||
-      !hasPendingAgentResultText(source, body) ||
-      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS ||
+      (!isGrokAutomationResultPending(original) &&
+        ((original.payload.lastAssistantMessage &&
+          original.payload.lastAssistantMessageIsToolOutput !== true) ||
+          !hasPendingAgentResultText(source, body)))
     ) {
       return
     }
@@ -158,7 +162,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       current.payload.agentType !== original.payload.agentType ||
       current.payload.prompt !== original.payload.prompt ||
       (current.payload.lastAssistantMessage &&
-        current.payload.lastAssistantMessageIsToolOutput !== true)
+        current.payload.lastAssistantMessageIsToolOutput !== true &&
+        !isGrokAutomationResultPending(current))
     ) {
       return
     }
@@ -174,6 +179,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
-    this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+    const updated = this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
+    if (updated && isGrokAutomationResultPending(updated)) {
+      this.scheduleAssistantMessageRetry(source, body, updated, nextAttempt, requireExactOriginal)
+    }
   }
 }

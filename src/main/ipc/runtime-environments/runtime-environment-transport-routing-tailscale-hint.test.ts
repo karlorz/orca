@@ -47,13 +47,13 @@ afterEach(() => {
 })
 
 describe('Tailscale hint on remote runtime connection failure', () => {
-  it('recommends Tailscale on the settings status probe for a non-tailnet endpoint', async () => {
+  it('recommends reconnecting SSH on the status probe for a loopback endpoint', async () => {
     const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
     const response = await getRuntimeEnvironmentStatus(userDataPath, id, 1000)
     expect(response.ok).toBe(false)
     if (response.ok === false) {
-      expect(response.error.message).toContain('connect both devices to Tailscale')
-      expect(response.error.message).toContain('https://tailscale.com/download')
+      expect(response.error.message).toContain('Reconnect the SSH host in Settings')
+      expect(response.error.message).toContain('LAN or Tailscale address')
     }
   })
 
@@ -70,7 +70,7 @@ describe('Tailscale hint on remote runtime connection failure', () => {
   it('augments the thrown error for in-use calls (the toast path)', async () => {
     const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
     await expect(callRuntimeEnvironment(userDataPath, id, 'files.read', {}, 1000)).rejects.toThrow(
-      /connect both devices to Tailscale/
+      /Reconnect the SSH host in Settings/
     )
   })
 
@@ -81,6 +81,6 @@ describe('Tailscale hint on remote runtime connection failure', () => {
         onEvent: () => {},
         onClose: () => {}
       })
-    ).rejects.toThrow(/connect both devices to Tailscale/)
+    ).rejects.toThrow(/Reconnect the SSH host in Settings/)
   })
 })

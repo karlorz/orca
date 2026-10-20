@@ -20,10 +20,9 @@ import type { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpStructuredOptions } from './acp-structured-options'
 import type { AcpStructuredPrompts } from './acp-structured-prompts'
 import type { AcpStructuredTurns } from './acp-structured-turns'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 
 export type AcpStructuredSession = {
-  events?: StructuredAgentSessionEventSink
   sessionId: string
   nativeSessionId?: string
   fence: number
@@ -36,8 +35,6 @@ export type AcpStructuredSession = {
   prompts: AcpStructuredPrompts
   options: AcpStructuredOptions
   turns: AcpStructuredTurns
-  /** Saved picks the agent refused when this child started. */
-  restoreSkipped: readonly string[]
   /** Orca asked this child to stop; its exit is then a requested close. */
   closeRequested: boolean
   /** Why nothing this child says reaches the journal any more; null while it does. */
@@ -46,6 +43,8 @@ export type AcpStructuredSession = {
   ended: boolean
   exitObservedAt: number | null
   unbindReadingControl?: () => void
+  dispose: () => void
+  open: (signal: AbortSignal) => Promise<StructuredAgentSessionProviderOpenResult>
 }
 
 /** Every agent frame goes through here once the lane exists: options and commands first, so a
@@ -103,7 +102,6 @@ export function closeAcpSessionJournal(
   if (session.journalClosed !== null) {
     return
   }
-  session.events?.observeExit?.(session.turns.heldSends)
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason, cause)
@@ -124,7 +122,6 @@ export function endAcpStructuredSession(
     return
   }
   session.ended = true
-  session.events?.observeExit?.(undefined, observedAt)
   session.exitObservedAt = observedAt
   const stderr = session.connection.stderrTail()
   // Read at the proven exit: a crash usually ends the agent's stdout before its exit is observed,
@@ -181,7 +178,9 @@ export function readAcpControlBinding(session: AcpStructuredSession | undefined)
 }
 
 /** Only for a send refused before its prompt was written. */
-export function rejectedAcpDispatch(session: AcpStructuredSession): AgentSessionDispatchOutcome {
+export function rejectedAcpDispatch(
+  session: Pick<AcpStructuredSession, 'spec'>
+): AgentSessionDispatchOutcome {
   return {
     state: 'rejected',
     ...agentSessionFailureWords(

@@ -31,6 +31,39 @@ describe('updater', () => {
     resetUpdaterMocks()
   })
 
+  it.each([true, false])(
+    'reports a disabled updater instead of latest (manual=%s)',
+    async (manual) => {
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(null)
+      const send = vi.fn()
+      const setLastUpdateCheckAt = vi.fn()
+      const updater = await loadUpdaterModule()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture only receives updater status through webContents.send.
+      updater.setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => (manual ? Date.now() : null),
+        setLastUpdateCheckAt
+      })
+      if (manual) {
+        updater.checkForUpdatesFromMenu()
+      }
+
+      await vi.waitFor(
+        () =>
+          expect(updater.getUpdateStatus()).toMatchObject({
+            state: 'error',
+            message: expect.stringContaining('updater is inactive')
+          }),
+        { timeout: 3_000 }
+      )
+      expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+      expect(
+        send.mock.calls.some(
+          ([channel, status]) => channel === 'updater:status' && status.state === 'not-available'
+        )
+      ).toBe(false)
+    }
+  )
+
   it('leaves a dismissed release update on the release source', async () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')

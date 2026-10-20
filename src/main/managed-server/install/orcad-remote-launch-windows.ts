@@ -36,11 +36,7 @@ import {
   ORCAD_READINESS_FILENAME,
   ORCAD_WINDOWS_PROCESS_FILENAME
 } from './orcad-remote-host-support'
-import {
-  orcadListenArgv,
-  orcadManagedLaunchEnv,
-  type OrcadLaunchSpec
-} from './orcad-remote-launch'
+import { orcadListenArgv, orcadManagedLaunchEnv, type OrcadLaunchSpec } from './orcad-remote-launch'
 import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from '../../orcad/orcad-host-unavailable'
 
 export class OrcadWindowsLaunchRefusedError extends Error {

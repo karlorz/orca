@@ -69,7 +69,19 @@ async function makeOriginRuntime() {
       observedAt: Date.now()
     }
   })
-  recordObservedAgentStatusPaneIdentity(observed, paneKey, runtime)
+  recordObservedAgentStatusPaneIdentity(
+    observed,
+    {
+      paneKey,
+      connectionId: null,
+      worktreeId: TEST_WORKTREE_ID,
+      providerSession: { key: 'session_id', id: 'origin-session' },
+      receivedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      payload: { state: 'done', prompt: 'Origin probe', agentType: 'grok' }
+    },
+    runtime
+  )
   const reveal = vi.fn(async (_worktreeId, options) => {
     expect(options.canFocusExistingSession()).toBe(true)
     return {

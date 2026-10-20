@@ -5,8 +5,8 @@ import {
 import { AGENT_SESSION_BOUND_CONTROL_CAPABILITY } from '../../shared/agent-session-bound-control'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import {
-  RemoteRuntimeClientError,
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
 } from '../../shared/remote-runtime-client'

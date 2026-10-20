@@ -22,3 +22,14 @@ export const JournalCursor = z
     sequence: z.number().int().nonnegative()
   })
   .strict()
+
+export const ProviderHandle = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('codex'), threadId: Identifier('Invalid thread id') }).strict(),
+  z
+    .object({
+      kind: z.literal('claude'),
+      sessionId: Identifier('Invalid provider session id'),
+      leafUuid: Identifier('Invalid leaf uuid').nullable()
+    })
+    .strict()
+])

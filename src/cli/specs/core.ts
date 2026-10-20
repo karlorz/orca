@@ -1,3 +1,4 @@
+import { APP_COMMAND_SPECS } from './app-commands'
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
@@ -7,6 +8,7 @@ import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -27,18 +29,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: ['orca status', 'orca status --json']
   },
-  {
-    path: ['claude-teams'],
-    argumentMode: 'passthrough',
-    summary: 'Start Claude Code Agent Teams in the current Orca terminal',
-    usage: 'orca claude-teams [claude args...]',
-    allowedFlags: [...GLOBAL_FLAGS],
-    notes: [
-      'Passes all following arguments through to Claude Code after enabling Agent Teams native panes.',
-      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.'
-    ],
-    examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
-  },
+  ...APP_COMMAND_SPECS,
   ...REPO_COMMAND_SPECS,
   {
     path: ['worktree', 'list'],
@@ -68,7 +59,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['reference'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -101,8 +92,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'This creates a new checkout. For a fresh agent in an existing worktree, use `orca agent launch` instead.',
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
-      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      '--host runtime:<environment-id> creates on that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      'Use --project to create on a ready project host setup without spelling the backing repo id. --project takes the project id or the display name from `orca project list`.',
+      '--host is only needed when the project is set up on more than one host; with a single setup Orca uses it. When it is ambiguous the error names every host the project is set up on.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
@@ -292,6 +284,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal rename --terminal term_abc123 --json'
     ]
   },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',

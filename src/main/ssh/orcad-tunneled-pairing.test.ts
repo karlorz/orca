@@ -48,8 +48,8 @@ describe('tunneledOrcadPairingCode', () => {
   })
 
   it('refuses a non-WebSocket offer', () => {
-    expect(() => tunneledOrcadPairingCode(readiness('https://runtime.example.com'), 46_768)).toThrow(
-      'not a WebSocket URL'
-    )
+    expect(() =>
+      tunneledOrcadPairingCode(readiness('https://runtime.example.com'), 46_768)
+    ).toThrow('not a WebSocket URL')
   })
 })

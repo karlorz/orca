@@ -9,12 +9,16 @@ import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-comma
 import type * as RecordFile from '../install/orcad-remote-record-file'
 import type * as InstallLock from '../install/remote-install-lock'
 import type * as VersionedInstall from '../install/remote-versioned-install'
+import type * as ShellArgumentQuoting from '../../../shared/shell-argument-quoting'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+vi.mock('../../../shared/shell-argument-quoting', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellArgumentQuoting>()),
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../install/remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()
@@ -75,7 +79,13 @@ const slot = {
 }
 const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
 const deploy = (): Promise<unknown> =>
-  deployOrcad({ ...slot, localOrcadDir: '/local/out/orcad', target: 'linux-x64-glibc', census })
+  deployOrcad({
+    ...slot,
+    localOrcadDir: '/local/out/orcad',
+    target: 'linux-x64-glibc',
+    census,
+    recountCensus: async () => census
+  })
 const rollback = (): Promise<unknown> =>
   rollbackOrcad({
     ...slot,

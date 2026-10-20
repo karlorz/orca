@@ -52,7 +52,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
             state: 'stopped',
             processAction: 'closed_agent_terminal'
           })
-          expect(kill).toHaveBeenCalledExactlyOnceWith(PTY_ID)
+          expect(kill).toHaveBeenCalledExactlyOnceWith(PTY_ID, { expectedIncarnationId: '1' })
           return
         }
         if (scenario === 'read') {
@@ -77,7 +77,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
           return
         }
         expect(receipt).toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
-        expect(kill).toHaveBeenCalledExactlyOnceWith(PTY_ID)
+        expect(kill).toHaveBeenCalledExactlyOnceWith(PTY_ID, { expectedIncarnationId: '1' })
         expect(harness.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
           ownership_state: 'released',
           release_state: 'released'

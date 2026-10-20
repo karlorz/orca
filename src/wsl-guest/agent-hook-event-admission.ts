@@ -6,6 +6,7 @@ import type { HookListenerState } from '../shared/agent-hook-listener/listener-s
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { shouldClearAssistantMessageRetry } from '../shared/agent-hook-listener/grok-result-retry'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -68,10 +69,7 @@ export function applyRelayHookEvent(
     host.clearPaneState(event.paneKey)
     return undefined
   }
-  if (
-    event.payload.state !== 'done' ||
-    (event.payload.lastAssistantMessage && event.payload.lastAssistantMessageIsToolOutput !== true)
-  ) {
+  if (shouldClearAssistantMessageRetry(event)) {
     host.clearAssistantMessageRetry(event.paneKey)
   }
   // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when

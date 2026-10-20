@@ -1,3 +1,4 @@
+import { deriveCliWriterTopology } from './cli-writer-observation'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileRemoteCodexState,
@@ -22,6 +23,8 @@ import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { shouldClearAssistantMessageRetry } from '../../../shared/agent-hook-listener/grok-result-retry'
+import { isLateGrokSessionStart } from '../../../shared/agent-hook-listener/grok-session-start-order'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
@@ -49,7 +52,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    newRun = false
   ): EnrichedAgentHookEventPayload | undefined {
     const transitioned = transitionHookPresence(
       incoming,
@@ -83,6 +87,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    if (isLateGrokSessionStart(previous, payload)) {
+      return previous
+    }
     const rowBefore = mutationBefore ?? previous
     const terminalHandle =
       payload.terminalHandle ??
@@ -139,10 +146,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
-      const enriched = {
-        ...this.attachStatusTiming(terminalOwnedPayload, now),
-        observation: this.stampObservation(terminalOwnedPayload, origin, now)
-      }
+      const enriched = deriveCliWriterTopology(
+        {
+          ...this.attachStatusTiming(terminalOwnedPayload, now),
+          observation: this.stampObservation(terminalOwnedPayload, origin, now)
+        },
+        rowBefore,
+        this.cliWriterExecutionMatches,
+        newRun,
+        incoming.agentPresence?.process
+      )
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       if (!this.writeLegacyStatusRow(enriched)) {
@@ -245,11 +258,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       return held
     }
-    if (
-      effectivePayload.payload.state !== 'done' ||
-      (effectivePayload.payload.lastAssistantMessage &&
-        effectivePayload.payload.lastAssistantMessageIsToolOutput !== true)
-    ) {
+    if (shouldClearAssistantMessageRetry(effectivePayload)) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
     onAccepted?.()
@@ -269,10 +278,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
-    const enriched = {
-      ...this.attachStatusTiming(pairedPayload, now, observedAt),
-      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
-    }
+    const enriched = deriveCliWriterTopology(
+      {
+        ...this.attachStatusTiming(pairedPayload, now, observedAt),
+        observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+      },
+      rowBefore,
+      this.cliWriterExecutionMatches,
+      newRun,
+      incoming.agentPresence?.process
+    )
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
       Number.isFinite(enriched.payload.turnCompletedAt)

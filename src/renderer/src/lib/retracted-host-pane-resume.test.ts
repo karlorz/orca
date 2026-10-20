@@ -69,24 +69,28 @@ describe.each(['repo-1::/workspace/repo', 'folder:workspace'])('%s', (worktreeId
     expect(Object.keys(state.automaticAgentResumeClaimsByTabId)).toHaveLength(1)
   })
 
-  it('still clears completed mirror history whose pane is gone', () => {
-    const record = {
-      ...makeRecord(worktreeId, makePaneKey(HOST_TAB_ID, LEAF_ID), HOST_TAB_ID),
-      state: 'done' as const
-    }
-    useAppStore.setState({
-      tabsByWorktree: { [worktreeId]: [] },
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
-      automaticAgentResumeClaimsByTabId: {},
-      pendingStartupByTabId: {}
-    })
+  it.each([false, true])(
+    'retains completed mirror history without auto-resuming it (interrupted %s)',
+    (interrupted) => {
+      const record = {
+        ...makeRecord(worktreeId, makePaneKey(HOST_TAB_ID, LEAF_ID), HOST_TAB_ID),
+        state: 'done' as const,
+        interrupted
+      }
+      useAppStore.setState({
+        tabsByWorktree: { [worktreeId]: [] },
+        sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
+        automaticAgentResumeClaimsByTabId: {},
+        pendingStartupByTabId: {}
+      })
 
-    expect(resumeSleepingAgentSessionsForWorktree(worktreeId)).toBe(0)
-    const state = useAppStore.getState()
-    expect(state.sleepingAgentSessionsByPaneKey).toEqual({})
-    expect(state.tabsByWorktree[worktreeId]).toEqual([])
-    expect(state.pendingStartupByTabId).toEqual({})
-  })
+      expect(resumeSleepingAgentSessionsForWorktree(worktreeId)).toBe(0)
+      const state = useAppStore.getState()
+      expect(state.sleepingAgentSessionsByPaneKey).toEqual({ [record.paneKey]: record })
+      expect(state.tabsByWorktree[worktreeId]).toEqual([])
+      expect(state.pendingStartupByTabId).toEqual({})
+    }
+  )
 
   it('does not recover a native record that shares its session with an older mirror', () => {
     const mirrored = makeRecord(worktreeId, makePaneKey(HOST_TAB_ID, LEAF_ID), HOST_TAB_ID)

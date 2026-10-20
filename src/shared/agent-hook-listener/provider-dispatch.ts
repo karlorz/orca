@@ -7,13 +7,13 @@ import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
-import { isNewTurnEvent } from './provider-event-routing'
+import { isNewTurnEvent, isProviderSessionOnlyEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
 import { readJcodeTurnPrompt } from './providers/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
-import { normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
 import { normalizeGeminiEvent } from './providers/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor-events'
@@ -32,10 +32,13 @@ import { normalizeJcodeEvent } from './providers/jcode-events'
 import { normalizeKiroEvent } from './providers/kiro-events'
 
 export type ProviderDispatchResult = {
+  providerSessionOnly: boolean
   payload: ParsedAgentStatusPayload | null
   resolvedPromptText: string
   promptInteractionKey?: string
   hasTranscriptPromptEvidence: boolean
+  /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
+  eventName: unknown
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -49,9 +52,13 @@ export function normalizeProviderEvent(input: {
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
+  hasProviderSession?: boolean
 }): ProviderDispatchResult {
-  const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
-    input
+  const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
+  const eventName =
+    source === 'codex'
+      ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload)
+      : input.eventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -213,5 +220,17 @@ export function normalizeProviderEvent(input: {
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
 
-  return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
+  return {
+    payload,
+    resolvedPromptText,
+    promptInteractionKey,
+    hasTranscriptPromptEvidence,
+    providerSessionOnly: isProviderSessionOnlyEvent(
+      source,
+      eventName,
+      hookPayload,
+      input.hasProviderSession === true
+    ),
+    eventName
+  }
 }

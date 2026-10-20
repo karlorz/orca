@@ -9,6 +9,23 @@ fork:
   upstreamBranch: main
   syncWorkflow: .github/workflows/fork-sync-main.yml
 features:
+  - id: linux-home-appimage-generic-relaunch
+    title: Restart the canonical managed home AppImage instead of its cached executable
+    kind: product
+    status: landed
+    paths:
+      - src/main/app-relaunch.ts
+      - src/main/app-relaunch.test.ts
+  - id: linux-home-appimage-cached-launch-updater
+    title: Recover the managed updater from cached launches and report inactive checks accurately
+    kind: product
+    status: landed
+    paths:
+      - src/main/linux-home-update-policy.ts
+      - src/main/home-appimage-runtime.ts
+      - src/main/updater/updater-setup.ts
+      - src/main/updater/updater-check-state.ts
+      - src/main/updater/updater-remote-status.ts
   - id: pairing-offer-cli
     title: CLI orca pairing offer --scope mobile for desktop Share-this-host mobile QR
     kind: product
@@ -61,7 +78,7 @@ features:
     kind: product
     status: landed
     paths:
-      - src/main/ipc/runtime-environment-unreachable-hint.ts
+      - src/main/ipc/runtime-environments/runtime-environment-unreachable-hint.ts
   - id: linux-home-appimage-update-check
     title: Home AppImage update-check diagnostics, atom fallback, fail-closed identity, and skip fork agent-state-rules fetch
     kind: product
@@ -505,7 +522,7 @@ features:
     status: landed
     paths:
       - src/main/startup/main-process-relay-startup.ts
-      - src/main/startup/main-process-relay-startup.test.ts
+      - src/main/startup/main-process-relay-install-retry.test.ts
       - src/main/startup/main-process-runtime-launch.ts
       - src/main/startup/main-window-core-services.ts
       - src/main/startup/main-process-quit.ts
@@ -586,15 +603,27 @@ features:
       - src/shared/agent-hook-listener/grok-completed-update-result.ts
     wiki: projects/orca/work/2026-10-07-automation-outcome-reporting
 
+  - id: grok-late-startup-preserves-automation-turn
+    title: Preserve an observed Grok prompt when the same launch delivers SessionStart late
+    kind: product
+    status: landed
+    paths:
+      - src/shared/agent-hook-listener/grok-session-start-order.ts
+      - src/shared/agent-hook-listener.ts
+      - src/main/agent-hooks/server/server-status-update.ts
+      - src/main/automations/automation-run-report-flush.test.ts
+      - src/main/automations/service-late-agent-result.test.ts
+    wiki: projects/llm-wiki/work/2026-10-19-daily-sleep-pipeline-code-repair
+
   - id: managed-orcad-listen-extras
     title: Optional managed-orcad bindHost, pairingAddress, and mobilePairing on the SSH deployment sidecar
     kind: product
     status: landed
     paths:
       - src/shared/runtime-environments.ts
-      - src/main/ssh/orcad-remote-launch.ts
+      - src/main/managed-server/install/orcad-remote-launch.ts
       - src/main/ssh/orcad-tunneled-pairing.ts
-      - src/main/ssh/orcad-managed-runtime-context.ts
+      - src/main/managed-server/lifecycle/orcad-managed-runtime-context.ts
 
   - id: grok-bound-structured-session-controls
     title: Public exact-target Grok Follow up and Stop with durable receipts and negotiated CLI adapters
@@ -625,8 +654,8 @@ features:
     status: landed
     paths:
       - src/main/ssh/managed-orcad-restore-hold.ts
-      - src/main/ssh/orcad-managed-update-on-restore.ts
-      - src/main/ipc/runtime-environment-managed-tunnel.ts
+      - src/main/managed-server/lifecycle/orcad-managed-update-on-restore.ts
+      - src/main/ipc/runtime-environments/runtime-environment-managed-tunnel.ts
     wiki: projects/orca/work/2026-10-14-pvelxc-shared-mobile-sessions
 
   - id: pet-navigation-pane-flash
@@ -636,7 +665,7 @@ features:
     paths:
       - src/renderer/src/hooks/ipc-events/terminal-presentation-ipc-bridge.ts
       - src/main/runtime/orca-runtime-guarded-pty-reveal.ts
-      - src/main/runtime/orca-runtime-focus-terminal.ts
+      - src/main/runtime/terminal/focus/focus-terminal.ts
       - src/main/runtime/terminal-originating-pane-navigation.ts
       - src/main/runtime/terminal-originating-pane-navigation-types.ts
       - src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods.ts
@@ -669,3 +698,31 @@ features:
       - src/shared/skill-freshness.ts
       - src/renderer/src/components/skills/skill-freshness-scan-issues.tsx
       - src/renderer/src/components/skills/skill-freshness-summary-headline.tsx
+
+  - id: automation-full-final-report
+    title: Preserve bounded same-turn final automation reports through delayed completion flush and terminal retirement
+    kind: product
+    status: landed
+    paths:
+      - src/shared/automation-assistant-result.ts
+      - src/shared/agent-hook-listener/grok-result-retry.ts
+      - src/main/automations/automation-run-result-capture.ts
+      - src/main/automations/automation-run-agent-result-source.ts
+      - src/renderer/src/components/automations/automation-run-output-snapshot.ts
+
+  - id: fork-required-pr-runners
+    title: Run the full required PR workflow on available GitHub-hosted fork runners
+    kind: ci
+    status: landed
+    paths:
+      - .github/workflows/pr.yml
+      - config/scripts/pr-workflow-parallelism.test.mjs
+      - config/scripts/pr-preflight-gates.test.mjs
+
+  - id: agent-operation-ledger-nul-readback
+    title: Preserve complete caller and operation keys when Node SQLite reloads replay receipts
+    kind: product
+    status: landed
+    paths:
+      - src/main/runtime/agent-session-record-rows.ts
+      - src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.test.ts

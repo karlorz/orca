@@ -7,16 +7,22 @@ const workflows = readdirSync('.github/workflows').flatMap((file) => {
   const workflow = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
   // The LoC reporter updates PR metadata rather than running CI.
   return Object.hasOwn(workflow.on ?? {}, 'pull_request') && file !== 'pr-test-loc.yml'
-    ? [{ file, workflow }]
+    ? [{ file, workflow, repository: file.startsWith('fork-') ? 'karlorz/orca' : 'stablyai/orca' }]
     : []
 })
 
-function admitted(condition, draft, needs = {}, eventName = 'pull_request') {
+function admitted(
+  condition,
+  draft,
+  needs = {},
+  eventName = 'pull_request',
+  repository = 'stablyai/orca'
+) {
   return (
     compileAggregateExpression(condition ?? 'true', ['github', 'needs', 'inputs'])({
       github: {
         event_name: eventName,
-        repository: 'stablyai/orca',
+        repository,
         event: { pull_request: { draft } }
       },
       needs,
@@ -25,7 +31,7 @@ function admitted(condition, draft, needs = {}, eventName = 'pull_request') {
   )
 }
 
-it.each(workflows)('$file starts no CI jobs for a draft PR', ({ workflow }) => {
+it.each(workflows)('$file starts no CI jobs for a draft PR', ({ workflow, repository }) => {
   const needs = Object.fromEntries(
     Object.keys(workflow.jobs).map((id) => [id, { result: 'skipped', outputs: {} }])
   )
@@ -34,36 +40,45 @@ it.each(workflows)('$file starts no CI jobs for a draft PR', ({ workflow }) => {
     if (job.needs && !/\b(?:cancelled|always|success|failure)\(/.test(job.if ?? '')) {
       continue
     }
-    expect(admitted(job.if, true, needs), id).toBe(false)
+    expect(admitted(job.if, true, needs, 'pull_request', repository), id).toBe(false)
   }
 })
 
-it.each(workflows)('$file starts CI when ready and cancels it when drafted', ({ workflow }) => {
-  const types = workflow.on.pull_request.types
-  expect(types).toEqual(
-    expect.arrayContaining([
-      'opened',
-      'synchronize',
-      'reopened',
-      'ready_for_review',
-      'converted_to_draft'
-    ])
-  )
-  expect(Object.values(workflow.jobs).some((job) => !job.needs && admitted(job.if, false))).toBe(
-    true
-  )
-  const concurrency = workflow.concurrency['cancel-in-progress']
-  expect(typeof concurrency === 'boolean' ? concurrency : admitted(concurrency, true)).toBe(true)
-})
+it.each(workflows)(
+  '$file starts CI when ready and cancels it when drafted',
+  ({ workflow, repository }) => {
+    const types = workflow.on.pull_request.types
+    expect(types).toEqual(
+      expect.arrayContaining([
+        'opened',
+        'synchronize',
+        'reopened',
+        'ready_for_review',
+        'converted_to_draft'
+      ])
+    )
+    expect(
+      Object.values(workflow.jobs).some(
+        (job) => !job.needs && admitted(job.if, false, {}, 'pull_request', repository)
+      )
+    ).toBe(true)
+    const concurrency = workflow.concurrency['cancel-in-progress']
+    expect(
+      typeof concurrency === 'boolean'
+        ? concurrency
+        : admitted(concurrency, true, {}, 'pull_request', repository)
+    ).toBe(true)
+  }
+)
 
-it.each(workflows)('$file keeps its non-PR entry points eligible', ({ workflow }) => {
+it.each(workflows)('$file keeps its non-PR entry points eligible', ({ workflow, repository }) => {
   const needs = Object.fromEntries(
     Object.keys(workflow.jobs).map((id) => [id, { result: 'success', outputs: {} }])
   )
   for (const event of Object.keys(workflow.on).filter((name) => name !== 'pull_request')) {
     for (const [id, job] of Object.entries(workflow.jobs)) {
-      expect(admitted(job.if, true, needs, event), `${event}/${id}`).toBe(
-        admitted(job.if, false, needs, event)
+      expect(admitted(job.if, true, needs, event, repository), `${event}/${id}`).toBe(
+        admitted(job.if, false, needs, event, repository)
       )
     }
   }

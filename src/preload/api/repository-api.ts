@@ -136,6 +136,7 @@ export type ProjectGroupsApi = {
     projectId: string
     groupId: string | null
     order?: number
+    hostId?: string
   }) => Promise<Repo | null>
   scanNested: (args: {
     path: string

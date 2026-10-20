@@ -5,7 +5,7 @@
 //   launch  - deploy, RPC, kill orcad => relaunch + census, `wsl --terminate` => terminals exited;
 //             then an app update (E1): deferred over a live terminal, forced past it with the
 //             terminal kept, silent with none, and silent again after a reboot
-//   survive - >= 60 s after launch exited: distros still Running, holders adopted live, reconnect,
+//   survive - >= 60 s after launch exited: distros still Running, holders adopted live, reconnect, structured chat in git/folder projects,
 //             teardown leaves no bridge or holder processes, WSLInterop intact
 // .github/workflows/wsl-orcad-e2e.yml imports the distros and runs both phases.
 //
@@ -25,6 +25,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-co
 import { parsePairingCode } from '../../shared/pairing'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
+import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
@@ -35,6 +36,7 @@ import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
+import { proveWslStructuredChat } from './wsl-orcad-structured-chat-contract'
 import { WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -392,6 +394,7 @@ async function waitForNoLiveTerminals(connection: WslOrcadConnection): Promise<v
 /** App updates (E1): N -> N+1 over a live terminal, N+2 idle, N+3 after a reboot. */
 async function updatePhase(distro: string): Promise<Receipt> {
   const result: Receipt = {}
+  receipt.update = result
   if (!supervisor) {
     throw new Error('supervisor missing')
   }
@@ -430,7 +433,14 @@ async function updatePhase(distro: string): Promise<Receipt> {
   await runInTerminal(forced, terminal, ':', `terminal kept across Force in ${distro}`)
 
   // No terminals: the next build lands on connect without asking.
-  await rpc(forced, 'terminal.close', { terminal })
+  const { close } = await rpc<{ close: RuntimeTerminalClose }>(forced, 'terminal.close', {
+    terminal
+  })
+  result.close = close
+  result.censusAfterClose = await requestOrcadTerminalCensus(pairedConnection(forced), 0)
+  expect(close, 'the recovered terminal close must confirm its stop').toMatchObject({
+    ptyKilled: true
+  })
   await waitForNoLiveTerminals(forced)
   templates.set(key, nextTemplate('n2'))
   started = performance.now()
@@ -554,10 +564,26 @@ async function survivePhase(): Promise<void> {
     expect(adopted).toContainEqual({ distro: name, state: 'live' })
   }
   for (const { name } of DISTROS) {
-    const connection = await manager.ensure(name)
+    let connection = await manager.ensure(name)
     await rpc(connection, 'status.get')
     receipt[`${name}.detachedSession`] = await proveDetachedSession(connection, name)
     receipt[`${name}.census`] = await requestOrcadTerminalCensus(pairedConnection(connection), 0)
+    if (connection.pid === null) {
+      throw new Error('Missing guest runtime PID')
+    }
+    receipt[`${name}.chat`] = await proveWslStructuredChat({
+      rpc: (method, params) => rpc(connection, method, params),
+      guest: (command) => guest(name, command),
+      pairing: () => pairedConnection(connection),
+      runtimePid: connection.pid,
+      reconnect: async (whileDisconnected) => {
+        const { localPort, pid } = connection
+        await connection.close()
+        await whileDisconnected()
+        connection = await manager.ensure(name, { localPort })
+        expect(connection.pid, 'bridge loss must preserve the guest runtime').toBe(pid)
+      }
+    })
   }
 
   // Teardown: bridges closed, holders released, distros terminated.
@@ -623,7 +649,6 @@ describe.runIf(RUN && process.platform === 'win32')('WSL orcad on real WSL2 dist
         pids[name] = typeof result.orcadPid === 'number' ? result.orcadPid : null
       }
       const update = await updatePhase(PLAIN)
-      receipt.update = update
       pids[PLAIN] = typeof update.orcadPid === 'number' ? update.orcadPid : null
       // Bridges and watches go; the holders must not.
       await supervisor.dispose()

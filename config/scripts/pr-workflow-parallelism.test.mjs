@@ -10,6 +10,28 @@ const evidenceWorkflow = parse(
 )
 
 describe('PR workflow parallelism', () => {
+  it('routes the fork to available runners while retaining upstream runners', () => {
+    for (const [expression, hosted, upstream] of [
+      [workflow.jobs.code_paths['runs-on'], 'ubuntu-24.04', 'blacksmith-2vcpu-ubuntu-2404'],
+      [workflow.jobs.preflight['runs-on'], 'ubuntu-24.04', 'blacksmith-8vcpu-ubuntu-2404'],
+      [workflow.jobs.test.with.runner, 'ubuntu-24.04', 'blacksmith-4vcpu-ubuntu-2404'],
+      [
+        workflow.jobs.dependency_isolation['runs-on'],
+        'ubuntu-24.04',
+        'blacksmith-4vcpu-ubuntu-2404'
+      ],
+      [workflow.jobs.verify['runs-on'], 'ubuntu-22.04', 'blacksmith-2vcpu-ubuntu-2204']
+    ]) {
+      for (const repository of ['karlorz/orca', 'stablyai/orca']) {
+        expect(runInNewContext(expression.slice(3, -2), { github: { repository } })).toBe(
+          repository === 'karlorz/orca' ? hosted : upstream
+        )
+      }
+    }
+    expect(workflow.jobs.verify['continue-on-error']).toBeUndefined()
+    expect(workflow.jobs.verify.steps.every((step) => !step['continue-on-error'])).toBe(true)
+  })
+
   it('enforces import boundaries in the required static-analysis checks', () => {
     const guard = workflow.jobs.preflight.steps.find((step) =>
       step.run?.includes('bun config/scripts/check-import-boundaries.mjs')
@@ -77,4 +99,16 @@ describe('PR workflow parallelism', () => {
     await expect(result).rejects.toBe(failure)
     expect(env['INPUT_GITHUB-TOKEN']).toBe('test-token')
   })
+})
+
+it('keeps the costly layout-owner experiment manual and limits it to one active suite', () => {
+  const experiment = parse(readFileSync('.github/workflows/layout-owner-e2e.yml', 'utf8'))
+  expect(Object.keys(experiment.on)).toEqual(['workflow_dispatch'])
+  expect(experiment.concurrency).toEqual({
+    group: 'layout-owner-e2e',
+    'cancel-in-progress': false
+  })
+  for (const job of Object.values(workflow.jobs)) {
+    expect(job.with?.layout_owner).toBeUndefined()
+  }
 })

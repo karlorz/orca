@@ -280,7 +280,16 @@ export function couldRunOnWindows(runsOn) {
       : Array.isArray(runsOn)
         ? runsOn
         : [...(runsOn?.labels ?? []), runsOn?.group ?? ''].flat()
-  return labels.some((label) => /windows/i.test(String(label)) || String(label).includes('${{'))
+  return labels.some((label) => {
+    const value = String(label)
+    const repositoryRoute = value.match(
+      /^\$\{\{\s*github\.repository\s*==\s*'[^']+'\s*&&\s*'([\w.-]+)'\s*\|\|\s*'([\w.-]+)'\s*\}\}$/
+    )
+    if (repositoryRoute) {
+      return repositoryRoute.slice(1).some((runner) => /windows/i.test(runner))
+    }
+    return /windows/i.test(value) || value.includes('${{')
+  })
 }
 
 /** The vitest argv of the one Windows job's one curated-file step. */
@@ -532,6 +541,24 @@ describe('Windows runner detection', () => {
     expect(couldRunOnWindows('ubuntu-latest')).toBe(false)
     expect(couldRunOnWindows(['self-hosted', 'linux'])).toBe(false)
     expect(couldRunOnWindows(undefined)).toBe(false)
+  })
+
+  it('checks both literal repository routes and keeps unknown expressions unresolved', () => {
+    expect(
+      couldRunOnWindows(
+        "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}"
+      )
+    ).toBe(false)
+    expect(
+      couldRunOnWindows(
+        "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'windows-2022' }}"
+      )
+    ).toBe(true)
+    expect(
+      couldRunOnWindows(
+        "${{ github.repository == 'karlorz/orca' && matrix.runner || 'ubuntu-24.04' }}"
+      )
+    ).toBe(true)
   })
 })
 

@@ -148,7 +148,13 @@ describe('terminal close and handle incarnation continuity', () => {
           : harness.runtime.closeTerminal(harness.terminal.handle)
       ).resolves.toMatchObject({ handle: harness.terminal.handle, tabId: TAB_ID })
 
-      expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+      if (closeMode === 'pane') {
+        expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
+          expectedIncarnationId: INCARNATION_ID
+        })
+      } else {
+        expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+      }
       await expect(
         harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       ).resolves.toMatchObject({ tabs: [] })
@@ -206,7 +212,7 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.retirePersistedTab()
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, { expectedIncarnationId: INCARNATION_ID })
     expect(harness.closeTerminal).not.toHaveBeenCalled()
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
   })
@@ -254,7 +260,8 @@ describe('terminal close and handle incarnation continuity', () => {
     ])
     expect(harness.stopAndWait).toHaveBeenCalledTimes(1)
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: INCARNATION_ID
     })
     expect(harness.kill).not.toHaveBeenCalled()
     expect(closeMobileSessionTab).toHaveBeenCalledTimes(1)
@@ -310,8 +317,10 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.retirePersistedTab()
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ ptyKilled: false })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
-    expect(harness.kill).toHaveBeenCalledWith(SIBLING_PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, { expectedIncarnationId: INCARNATION_ID })
+    expect(harness.kill).toHaveBeenCalledWith(SIBLING_PTY_ID, {
+      expectedIncarnationId: SIBLING_INCARNATION_ID
+    })
   })
 
   it('uses verified teardown after retirement before falling back to kill', async () => {
@@ -327,7 +336,8 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.acknowledged.resolve()
     await expect(closing).resolves.toMatchObject({ ptyKilled: true })
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: INCARNATION_ID
     })
     expect(harness.kill).not.toHaveBeenCalled()
   })
@@ -370,7 +380,7 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'a follow-up stop was issued but its outcome could not be verified'
     })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, { expectedIncarnationId: INCARNATION_ID })
   })
 
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
@@ -405,9 +415,10 @@ describe('terminal close and handle incarnation continuity', () => {
       ptyStopReason: 'provider_unavailable'
     })
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: INCARNATION_ID
     })
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill).toHaveBeenCalledWith(PTY_ID, { expectedIncarnationId: INCARNATION_ID })
   })
 
   it('finishes PTY teardown when the session store disappears after retirement', async () => {
@@ -429,7 +440,8 @@ describe('terminal close and handle incarnation continuity', () => {
     await expect(closing).resolves.toMatchObject({ handle, tabId: TAB_ID, ptyKilled: false })
     expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
     expect(harness.stopAndWait).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID, {
-      deadlineMs: expect.any(Number)
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: INCARNATION_ID
     })
   })
 

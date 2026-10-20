@@ -1,12 +1,15 @@
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { probeManagedOrcadTunnel } from './orcad-managed-tunnel-resume'
 import { ensureManagedOrcadServing } from './orcad-managed-serving'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import { getRemoteRuntimeSharedControlAnsweredAt } from '../../ipc/runtime-environments/runtime-environment-shared-control-answers'
-import { getSshConnectionManager, getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import {
+  getSshConnectionManager,
+  getSshTargetRegistryStore
+} from '../../ssh/targets/ssh-target-registry'
 import {
   MANAGED_ORCAD_TUNNEL_TARGETING,
   type OrcadTunnelStartChecks
@@ -88,4 +91,9 @@ export function startOrcadManagedTunnel(
 
 export function closeOrcadManagedTunnel(environmentId: string): Promise<void> {
   return managedTunnels.close(environmentId)
+}
+
+/** Part of the SSH session's teardown, so a Disconnect leaves no managed `ssh -L` listening. */
+export function closeOrcadManagedTunnelsForTarget(targetId: string): Promise<void> {
+  return managedTunnels.closeTarget(targetId)
 }

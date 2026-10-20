@@ -5,6 +5,14 @@ import {
 } from './terminal-close-observed-exit-test-fixture'
 
 describe('closing a terminal after observing its physical exit', () => {
+  it('closes a surviving daemon terminal after inventory recovers its incarnation', async () => {
+    const result = await runObservedExitSocketScenario('healthy', true)
+    expect(result.close.ptyKilled).toBe(true)
+    expect(result.fallbackKills).toBe(0)
+    expect(result.targetInventoryCount).toBe(0)
+    expect(result.settled.liveness).toBe('exited')
+  })
+
   it('preserves the physical cause when an unrelated daemon prevents aggregate verification', async () => {
     const result = await runObservedExitSocketScenario('physical-exit-observed')
     expect(result.close).toEqual({ ptyKilled: true, ptyStopVerdict: null })
@@ -50,7 +58,11 @@ describe('closing a terminal after observing its physical exit', () => {
     expect(result.verdict?.status).toBe('exited')
   })
 
-  it.each(['replacement', 'unverified', 'legacy-unstamped', 'throw-after-exit'] as const)(
+  it('refuses a terminal replaced while its previous incarnation was stopping', async () => {
+    await expect(runObservedExitControl('replacement')).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it.each(['unverified', 'legacy-unstamped', 'throw-after-exit'] as const)(
     'does not reuse an exit for %s',
     async (control) => {
       const result = await runObservedExitControl(control)

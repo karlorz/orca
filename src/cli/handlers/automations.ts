@@ -36,13 +36,7 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from '../automation-runs-paging'
-import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
-import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import {
-  EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
-  hasExtraAgentArgs
-} from '../../shared/automation-extra-agent-args'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -65,7 +59,10 @@ import {
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
-import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import {
+  getExtraAgentArgsFlag,
+  assertExtraAgentArgsSupported
+} from './automation-extra-agent-args-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -176,20 +173,6 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
     )
   }
   return runContext
-}
-
-// Why: an older runtime strips the field and would run the automation without it.
-async function assertExtraAgentArgsSupported(
-  client: RuntimeClient,
-  extraAgentArgs: string | undefined
-): Promise<void> {
-  if (!hasExtraAgentArgs(extraAgentArgs)) {
-    return
-  }
-  const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
-  }
 }
 
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {

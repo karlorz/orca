@@ -25,7 +25,6 @@ import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-sessi
 
 export { StaleRelayBrokerError, type RelayBrokerStatus } from './relay-session-broker-contract'
 
-
 export class RelaySessionBroker {
   private readonly options: RelaySessionBrokerOptions
   private readonly relayHostId: string

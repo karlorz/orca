@@ -147,6 +147,30 @@ describe('publishAgentHookEnvelope', () => {
     }
   })
 
+  it('sheds oversized full automation prose before the bounded status preview', () => {
+    const primary = makeBoundedClient(16384)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      const envelope = {
+        ...makeEnvelope({ lastAssistantMessage: 8000 }),
+        automationAssistantResult: {
+          content: 'R'.repeat(256 * 1024),
+          truncated: false,
+          providerSessionId: 'session',
+          providerPromptId: 'prompt'
+        }
+      }
+      publishAgentHookEnvelope(dispatcher, envelope)
+      const published = decodeEnvelopes(primary)
+      expect(published).toHaveLength(1)
+      expect(published[0].automationAssistantResult).toBeUndefined()
+      expect(published[0].payload.lastAssistantMessage).toHaveLength(8000)
+      expect(envelope.automationAssistantResult.content).toHaveLength(256 * 1024)
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
   it('sheds lastAssistantMessage first and stops as soon as the frame fits', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
