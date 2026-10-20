@@ -17,14 +17,15 @@ const content = `Synthetic report 😀\n${'complete report row\n'.repeat(1000)}`
 afterEach(() => vi.unstubAllEnvs())
 
 describe('automation report flush before terminal retirement', () => {
-  it.each([
-    { host: 'local', completionHook: 'Stop' },
-    { host: 'local', completionHook: 'SessionEnd' },
-    { host: 'relay', completionHook: 'Stop' },
-    { host: 'relay', completionHook: 'SessionEnd' }
-  ])(
-    'waits for the exact completed report after a capped $host $completionHook preview',
-    async ({ host, completionHook }) => {
+  it.each(
+    ['local', 'relay'].flatMap((host) =>
+      ['Stop', 'SessionEnd'].flatMap((completionHook) =>
+        [false, true].map((lateSessionStart) => ({ host, completionHook, lateSessionStart }))
+      )
+    )
+  )(
+    'waits for the exact $host $completionHook report (late startup: $lateSessionStart)',
+    async ({ host, completionHook, lateSessionStart }) => {
       const root = mkdtempSync(join(tmpdir(), 'orca-automation-report-flush-'))
       const cwd = join(root, 'workspace')
       const sessionDir = join(root, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
@@ -68,6 +69,7 @@ describe('automation report flush before terminal retirement', () => {
               paneKey,
               tabId: 'tab-report',
               worktreeId: 'workspace',
+              launchToken: 'report-launch',
               env: host === 'relay' ? 'remote' : 'production',
               payload: { sessionId, cwd, ...payload }
             })
@@ -106,6 +108,15 @@ describe('automation report flush before terminal retirement', () => {
           }
         })
         capture.track(run)
+        if (lateSessionStart) {
+          const before = server.getAutomationResultRowsForPane(paneKey)[0]
+          await post({ hookEventName: 'SessionStart' })
+          expect(server.getAutomationResultRowsForPane(paneKey)[0]).toMatchObject({
+            providerPromptId: promptId,
+            turnStartedAt: before.turnStartedAt,
+            payload: { state: 'working', prompt: 'report' }
+          })
+        }
         await post({ hookEventName: 'Stop', promptId })
         if (completionHook === 'SessionEnd') {
           await post({ hookEventName: 'SessionEnd' })

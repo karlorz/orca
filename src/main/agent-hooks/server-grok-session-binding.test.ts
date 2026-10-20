@@ -56,6 +56,39 @@ function fixture(): BindingTestServer {
 }
 
 describe('Grok binding in the existing canonical hook row', () => {
+  it('keeps a live turn when an older relay forwards its delayed startup identity', () => {
+    const server = fixture()
+    const identity = {
+      source: 'grok',
+      paneKey: owner.paneKey,
+      tabId: owner.tabId,
+      worktreeId: owner.worktreeId,
+      launchToken: owner.launchToken,
+      providerSession: { key: 'session_id', id: 'session' }
+    }
+    server.ingestRemote(
+      {
+        ...identity,
+        hookEventName: 'UserPromptSubmit',
+        grokPromptBoundary: true,
+        providerPromptId: 'prompt',
+        payload: { state: 'working', prompt: 'report', agentType: 'grok' }
+      },
+      'remote-host'
+    )
+    const before = server.getAutomationResultRowsForPane(owner.paneKey)[0]
+    server.ingestRemote(
+      {
+        ...identity,
+        hookEventName: 'SessionStart',
+        providerSessionOnly: true,
+        payload: { state: 'done', prompt: '', agentType: 'grok' }
+      },
+      'remote-host'
+    )
+    expect(server.getAutomationResultRowsForPane(owner.paneKey)[0]).toBe(before)
+  })
+
   it('retains live SessionStart identity without a working status or a public routing credential', () => {
     const server = fixture()
     server.ingestGrok({

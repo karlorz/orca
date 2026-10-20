@@ -96,6 +96,7 @@ describe('durable late automation result', () => {
             paneKey,
             tabId: 'tab-1',
             worktreeId: 'wt-1',
+            launchToken: 'automation-launch',
             env: 'production',
             payload
           })
@@ -129,6 +130,7 @@ describe('durable late automation result', () => {
           promptId: 'p-1',
           prompt: 'review'
         })
+        await post({ hookEventName: 'SessionStart', sessionId })
         await post({
           hookEventName: 'PostToolUse',
           sessionId,

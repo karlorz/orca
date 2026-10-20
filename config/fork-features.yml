@@ -586,6 +586,18 @@ features:
       - src/shared/agent-hook-listener/grok-completed-update-result.ts
     wiki: projects/orca/work/2026-10-07-automation-outcome-reporting
 
+  - id: grok-late-startup-preserves-automation-turn
+    title: Preserve an observed Grok prompt when the same launch delivers SessionStart late
+    kind: product
+    status: landed
+    paths:
+      - src/shared/agent-hook-listener/grok-session-start-order.ts
+      - src/shared/agent-hook-listener.ts
+      - src/main/agent-hooks/server/server-status-update.ts
+      - src/main/automations/automation-run-report-flush.test.ts
+      - src/main/automations/service-late-agent-result.test.ts
+    wiki: projects/llm-wiki/work/2026-10-19-daily-sleep-pipeline-code-repair
+
   - id: managed-orcad-listen-extras
     title: Optional managed-orcad bindHost, pairingAddress, and mobilePairing on the SSH deployment sidecar
     kind: product

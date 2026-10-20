@@ -1,7 +1,5 @@
 import { readGrokAutomationAssistantResult } from './automation-assistant-result'
 import { readAgentProcessIdentity } from './agent-process-presence'
-import { resolveAgentStatusIdentity } from './agent-status-identity'
-import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import { extractAgentProviderSession } from './agent-session-resume'
@@ -31,6 +29,8 @@ import {
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 import { CLAUDE_EXIT_SESSION_END_REASONS } from './agent-hook-listener/claude-exit-session-end-reasons'
+import { isLateGrokSessionStart } from './agent-hook-listener/grok-session-start-order'
+import { isHookFromInheritedAgent } from './agent-hook-listener/hook-owner-precedence'
 
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -149,32 +149,22 @@ export function normalizeHookPayload(
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
-  const previousReceivedAt =
-    previousStatus &&
-    'receivedAt' in previousStatus &&
-    typeof previousStatus.receivedAt === 'number'
-      ? previousStatus.receivedAt
-      : previousStatus?.hostEvidenceObservedAt
-  // Reject before provider folds mutate the pane's prompt, tool and child caches.
   if (
-    previousStatus &&
-    previousReceivedAt !== undefined &&
-    sameAgentStatusTerminalOwner(
-      { connectionId: previousStatus.connectionId ?? null, worktreeId: previousStatus.worktreeId },
-      { connectionId: null, worktreeId }
-    ) &&
-    resolveAgentStatusIdentity({
-      existing: {
-        agentType: previousStatus.payload.agentType,
-        state: previousStatus.payload.state,
-        updatedAt: previousReceivedAt,
-        restoredUnconfirmed: previousStatus.restoredUnconfirmed,
-        agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
-      },
-      incoming: source,
-      now: Date.now()
-    }).inheritedFromActivePane
+    isLateGrokSessionStart(previousStatus, {
+      source,
+      hookEventName: typeof eventName === 'string' ? eventName : undefined,
+      paneKey,
+      tabId,
+      worktreeId,
+      connectionId: null,
+      launchToken,
+      providerSession: providerSession ?? undefined
+    })
   ) {
+    return null
+  }
+  // Reject before provider folds mutate the pane's prompt, tool and child caches.
+  if (isHookFromInheritedAgent(previousStatus, source, worktreeId)) {
     return null
   }
   // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An
