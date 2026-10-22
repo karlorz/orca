@@ -490,6 +490,8 @@ describe('a surface the host retired stays retired when a restored sibling regis
 
     await runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, 'tab-y', { reason: 'user' })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Fork: a main-owned close stops through the incarnation-guarded stop loop, so its kill is
+      // pinned to the incarnation the close was issued against.
       expect(kill).toHaveBeenCalledWith(SSH_PTY_Y, { expectedIncarnationId: 'incarnation-y' })
     } else {
       expect(kill).toHaveBeenCalledWith(SSH_PTY_Y)
