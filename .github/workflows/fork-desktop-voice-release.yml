@@ -51,6 +51,7 @@ jobs:
     if: github.repository == 'karlorz/orca'
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/node-server-tests.yml
     with:
       ref: ${{ github.sha }}
