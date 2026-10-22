@@ -22,13 +22,16 @@ type CreateMobilePairingOffer = (args: {
 
 export async function createDesktopMobilePairingOffer(args: {
   createOffer: CreateMobilePairingOffer
+  /** The listener's bind host, read only when no address was picked; the picker offers families it serves. */
+  getListenerHost: () => string
   address?: string
   rotate?: boolean
   connectionMode?: MobilePairingConnectionMode
   getDefaultRouteInterfaceNames?: DefaultRouteInterfaceLookup
 }): Promise<PairingCreateMobileOfferResult> {
   const advertised =
-    args.address ?? (await getDefaultPairingAddress(args.getDefaultRouteInterfaceNames))
+    args.address ??
+    (await getDefaultPairingAddress(args.getListenerHost(), args.getDefaultRouteInterfaceNames))
   // Why: LAN-only has no relay fallback, so a missing auto-advertised address must fail closed.
   if (!advertised && args.connectionMode === 'local-only') {
     return {
@@ -67,6 +70,7 @@ export function registerDesktopMobilePairingOffers(
   rpcServer: {
     setMobilePairingOffers: (hook: MobilePairingOfferRpcContext | null) => void
     createMobilePairingOffer: CreateMobilePairingOffer
+    getNetworkExposureBindHost: () => string
   },
   serveOptions: unknown
 ): void {
@@ -77,6 +81,7 @@ export function registerDesktopMobilePairingOffers(
     create: (params: PairingCreateMobileOfferParams) =>
       createDesktopMobilePairingOffer({
         createOffer: (offerArgs) => rpcServer.createMobilePairingOffer(offerArgs),
+        getListenerHost: () => rpcServer.getNetworkExposureBindHost(),
         address: params.address,
         rotate: params.rotate
       })

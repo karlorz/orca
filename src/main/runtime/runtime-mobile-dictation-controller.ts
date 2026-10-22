@@ -6,6 +6,11 @@ import {
 } from '../../shared/voice-dictation-selection'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { joinTranscriptSegments } from '../../shared/dictation-segment-format'
+import { getCatalogModel, isLocalSpeechModel } from '../speech/model-catalog'
+import {
+  hasLocalSpeechRecognizer,
+  LOCAL_SPEECH_UNAVAILABLE_ERROR
+} from '../speech/stt-worker-paths'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type MobileDictationLiveSnapshot = {
@@ -61,6 +66,10 @@ export class RuntimeMobileDictationController {
         : params.modelId || effectiveSttModel(voice)
     if (!modelId) {
       throw new Error('voice_model_not_selected')
+    }
+    const manifest = getCatalogModel(modelId)
+    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer()) {
+      throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {

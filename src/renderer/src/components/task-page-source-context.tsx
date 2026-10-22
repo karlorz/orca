@@ -123,6 +123,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 } {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
@@ -130,6 +131,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
     id: repo.id,
     path: repo.path,
     executionHostId: repo.executionHostId,
+    connectionId: repo.connectionId,
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

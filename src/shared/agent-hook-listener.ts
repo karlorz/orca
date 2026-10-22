@@ -315,6 +315,7 @@ export function normalizeHookPayload(
       : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...dispatched.hostTurnSignals,
     automationAssistantResult:
       source === 'grok' && (transportPayload.mainAgent?.state ?? transportPayload.state) === 'done'
         ? readGrokAutomationAssistantResult(hookPayloadRecord, record, grokActiveTurn)

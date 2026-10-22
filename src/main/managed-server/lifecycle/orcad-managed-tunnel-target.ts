@@ -18,10 +18,8 @@ import { listenExtrasFromDeployment, managedOrcadSlot } from './orcad-managed-ru
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import type {
-  PortForwardEntry,
-  SshPortForwardManager
-} from '../../ssh/port-forwarding/ssh-port-forward'
+import type { PortForwardEntry } from '../../../shared/ssh-types'
+import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 
 export type OrcadManagedTunnelTargeting = {
   resolveRemotePort: (input: OrcadTunnelPortInput) => Promise<number>
@@ -72,7 +70,7 @@ export const PERSISTED_PORT_TARGETING: OrcadManagedTunnelTargeting = {
   verifyIdentity: async () => ({ verdict: 'verified' })
 }
 
-export type VerifiedOrcadForwardArgs = {
+type VerifiedOrcadForwardArgs = {
   targetId: string
   connection: SshConnection
   forwards: SshPortForwardManager

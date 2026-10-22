@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -10,6 +11,8 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO_ID = 'repo'
@@ -188,6 +191,19 @@ function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
         sessions.get(hostId ?? LOCAL_EXECUTION_HOST_ID) ?? getDefaultWorkspaceSession(),
       setWorkspaceSession: (next: WorkspaceSessionState, hostId?: ExecutionHostId) => {
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, next)
+      },
+      // A layout-owner build's own layout write, as the Store applies it to the routed partition.
+      applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly ExecutionHostId[]) => {
+        const hostId = hostIds[0] ?? LOCAL_EXECUTION_HOST_ID
+        const change = applyCommandToSession(
+          hostId,
+          sessions.get(hostId) ?? getDefaultWorkspaceSession(),
+          command
+        )
+        if (change.session) {
+          sessions.set(hostId, change.session)
+        }
+        return change.value
       },
       flushPendingOrThrowAsync: async () => {},
       // The production store commits asynchronously; a synchronous flush on these paths is a bug.
@@ -473,7 +489,11 @@ describe('a surface the host retired stays retired when a restored sibling regis
     expect(await listedSurfaces(runtime)).toContain(`tab-y::${RIGHT}:ready`)
 
     await runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, 'tab-y', { reason: 'user' })
-    expect(kill).toHaveBeenCalledWith(SSH_PTY_Y)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(kill).toHaveBeenCalledWith(SSH_PTY_Y, { expectedIncarnationId: 'incarnation-y' })
+    } else {
+      expect(kill).toHaveBeenCalledWith(SSH_PTY_Y)
+    }
     runtime.registerPty(SSH_PTY_X, WORKTREE_ID, 'ssh-1', {
       tabId: 'tab-x',
       leafId: LEFT,

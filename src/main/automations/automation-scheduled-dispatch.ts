@@ -9,7 +9,11 @@ import {
   requestAutomationDispatch,
   type AutomationRendererChannel
 } from './automation-dispatch-request'
-import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
+import {
+  captureLegacyRunTarget,
+  resolveAutomationRunTarget,
+  type AutomationRunTargetResult
+} from './run-target-resolution'
 import {
   describeScheduledRefusal,
   missedBeyondGrace,
@@ -81,10 +85,11 @@ export function dispatchAutomationRun(
 
 export async function evaluateScheduledAutomation(
   host: AutomationScheduledDispatchHost,
-  automation: Automation,
+  listed: Automation,
   now: number
 ): Promise<void> {
   const generation = host.dispatchGeneration()
+  const automation = captureLegacyRunTarget(host.store, listed, host.allowRemoteHostScheduling)
   const scheduledFor = host.store.getLatestAutomationOccurrence(automation, now)
   if (scheduledFor === null) {
     await host.runs.advanceNextRun(automation.id, now)

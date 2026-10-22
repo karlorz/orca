@@ -72,16 +72,24 @@ it('qualifies the same source via the unchanged template matrix and same-run dow
     path: 'out/orcad-template'
   })
   expect(step('Verify same-run template provenance').run).toContain('validation-provenance.json')
-  expect(template.jobs.desktop_template.needs).toEqual([
-    'persistence',
-    'mobile_web_bundle',
-    'linux_glibc_floor',
-    'linux_glibc217_compat',
-    'linux_musl'
-  ])
-  for (const job of template.jobs.desktop_template.needs) {
-    expect(template.jobs.desktop_template.if).toContain(`needs.${job}.result == 'success'`)
+  expect(template.jobs.desktop_template.needs).toBe('changes')
+  const qualification = template.jobs.desktop_template.steps.find(
+    (entry) => entry.name === 'Wait for every template qualification lane'
+  ).with.script
+  for (const [job, count] of Object.entries({
+    persistence: 6,
+    mobile_web_bundle: 1,
+    linux_glibc_floor: 2,
+    linux_glibc217_compat: 1,
+    linux_musl: 2
+  })) {
+    expect(qualification).toContain(`${job}: ${count}`)
   }
+  expect(qualification).toContain("lane.conclusion !== 'success'")
+  expect(qualification).toContain('lanes.length !== count')
+  expect(qualification).toContain(
+    "throw new Error('Timed out waiting for every template qualification lane')"
+  )
   const provenance = template.jobs.desktop_template.steps.find(
     (entry) => entry.name === 'Bind validation template to exact source and run'
   )

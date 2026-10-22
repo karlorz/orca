@@ -2,9 +2,15 @@
 // Fail closed when mobile/pnpm-lock.yaml drifts from package.json / workspace patches.
 
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parse, parseAllDocuments } from 'yaml'
+
+// Reuse the updater's declared semver dependency without relying on hoisted transitive packages.
+const { intersects, validRange } = createRequire(
+  import.meta.resolve('electron-updater/package.json')
+)('semver')
 
 export const CODEGEN_PATCH_PREFIX = '@react-native/codegen@'
 
@@ -24,6 +30,21 @@ export function manifestSpecifiers(manifest) {
     ...manifest?.devDependencies,
     ...manifest?.optionalDependencies
   }
+}
+
+function overriddenSpecifier(name, specifier, overrides) {
+  let wanted = specifier
+  for (const [selector, replacement] of Object.entries(overrides)) {
+    if (selector === name) {
+      wanted = replacement
+    } else if (selector.startsWith(`${name}@`)) {
+      const range = selector.slice(name.length + 1)
+      if (validRange(specifier) && validRange(range) && intersects(specifier, range)) {
+        wanted = replacement
+      }
+    }
+  }
+  return wanted
 }
 
 export function lockfileSpecifiers(lockfile) {
@@ -64,7 +85,13 @@ export function findMobileLockfileProblems({
   patchFiles = {}
 } = {}) {
   const problems = []
-  const expectedSpecifiers = manifestSpecifiers(manifest)
+  const overrides = { ...workspace?.overrides, ...manifest?.pnpm?.overrides }
+  const expectedSpecifiers = Object.fromEntries(
+    Object.entries(manifestSpecifiers(manifest)).map(([name, specifier]) => [
+      name,
+      overriddenSpecifier(name, specifier, overrides)
+    ])
+  )
   const actualSpecifiers = lockfileSpecifiers(lockfile)
   const specifierNames = new Set([
     ...Object.keys(expectedSpecifiers),

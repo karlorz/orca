@@ -76,6 +76,10 @@ export abstract class OrcaRuntimeWithCloseTerminal extends OrcaRuntimeWithStopEx
         }
       }
     }
+    const mainClose = await this.closeMainOwnedTerminal(handle, false, options)
+    if (mainClose) {
+      return mainClose
+    }
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     const gcCloseHost: GcCloseStopHost = {
       ptysById: this.ptysById,
@@ -237,6 +241,10 @@ export abstract class OrcaRuntimeWithCloseTerminal extends OrcaRuntimeWithStopEx
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
+    const mainClose = await this.closeMainOwnedTerminal(handle, true)
+    if (mainClose) {
+      return mainClose
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const closeAuthority: RuntimePtyTabCloseAuthority = {

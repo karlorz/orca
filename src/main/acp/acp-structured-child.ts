@@ -6,6 +6,7 @@ import type { AcpStructuredSession } from './acp-structured-session'
 
 export type AcpStructuredChild = Pick<
   AcpStructuredSession,
+  | 'events'
   | 'sessionId'
   | 'nativeSessionId'
   | 'fence'
@@ -32,6 +33,18 @@ export function isAcpReadySession(
   session: AcpStructuredChild | null | undefined
 ): session is AcpStructuredSession & AcpStructuredChild {
   return session != null && session.lane !== null && session.turns !== null
+}
+
+export function requireLiveAcpSession(
+  sessions: ReadonlyMap<string, AcpStructuredSession>,
+  sessionId: string,
+  agent: string
+): AcpStructuredSession {
+  const session = sessions.get(sessionId)
+  if (!session || !isAcpReadySession(session) || session.journalClosed !== null) {
+    throw new Error(`no live ${agent} child owns ${sessionId}`)
+  }
+  return session
 }
 
 export function acpStartupFailure(

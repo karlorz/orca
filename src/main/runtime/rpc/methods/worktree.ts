@@ -9,7 +9,7 @@ import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-
 import { getWorkspaceStatusWarning } from '../../../../shared/workspace-status-warning'
 import { createWorktreeWithStartupAgent } from '../../../agent-launch/startup-agent-worktree-create'
 import { defineMethod } from '../core'
-import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
@@ -30,6 +30,7 @@ import {
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { WORKTREE_REMOVE_METHODS } from './worktree-remove-methods'
+import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -61,12 +62,7 @@ export const WORKTREE_METHODS = [
       worktree: await runtime.showManagedWorktree(params.worktree)
     })
   }),
-  defineMethod({
-    name: 'worktree.sleep',
-    permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.sleepManagedWorktree(params.worktree)
-  }),
+  WORKTREE_SLEEP_METHOD,
   defineMethod({
     name: 'worktree.activate',
     permission: 'workspace',
@@ -93,9 +89,9 @@ export const WORKTREE_METHODS = [
       // Why: a mobile create interrupted by a connection migration is retried with
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
-      context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
+      context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
-        const repo = await runtime.showRepo(params.repo)
+        const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: params.repo,

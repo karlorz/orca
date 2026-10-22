@@ -21,8 +21,9 @@ export function resolveHostEndpointEdit(
   }
 
   const fallbackScheme = endpointScheme(storedEndpoint)
-  const fallbackPort =
-    endpointPort(storedEndpoint) ?? (fallbackScheme === 'wss' ? '443' : undefined)
+  const fallbackPort = /^wss:\/\//i.test(input.trim())
+    ? '443'
+    : (endpointPort(storedEndpoint) ?? (fallbackScheme === 'wss' ? '443' : undefined))
   const options = { fallbackPort, fallbackScheme }
   const normalizedInput = normalizeHostEndpoint(input, options)
   if (!normalizedInput.ok) {

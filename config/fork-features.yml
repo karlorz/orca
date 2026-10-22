@@ -737,3 +737,39 @@ features:
     paths:
       - src/main/runtime/agent-session-record-rows.ts
       - src/main/native-chat/agent-session-wire/structured-agent-session-bound-controls.test.ts
+
+  - id: remote-editor-image-preview-owner-routing
+    title: Read image previews from the runtime that owns the file instead of the local disk
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
+      - src/renderer/src/lib/file-owner-runtime-target.ts
+      - src/renderer/src/runtime/runtime-file-read-client.ts
+      - src/renderer/src/runtime/runtime-file-routing.ts
+      - src/renderer/src/runtime/runtime-paged-file-read.ts
+
+  - id: runtime-owner-dual-env-alias-identity
+    title: Treat a paired server's dual environment aliases as one owner across sidebar, explorer, and quick open
+    kind: product
+    status: landed
+    paths:
+      - src/shared/runtime-environment-owner.ts
+      - src/renderer/src/lib/resolve-owner.ts
+      - src/renderer/src/lib/runtime-owner-catalog.ts
+      - src/renderer/src/lib/runtime-owner-route-state.ts
+      - src/renderer/src/lib/single-runtime-legacy-owner.ts
+      - src/renderer/src/lib/worktree-operation-route.ts
+      - src/shared/sidebar-list/runtime-owner-worktrees.ts
+      - src/shared/sidebar-list/sidebar-row-plan.ts
+
+  - id: tab-sync-env-scoped-provenance
+    title: Scope mirrored editor and terminal tab provenance to its environment so paired runtimes stop duplicating tabs or culling coordinator terminals
+    kind: product
+    status: landed
+    paths:
+      - src/renderer/src/lib/editor-file-operation-owner.ts
+      - src/renderer/src/runtime/web-session-tabs-sync/mirrored-editor-file-identity.ts
+      - src/renderer/src/runtime/web-session-tabs-sync/cross-runtime-mirror-suppression.ts
+      - src/renderer/src/runtime/web-session-tabs-sync/terminal-surfaces.ts
+      - src/renderer/src/store/slices/editor/file-ids/editor-file-ids.ts

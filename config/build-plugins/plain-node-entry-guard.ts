@@ -2,6 +2,9 @@ import { spawn } from 'node:child_process'
 import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
+import { CLI_MAIN_ENTRY_NAMES } from './plain-node-cli-entry-names'
+
+export { CLI_MAIN_ENTRY_NAMES }
 
 type NormalizedInputOptions = Rollup.NormalizedInputOptions
 type NormalizedOutputOptions = Rollup.NormalizedOutputOptions
@@ -16,33 +19,6 @@ type OutputChunk = Rollup.OutputChunk
 // build when any chunk reachable from a plain-Node fork entry requires
 // electron, and smoke-loads daemon-entry under plain Node to prove its module
 // graph still resolves.
-
-// The CLI loads these paths after electron-vite replaces out/main.
-export const CLI_MAIN_ENTRY_NAMES = [
-  'agent-hooks/managed-agent-hook-controls',
-  'daemon/daemon-pid-file-parse',
-  'gitlab/project-ref-parser',
-  'home-appimage-release-policy',
-  'home-appimage-updater',
-  'linux-home-update-policy',
-  'orca-home-appimage-install',
-  'orca-home-appimage-verification',
-  'orca-profiles/profile-index-store',
-  'claude-accounts/keychain',
-  ...[
-    'access',
-    'active-location',
-    'storage-classification',
-    'offline-settings',
-    'backup-path',
-    'database-recovery',
-    'domain-reader',
-    'recovery-command'
-  ].map((module) => `persistence/profile-state/profile-state-${module}`),
-  'persistence/profile-state/legacy-json/profile-state-export-path',
-  'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
-] as const
 
 // Plain-Node processes and CLI modules cannot load Electron's API.
 const PLAIN_NODE_ENTRY_NAMES = [

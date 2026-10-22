@@ -5,8 +5,8 @@
 const WORD_BOUNDARY_CHAR_RE = /^[\p{L}\p{N}]$/u
 const CJK_BOUNDARY_CHAR_RE =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u
-const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}]$/u
-const NO_SPACE_AFTER_CHAR_RE = /^[([{（《「『]$/u
+const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%\u3002\uff0c\u3001\uff01\uff1f\uff1b\uff1a\uff09)\]}]$/u
+const NO_SPACE_AFTER_CHAR_RE = /^[([{\uff08\u300a\u300c\u300e]$/u
 const SPACE_AFTER_CHAR_RE = /^[,.;:!?%]$/u
 
 function getFirstNonWhitespaceChar(text: string): string {

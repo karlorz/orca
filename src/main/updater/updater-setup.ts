@@ -1,7 +1,6 @@
 import { app, powerMonitor } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { resolveAppImageGenerationOfExecutable } from '../../shared/appimage-cache-identity'
-import { is } from '@electron-toolkit/utils'
 import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from '../updater-release-build-cache'
 import type {
@@ -140,10 +139,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       this.sendErrorStatus(`The server update did not complete: ${serveHandoffFailure}`, true)
     }
 
-    if (!app.isPackaged && !is.dev) {
-      return
-    }
-    if (is.dev) {
+    if (!app.isPackaged) {
       return
     }
 

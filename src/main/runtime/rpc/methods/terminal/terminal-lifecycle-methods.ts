@@ -21,7 +21,7 @@ import {
   TerminalStopExact,
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { closeTerminalFromRpc } from './terminal-gc-close'
+import { closeTerminalFromRpc, TERMINAL_GC_CLOSE_METHOD } from './terminal-gc-close'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
@@ -52,6 +52,38 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       const activate = pairedViewer ? false : params.activate === true
       const presentation =
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+      if (params.windowTab) {
+        // Only the desktop IPC proves ownership of this host's window tabs.
+        if (
+          context.caller?.kind !== 'desktop' ||
+          !params.worktree?.startsWith('id:') ||
+          !params.tabId ||
+          !params.leafId
+        ) {
+          throw new Error('host_not_owned')
+        }
+        return {
+          terminal: await runtime.startWindowTabTerminal(
+            params.worktree.slice('id:'.length),
+            { tabId: params.tabId, leafId: params.leafId },
+            {
+              command: params.command,
+              ...(params.cwd ? { cwd: params.cwd } : {}),
+              ...(params.shell ? { shellOverride: params.shell } : {}),
+              startupCommandDelivery: params.startupCommandDelivery,
+              env: params.env,
+              envToDelete: params.envToDelete,
+              ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+              ...(params.resumeProviderSession
+                ? { resumeProviderSession: params.resumeProviderSession }
+                : {}),
+              ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+              ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              terminalImageViewerSupported: terminalImageViewerSupported(context)
+            }
+          )
+        }
+      }
       const terminal = await runtime.dedupeTerminalCreate(
         pairedDeviceId ?? clientId ?? 'local',
         params.worktree,
@@ -98,7 +130,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           terminal.executionHostId
         )
       }
-      return { terminal }
+      const publicTerminal = { ...terminal }
+      delete publicTerminal.savedStartupCwd
+      return { terminal: publicTerminal }
     }
   }),
   defineMethod({
@@ -106,12 +140,25 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     permission: 'workspace',
     params: TerminalSplit,
     handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
-        direction: params.direction,
-        command: params.command,
-        env: params.env,
-        telemetrySource: params.telemetrySource
-      })
+      split:
+        params.pane && !params.terminal
+          ? await runtime.splitTerminalPane(params.pane, {
+              direction: params.direction ?? 'horizontal',
+              newLeafId: params.newLeafId,
+              cwd: params.cwd,
+              initialSize: params.initialSize,
+              command: params.command,
+              env: params.env,
+              // The window's split shows why its start failed, as its own spawn did.
+              keepPaneOnStartFailure: true
+            })
+          : // The schema requires a handle when no pane is named.
+            await runtime.splitTerminal(params.terminal ?? '', {
+              direction: params.direction,
+              command: params.command,
+              env: params.env,
+              telemetrySource: params.telemetrySource
+            })
     })
   }),
   defineMethod({
@@ -226,20 +273,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       )
     })
   }),
-  defineMethod({
-    name: 'terminal.gcClose',
-    permission: 'workspace',
-    params: TerminalClose,
-    handler: async (params, context) => ({
-      close: await withTerminalCloseAttribution(
-        'terminal.gcClose',
-        context,
-        'terminal',
-        params.terminal,
-        () => closeTerminalFromRpc(context.runtime, params)
-      )
-    })
-  }),
+  TERMINAL_GC_CLOSE_METHOD,
   defineMethod({
     name: 'terminal.closeTab',
     permission: 'workspace',

@@ -23,6 +23,9 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const {
+  assertNoWindowsExecutablesInRuntimeNodeModules
+} = require('./packaged-windows-only-runtime-files.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const {
   verifyPackagedWindowsAgentHook
@@ -395,7 +398,6 @@ module.exports = {
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
-    'out/main/claude-accounts/keychain.js',
     'out/main/daemon/daemon-pid-file-parse.js',
     'out/main/codex/**',
     'out/main/copilot/**',
@@ -408,6 +410,8 @@ module.exports = {
     'out/main/linux-home-update-policy.js',
     'out/main/grok/**',
     'out/main/hermes/**',
+    'out/main/asar-transparent-fs.js',
+    'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/startup/http1-compatibility-marker.js',
@@ -438,9 +442,11 @@ module.exports = {
   beforePack: (
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
-    ensureWaylandClipboard = ensureBundledWaylandClipboard
+    ensureWaylandClipboard = ensureBundledWaylandClipboard,
+    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
   ) => {
-    assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir])
+    // The template is the server every SSH host gets, so a dark test template must never ship.
+    assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()
@@ -490,6 +496,7 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.
@@ -676,6 +683,7 @@ module.exports = {
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     ...forkMacSigningIdentity(),
+    ...(isMacRelease ? { sign: resolve(__dirname, 'scripts/sign-mac-app.mjs') } : {}),
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,

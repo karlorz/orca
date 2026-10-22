@@ -67,6 +67,31 @@ describe('findMobileLockfileProblems', () => {
     expect(findMobileLockfileProblems(validInput())).toEqual([])
   })
 
+  it.each([
+    ['react', '19.2.9'],
+    ['react@>=19.0.0 <19.2.9', '19.2.9'],
+    ['react@<19.0.0', '19.2.8'],
+    ['parent>react', '19.2.8']
+  ])('applies only matching direct dependency overrides (%s)', (selector, expected) => {
+    const input = validInput()
+    input.workspace.overrides = { [selector]: '19.2.9' }
+    input.lockfile.importers['.'].dependencies.react.specifier = expected
+    expect(findMobileLockfileProblems(input)).toEqual([])
+    input.lockfile.importers['.'].dependencies.react.specifier = '18.0.0'
+    expect(findMobileLockfileProblems(input)).toHaveLength(1)
+  })
+
+  it('recognizes a security override that intersects the declared range', () => {
+    const input = validInput()
+    input.manifest.dependencies['markdown-it'] = '^14.3.2'
+    input.workspace.overrides = { 'markdown-it@>=14.0.0 <14.3.3': '14.3.3' }
+    input.lockfile.importers['.'].dependencies['markdown-it'] = {
+      specifier: '14.3.3',
+      version: '14.3.3'
+    }
+    expect(findMobileLockfileProblems(input)).toEqual([])
+  })
+
   it('reports a lockfile specifier that drifted from package.json', () => {
     const input = validInput()
     input.lockfile.importers['.'].dependencies.react.specifier = '19.1.0'

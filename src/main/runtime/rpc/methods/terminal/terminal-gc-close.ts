@@ -1,3 +1,6 @@
+import { defineMethod } from '../../core'
+import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
+import { TerminalClose } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { classifyGcTerminalIdle } from '../../../../../shared/worktree-gc-terminal-idle'
 import type {
   RuntimeTerminalClose,
@@ -115,3 +118,18 @@ export async function closeTerminalFromRpc(
     ...(params.gcCoordHandle ? { gcCoordHandle: params.gcCoordHandle } : {})
   })
 }
+
+export const TERMINAL_GC_CLOSE_METHOD = defineMethod({
+  name: 'terminal.gcClose',
+  permission: 'workspace',
+  params: TerminalClose,
+  handler: async (params, context) => ({
+    close: await withTerminalCloseAttribution(
+      'terminal.gcClose',
+      context,
+      'terminal',
+      params.terminal,
+      () => closeTerminalFromRpc(context.runtime, params)
+    )
+  })
+})

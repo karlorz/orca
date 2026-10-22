@@ -8,18 +8,18 @@ export function tunneledOrcadPairingCode(
 ): string {
   if (!pairedOffer && !readiness.pairing.available) {
     throw new Error(
-      `The managed Orca server did not publish a pairing offer: ${readiness.pairing.guidance}`
+      `This host’s Orca server did not publish a pairing offer: ${readiness.pairing.guidance}`
     )
   }
   // An enrolled client keeps its grant; startup offers are for new clients.
   const offer =
     pairedOffer ?? (readiness.pairing.available ? parsePairingCode(readiness.pairing.url) : null)
   if (!offer) {
-    throw new Error('The managed Orca server published an invalid pairing offer.')
+    throw new Error('This host’s Orca server published an invalid pairing offer.')
   }
   const endpoint = new URL(offer.endpoint)
   if (endpoint.protocol !== 'ws:' && endpoint.protocol !== 'wss:') {
-    throw new Error('The managed Orca server pairing endpoint is not a WebSocket URL.')
+    throw new Error('This host’s Orca server pairing endpoint is not a WebSocket URL.')
   }
   // Mac always uses the SSH local forward. Advertised host (LAN/public) is for other clients.
   endpoint.protocol = 'ws:'

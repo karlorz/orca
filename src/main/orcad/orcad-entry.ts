@@ -10,16 +10,12 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
-import { join } from 'node:path'
 import process from 'node:process'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
-import {
-  installOrcadHostAdapters,
-  prepareOrcadSecretStore,
-  runOrcadQuitHandlers
-} from './orcad-host-adapters'
+import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
+import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import { warnIfSiblingProfileRuntimeLive } from '../runtime/sibling-profile-runtime-warning'
 import {
@@ -32,6 +28,7 @@ import { ORCAD_USAGE, parseArgs, resolveOrcadWebClientRoot } from './orcad-comma
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 import { prepareOrcadManagedStop } from './orcad-managed-stop-admission'
+import { bindOrcadStopTerminalAdmission } from './orcad-stop-terminal-admission'
 import type { OrcadHandle, OrcadOptions } from './orcad-start-contract'
 import { beginOrcadIdleExit, bindOrcadIdleShutdown } from './orcad-managed-idle-exit-host'
 import { orcadAutomationsKeepHostBusy, startOrcadAutomations } from './orcad-automations'
@@ -44,6 +41,7 @@ import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 
 export { parseArgs }
 export { installOrcadHostAdapters }
@@ -77,18 +75,6 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
-}
-
-async function prepareOrcadSecretStoreAndMigrate(userDataPath: string): Promise<void> {
-  const { getSecretStore } = await import('../../shared/secret-store')
-  const { reportSecretProtectionGap } = await import('../host/secret-protection-report')
-  const { migratePlaintextCredentials, orcadCredentialRoot } =
-    await import('./orcad-plaintext-credential-migration')
-  // Why the credential root, not userData: a disposable ORCA_USER_DATA would take the key with it.
-  if (await prepareOrcadSecretStore(orcadCredentialRoot(), userDataPath)) {
-    migratePlaintextCredentials(getSecretStore())
-  }
-  reportSecretProtectionGap({ dataFile: join(userDataPath, 'orca-data.json') })
 }
 
 async function startOrcadRuntime(
@@ -130,6 +116,7 @@ async function startOrcadRuntime(
 
   const { disposeWatcherProcessAndWait } = await import('../ipc/parcel-watcher-process')
 
+  let paneGridsForShutdown: { flushPaneGrids(): Promise<void> | null } | null = null
   let profileStoreForShutdown:
     | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
     | undefined
@@ -145,6 +132,11 @@ async function startOrcadRuntime(
   registerCleanup(async () => {
     // A SQLite-backed orcad has no JSON mirror to absorb a debounced write after SIGTERM.
     if (profileStoreForShutdown) {
+      // Layout-owner build: a pane's grid still inside its write burst joins the final save.
+      const paneGrids = paneGridsForShutdown?.flushPaneGrids()
+      if (paneGrids) {
+        await paneGrids
+      }
       await flushOrcadProfileStoreForShutdown(profileStoreForShutdown)
     }
   })
@@ -171,6 +163,9 @@ async function startOrcadRuntime(
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
+  // Before the hook server starts: a turn that begins before the feed subscribes is never counted.
+  const { startOrcadStats } = await import('./orcad-stats')
+  const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup)
   await agentHookServer.start({
     env: 'production',
     userDataPath: runtimeUserDataPath,
@@ -211,7 +206,7 @@ async function startOrcadRuntime(
   })
 
   const { loadAgentSessionClaimSigner } = await import('../runtime/agent-session-claim-identity')
-  const runtime = new OrcaRuntimeService(profileStore, undefined, {
+  const runtime = new OrcaRuntimeService(profileStore, stats, {
     // Why persistent: the terminal daemon outlives orcad, so a per-process key would make a
     // restarted orcad unable to recognise (and adopt) the agent PTYs it already owns.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
@@ -246,6 +241,7 @@ async function startOrcadRuntime(
       }
     }
   })
+  paneGridsForShutdown = runtime
 
   agentHookServer.setSessionTerminalOwnerResolver((paneKey) =>
     runtime.getSessionTerminalOwner(paneKey)
@@ -307,6 +303,10 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+  // Switch point: main shows live terminals no pane shows, before any client attaches.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await placeUnshownLiveTerminalsBestEffort(runtime)
+  }
   // Hook rows hydrated and the PTY runtime registered: stored sort tiers can be checked.
   runtime.agentTransitions.seedRestoredRows()
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
@@ -328,6 +328,7 @@ async function startOrcadRuntime(
   })
 
   const bindHost = resolveOrcadBindHost(options.bind)
+  bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)
   const rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,

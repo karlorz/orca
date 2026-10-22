@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { publishConnectionRevival } from './connection-revival-signal'
 import { subscribeConnectionLogBackgroundFlush } from './connection-log-background-flush'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
@@ -322,6 +323,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           // One broken physical session must not block recovery for other hosts.
         }
       }
+      publishConnectionRevival(reason)
     })
   }, [])
 

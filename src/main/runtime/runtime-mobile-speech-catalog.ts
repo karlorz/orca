@@ -8,11 +8,24 @@ import {
 } from '../../shared/voice-dictation-selection'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { hasLocalSpeechRecognizer } from '../speech/stt-worker-paths'
 import {
   deleteLocalSpeechModel,
   getSpeechModelDeletionErrorCode
 } from '../speech/speech-model-deletion'
 import type { RuntimeStore } from './runtime-store-contract'
+import {
+  clearOpenAiSpeechApiKey,
+  getOpenAiSpeechApiKeyProtection,
+  hasOpenAiSpeechApiKey,
+  saveOpenAiSpeechApiKey
+} from '../speech/openai-api-key-store'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+
+export type OpenAiSpeechKeyStatus = {
+  configured: boolean
+  protection: SecretAtRestProtection | null
+}
 
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
@@ -22,22 +35,26 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.filter(
-      (manifest) => manifest.provider !== 'system'
-    ).map((manifest) => {
-      const state = stateById.get(manifest.id)
-      const status = state?.status ?? 'not-downloaded'
-      return {
-        id: manifest.id,
-        label: manifest.label,
-        provider: manifest.provider,
-        sizeBytes: manifest.sizeBytes ?? null,
-        recommended: manifest.recommended === true,
-        status,
-        ...(status === 'unavailable' ? { unavailableReason: 'mac-only' as const } : {}),
-        progress: state?.progress ?? null
-      }
-    })
+    // Why omit, not mark: a status arm older phones don't know would read as a model they can pick.
+    const runnable = hasLocalSpeechRecognizer()
+      ? SPEECH_MODEL_CATALOG
+      : SPEECH_MODEL_CATALOG.filter((manifest) => !isLocalSpeechModel(manifest))
+    const models: RuntimeSpeechModelSummary[] = runnable
+      .filter((manifest) => manifest.provider !== 'system')
+      .map((manifest) => {
+        const state = stateById.get(manifest.id)
+        const status = state?.status ?? 'not-downloaded'
+        return {
+          id: manifest.id,
+          label: manifest.label,
+          provider: manifest.provider,
+          sizeBytes: manifest.sizeBytes ?? null,
+          recommended: manifest.recommended === true,
+          status,
+          ...(status === 'unavailable' ? { unavailableReason: 'mac-only' as const } : {}),
+          progress: state?.progress ?? null
+        }
+      })
     return {
       enabled: voice.enabled === true,
       useMacSpeech: isMacSpeechSelected(voice),
@@ -51,7 +68,7 @@ export class RuntimeMobileSpeechCatalog {
   async download(modelId: string): Promise<{ started: true }> {
     const store = this.requireStore()
     const manifest = getCatalogModel(modelId)
-    if (!manifest || !isLocalSpeechModel(manifest)) {
+    if (!manifest || !isLocalSpeechModel(manifest) || !hasLocalSpeechRecognizer()) {
       throw new Error('voice_model_not_downloadable')
     }
     void getSpeechModelManager(store)
@@ -133,6 +150,24 @@ export class RuntimeMobileSpeechCatalog {
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()
+  }
+
+  /**
+   * The cloud models' key, set on the host that transcribes. Why over RPC: desktop Settings is the
+   * only other way in, and a headless host has no desktop. Sealed by this host's own secret store.
+   */
+  openAiKeyStatus(): OpenAiSpeechKeyStatus {
+    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+  }
+
+  setOpenAiKey(apiKey: string): OpenAiSpeechKeyStatus {
+    saveOpenAiSpeechApiKey(apiKey)
+    return this.openAiKeyStatus()
+  }
+
+  clearOpenAiKey(): OpenAiSpeechKeyStatus {
+    clearOpenAiSpeechApiKey()
+    return this.openAiKeyStatus()
   }
 
   private requireStore(): RuntimeStore {

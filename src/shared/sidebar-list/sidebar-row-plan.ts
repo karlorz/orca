@@ -44,6 +44,7 @@ import type {
   NewExternalWorktreesInboxCandidate,
   PendingCreationRef,
   PinnedWorktreeDisplayPolicy,
+  RepoOfWorktree,
   Row,
   SidebarPRGroupReader,
   WorktreeGroupBy
@@ -62,6 +63,8 @@ export type SidebarRowPlanInputs = {
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
+  /** Defaults to repoMap's registration for the row's repo id. */
+  repoOfWorktree?: RepoOfWorktree
   prGroupOf: SidebarPRGroupReader
   repoOrder?: Map<string, number>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -88,6 +91,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     groupBy,
     worktrees: publishedWorktrees,
     repoMap,
+    repoOfWorktree,
     prGroupOf,
     repoOrder,
     workspaceStatuses,
@@ -115,6 +119,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       )
     : publishedWorktrees
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
@@ -196,7 +201,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     // mixed at all. Scoping to naturalWorktrees left pinned remotes unlabelled.
     const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
       worktrees,
-      repoMap,
+      repoOf,
       hostLabelById,
       defaultHostId
     )
@@ -222,7 +227,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     })
     emitPinnedGroup(
       pinnedSectionWorktrees,
-      repoMap,
+      repoOf,
       defaultHostId,
       collapsedGroups,
       renderedNaturalAnchorRepoIds,
@@ -245,19 +250,19 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           hostWorktreeCounts: getLaneHostWorktreeCounts(
             naturalWorktrees,
             renderableFolderWorkspaces,
-            repoMap,
+            repoOf,
             defaultHostId
           ),
           hostWorktreeIds: getLaneHostWorktreeIds(
             naturalWorktrees,
             renderableFolderWorkspaces,
-            repoMap,
+            repoOf,
             defaultHostId
           ),
           worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-          appendWorktreeRows(result, repoMap, occurrencePlan, {
+          appendWorktreeRows(result, repoOf, occurrencePlan, {
             collapsedGroups,
             groupDepth: 0,
             sectionKey: ALL_GROUP_KEY,
@@ -279,6 +284,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       collapsedGroups,
       workspaceStatuses,
       repoMap,
+      repoOf,
       defaultHostId,
       hostLabelById,
       projectIndex,

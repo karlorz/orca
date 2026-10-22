@@ -73,7 +73,10 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:listNetworkInterfaces',
     async (): Promise<{ interfaces: NetworkInterface[] }> => ({
-      interfaces: await getPairingNetworkInterfaces(getDefaultRouteInterfaceNames)
+      interfaces: await getPairingNetworkInterfaces(
+        rpcServer.getNetworkExposureBindHost(),
+        getDefaultRouteInterfaceNames
+      )
     })
   )
 
@@ -89,6 +92,7 @@ export function registerMobileHandlers(
     ) => {
       const offer = await createDesktopMobilePairingOffer({
         createOffer: (offerArgs) => rpcServer.createMobilePairingOffer(offerArgs),
+        getListenerHost: () => rpcServer.getNetworkExposureBindHost(),
         address: args?.address,
         connectionMode: args?.connectionMode,
         rotate: args?.rotate,
@@ -112,7 +116,12 @@ export function registerMobileHandlers(
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
+      const ip =
+        args?.address ??
+        (await getDefaultPairingAddress(
+          rpcServer.getNetworkExposureBindHost(),
+          getDefaultRouteInterfaceNames
+        ))
       if (!ip) {
         return { available: false as const }
       }

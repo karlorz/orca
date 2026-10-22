@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
@@ -16,6 +15,8 @@ import {
   type SpeechModelCacheDir
 } from './model-cache-path'
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
+import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
+import { getAppEnvironment } from '../../shared/app-environment'
 import {
   removeModelDownloadFiles,
   removeModelDownloadStaging
@@ -35,9 +36,14 @@ export class ModelManager extends SpeechModelDownloadTransport {
   private modelStates = new Map<string, SpeechModelState>()
   private progressCallbacks = new Set<ProgressCallback>()
 
-  constructor(customModelsDir?: string) {
-    super()
-    const requestedModelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
+  constructor(
+    customModelsDir: string | undefined,
+    openRequest: OpenSpeechDownloadRequest,
+    private readonly hasOpenAiKey: () => boolean = hasOpenAiSpeechApiKey
+  ) {
+    super(openRequest)
+    const requestedModelsDir =
+      customModelsDir || join(getAppEnvironment().getPath('userData'), 'speech-models')
     const prepared = this.prepareModelsDir(requestedModelsDir)
     this.modelsDir = prepared.modelsDir
     this.migrationSourceDir = prepared.migrationSourceDir
@@ -98,11 +104,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    const catalogState = readinessForCatalogModel(
-      manifest,
-      process.platform,
-      hasOpenAiSpeechApiKey()
-    )
+    const catalogState = readinessForCatalogModel(manifest, process.platform, this.hasOpenAiKey())
     if (catalogState) {
       return catalogState
     }

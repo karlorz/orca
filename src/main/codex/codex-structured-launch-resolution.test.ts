@@ -69,14 +69,12 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
-  resolveRollout: () => Promise<string | null> = async () => null,
   resolveLaunchArgs?: () => string[]
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
-    resolveRollout,
     resolveLaunchArgs: resolveLaunchArgs ?? (() => value?.launchArgs ?? [])
   })
 }
@@ -103,7 +101,6 @@ describe('codex structured launch resolution', () => {
               : []
         }),
         undefined,
-        undefined,
         () => args
       )
       await expect(resolve({ identity: IDENTITY })).rejects.toThrow(/Arguments/)
@@ -118,19 +115,15 @@ describe('codex structured launch resolution', () => {
     }
   )
 
-  it('starts a new thread after clear without resolving the old rollout', async () => {
-    const resolveRollout = vi.fn(async () => '/old/rollout.jsonl')
+  it('starts a new thread after clear without reusing the old handle', async () => {
     const value = record({
       providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
       providerHandleChain: []
     })
-    const launch = await resolverFor(
-      value,
-      undefined,
-      resolveRollout
-    )({ identity: { ...IDENTITY, providerHandle: codexProviderHandle('old-thread') } })
+    const launch = await resolverFor(value)({
+      identity: { ...IDENTITY, providerHandle: codexProviderHandle('old-thread') }
+    })
     expect(launch.resumeThreadId).toBeNull()
-    expect(resolveRollout).not.toHaveBeenCalled()
   })
 
   it('resumes a floating session in its pinned folder, not the current floating setting', async () => {
@@ -289,7 +282,7 @@ describe('codex structured launch resolution', () => {
 
   // The chat's mode replaces Agent Permissions: a Yolo terminal setting grants a chat nothing.
   it('ignores the bypass flag the agent Arguments carry', async () => {
-    const launch = await resolverFor(record(), undefined, undefined, () => [
+    const launch = await resolverFor(record(), undefined, () => [
       '--dangerously-bypass-approvals-and-sandbox'
     ])({ identity: IDENTITY, spawnToken: TEST_SPAWN_TOKEN, permissionMode: 'ask' })
 
@@ -329,19 +322,18 @@ describe('codex structured launch resolution', () => {
     ])
   })
 
-  it('pins resume to the rollout file that proved the durable thread', async () => {
-    const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
+  it('resumes the durable thread ID under its pinned account home', async () => {
     const launch = await resolverFor(
       record({
         launchArgs: ['--enable', 'unified_exec', '-c', 'model_reasoning_effort=high'],
         providerHandleChain: [handleLink('thread-current', 1)]
       }),
-      async (id) => `/repos/${id}`,
-      resolveRollout
+      async (id) => `/repos/${id}`
     )({ identity: IDENTITY })
 
-    expect(resolveRollout).toHaveBeenCalledWith('/home/work/.codex', 'thread-current')
-    expect(launch.resumePath).toBe('/home/work/.codex/sessions/rollout.jsonl')
+    expect(launch.resumeThreadId).toBe('thread-current')
+    expect(launch.codexHome).toBe('/home/work/.codex')
+    expect(launch.env?.CODEX_HOME).toBe('/home/work/.codex')
     expect(launch.args).toEqual([
       '--enable',
       'unified_exec',

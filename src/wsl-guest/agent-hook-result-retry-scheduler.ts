@@ -11,6 +11,7 @@ import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { pickHostTurnEnd } from '../shared/agent-status-types'
 import {
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -256,7 +257,13 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    const updated = this.host.applyEvent(event, source, env, version)
+    // Why: the retry only adds text to the same turn end, so it restates that end instead of minting one.
+    const updated = this.host.applyEvent(
+      { ...event, ...pickHostTurnEnd(current) },
+      source,
+      env,
+      version
+    )
     if (updated && isGrokAutomationResultPending(updated)) {
       this.scheduleAssistantMessageRetry(
         source,

@@ -402,7 +402,6 @@ describe('electron-builder config', () => {
         'out/package.json',
         'out/cli/**',
         'out/shared/**',
-        'out/main/claude-accounts/keychain.js',
         'out/main/daemon/daemon-pid-file-parse.js',
         'out/main/home-appimage-*.js',
         'out/main/orca-home-appimage-*.js',
@@ -641,6 +640,24 @@ describe('arch-aware packaging guard', () => {
       } else {
         process.env.ORCA_LAYOUT_OWNER = previous
       }
+    }
+  })
+
+  it('refuses to package an orcad template marked by a dark test build', async () => {
+    const templateDir = join(scratch, 'orcad-template')
+    await mkdir(templateDir, { recursive: true })
+    await writeFile(join(templateDir, 'ORCA_LAYOUT_OWNER_MAIN'), 'dark\n')
+    try {
+      expect(() =>
+        electronBuilderConfig.beforePack(
+          { electronPlatformName: process.platform, arch: HOST_ARCH },
+          bundleDir,
+          () => undefined,
+          templateDir
+        )
+      ).toThrow(`${templateDir} holds an ORCA_LAYOUT_OWNER=main build`)
+    } finally {
+      await rm(templateDir, { recursive: true, force: true })
     }
   })
 

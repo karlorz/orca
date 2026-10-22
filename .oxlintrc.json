@@ -248,8 +248,10 @@
         "**/*.spec.tsx",
         "**/*.test.mts",
         "**/*.test.cts",
+        "**/*.test.mjs",
         "**/*.spec.mts",
-        "**/*.spec.cts"
+        "**/*.spec.cts",
+        "**/*.spec.mjs"
       ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]

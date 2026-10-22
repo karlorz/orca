@@ -184,7 +184,9 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
         const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
         const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
           ptyId: live.pty.ptyId,
-          title: getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
+          title:
+            this.getPtyManualTitle(live.pty, false) ??
+            getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
           ...(live.pty.launchConfig && !options.existingSessionOnly
             ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
             : {}),

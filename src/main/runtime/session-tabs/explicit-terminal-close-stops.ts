@@ -1,3 +1,13 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import { closeMainOwnedPaneByHandle } from './main-handle-close'
+import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
+import {
+  capturePtyIncarnationIds,
+  finishGuardedPtyStop,
+  type TerminalGcCloseStopOptions
+} from '../rpc/methods/terminal/terminal-gc-close-stop-fence'
 import type { WorktreePtyHostFence } from '../worktree-pty-host-fence'
 import { OrcaRuntimeWithFocusTerminal } from '../terminal/focus/focus-terminal'
 import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from '../orca-runtime-core'
@@ -11,6 +21,56 @@ export type ExplicitCloseStop = { stopped: boolean }
 export const EXPLICIT_CLOSE_NO_STOP: ExplicitCloseStop = { stopped: false }
 
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
+  protected abstract describeTerminalClose(
+    handle: string,
+    tabId: string,
+    ptyId: string | null,
+    stop: ExplicitCloseStop
+  ): RuntimeTerminalClose
+
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  protected async closeMainOwnedTerminal(
+    handle: string,
+    wholeTab: boolean,
+    options?: TerminalGcCloseStopOptions
+  ): Promise<RuntimeTerminalClose | null> {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return null
+    }
+    const captured = capturePtyIncarnationIds(this.ptysById, [...this.ptysById.keys()])
+    const result = await closeMainOwnedPaneByHandle(
+      {
+        runtime: this,
+        livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+        liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+        remoteSessionIdOf: (worktreeId, tabId) =>
+          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
+        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        stop: (ptyIds, addressed) =>
+          finishGuardedPtyStop(
+            {
+              ptysById: this.ptysById,
+              stopExplicitlyClosedTabPtys: (ids, ptyId, incarnations) =>
+                this.stopExplicitlyClosedTabPtys(ids, ptyId, incarnations)
+            },
+            handle,
+            ptyIds,
+            addressed,
+            captured,
+            options
+          ),
+        describe: (...args) => this.describeTerminalClose(...args)
+      },
+      handle,
+      wholeTab
+    )
+    if (result) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    }
+    return result
+  }
+
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   protected abstract refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],

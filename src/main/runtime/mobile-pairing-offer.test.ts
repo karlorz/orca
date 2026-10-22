@@ -44,6 +44,7 @@ describe('createDesktopMobilePairingOffer', () => {
     await expect(
       createDesktopMobilePairingOffer({
         createOffer,
+        getListenerHost: () => '127.0.0.1',
         address: '192.168.1.24',
         rotate: true
       })
@@ -65,6 +66,7 @@ describe('createDesktopMobilePairingOffer', () => {
     await expect(
       createDesktopMobilePairingOffer({
         createOffer,
+        getListenerHost: () => '127.0.0.1',
         connectionMode: 'local-only',
         getDefaultRouteInterfaceNames: async () => new Set()
       })
@@ -81,6 +83,7 @@ describe('createDesktopMobilePairingOffer', () => {
     await expect(
       createDesktopMobilePairingOffer({
         createOffer,
+        getListenerHost: () => '127.0.0.1',
         getDefaultRouteInterfaceNames: async () => new Set()
       })
     ).resolves.toEqual({
@@ -104,6 +107,7 @@ describe('createDesktopMobilePairingOffer', () => {
     await expect(
       createDesktopMobilePairingOffer({
         createOffer,
+        getListenerHost: () => '127.0.0.1',
         address: '100.64.1.20'
       })
     ).resolves.toEqual({
@@ -119,7 +123,11 @@ describe('registerDesktopMobilePairingOffers', () => {
   it('installs the owner hook only for desktop startup', () => {
     const createMobilePairingOffer = vi.fn()
     const setMobilePairingOffers = vi.fn()
-    const rpcServer = { createMobilePairingOffer, setMobilePairingOffers }
+    const rpcServer = {
+      createMobilePairingOffer,
+      setMobilePairingOffers,
+      getNetworkExposureBindHost: () => '127.0.0.1'
+    }
 
     registerDesktopMobilePairingOffers(rpcServer, { wsPort: 6768 })
     expect(setMobilePairingOffers).not.toHaveBeenCalled()

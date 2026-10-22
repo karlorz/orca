@@ -14,7 +14,6 @@ import {
 } from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../store/slices/editor'
-import { createEditorBuffers } from '../../store/slices/editor/buffers/editor-buffer-record'
 import {
   advanceWebSessionOpenFilesIndex,
   sameOpenFiles,
@@ -184,11 +183,6 @@ export function prepareWebSessionTabsSnapshotBrowser(
     return sameOpenFiles(state.openFiles, next) ? state.openFiles : next
   })()
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
-  // Why: a mirrored tab's buffer state is the host's, so its record is (re)created with the tab.
-  const nextEditorBuffers =
-    nextOpenFiles === state.openFiles
-      ? state.editorBuffers
-      : createEditorBuffers(state.editorBuffers ?? {}, mirroredOpenFiles)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
       // A suppressed frame is inert: its stripped surfaces are no evidence about sessions it
@@ -254,7 +248,6 @@ export function prepareWebSessionTabsSnapshotBrowser(
     removedEditorFileIds,
     nextWorktreeOpenFileIds,
     nextOpenFiles,
-    nextEditorBuffers,
     retainedUnifiedTabs,
     existingViewModeByTabId
   }

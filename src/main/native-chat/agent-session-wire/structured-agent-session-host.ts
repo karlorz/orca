@@ -209,7 +209,7 @@ export class StructuredAgentSessionHost {
     this.lifetime.close(sessionId, cause)
 
   /** One bounded host-owned snapshot; a tab need not be visible for its child to be stopped. */
-  sleepWorkspace = (workspaceId: string): Promise<{ stoppedSessionIds: string[] }> =>
+  sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
     sleepStructuredAgentSessionWorkspace(
       {
         deps: this.deps,
@@ -219,9 +219,11 @@ export class StructuredAgentSessionHost {
         // A start registered after the stop is newer work, as a running delivery is.
         deliveryRunning: (id) =>
           this.conversationDelivery.loop.isRunning(id) || this.runtimeState.startFlights.has(id),
-        childWorkIncomplete: this.clientDelivery.childWorkIncomplete
+        childWorkIncomplete: this.clientDelivery.childWorkIncomplete,
+        publishRecordNotes: this.clientDelivery.publishRecordNotes
       },
-      workspaceId
+      workspaceId,
+      markAsleep
     )
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
@@ -321,7 +323,9 @@ export class StructuredAgentSessionHost {
 
   conversationCommand = this.conversationCommands.run
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
-  readCommands = (sessionId: string) => ({ commands: this.clientDelivery.readCommands(sessionId) })
+  readCommands = async (sessionId: string) => ({
+    commands: await this.clientDelivery.readCommandsSettled(sessionId)
+  })
 
   /** From the record store, never the session map: an idle-released chat has no map entry. */
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
@@ -342,7 +346,6 @@ export class StructuredAgentSessionHost {
   subscribe = (input: AgentSessionSubscribeInput) => this.backgroundTasks.subscribe(input)
 
   settleLateDispatch = this.boundControls.settleLateDispatch
-  releaseUnansweredDispatches = this.boundControls.releaseUnansweredDispatches
   /** What the live child holds changed with no row: every reader re-derives current work. */
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
 
@@ -352,6 +355,7 @@ export class StructuredAgentSessionHost {
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
+  regenerateConversationName = (id: string) => this.deps.conversationNaming?.regenerate(id) ?? false
 
   /** Turns that settle, and prompts raised, from now on. Live-only: nothing missed is replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
