@@ -67,6 +67,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
     FILE_OWNER_UNRESOLVED_MESSAGE: 'unresolved',
     getRuntimeTargetForFileOwner,
     requireRuntimeTargetForFileOwner: getRuntimeTargetForFileOwner,
+    requireRuntimeTargetForEditorFileRead: getRuntimeTargetForFileOwner,
     getRuntimeTargetForWorktreeOwner: (state: unknown, worktreeId: string | null | undefined) =>
       getRuntimeTargetForFileOwner(state, worktreeId, undefined)
   }

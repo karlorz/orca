@@ -57,7 +57,8 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
   }
   return {
     getRuntimeTargetForFileOwner: ownerTarget,
-    requireRuntimeTargetForFileOwner: ownerTarget
+    requireRuntimeTargetForFileOwner: ownerTarget,
+    requireRuntimeTargetForEditorFileRead: ownerTarget
   }
 })
 

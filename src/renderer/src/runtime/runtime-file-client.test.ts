@@ -14,7 +14,8 @@ import {
   fsRename,
   fsDeletePath,
   runtimeEnvironmentCall,
-  installRuntimeFileClientEnvironment
+  installRuntimeFileClientEnvironment,
+  type RuntimeRpcRequest
 } from './runtime-file-client-test-harness'
 
 installRuntimeFileClientEnvironment()
@@ -239,27 +240,17 @@ describe('runtime file client', () => {
     ).rejects.toThrow('Update the server to open it')
   })
 
-  it('falls back to files.readPreview when a remote binary file is opened', async () => {
-    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'files.read') {
-        return Promise.resolve({
-          id: 'rpc-read',
-          ok: false,
-          error: { code: 'runtime_error', message: 'binary_file' },
-          _meta: { runtimeId: 'remote-runtime' }
-        })
-      }
-      return Promise.resolve({
-        id: 'rpc-preview',
-        ok: true,
-        result: {
-          content: 'JVBERi0=',
-          isBinary: true,
-          isImage: true,
-          mimeType: 'application/pdf'
-        },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
+  it('opens a remote PDF through files.readPreview without files.read', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-preview',
+      ok: true,
+      result: {
+        content: 'JVBERi0=',
+        isBinary: true,
+        isImage: true,
+        mimeType: 'application/pdf'
+      },
+      _meta: { runtimeId: 'remote-runtime' }
     })
 
     await expect(
@@ -278,16 +269,97 @@ describe('runtime file client', () => {
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
-      method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
       method: 'files.readPreview',
       params: { worktree: 'id:wt-1', relativePath: 'doc.pdf' },
       timeoutMs: 15_000
     })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.read' })
+    )
+  })
+
+  it('opens a remote jpeg through files.readPreview', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-preview',
+      ok: true,
+      result: {
+        content: 'iVBORw0KGgo=',
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/jpeg'
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/root/projects/company-coord/out/muse-decorative-a.jpg',
+        relativePath: 'out/muse-decorative-a.jpg',
+        worktreeId: 'repo-1::/root/projects/company-coord'
+      })
+    ).resolves.toMatchObject({ isBinary: true, isImage: true, mimeType: 'image/jpeg' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.readPreview',
+        params: {
+          worktree: 'id:repo-1::/root/projects/company-coord',
+          relativePath: 'out/muse-decorative-a.jpg'
+        }
+      })
+    )
+  })
+
+  it('retries a paired-host image read with path: after selector_not_found', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeRpcRequest) => {
+      const worktree =
+        args.params && typeof args.params === 'object' && 'worktree' in args.params
+          ? args.params.worktree
+          : undefined
+      if (
+        args.method === 'files.readPreview' &&
+        typeof worktree === 'string' &&
+        worktree.startsWith('id:')
+      ) {
+        return Promise.resolve({
+          id: 'rpc-id',
+          ok: false,
+          error: { code: 'selector_not_found', message: 'selector_not_found' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: 'rpc-path',
+        ok: true,
+        result: {
+          content: 'iVBORw0KGgo=',
+          isBinary: true,
+          isImage: true,
+          mimeType: 'image/jpeg'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/root/projects/company-coord/out/muse-decorative-a.jpg',
+        relativePath: 'out/muse-decorative-a.jpg',
+        worktreeId: 'repo-1::/root/projects/company-coord'
+      })
+    ).resolves.toMatchObject({ isImage: true, mimeType: 'image/jpeg' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.readPreview',
+        params: {
+          worktree: 'path:/root/projects/company-coord',
+          relativePath: 'out/muse-decorative-a.jpg'
+        }
+      })
+    )
   })
 
   it('does not fall back to files.readPreview for non-binary remote read errors', async () => {
@@ -363,8 +435,8 @@ describe('runtime file client', () => {
     await expect(
       readRuntimeFileContent({
         target: { kind: 'environment' as const, environmentId: 'env-1' },
-        filePath: '/remote/repo/doc.pdf',
-        relativePath: 'doc.pdf',
+        filePath: '/remote/repo/notes.dat',
+        relativePath: 'notes.dat',
         worktreeId: 'wt-1'
       })
     ).rejects.toThrow('binary_file')

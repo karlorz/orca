@@ -1,5 +1,6 @@
 import {
   isWindowsAbsolutePathLike,
+  normalizeRuntimePathSeparators,
   relativePathInsideRoot
 } from '../../../shared/cross-platform-path'
 import { normalizeRelativePath } from '@/lib/path'
@@ -114,6 +115,24 @@ export function getRelativePathInsideWorktree(
     return null
   }
   return relativePathInsideRoot(worktreePath, absolutePath)
+}
+
+/** Host `path:` selector for a file whose relative path is already known. */
+export function pathWorktreeSelectorForContainedFile(
+  absolutePath: string,
+  relativePath: string
+): string | null {
+  if (!canReadRelativeRuntimeFile(relativePath)) {
+    return null
+  }
+  const abs = normalizeRuntimePathSeparators(absolutePath)
+  const rel = normalizeRuntimePathSeparators(relativePath).replace(/^\/+/, '')
+  const suffix = `/${rel}`
+  if (!abs.endsWith(suffix)) {
+    return null
+  }
+  const root = abs.slice(0, -suffix.length)
+  return root.length > 0 ? `path:${root}` : null
 }
 
 export function joinRuntimeRelativePath(basePath: string, relativePath: string): string {

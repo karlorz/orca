@@ -3,8 +3,11 @@ import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
 import type {
   RuntimeFilePreviewResult,
-  RuntimeFileReadChunkResult
+  RuntimeFileReadChunkResult,
+  RuntimeFileReadResult
 } from '../../../shared/runtime-types'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   readRemoteRuntimeFileChunk,
   statRemoteRuntimeFile,
@@ -14,6 +17,9 @@ import {
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
+import { pathWorktreeSelectorForContainedFile } from './runtime-file-routing'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { RuntimeReadableFileContent } from './runtime-file-client-types'
 
 // Why: under files.readChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
 const PAGED_READ_CHUNK_BYTES = 384 * 1024
@@ -155,6 +161,88 @@ export function pagedTextFileResult(bytes: Uint8Array): RuntimeFilePreviewResult
   }
   // Why: keep a BOM like the host's Buffer decode, or a save would silently drop it.
   return { content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), isBinary: false }
+}
+
+export async function readRemoteWorkspaceFileContent(args: {
+  target: RuntimeClientTarget & { kind: 'environment' }
+  filePath: string
+  relativePath: string
+  worktreeId: string
+  worktreeSelector?: string
+  pageOversizedBinary?: boolean
+}): Promise<RuntimeReadableFileContent> {
+  const idSelector = args.worktreeSelector ?? toRuntimeWorktreeSelector(args.worktreeId)
+  try {
+    return await readRemoteWorkspaceFileAtSelector({
+      target: args.target,
+      worktree: idSelector,
+      relativePath: args.relativePath,
+      pageOversizedBinary: args.pageOversizedBinary
+    })
+  } catch (error) {
+    const pathSelector = pathWorktreeSelectorForContainedFile(args.filePath, args.relativePath)
+    if (
+      args.worktreeSelector ||
+      !pathSelector ||
+      pathSelector === idSelector ||
+      !hasRuntimeRpcErrorCode(error, 'selector_not_found')
+    ) {
+      throw error
+    }
+    return await readRemoteWorkspaceFileAtSelector({
+      target: args.target,
+      worktree: pathSelector,
+      relativePath: args.relativePath,
+      pageOversizedBinary: args.pageOversizedBinary
+    })
+  }
+}
+
+async function readRemoteWorkspaceFileAtSelector(args: {
+  target: RuntimeClientTarget & { kind: 'environment' }
+  worktree: string
+  relativePath: string
+  pageOversizedBinary?: boolean
+}): Promise<RuntimeReadableFileContent> {
+  const remote = pinRemoteFileAddress({
+    target: args.target,
+    worktree: args.worktree,
+    relativePath: args.relativePath
+  })
+  if (previewableBinaryMimeType(args.relativePath)) {
+    return await readRemoteFilePreview(remote, { pageOversized: args.pageOversizedBinary === true })
+  }
+  let result: RuntimeFileReadResult
+  try {
+    result = await callRuntimeRpc<RuntimeFileReadResult>(
+      args.target,
+      'files.read',
+      { worktree: remote.worktree, relativePath: args.relativePath },
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
+      }
+    )
+  } catch (err) {
+    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
+      return await readRemoteFilePreview(remote, {
+        pageOversized: args.pageOversizedBinary === true
+      })
+    }
+    throw err
+  }
+  if (result.truncated) {
+    const paged = await readRemoteFileInChunks(remote)
+    if (paged.kind === 'ok') {
+      return pagedTextFileResult(paged.bytes)
+    }
+    throw new Error(
+      paged.kind === 'unsupported'
+        ? 'Remote file is larger than the 512 KB this Orca server can send. Update the server to open it.'
+        : `Remote file is too large to open in the editor (${paged.size} bytes)`
+    )
+  }
+  return { content: result.content, isBinary: false }
 }
 
 /** Mirrors the host's RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES, which drives `files.readPreview`. */

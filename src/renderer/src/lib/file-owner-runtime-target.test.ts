@@ -3,6 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getRuntimeTargetForFileOwner,
   getRuntimeTargetForWorktreeOwner,
+  requireRuntimeTargetForEditorFileRead,
   requireRuntimeTargetForFileOwner
 } from './file-owner-runtime-target'
 import type { WorktreeOperationRouteState } from './worktree-operation-route'
@@ -101,6 +102,21 @@ describe('getRuntimeTargetForFileOwner', () => {
     expect(getRuntimeTargetForFileOwner(state, 'runtime-repo::wt-b', undefined)).toEqual({
       kind: 'environment',
       environmentId: 'owner-env'
+    })
+  })
+})
+
+describe('requireRuntimeTargetForEditorFileRead', () => {
+  it('reads a paired-server worktree on that server even when the tab stamp is this app', () => {
+    expect(requireRuntimeTargetForEditorFileRead(state, 'runtime-repo::wt-b', null)).toEqual({
+      kind: 'environment',
+      environmentId: 'owner-env'
+    })
+  })
+
+  it('keeps a local worktree on this app when the tab has no stamp', () => {
+    expect(requireRuntimeTargetForEditorFileRead(state, 'local-repo::wt-a', undefined)).toEqual({
+      kind: 'local'
     })
   })
 })

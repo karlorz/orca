@@ -7,7 +7,7 @@ import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { requireRuntimeTargetForEditorFileRead } from '@/lib/file-owner-runtime-target'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
 import {
@@ -105,7 +105,7 @@ export function useEditorPanelFileContentLoader({
         const readTarget: RuntimeClientTarget =
           isClientLocalTab && restoredOpenFile?.runtimeEnvironmentId === undefined
             ? { kind: 'local' }
-            : requireRuntimeTargetForFileOwner(
+            : requireRuntimeTargetForEditorFileRead(
                 useAppStore.getState(),
                 worktreeId,
                 restoredOpenFile?.runtimeEnvironmentId

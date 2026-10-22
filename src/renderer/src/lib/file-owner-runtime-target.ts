@@ -54,3 +54,16 @@ export function requireRuntimeTargetForFileOwner(
   }
   return target
 }
+
+/** Editor reads follow the worktree's paired host; a local tab stamp would miss that workspace. */
+export function requireRuntimeTargetForEditorFileRead(
+  state: WorktreeOperationRouteState,
+  worktreeId: string | null | undefined,
+  runtimeEnvironmentId: string | null | undefined
+): RuntimeClientTarget {
+  const catalog = getRuntimeTargetForWorktreeOwner(state, worktreeId)
+  if (catalog?.kind === 'environment') {
+    return catalog
+  }
+  return requireRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId)
+}
