@@ -16,6 +16,10 @@ import {
 } from './worktree-operation-route'
 import { resolveWriteRoute } from './resolve-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import {
+  canonicalRuntimeOwnerKey,
+  isSavedRuntimeEnvironment
+} from '../../../shared/runtime-environment-owner'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
@@ -41,7 +45,7 @@ type EditorOwnerState = Pick<
   | 'sshStateByEnvironment'
 >
 
-const OWNER_CHANGED_MESSAGE =
+export const OWNER_CHANGED_MESSAGE =
   "Couldn't verify which host owns this file. Reopen the file after the connection settles."
 
 export function captureEditorFileOperationProvenance(
@@ -57,13 +61,19 @@ export function captureEditorFileOperationProvenance(
       ? 'explicit'
       : 'legacy'
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
+  // Why: a worktree on a paired server has no local row, so the hint the tab was opened with is
+  // the only owner evidence left — but only for a runtime this client is still paired to.
+  const hintedEnvironmentIsPaired = isSavedRuntimeEnvironment(
+    state.runtimeEnvironments,
+    hintedRuntimeEnvironmentId
+  )
   const route =
     getFloatingWorkspaceOperationRoute(worktreeId) ??
     (explicitResolution.kind === 'resolved'
       ? explicitResolution.route
       : explicitResolution.kind === 'ambiguous'
         ? null
-        : ownerHintProvided && worktreeIsPublished
+        : ownerHintProvided && (worktreeIsPublished || hintedEnvironmentIsPaired)
           ? {
               executionHostId: hintedRuntimeEnvironmentId
                 ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
@@ -71,7 +81,12 @@ export function captureEditorFileOperationProvenance(
               runtimeEnvironmentId: hintedRuntimeEnvironmentId
             }
           : resolveEditorOwnerRoute(state, worktreeId))
-  if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
+  if (
+    !route ||
+    (ownerHintProvided &&
+      canonicalRuntimeOwnerKey(hintedRuntimeEnvironmentId, state.runtimeEnvironments) !==
+        canonicalRuntimeOwnerKey(route.runtimeEnvironmentId, state.runtimeEnvironments))
+  ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
   const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(state, route)
@@ -145,7 +160,15 @@ function resolveCurrentEditorRoute(
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return resolveEditorOwnerRoute(state, worktreeId, provenance.generation.route.executionHostId)
   }
-  return isWorktreePublished(state, worktreeId) ? provenance.generation.route : null
+  if (isWorktreePublished(state, worktreeId)) {
+    return provenance.generation.route
+  }
+  // Why: a worktree published only on a paired runtime has no local row either, and losing that
+  // runtime from the catalog is what must invalidate the route.
+  const capturedEnvironmentId = provenance.generation.route.runtimeEnvironmentId
+  return isSavedRuntimeEnvironment(state.runtimeEnvironments, capturedEnvironmentId)
+    ? provenance.generation.route
+    : null
 }
 
 function isWorktreePublished(state: EditorOwnerState, worktreeId: string): boolean {

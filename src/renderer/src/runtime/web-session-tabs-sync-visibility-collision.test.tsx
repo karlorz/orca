@@ -37,6 +37,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
+import { registerRuntimeOwnerEnvironments } from '@/lib/runtime-owner-catalog'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -259,6 +260,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
 
   afterEach(() => {
     cleanup()
+    registerRuntimeOwnerEnvironments(() => [])
     useAppStore.setState(initialState, true)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
@@ -407,6 +409,12 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
   })
 
   it('waits for a newer surviving-host frame before repairing shared state', async () => {
+    // Why: two channels survive one session only as aliases of the same runtime; distinct
+    // runtimes are cross-runtime mirrors and the survivor policy no longer admits them.
+    registerRuntimeOwnerEnvironments(() => [
+      { id: ENV_A, runtimeId: 'runtime-shared' },
+      { id: ENV_B, runtimeId: 'runtime-shared' }
+    ])
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
     await publish(findGlobalSubscription(ENV_A), {
@@ -449,6 +457,11 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
   })
 
   it('fences an omitted host while its survivor inventory is unavailable', async () => {
+    // Why: same-runtime aliases, as in the survivor test above.
+    registerRuntimeOwnerEnvironments(() => [
+      { id: ENV_A, runtimeId: 'runtime-shared' },
+      { id: ENV_B, runtimeId: 'runtime-shared' }
+    ])
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
     await publish(findGlobalSubscription(ENV_A), {

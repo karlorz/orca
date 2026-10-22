@@ -1,12 +1,15 @@
+import { getRuntimeOwnerEnvironments } from '@/lib/runtime-owner-catalog'
 import type { Tab } from '../../../../shared/tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import {
   resolveEditorFileIdForOwner,
   runtimeOwnerKey
 } from '../../store/slices/editor/file-ids/editor-file-ids'
+import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { ReadyEditorSurface } from './state'
 
 type FileIndex = {
+  environments: ReturnType<typeof getRuntimeOwnerEnvironments>
   byId: Map<string, OpenFile>
   byOwner: Map<string, OpenFile>
   reservedSourceIds: Map<string, OpenFile>
@@ -19,15 +22,25 @@ function ownerKey(
   environmentId: string | null | undefined,
   mode: OpenFile['mode']
 ): string {
-  return JSON.stringify([worktreeId, runtimeOwnerKey(environmentId), mode ?? 'edit', filePath])
+  return JSON.stringify([
+    worktreeIdentityKey(worktreeId),
+    runtimeOwnerKey(environmentId),
+    mode ?? 'edit',
+    filePath
+  ])
 }
 
 function fileIndex(files: readonly OpenFile[]): FileIndex {
   const cached = indexes.get(files)
-  if (cached) {
+  if (cached && cached.environments === getRuntimeOwnerEnvironments()) {
     return cached
   }
-  const index: FileIndex = { byId: new Map(), byOwner: new Map(), reservedSourceIds: new Map() }
+  const index: FileIndex = {
+    environments: getRuntimeOwnerEnvironments(),
+    byId: new Map(),
+    byOwner: new Map(),
+    reservedSourceIds: new Map()
+  }
   for (const file of files) {
     if (!index.byId.has(file.id)) {
       index.byId.set(file.id, file)
@@ -83,7 +96,7 @@ export function createMirroredEditorFileResolver(
     const preservesOwner =
       retained &&
       existingTab?.id === tab.id &&
-      retained.worktreeId === worktreeId &&
+      worktreeIdsEqual(retained.worktreeId, worktreeId) &&
       retained.filePath === tab.filePath &&
       (retained.mode ?? 'edit') === mode &&
       !retained.runtimeEnvironmentId?.trim()

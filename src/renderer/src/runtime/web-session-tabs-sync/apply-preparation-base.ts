@@ -29,6 +29,7 @@ import {
   shouldReplaceTerminalTab
 } from './terminal-surfaces'
 import { buildMirroredTerminalTabs } from './terminal-build'
+import { crossRuntimeMirrorSuppressesFrame } from './cross-runtime-mirror-suppression'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 export function prepareWebSessionTabsSnapshotBase(
@@ -102,8 +103,15 @@ export function prepareWebSessionTabsSnapshotBase(
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const existingTerminalById = new Map(currentTerminalTabs.map((tab) => [tab.id, tab]))
   const reconcilesNonAgentTabs = options?.contentScope !== 'agent-session'
+  // Why: a runtime this client already mirrors directly is the worktree's owner; another
+  // runtime's copy of the same tabs would only duplicate them in this strip. One verdict strips
+  // the frame's surfaces for every downstream builder (terminal/browser/editor/agent); retention
+  // gates keep the flag so an inert frame cannot cull what it never owned.
+  const mirrorsOwnedByOtherRuntime =
+    reconcilesNonAgentTabs && crossRuntimeMirrorSuppressesFrame(currentTerminalTabs, environmentId)
+  const admittedSnapshot = mirrorsOwnedByOtherRuntime ? { ...snapshot, tabs: [] } : snapshot
   const terminalSurfaceTabs = reconcilesNonAgentTabs
-    ? snapshot.tabs.filter(isTerminalSurfaceTab)
+    ? admittedSnapshot.tabs.filter(isTerminalSurfaceTab)
     : []
   const readyTerminalTabs = terminalSurfaceTabs.filter(isReadyTerminalTab)
   const nextRemotePtyIds = new Set(
@@ -137,6 +145,8 @@ export function prepareWebSessionTabsSnapshotBase(
     }
   }
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
+  const contentsAffirmed = hostSnapshotAffirmsWorktreeContents(snapshot)
+  const isWorktreeRemovalFrame = isWebSessionTabsWorktreeRemovalFrame(snapshot)
   const retainedTerminalTabs = reconcilesNonAgentTabs
     ? currentTerminalTabs.filter(
         (tab) =>
@@ -146,12 +156,14 @@ export function prepareWebSessionTabsSnapshotBase(
             nextRemotePtyIds,
             nextMirroredTerminalIds,
             exactProvisionalHandoffs,
-            state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+            state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId,
+            contentsAffirmed,
+            isWorktreeRemovalFrame
           )
       )
     : currentTerminalTabs
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
-    snapshot,
+    admittedSnapshot,
     environmentId,
     existingTerminalById,
     state.terminalLayoutsByTabId,
@@ -177,15 +189,14 @@ export function prepareWebSessionTabsSnapshotBase(
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
-      : isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
-          !hostSnapshotAffirmsWorktreeContents(snapshot)
+      : isWorktreeRemovalFrame || !contentsAffirmed
         ? null
         : []
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  if (reconcilesNonAgentTabs && !isWebSessionTabsWorktreeRemovalFrame(snapshot)) {
+  if (reconcilesNonAgentTabs && !isWorktreeRemovalFrame && !mirrorsOwnedByOtherRuntime) {
     for (const tabId of collectUnhydratedMirroredTabRetractions({
       state,
       environmentId,
@@ -207,7 +218,7 @@ export function prepareWebSessionTabsSnapshotBase(
   return {
     state,
     rawSnapshot,
-    snapshot,
+    snapshot: admittedSnapshot,
     environmentId,
     worktreeId,
     now,
@@ -221,6 +232,7 @@ export function prepareWebSessionTabsSnapshotBase(
     currentTerminalTabs,
     existingTerminalById,
     reconcilesNonAgentTabs,
+    mirrorsOwnedByOtherRuntime,
     terminalSurfaceTabs,
     readyTerminalTabs,
     nextRemotePtyIds,

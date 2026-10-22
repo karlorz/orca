@@ -1,4 +1,5 @@
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { OpenFile } from '../../store/slices/editor'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { sameStringArray } from './state-equality-core'
@@ -37,21 +38,23 @@ export function webSessionOpenFilesForWorktree(
   worktreeId: string,
   batchContext?: WebSessionTabsBatchContext
 ): readonly OpenFile[] {
+  const key = worktreeIdentityKey(worktreeId)
   if (!batchContext) {
-    return state.openFiles.filter((file) => file.worktreeId === worktreeId)
+    return state.openFiles.filter((file) => worktreeIdentityKey(file.worktreeId) === key)
   }
   let index = batchContext.openFilesIndex
   if (!index || index.source !== state.openFiles) {
     const byWorktree = new Map<string, OpenFile[]>()
     for (const file of state.openFiles) {
-      const bucket = byWorktree.get(file.worktreeId) ?? []
+      const bucketKey = worktreeIdentityKey(file.worktreeId)
+      const bucket = byWorktree.get(bucketKey) ?? []
       bucket.push(file)
-      byWorktree.set(file.worktreeId, bucket)
+      byWorktree.set(bucketKey, bucket)
     }
     index = { source: state.openFiles, byWorktree }
     batchContext.openFilesIndex = index
   }
-  return index.byWorktree.get(worktreeId) ?? []
+  return index.byWorktree.get(key) ?? []
 }
 
 /** Retargets the index at the array a snapshot just produced, re-bucketing only the
@@ -66,13 +69,16 @@ export function advanceWebSessionOpenFilesIndex(
   if (!index || index.source === nextOpenFiles) {
     return
   }
+  const key = worktreeIdentityKey(worktreeId)
   const bucket: OpenFile[] = []
   for (const file of nextOpenFiles) {
-    if (file.worktreeId === worktreeId) {
+    if (worktreeIdentityKey(file.worktreeId) === key) {
       bucket.push(file)
     }
   }
-  index.byWorktree.set(worktreeId, bucket)
+  // Why: bucket under the canonical key — reads look up by it, and a raw-spelling write would
+  // silently miss and re-filter on every snapshot.
+  index.byWorktree.set(key, bucket)
   index.source = nextOpenFiles
 }
 

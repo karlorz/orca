@@ -143,6 +143,142 @@ describe('host editor file ownership', () => {
     expect(patch?.unifiedTabsByWorktree?.[WT]?.[0]?.entityId).toBe(owned.id)
   })
 
+  it('adopts a locally opened env-stamped file the host later lists', () => {
+    const pngPath = '/repo/out/oidc-visual-report-dark.png'
+    const ownedId = buildOwnedEditorFileId(pngPath, WT, ENV)
+    const local: OpenFile = {
+      id: ownedId,
+      filePath: pngPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      worktreeId: WT,
+      language: 'plaintext',
+      isDirty: false,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit'
+    }
+    const localUnified = {
+      id: 'local-png-unified',
+      entityId: ownedId,
+      worktreeId: WT,
+      groupId: 'local-group',
+      contentType: 'editor' as const,
+      label: 'oidc-visual-report-dark.png',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: true,
+      isPinned: false
+    }
+    const hostFileTab: RuntimeMobileSessionFileTab = {
+      type: 'file',
+      id: 'host-png-tab',
+      title: 'oidc-visual-report-dark.png',
+      filePath: pngPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      language: 'plaintext',
+      isDirty: false,
+      isActive: true
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        openFiles: [local],
+        unifiedTabsByWorktree: { [WT]: [localUnified] }
+      }),
+      makeSnapshot([hostFileTab], { activeTabId: hostFileTab.id, activeTabType: 'file' }),
+      ENV,
+      NOW
+    )
+    const files = patch.openFiles ?? [local]
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatchObject({
+      id: ownedId,
+      filePath: pngPath,
+      mirroredFromRuntimeSession: true
+    })
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.filter((tab) => tab.contentType === 'editor')
+    ).toEqual([expect.objectContaining({ id: 'host-png-tab', entityId: ownedId })])
+  })
+
+  it('adopts a local file whose worktree id is a path-spelling alias of the snapshot', () => {
+    const aliasWorktreeId = `${WT}/`
+    const pngPath = '/repo/out/oidc-visual-report-dark.png'
+    const ownedId = buildOwnedEditorFileId(pngPath, aliasWorktreeId, ENV)
+    const local: OpenFile = {
+      id: ownedId,
+      filePath: pngPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      worktreeId: aliasWorktreeId,
+      language: 'plaintext',
+      isDirty: false,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit'
+    }
+    const hostFileTab: RuntimeMobileSessionFileTab = {
+      type: 'file',
+      id: 'host-png-alias',
+      title: 'oidc-visual-report-dark.png',
+      filePath: pngPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      language: 'plaintext',
+      isDirty: false,
+      isActive: true
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({ openFiles: [local] }),
+      makeSnapshot([hostFileTab], { activeTabId: hostFileTab.id, activeTabType: 'file' }),
+      ENV,
+      NOW
+    )
+    const files = patch.openFiles ?? [local]
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatchObject({ id: ownedId, mirroredFromRuntimeSession: true })
+    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]?.entityId).toBe(ownedId)
+  })
+
+  it('keeps a second local image when the host lists only one of two paths', () => {
+    const firstPath = '/repo/out/oidc-architecture-design.png'
+    const secondPath = '/repo/out/oidc-visual-report-dark.png'
+    const first = file({
+      id: buildOwnedEditorFileId(firstPath, WT, ENV),
+      filePath: firstPath,
+      relativePath: 'out/oidc-architecture-design.png',
+      runtimeEnvironmentId: ENV
+    })
+    const second = file({
+      id: buildOwnedEditorFileId(secondPath, WT, ENV),
+      filePath: secondPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      runtimeEnvironmentId: ENV
+    })
+    const hostSecond: RuntimeMobileSessionFileTab = {
+      type: 'file',
+      id: 'host-second-png',
+      title: 'oidc-visual-report-dark.png',
+      filePath: secondPath,
+      relativePath: 'out/oidc-visual-report-dark.png',
+      language: 'plaintext',
+      isDirty: false,
+      isActive: true
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({ openFiles: [first, second] }),
+      makeSnapshot([hostSecond], { activeTabId: hostSecond.id, activeTabType: 'file' }),
+      ENV,
+      NOW
+    )
+    const files = patch.openFiles ?? [first, second]
+    expect(files.map((entry) => entry.filePath).sort()).toEqual([firstPath, secondPath])
+    expect(
+      files.find((entry) => entry.filePath === firstPath)?.mirroredFromRuntimeSession
+    ).toBeUndefined()
+    expect(files.find((entry) => entry.filePath === secondPath)).toMatchObject({
+      id: second.id,
+      mirroredFromRuntimeSession: true
+    })
+  })
+
   it('treats an omitted legacy mode as an editable file', () => {
     const owned = file({
       id: buildOwnedEditorFileId(filePath, WT, ENV),

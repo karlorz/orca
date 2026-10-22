@@ -9,6 +9,8 @@ import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/te
 import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
+import { getRuntimeOwnerEnvironments } from '@/lib/runtime-owner-catalog'
+import { sameCanonicalRuntimeOwner } from '../../../../shared/runtime-environment-owner'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   WEB_TERMINAL_SURFACE_TAB_PREFIX,
@@ -164,6 +166,11 @@ export function isRuntimeTerminalTabForEnvironment(
   return getRemoteRuntimePtyEnvironmentId(tab.ptyId) === environmentId
 }
 
+/** Saved ids of one runtime instance alias each other, so only the canonical key identifies it. */
+function isSameRuntimeOwner(left: string, right: string): boolean {
+  return sameCanonicalRuntimeOwner(left, right, getRuntimeOwnerEnvironments())
+}
+
 export function isMirroredTerminalSurfaceId(tabId: string): boolean {
   return (
     tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX) ||
@@ -245,7 +252,9 @@ export function shouldReplaceTerminalTab(
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
   exactProvisionalHandoffs: ReadonlySet<string>,
-  persistedLeafPtyIds: Readonly<Record<string, string>> | undefined
+  persistedLeafPtyIds: Readonly<Record<string, string>> | undefined,
+  contentsAffirmed = true,
+  isWorktreeRemovalFrame = false
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
@@ -253,8 +262,18 @@ export function shouldReplaceTerminalTab(
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
-    // Why: host snapshots are authoritative for mirrored tabs; replace old mirrors even when the next surface still awaits a stream handle, else parity drifts.
-    return true
+    // Rebuild when the frame still names this surface. Absence is a close only
+    // when the host affirms the worktree or sends an explicit removal.
+    if (nextMirroredTerminalIds.has(tab.id)) {
+      return true
+    }
+    // Why: another runtime's empty terminal list is not this tab's close — only the runtime
+    // that minted the PTY can retract its surface.
+    const sourceEnvironmentId = tab.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null
+    if (sourceEnvironmentId && !isSameRuntimeOwner(sourceEnvironmentId, environmentId)) {
+      return false
+    }
+    return contentsAffirmed || isWorktreeRemovalFrame
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
     // Why: a fresh placeholder has no identity, so the host's first terminal takes it over. A

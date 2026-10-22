@@ -3,7 +3,8 @@ import { useAppStore } from '@/store'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
+  getEditorFileOperationContext,
+  OWNER_CHANGED_MESSAGE
 } from './editor-file-operation-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
@@ -91,6 +92,58 @@ describe('editor file operation owner', () => {
     )
 
     expect(context.target).toEqual({ kind: 'environment', environmentId: 'hub-a' })
+  })
+
+  it('accepts a paired-runtime hint when the worktree has no local row', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('pvelxc', 1)])
+
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      worktreeId,
+      'pvelxc',
+      true
+    )
+    const context = getEditorFileOperationContext(
+      useAppStore.getState(),
+      { worktreeId, runtimeEnvironmentId: 'pvelxc', operationProvenance: provenance },
+      '/remote/repo'
+    )
+
+    expect(provenance.generation.route).toEqual({
+      executionHostId: 'runtime:pvelxc',
+      runtimeEnvironmentId: 'pvelxc'
+    })
+    expect(context.target).toEqual({ kind: 'environment', environmentId: 'pvelxc' })
+  })
+
+  it('rejects a hint naming a runtime this client is not paired to', () => {
+    useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('pvelxc', 1)])
+
+    expect(() =>
+      captureEditorFileOperationProvenance(useAppStore.getState(), worktreeId, 'msi', true)
+    ).toThrow(OWNER_CHANGED_MESSAGE)
+    expect(() =>
+      captureEditorFileOperationProvenance(useAppStore.getState(), worktreeId, 'pvelxc', true)
+    ).not.toThrow()
+  })
+
+  it('accepts an alias-stamped hint for the same runtime the catalog resolves', () => {
+    useAppStore.getState().setRuntimeEnvironments([
+      { ...runtimeEnvironment('pvelxc', 1), runtimeId: 'runtime-pvelxc' },
+      { ...runtimeEnvironment('accept', 2), runtimeId: 'runtime-pvelxc' }
+    ])
+
+    const provenance = captureEditorFileOperationProvenance(
+      useAppStore.getState(),
+      worktreeId,
+      'accept',
+      true
+    )
+
+    expect(provenance.generation.route).toEqual({
+      executionHostId: 'runtime:accept',
+      runtimeEnvironmentId: 'accept'
+    })
   })
 
   it('rejects an open tab after the same environment id is re-paired', () => {

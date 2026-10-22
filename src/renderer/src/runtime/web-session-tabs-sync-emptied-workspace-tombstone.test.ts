@@ -133,7 +133,7 @@ describe('applyWebSessionTabsSnapshot emptied-workspace tombstone', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    expect(patch.tabsByWorktree).toBeDefined()
-    expect(Object.hasOwn(patch.tabsByWorktree!, WT)).toBe(false)
+    const nextTabs = patch.tabsByWorktree?.[WT] ?? mirroredTabs
+    expect(nextTabs).toEqual([mirroredTabs[0]])
   })
 })

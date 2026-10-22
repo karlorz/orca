@@ -1,16 +1,19 @@
+import { canonicalRuntimeOwnerKey } from '../../../../../../shared/runtime-environment-owner'
+import { getRuntimeOwnerEnvironments } from '@/lib/runtime-owner-catalog'
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
 import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
+import { worktreeIdsEqual } from '../../../../../../shared/worktree/id'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
-  return runtimeEnvironmentId?.trim() || null
+  return canonicalRuntimeOwnerKey(runtimeEnvironmentId, getRuntimeOwnerEnvironments())
 }
 
 export function isSameEditorOwner(
@@ -19,7 +22,7 @@ export function isSameEditorOwner(
   runtimeEnvironmentId: string | null | undefined
 ): boolean {
   return (
-    file.worktreeId === worktreeId &&
+    worktreeIdsEqual(file.worktreeId, worktreeId) &&
     runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
   )
 }
