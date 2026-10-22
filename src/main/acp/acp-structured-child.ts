@@ -36,7 +36,7 @@ export function isAcpReadySession(
 }
 
 export function requireLiveAcpSession(
-  sessions: ReadonlyMap<string, AcpStructuredSession>,
+  sessions: ReadonlyMap<string, AcpStructuredChild>,
   sessionId: string,
   agent: string
 ): AcpStructuredSession {
