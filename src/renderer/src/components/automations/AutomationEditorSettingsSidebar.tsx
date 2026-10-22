@@ -1,3 +1,4 @@
+import { normalizeAutomationDraftLaunchOptions } from './automation-draft-model'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { translate } from '@/i18n/i18n'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
@@ -78,7 +79,11 @@ export function AutomationEditorSettingsSidebar({
             <AgentCombobox
               agents={visibleAgents}
               value={draft.agentId}
-              onValueChange={(agentId) => onDraftChange((current) => ({ ...current, agentId }))}
+              onValueChange={(agentId) =>
+                onDraftChange((current) =>
+                  normalizeAutomationDraftLaunchOptions({ ...current, agentId })
+                )
+              }
               defaultAgent={settings?.defaultTuiAgent ?? null}
               triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
               allowNarrowTrigger

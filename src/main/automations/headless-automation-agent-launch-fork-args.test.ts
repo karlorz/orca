@@ -95,16 +95,36 @@ describe('headless automation launch: fork per-automation args', () => {
   it('passes per-automation model, reasoning effort and agent profile into the spawned args', async () => {
     const opts = await launchedOptions({
       model: 'deepseek-v4-flash',
-      reasoningEffort: 'xhigh',
+      reasoningEffort: 'max',
       agentProfile: 'minimal'
     })
     expect(opts.launchPreferences).toEqual(
-      buildAutomationModelLaunchPreferences('grok', 'deepseek-v4-flash', 'xhigh', 'minimal')
+      buildAutomationModelLaunchPreferences('grok', 'deepseek-v4-flash', 'max', 'minimal')
     )
     expect(opts.extraAgentArgs).toBeUndefined()
     expect(spawnedCommand(opts)).toContain(
-      "'--agent' 'minimal' '-m' 'deepseek-v4-flash' '--reasoning-effort' 'xhigh'"
+      "'--agent' 'minimal' '-m' 'deepseek-v4-flash' '--reasoning-effort' 'max'"
     )
+  })
+
+  it('leaves Agent default effort out of the spawned Grok command', async () => {
+    const opts = await launchedOptions({ model: 'deepseek-v4-flash', reasoningEffort: null })
+    expect(opts.launchPreferences).toEqual({ model: 'deepseek-v4-flash' })
+    const command = spawnedCommand(opts)
+    expect(command).toContain("'-m' 'deepseek-v4-flash'")
+    expect(command).not.toContain('--effort')
+    expect(command).not.toContain('--reasoning-effort')
+  })
+
+  it('drops a stale profile from non-Grok preferences and spawned args', async () => {
+    const opts = await launchedOptions({
+      agentId: 'claude',
+      model: 'opus',
+      agentProfile: 'minimal'
+    })
+    expect(opts.launchPreferences).toEqual({ model: 'opus' })
+    expect(spawnedCommand(opts)).not.toContain('--agent')
+    expect(spawnedCommand(opts)).not.toContain('--effort')
   })
 
   it('passes agentFlags into the spawned args', async () => {

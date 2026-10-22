@@ -211,7 +211,7 @@ describe('tui agent startup session options', () => {
     expect(plan?.launchCommand).not.toContain("'low'")
   })
 
-  it('sends the grok effort default when host launch options override agent arguments', () => {
+  it('omits the effort flag when host launch options override agent arguments', () => {
     const plan = buildAgentStartupPlan({
       agent: 'grok',
       prompt: 'Check startup',
@@ -220,8 +220,35 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'gpt-6.1-sol' },
       sessionOptionsOverrideAgentArgs: true
     })
-    expect(plan?.launchCommand).toContain("grok '-m' 'gpt-6.1-sol' '--reasoning-effort' 'medium'")
-    expect(plan?.sessionOptions).toEqual({ model: 'gpt-6.1-sol', effort: 'medium' })
+    // Why: grok names no effort default, so an unpicked tier never reaches argv.
+    expect(plan?.launchCommand).toBe("grok '-m' 'gpt-6.1-sol' -- 'Check startup'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-6.1-sol' })
+  })
+
+  it('forwards a picked grok effort once the host launch options own the command', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: 'Check startup',
+      cmdOverrides: {},
+      platform: 'linux',
+      sessionOptions: { model: 'gpt-6.1-sol', effort: 'max' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toContain("grok '-m' 'gpt-6.1-sol' '--reasoning-effort' 'max'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-6.1-sol', effort: 'max' })
+  })
+
+  it('drops an unaccepted grok effort from a host launch without dropping the model', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'grok',
+      prompt: 'Check startup',
+      cmdOverrides: {},
+      platform: 'linux',
+      sessionOptions: { model: 'gpt-6.1-sol', effort: 'low' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(plan?.launchCommand).toBe("grok '-m' 'gpt-6.1-sol' -- 'Check startup'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-6.1-sol' })
   })
 
   it('applies explicit session options to resume commands', () => {

@@ -64,7 +64,7 @@ export function resolveAgentLaunchCommand(args: {
     args.agent,
     args.sessionOptions,
     args.sessionOptionsOverrideAgentArgs ? [] : trailingWithExtra,
-    !args.sessionOptionsOverrideAgentArgs || args.agent === 'grok'
+    !args.sessionOptionsOverrideAgentArgs
   )
   if (override && args.sessionOptionsOverrideAgentArgs) {
     const overrideTokens = tokenizeStartupCommand(override, args.shell)
@@ -75,7 +75,7 @@ export function resolveAgentLaunchCommand(args: {
       args.agent,
       args.sessionOptions,
       overrideTokens.tokens,
-      args.agent === 'grok'
+      false
     )
     if (
       Object.entries(resolvedOptions.appliedValues).some(

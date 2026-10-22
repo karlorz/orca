@@ -575,10 +575,21 @@ features:
       - src/renderer/src/components/sidebar/should-use-in-app-local-folder-picker.ts
     wiki: raw/transcripts/2026-10-01-bug-linux-add-project-browse-folder-sigabrt.md
 
+  - id: automation-effort-and-profile-gating
+    title: Omit default effort flags, offer per-model Grok effort menus, and clear profiles for other agents
+    kind: product
+    status: landed
+    paths:
+      - src/shared/automation-model.ts
+      - src/shared/agent-session-option-catalog-grok.ts
+      - src/shared/agent-session-option-launch.ts
+      - src/renderer/src/components/automations
+    wiki: projects/orca/work/2026-10-23-automation-effort-and-profile-gating
+
   - id: grok-launch-reasoning-effort-medium
     title: Grok launches pass --reasoning-effort medium with -m, including discovered models
     kind: product
-    status: landed
+    status: superseded
     paths:
       - src/shared/agent-session-option-catalog-grok.ts
       - src/shared/agent-session-option-launch.ts

@@ -78,4 +78,24 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     const updater = onDraftChange.mock.calls[0][0]
     expect(updater(DRAFT).agentId).toBe('claude')
   })
+  it('clears Grok-only profiles and unsupported effort through the actual agent picker', () => {
+    const onDraftChange = vi.fn()
+    renderSidebar(onDraftChange)
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+    const updater = onDraftChange.mock.calls[0][0]
+    expect(
+      updater({
+        ...DRAFT,
+        agentId: 'grok',
+        model: 'haiku',
+        agentProfile: 'minimal',
+        reasoningEffort: 'max'
+      })
+    ).toMatchObject({
+      agentId: 'claude',
+      agentProfile: undefined,
+      reasoningEffort: ''
+    })
+  })
 })

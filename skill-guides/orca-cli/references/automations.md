@@ -20,7 +20,7 @@ Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or RRULE
 
 Use `--model <id>` to launch the run with a specific model. The id is free-form (models come from your own agent config) and Orca only emits a model flag for providers whose flag it knows, so an unset or unsupported-combination value simply keeps the agent's configured default. On `edit`, pass `--model ""` to clear a saved model.
 
-Use `--reasoning-effort` with a level the selected agent catalog accepts. Grok accepts low, medium, high, or xhigh. Codex can also accept max or ultra. Omit it for the agent default. On edit, pass an empty value to clear it.
+Use `--reasoning-effort` with a level the selected agent and model accept (for Grok, valid tiers differ per model). Codex can also accept max or ultra. Omit it for the agent default (omits the flag). On edit, pass an empty value to clear it.
 
 Use `--agent-profile minimal` only with `--provider grok`. On edit, pass an empty value to clear it.
 

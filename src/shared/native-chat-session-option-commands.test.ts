@@ -277,36 +277,36 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
 
   it('tracks effort under the current model', () => {
     const record = grokRecord('grok-4.5')
-    expect(recordGrok(record, '/effort medium')).toEqual({
+    expect(recordGrok(record, '/effort high')).toEqual({
       changed: true,
       opensAgentPicker: false
     })
     expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
-      value: 'medium',
+      value: 'high',
       source: 'dispatched'
     })
   })
 
   it('tracks nothing for an effort tier outside the seeded choices', () => {
-    // grok's canonical ladder has a `none` tier, but the picker only offers values
-    // the shared labels localize, so tracking it would render an untranslated pill.
+    // Unaccepted levels cannot become tracked session options.
     const record = grokRecord('grok-4.5')
     recordGrok(record, '/effort none')
     expect(record.valuesByModel['grok-4.5']?.effort).toBeUndefined()
   })
 
-  it('gates xhigh on the tracked model’s own menu, not grok’s canonical ladder', () => {
-    // grok warns and ignores a tier the active model lacks, so 4.5 must not record it.
-    const older = grokRecord('grok-4.5')
-    recordGrok(older, '/effort xhigh')
-    expect(older.valuesByModel['grok-4.5']?.effort).toBeUndefined()
-
-    const newer = grokRecord('grok-4.6')
-    recordGrok(newer, '/effort xhigh')
-    expect(newer.valuesByModel['grok-4.6']?.effort).toEqual({
-      value: 'xhigh',
-      source: 'dispatched'
-    })
+  it('rejects effort levels not accepted by the current Grok model', () => {
+    // grok-4.5 rejects xhigh and max; kimi-k3 rejects low and medium
+    for (const [model, invalidEfforts] of [
+      ['grok-4.5', ['xhigh', 'max']],
+      ['kimi-k3', ['low', 'medium', 'xhigh']],
+      ['sonnet', ['low', 'medium', 'high', 'xhigh']]
+    ] as const) {
+      for (const effort of invalidEfforts) {
+        const record = grokRecord(model)
+        recordGrok(record, `/effort ${effort}`)
+        expect(record.valuesByModel[model]?.effort).toBeUndefined()
+      }
+    }
   })
 
   it('rejects grok’s two-argument /model form and any other prose', () => {
@@ -337,32 +337,32 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
         catalog: GROK_SESSION_OPTION_CATALOG,
         models: GROK_SESSION_OPTION_CATALOG.models,
         record,
-        command: '/effort low',
+        command: '/effort high',
         persist
       })
     ).toEqual({ changed: true, opensAgentPicker: false })
     expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
-      value: 'low',
+      value: 'high',
       source: 'dispatched'
     })
-    expect(persist).toHaveBeenCalledWith('grok-4.7', 'effort', 'low')
+    expect(persist).toHaveBeenCalledWith('grok-4.7', 'effort', 'high')
   })
 
   it('does not reset tracked state when the typed model is the CLI default already shown', () => {
     // Regression: an untracked record read as `null`, so re-typing the model the picker
     // already displays looked like a switch and deleted that model's options.
     const record = grokRecord()
-    recordGrok(record, '/effort low')
+    recordGrok(record, '/effort high')
     recordGrok(record, '/model grok-4.7')
     expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
-      value: 'low',
+      value: 'high',
       source: 'dispatched'
     })
   })
 
   it('still resets tracked state when the typed model is a real switch', () => {
     const record = grokRecord()
-    recordGrok(record, '/effort low')
+    recordGrok(record, '/effort high')
     recordNativeChatSessionOptionCommand({
       catalog: GROK_SESSION_OPTION_CATALOG,
       models: [
@@ -374,7 +374,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
     })
     expect(record.model).toEqual({ value: 'grok-build', source: 'dispatched' })
     expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
-      value: 'low',
+      value: 'high',
       source: 'dispatched'
     })
   })

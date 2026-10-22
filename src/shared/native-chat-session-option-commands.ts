@@ -66,7 +66,9 @@ export function buildNativeChatSessionOptionCommand(args: {
   const model = args.models.find((candidate) => candidate.id === args.modelId)
   const values = flattenNativeChatSessionOptionRecord(args.record, args.modelId)
   for (const option of model?.options ?? []) {
-    values[option.id] ??= option.kind.defaultValue
+    if (option.kind.defaultValue !== undefined) {
+      values[option.id] ??= option.kind.defaultValue
+    }
   }
   values[args.optionId] = args.value
   const composed = args.catalog.composeModelValue(args.modelId, values)

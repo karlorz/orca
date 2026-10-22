@@ -52,21 +52,40 @@ describe('automation model launch command', () => {
     expect(normalizeAutomationAgentFlags('--verbose')).toBe('--verbose')
   })
   it('emits -m <model> for a grok run with a model', () => {
+    // Why: grok names no effort default, so a model-only run sends no effort flag.
     expect(launchCommandFor('grok', 'deepseek-v4-flash')).toBe(
-      "grok '-m' 'deepseek-v4-flash' '--reasoning-effort' 'medium' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+      "grok '-m' 'deepseek-v4-flash' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 
   it('emits reasoning effort before the prompt terminator', () => {
-    expect(launchCommandFor('grok', 'deepseek-v4-flash', 'xhigh')).toBe(
-      "grok '-m' 'deepseek-v4-flash' '--reasoning-effort' 'xhigh' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+    expect(launchCommandFor('grok', 'deepseek-v4-flash', 'max')).toBe(
+      "grok '-m' 'deepseek-v4-flash' '--reasoning-effort' 'max' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+    )
+  })
+
+  it('ignores an effort that is not in the model’s menu', () => {
+    for (const effort of ['low', 'medium', 'xhigh']) {
+      expect(launchCommandFor('grok', 'deepseek-v4-flash', effort)).toBe(
+        "grok '-m' 'deepseek-v4-flash' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+      )
+    }
+    expect(launchCommandFor('grok', 'grok-4.5', 'max')).toBe(
+      "grok '-m' 'grok-4.5' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 
   it('emits the minimal Grok profile before model and effort', () => {
-    expect(launchCommandFor('grok', 'deepseek-v4-flash', 'xhigh', 'minimal')).toBe(
-      "grok '--agent' 'minimal' '-m' 'deepseek-v4-flash' '--reasoning-effort' 'xhigh' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+    expect(launchCommandFor('grok', 'deepseek-v4-flash', 'max', 'minimal')).toBe(
+      "grok '--agent' 'minimal' '-m' 'deepseek-v4-flash' '--reasoning-effort' 'max' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
+  })
+
+  it('never forwards the minimal profile to a non-grok agent', () => {
+    expect(launchCommandFor('claude', 'opus', 'high', 'minimal')).toContain(
+      "claude '--model' 'opus' '--effort' 'high'"
+    )
+    expect(launchCommandFor('claude', 'opus', 'high', 'minimal')).not.toContain('--agent')
   })
 
   it('emits Claude model and effort flags', () => {
@@ -91,7 +110,7 @@ describe('automation model launch command', () => {
     // The id rides before grok's `--`, so the prompt stays the only positional
     // argument even when the stored id reads like CLI syntax.
     expect(launchCommandFor('grok', 'help')).toBe(
-      "grok '-m' 'help' '--reasoning-effort' 'medium' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
+      "grok '-m' 'help' '--permission-mode' 'bypassPermissions' -- 'Triage the alert queue'"
     )
   })
 })

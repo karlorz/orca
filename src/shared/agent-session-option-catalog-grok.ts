@@ -5,21 +5,17 @@ import type {
 } from './agent-session-option-catalog-types'
 import { removeAgentArgOption } from './agent-session-option-agent-args'
 import { parseGrokModelList } from './grok-model-list-probe'
+import type { SessionOptionSelectChoice } from './native-chat-session-options'
 
-// The offered slice of grok's canonical ladder, low to high. Its `none` tier is
-// omitted because `native-chat-session-option-labels.ts` leaves it untranslated;
-// `minimal` and `max` because no grok model's menu has ever advertised them.
-const GROK_EFFORT_CHOICES = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' }
-]
+const LOW = { value: 'low', label: 'Low' }
+const MEDIUM = { value: 'medium', label: 'Medium' }
+const HIGH = { value: 'high', label: 'High' }
+const XHIGH = { value: 'xhigh', label: 'Extra high' }
+const MAX = { value: 'max', label: 'Max' }
 
-// Why: grok accepts only the tiers the model's own menu advertises and merely warns
-// on the rest, so expose each model's ceiling rather than one shared menu.
-function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
-  const ceilingIndex = GROK_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+// Why: grok validates the tier against the picked model's own menu and exits fatally
+// on a mismatch (`use one of: ...`), so each model carries exactly the set it accepts.
+function grokEffort(values: readonly SessionOptionSelectChoice[]): CatalogOption {
   return {
     // Why: `LaunchPreferences` is a strict zod object over model/effort/mode, so a
     // novel id is dropped client-side and rejected on the wire.
@@ -28,9 +24,7 @@ function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: GROK_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
-      // Why: fork launch default so `-m` also sends `--reasoning-effort medium`.
-      defaultValue: 'medium'
+      choices: [...values]
     },
     apply: {
       launchArgs: (value) => ['--reasoning-effort', String(value)],
@@ -57,19 +51,86 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       label: 'Grok 4.7',
       description: "xAI's latest frontier model",
       isDefault: true,
-      options: [grokEffort('xhigh')]
+      options: [grokEffort([LOW, MEDIUM, HIGH, XHIGH])]
     },
     {
       id: 'grok-4.6',
       label: 'Grok 4.6',
       description: "xAI's previous frontier model",
-      options: [grokEffort('xhigh')]
+      options: [grokEffort([LOW, MEDIUM, HIGH, XHIGH])]
     },
     {
       id: 'grok-4.5',
       label: 'Grok 4.5',
       description: 'An earlier xAI frontier model',
-      options: [grokEffort('high')]
+      options: [grokEffort([LOW, MEDIUM, HIGH])]
+    },
+    {
+      id: 'grok-4.7-build-fast',
+      label: 'Grok 4.7 Build Fast',
+      description: 'Faster build variant of Grok 4.7',
+      options: [grokEffort([LOW, MEDIUM, HIGH, XHIGH])]
+    },
+    {
+      id: 'kimi-k3',
+      label: 'Kimi K3',
+      description: 'Moonshot Kimi K3 served through grok',
+      options: [grokEffort([HIGH, MAX])]
+    },
+    {
+      id: 'flash-max',
+      label: 'Flash Max',
+      description: 'Fast xAI model offered only at the top tiers',
+      options: [grokEffort([HIGH, MAX])]
+    },
+    {
+      id: 'gpt-6.1-sol',
+      label: 'GPT-6.1 Sol',
+      description: 'OpenAI GPT-6.1 Sol served through grok',
+      options: [grokEffort([MEDIUM, HIGH, XHIGH, MAX])]
+    },
+    {
+      id: 'gpt-5.6-sol',
+      label: 'GPT-5.6 Sol',
+      description: 'OpenAI GPT-5.6 Sol served through grok',
+      options: [grokEffort([MEDIUM, HIGH, XHIGH, MAX])]
+    },
+    {
+      id: 'gpt-5.6-luna',
+      label: 'GPT-5.6 Luna',
+      description: 'OpenAI GPT-5.6 Luna served through grok',
+      options: [grokEffort([MEDIUM, HIGH, XHIGH, MAX])]
+    },
+    {
+      id: 'deepseek-v4-flash',
+      label: 'DeepSeek V4 Flash',
+      description: 'DeepSeek V4 Flash served through grok',
+      options: [grokEffort([HIGH, MAX])]
+    },
+    {
+      id: 'grok-auto',
+      label: 'Grok Auto',
+      description: 'xAI routing that picks the model per request',
+      options: [grokEffort([HIGH, MAX])]
+    },
+    {
+      id: 'sonnet',
+      label: 'Sonnet',
+      description: 'Anthropic Sonnet served through grok',
+      options: [grokEffort([MAX])]
+    },
+    {
+      id: 'haiku',
+      label: 'Haiku',
+      description: 'Anthropic Haiku served through grok',
+      options: [grokEffort([MAX])]
+    },
+    {
+      id: 'flash-non-reasoning',
+      label: 'Flash Non-Reasoning',
+      description: 'Flash variant that ignores the reasoning-effort flag',
+      // Why: this model never validates the flag, so a menu would promise a choice it drops.
+      options: []
     }
   ],
   modelApply: {
@@ -79,10 +140,10 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // agent picker…" and never persist a model, so `-m` would never be emitted.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
-  // Why: launch resolves against this static seed, so a discovered id still needs a
-  // menu (and the catalog default) here. The widest menu is the safe guess: grok
-  // warns on a tier a model lacks, but a tier the menu withholds is unreachable.
-  unknownModelOptions: [grokEffort('xhigh')],
+  // Why: launch resolves against this static seed, so a discovered id still needs a menu
+  // here. Omitting the flag (agent default) is the safe path; an explicit pick outside the
+  // model's own set fails with a CLI error naming the valid set, so offer the widest one.
+  unknownModelOptions: [grokEffort([LOW, MEDIUM, HIGH, XHIGH, MAX])],
   // Why: grok's selectable ids retire between releases, so a stale seed entry
   // must be droppable — picking one is a fatal launch, not a warning.
   discoveredModelsAreAuthoritative: true,

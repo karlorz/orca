@@ -88,7 +88,10 @@ function optionDescriptor(args: {
   // own default no flag is sent at all, so its choice is nameable only where its listing states it.
   const cliStatesDefault =
     modelIsCliDefault && option.kind.type === 'select' && option.kind.defaultIsCliDefault === true
-  const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
+  const showDefault =
+    !tracked &&
+    option.kind.defaultValue !== undefined &&
+    (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)

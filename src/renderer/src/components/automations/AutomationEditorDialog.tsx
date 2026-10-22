@@ -6,6 +6,7 @@ import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
+import type { AutomationReasoningEffort } from '../../../../shared/automation-model'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -42,7 +43,7 @@ export type AutomationDraft = {
    *  the user's own agent config, not from a catalog Orca ships. */
   model: string
   agentFlags: string
-  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | ''
+  reasoningEffort?: AutomationReasoningEffort | ''
   agentProfile?: 'minimal' | ''
   /** Saved as-is; empty means none. */
   extraAgentArgs: string

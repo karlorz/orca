@@ -14,28 +14,23 @@ import {
   tryParseAutomationRrule
 } from '../../../../shared/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
+import {
+  AUTOMATION_DEFAULT_TIME,
+  formatTimeInput,
+  normalizeAutomationDraftLaunchOptions
+} from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
-
-function getAutomationDraftReasoningEffort(
-  effort: Automation['reasoningEffort']
-): AutomationDraft['reasoningEffort'] {
-  if (effort === 'low' || effort === 'medium' || effort === 'high' || effort === 'xhigh') {
-    return effort
-  }
-  return ''
-}
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
-  return {
+  return normalizeAutomationDraftLaunchOptions({
     name: automation.name,
     prompt: automation.prompt,
     agentId: automation.agentId,
     model: automation.model ?? '',
     agentFlags: automation.agentFlags ?? '',
-    reasoningEffort: getAutomationDraftReasoningEffort(automation.reasoningEffort),
+    reasoningEffort: automation.reasoningEffort ?? '',
     agentProfile: automation.agentProfile ?? '',
     extraAgentArgs: automation.extraAgentArgs ?? '',
     projectId: getAutomationRunRepoId(automation),
@@ -59,7 +54,7 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
       schedule || hasCustomSchedule
         ? null
         : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-  }
+  })
 }
 
 export function buildExternalAutomationEditDraft(

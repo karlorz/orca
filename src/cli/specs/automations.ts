@@ -63,7 +63,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --model to launch the agent with a specific model id; omit it to use the agent default. On edit, pass an empty --model to clear it.',
-      'Use --reasoning-effort with a level the selected agent catalog accepts. Grok accepts low, medium, high, or xhigh. Codex can also accept max or ultra. Omit it for the agent default. On edit, pass an empty value to clear it.',
+      'Use --reasoning-effort with a level the selected agent and model accept (for Grok, valid tiers differ per model). Codex can also accept max or ultra. Omit it for the agent default (omits the flag). On edit, pass an empty value to clear it.',
       'Use --agent-profile minimal only with --provider grok. On edit, pass an empty value to clear it.',
       'Use --agent-flags to append flags after the model and effort flags. A value that itself starts with -- must use the equals form, for example --agent-flags=--verbose. Flags that set model, agent, effort, or permission mode are rejected.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',

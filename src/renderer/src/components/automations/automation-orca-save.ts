@@ -14,7 +14,7 @@ import {
   dispatchAutomationReread,
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
-import { buildDraftPrecheck } from './automation-draft-model'
+import { buildDraftPrecheck, normalizeAutomationDraftLaunchOptions } from './automation-draft-model'
 import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
@@ -34,7 +34,7 @@ export async function saveOrcaAutomation(
   const { store, local, setup, destination, destinationForm, pageRefresh } = context
   const { repos, projectHostSetups } = store
   const {
-    draft,
+    draft: rawDraft,
     editingAutomationId,
     editingRowKey,
     editingDestination,
@@ -58,6 +58,7 @@ export async function saveOrcaAutomation(
     createDestination
   } = destination
   const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
+  const draft = normalizeAutomationDraftLaunchOptions(rawDraft)
 
   // Re-check the destination at the start of the transaction. This keeps all
   // side effects (hook probes and trust prompts) behind the destination fence.

@@ -120,17 +120,31 @@ export function isAutomationReasoningEffortSupported(
   if (!normalizedModel || !normalizedEffort) {
     return false
   }
+  return getAutomationReasoningEffortChoices(agent, normalizedModel).some(
+    (choice) => choice.value === normalizedEffort
+  )
+}
+
+/** Effort choices share the launch validator's agent/model catalog. */
+export function getAutomationReasoningEffortChoices(
+  agent: TuiAgent,
+  model: unknown
+): { value: AutomationReasoningEffort; label: string }[] {
   const catalog = getAgentSessionOptionCatalog(agent)
-  if (!catalog?.modelApply.launchArgs) {
-    return false
+  const normalizedModel = normalizeAutomationModel(model)
+  if (!normalizedModel || !catalog?.modelApply.launchArgs) {
+    return []
   }
   const options =
     findCatalogModel(catalog, normalizedModel)?.options ?? catalog.unknownModelOptions ?? []
   const effortOption = options.find((option) => option.id === 'effort')
-  return (
-    effortOption?.kind.type === 'select' &&
-    effortOption.kind.choices.some((choice) => choice.value === normalizedEffort)
-  )
+  if (effortOption?.kind.type !== 'select') {
+    return []
+  }
+  return effortOption.kind.choices.flatMap((choice) => {
+    const value = normalizeAutomationReasoningEffort(choice.value)
+    return value ? [{ value, label: choice.label }] : []
+  })
 }
 
 /** Returns the verified model launch preference, or `undefined` for the no-op

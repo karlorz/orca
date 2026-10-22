@@ -2,7 +2,11 @@ import { useCallback } from 'react'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { buildAutomationEditDraft } from './automation-edit-draft'
-import { AUTOMATION_DEFAULT_TIME, getDefaultWorktree } from './automation-draft-model'
+import {
+  AUTOMATION_DEFAULT_TIME,
+  getDefaultWorktree,
+  normalizeAutomationDraftLaunchOptions
+} from './automation-draft-model'
 import type { AutomationTemplate } from './automation-templates'
 import { dispatchAutomationReread } from './automation-row-action-dispatch'
 import { listAutomationsForTarget } from './automation-host-client'
@@ -86,8 +90,9 @@ export function useAutomationEditorActions({
           missedRunGraceMinutes: template.missedRunGraceMinutes ?? baseDraft.missedRunGraceMinutes
         }
       : baseDraft
-    setDraft(nextDraft)
-    setDraftAtOpen(nextDraft)
+    const normalizedDraft = normalizeAutomationDraftLaunchOptions(nextDraft)
+    setDraft(normalizedDraft)
+    setDraftAtOpen(normalizedDraft)
     setCreateOpen(true)
   }
 

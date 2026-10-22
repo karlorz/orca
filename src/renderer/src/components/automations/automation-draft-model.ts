@@ -1,3 +1,4 @@
+import { isAutomationReasoningEffortSupported } from '../../../../shared/automation-model'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -73,4 +74,18 @@ export function draftAgentFlagsNeedFreshSession(
   return (
     Boolean(draft.agentFlags.trim()) && draft.workspaceMode === 'existing' && draft.reuseSession
   )
+}
+
+export function normalizeAutomationDraftLaunchOptions(draft: AutomationDraft): AutomationDraft {
+  return {
+    ...draft,
+    reasoningEffort: isAutomationReasoningEffortSupported(
+      draft.agentId,
+      draft.model,
+      draft.reasoningEffort
+    )
+      ? draft.reasoningEffort
+      : '',
+    agentProfile: draft.agentId === 'grok' ? draft.agentProfile : undefined
+  }
 }

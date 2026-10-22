@@ -233,12 +233,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         liveTransport: 'catalog'
       })
       expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
-      expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5' }).args).toEqual([
-        '-m',
-        'grok-4.5',
-        '--reasoning-effort',
-        'medium'
-      ])
+      // Why: grok names no effort default, so `-m` stands alone until one is picked.
+      expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5' })).toEqual({
+        args: ['-m', 'grok-4.5'],
+        appliedValues: { model: 'grok-4.5' }
+      })
     })
   })
 

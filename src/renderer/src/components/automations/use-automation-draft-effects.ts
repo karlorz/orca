@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { AutomationTemplate } from './automation-templates'
-import { getDefaultWorktree } from './automation-draft-model'
+import { getDefaultWorktree, normalizeAutomationDraftLaunchOptions } from './automation-draft-model'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -110,18 +110,20 @@ export function useAutomationDraftEffects({
 
   const applyTemplateToDraft = useCallback(
     (template: AutomationTemplate): void => {
-      setDraft((current) => ({
-        ...current,
-        name: template.name,
-        prompt: template.prompt,
-        preset: template.preset,
-        time: template.time ?? current.time,
-        dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
-        customSchedule: '',
-        agentId: template.agentId ?? current.agentId,
-        missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
-        scheduleWarning: null
-      }))
+      setDraft((current) =>
+        normalizeAutomationDraftLaunchOptions({
+          ...current,
+          name: template.name,
+          prompt: template.prompt,
+          preset: template.preset,
+          time: template.time ?? current.time,
+          dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
+          customSchedule: '',
+          agentId: template.agentId ?? current.agentId,
+          missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
+          scheduleWarning: null
+        })
+      )
     },
     [setDraft]
   )

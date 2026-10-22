@@ -282,7 +282,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       makeAutomation({
         agentId: 'grok',
         model: 'flash-max',
-        reasoningEffort: 'xhigh',
+        reasoningEffort: 'max',
         agentProfile: 'minimal'
       })
     )
@@ -290,12 +290,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'grok',
-        sessionOptions: buildAutomationModelLaunchPreferences(
-          'grok',
-          'flash-max',
-          'xhigh',
-          'minimal'
-        )
+        sessionOptions: buildAutomationModelLaunchPreferences('grok', 'flash-max', 'max', 'minimal')
       })
     )
   })

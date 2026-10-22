@@ -1,3 +1,9 @@
+import { nativeChatSessionChoiceLabel } from '@/components/native-chat/native-chat-session-option-labels'
+import {
+  getAutomationReasoningEffortChoices,
+  normalizeAutomationReasoningEffort
+} from '../../../../shared/automation-model'
+import { normalizeAutomationDraftLaunchOptions } from './automation-draft-model'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -23,6 +29,7 @@ export function AutomationModelField({
   pickerTriggerClassName,
   onDraftChange
 }: AutomationModelFieldProps): React.JSX.Element {
+  const effortChoices = getAutomationReasoningEffortChoices(draft.agentId, draft.model)
   return (
     <Field
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
@@ -41,90 +48,90 @@ export function AutomationModelField({
           'Model'
         )}
         onChange={(event) =>
-          onDraftChange((current) => ({ ...current, model: event.target.value }))
+          onDraftChange((current) =>
+            normalizeAutomationDraftLaunchOptions({ ...current, model: event.target.value })
+          )
         }
         className={`font-mono text-xs ${pickerTriggerClassName}`}
       />
-      <Select
-        value={draft.reasoningEffort || 'default'}
-        onValueChange={(value) =>
-          onDraftChange((current) => ({
-            ...current,
-            reasoningEffort:
-              value === 'default' ? '' : (value as 'low' | 'medium' | 'high' | 'xhigh')
-          }))
-        }
-      >
-        <SelectTrigger
-          className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
-          aria-label={translate(
-            'auto.components.automations.AutomationModelField.reasoningEffort',
-            'Reasoning effort'
-          )}
+      {effortChoices.length > 0 ? (
+        <Select
+          value={draft.reasoningEffort || 'default'}
+          onValueChange={(value) =>
+            onDraftChange((current) =>
+              normalizeAutomationDraftLaunchOptions({
+                ...current,
+                reasoningEffort: normalizeAutomationReasoningEffort(value) ?? ''
+              })
+            )
+          }
         >
-          <SelectValue
-            placeholder={translate(
-              'auto.components.automations.AutomationModelField.agentDefault',
-              'Agent default'
+          <SelectTrigger
+            className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
+            aria-label={translate(
+              'auto.components.automations.AutomationModelField.reasoningEffort',
+              'Reasoning effort'
             )}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="default">
-            {translate(
-              'auto.components.automations.AutomationModelField.agentDefault',
-              'Agent default'
-            )}
-          </SelectItem>
-          <SelectItem value="low">
-            {translate('auto.components.automations.AutomationModelField.low', 'Low')}
-          </SelectItem>
-          <SelectItem value="medium">
-            {translate('auto.components.automations.AutomationModelField.medium', 'Medium')}
-          </SelectItem>
-          <SelectItem value="high">
-            {translate('auto.components.automations.AutomationModelField.high', 'High')}
-          </SelectItem>
-          <SelectItem value="xhigh">
-            {translate('auto.components.automations.AutomationModelField.extraHigh', 'Extra high')}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
-        value={draft.agentProfile || 'default'}
-        onValueChange={(value) =>
-          onDraftChange((current) => ({
-            ...current,
-            agentProfile: value === 'default' ? '' : 'minimal'
-          }))
-        }
-      >
-        <SelectTrigger
-          className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
-          aria-label={translate(
-            'auto.components.automations.AutomationModelField.agentProfile',
-            'Agent profile'
-          )}
+          >
+            <SelectValue
+              placeholder={translate(
+                'auto.components.automations.AutomationModelField.agentDefault',
+                'Agent default'
+              )}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">
+              {translate(
+                'auto.components.automations.AutomationModelField.agentDefault',
+                'Agent default'
+              )}
+            </SelectItem>
+            {effortChoices.map((choice) => (
+              <SelectItem key={choice.value} value={choice.value}>
+                {nativeChatSessionChoiceLabel(choice, 'effort')}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+      {draft.agentId === 'grok' ? (
+        <Select
+          value={draft.agentProfile || 'default'}
+          onValueChange={(value) =>
+            onDraftChange((current) => ({
+              ...current,
+              agentProfile: value === 'default' ? '' : 'minimal'
+            }))
+          }
         >
-          <SelectValue
-            placeholder={translate(
-              'auto.components.automations.AutomationModelField.agentDefault',
-              'Agent default'
+          <SelectTrigger
+            className={`mt-2 h-9 w-full ${pickerTriggerClassName}`}
+            aria-label={translate(
+              'auto.components.automations.AutomationModelField.agentProfile',
+              'Agent profile'
             )}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="default">
-            {translate(
-              'auto.components.automations.AutomationModelField.agentDefault',
-              'Agent default'
-            )}
-          </SelectItem>
-          <SelectItem value="minimal">
-            {translate('auto.components.automations.AutomationModelField.minimal', 'Minimal')}
-          </SelectItem>
-        </SelectContent>
-      </Select>
+          >
+            <SelectValue
+              placeholder={translate(
+                'auto.components.automations.AutomationModelField.agentDefault',
+                'Agent default'
+              )}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">
+              {translate(
+                'auto.components.automations.AutomationModelField.agentDefault',
+                'Agent default'
+              )}
+            </SelectItem>
+            <SelectItem value="minimal">
+              {translate('auto.components.automations.AutomationModelField.minimal', 'Minimal')}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      ) : null}
     </Field>
   )
 }

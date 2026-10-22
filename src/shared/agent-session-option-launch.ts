@@ -65,7 +65,7 @@ export function resolveAgentSessionOptionLaunch(
       const explicitValue = values[option.id]
       if (explicitValue !== undefined) {
         if (
-          !model &&
+          (!model || agent === 'grok') &&
           option.kind.type === 'select' &&
           !option.kind.choices.some((choice) => choice.value === explicitValue)
         ) {
@@ -73,8 +73,7 @@ export function resolveAgentSessionOptionLaunch(
         }
         return [[option.id, explicitValue]]
       }
-      // Why: grok launch reads the static seed, so discovered ids still need the catalog default.
-      return includeCatalogDefaults && (model || agent === 'grok')
+      return includeCatalogDefaults && option.kind.defaultValue !== undefined && model
         ? [[option.id, option.kind.defaultValue]]
         : []
     })
