@@ -2,9 +2,11 @@ import { readdir, readFile } from 'node:fs/promises'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { parseDaemonPidFile, type ParsedDaemonPid } from '../main/daemon/daemon-pid-file-parse'
+import type { HomeLiveDaemonState } from '../main/home-appimage-release-policy'
 
 const PID_FILE_PATTERN = /^daemon-v(\d+)\.pid$/
 const INVENTORY_TIMEOUT_MS = 5_000
+const INVENTORY_TIMEOUT_MESSAGE = 'Daemon inventory timed out'
 
 export type DaemonRecordInspection = 'live' | 'exited' | 'unverifiable'
 
@@ -30,13 +32,26 @@ export async function probeLiveHomeDaemonProtocols(
   userDataPath: string,
   host?: HomeDaemonInventoryHost
 ): Promise<readonly number[] | null> {
+  return (await probeHomeDaemonState(userDataPath, host)).protocols
+}
+
+/**
+ * Verified live daemon generations under one profile, or why none could be verified.
+ * Exited generations are skipped; anything unverifiable fails the whole inventory closed.
+ */
+export async function probeHomeDaemonState(
+  userDataPath: string,
+  host?: HomeDaemonInventoryHost
+): Promise<HomeLiveDaemonState> {
   const runtimeDir = join(userDataPath, 'daemon')
   const inventory = host ?? createProductionHomeDaemonInventoryHost(runtimeDir)
   let names: string[]
   try {
     names = await inventory.readdir(runtimeDir)
-  } catch {
-    return null
+  } catch (error) {
+    return isMissingFile(error)
+      ? { protocols: null, reason: 'none-live', detail: 'no daemon directory' }
+      : { protocols: null, reason: 'unavailable', detail: 'daemon directory unreadable' }
   }
   const generations = names.flatMap((name) => {
     const version = Number(PID_FILE_PATTERN.exec(name)?.[1])
@@ -46,18 +61,29 @@ export async function probeLiveHomeDaemonProtocols(
   for (const protocolVersion of generations.sort((left, right) => left - right)) {
     const verdict = await inspectGeneration(runtimeDir, protocolVersion, inventory)
     if (verdict === 'unverifiable') {
-      return null
+      return {
+        protocols: null,
+        reason: 'adapter-error',
+        detail: `protocol ${protocolVersion} pid record unverifiable`
+      }
     }
     if (verdict === 'live') {
       try {
         await inventory.queryInventory(protocolVersion)
-      } catch {
-        return null
+      } catch (error) {
+        const timedOut = error instanceof Error && error.message === INVENTORY_TIMEOUT_MESSAGE
+        return {
+          protocols: null,
+          reason: timedOut ? 'timeout' : 'adapter-error',
+          detail: `protocol ${protocolVersion}`
+        }
       }
       live.push(protocolVersion)
     }
   }
-  return live.length > 0 ? live : null
+  return live.length > 0
+    ? { protocols: live }
+    : { protocols: null, reason: 'none-live', detail: 'no live daemon record' }
 }
 
 export async function inspectHomeDaemonPidRecord(
@@ -135,7 +161,7 @@ async function queryHomeDaemonInventory(
       }
     }
     const timer = setTimeout(
-      () => settle(new Error('Daemon inventory timed out')),
+      () => settle(new Error(INVENTORY_TIMEOUT_MESSAGE)),
       INVENTORY_TIMEOUT_MS
     )
     timer.unref()

@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HomeAppImageUpdater } from './home-appimage-updater'
 import type { UpdateStatus } from '../shared/update-status-types'
-import { HOME_UPDATE_PROTOCOL_MESSAGE } from './home-appimage-release-policy'
+import type { HomeLiveDaemonState } from './home-appimage-release-policy'
 import {
   HOME_GITHUB_API_VERSION,
   HOME_RELEASES_API_URL,
@@ -17,7 +17,12 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function fixture(protocol = 44, runningTag = 'v1.4.224-0', tag = 'v1.4.224-1') {
+async function fixture(
+  protocol = 44,
+  runningTag = 'v1.4.224-0',
+  tag = 'v1.4.224-1',
+  metadata?: () => Promise<Response>
+) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'orca-home-updater-'))
   roots.push(root)
   const release = {
@@ -35,7 +40,9 @@ async function fixture(protocol = 44, runningTag = 'v1.4.224-0', tag = 'v1.4.224
       return Response.json([release])
     }
     if (url.endsWith('.json')) {
-      return Response.json({ schemaVersion: 1, tag, daemonProtocol: protocol })
+      return metadata
+        ? metadata()
+        : Response.json({ schemaVersion: 1, tag, daemonProtocol: protocol })
     }
     return new Response(url.endsWith('.txt') ? 'checksum fixture' : 'AppImage bytes')
   })
@@ -48,7 +55,10 @@ async function fixture(protocol = 44, runningTag = 'v1.4.224-0', tag = 'v1.4.224
   const unlock = vi.fn(async () => {})
   const restart = vi.fn(async () => {})
   const restartAborted = vi.fn()
-  const liveProtocols = vi.fn(async (): Promise<number[] | null> => [44])
+  const liveProtocols = vi.fn(async (): Promise<readonly number[] | HomeLiveDaemonState | null> => [
+    44
+  ])
+  const log = vi.fn()
   const updater = new HomeAppImageUpdater({
     root,
     runningTag: installed,
@@ -60,9 +70,11 @@ async function fixture(protocol = 44, runningTag = 'v1.4.224-0', tag = 'v1.4.224
     sendStatus: (status) => statuses.push(status),
     restart,
     restartAborted,
-    recordCheck: vi.fn()
+    recordCheck: vi.fn(),
+    log
   })
   return {
+    log,
     updater,
     fetch,
     statuses,
@@ -104,12 +116,104 @@ describe('managed home updater actions', () => {
     await f.updater.restart()
     expect(f.statuses.at(-1)).toMatchObject({
       state: 'error',
-      message: HOME_UPDATE_PROTOCOL_MESSAGE,
+      message: expect.stringContaining('v1.4.224-1 needs daemon protocol 45; live daemons: 44'),
       retryable: false
     })
+    expect(f.log).toHaveBeenCalledWith(
+      '[updater] home AppImage gate blocked: protocol-mismatch (protocol-mismatch)'
+    )
     expect(f.commit).not.toHaveBeenCalled()
     expect(f.restart).not.toHaveBeenCalled()
     expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+  })
+  it('blocks every install step while all daemon sockets are refused, without looping', async () => {
+    const f = await fixture()
+    f.liveProtocols.mockResolvedValue({
+      protocols: null,
+      reason: 'none-live',
+      detail: 'refused: protocol 44, 45'
+    })
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringMatching(/^Could not verify the live terminal daemons \(none-live/),
+      retryable: true
+    })
+    expect(f.statuses.some((status) => status.state === 'available')).toBe(false)
+    expect(f.log).toHaveBeenCalledWith(
+      '[updater] home AppImage gate blocked: daemon-state-unknown (none-live)'
+    )
+    await f.updater.download()
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+    // Retryable means a person re-runs the check; the updater itself asked exactly once.
+    expect(f.liveProtocols).toHaveBeenCalledTimes(1)
+  })
+  it('blocks download and restart when daemon state turns unknown after a passing check', async () => {
+    const f = await fixture()
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)?.state).toBe('available')
+    f.liveProtocols.mockResolvedValue(null)
+    await f.updater.download()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: true })
+    expect(f.commit).not.toHaveBeenCalled()
+    f.liveProtocols.mockResolvedValue([44])
+    await f.updater.download()
+    expect(f.statuses.at(-1)?.state).toBe('downloaded')
+    f.liveProtocols.mockResolvedValue({ protocols: null, reason: 'timeout' })
+    await f.updater.restart()
+    expect(f.restart).not.toHaveBeenCalled()
+    expect(f.restartAborted).toHaveBeenCalledOnce()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: true })
+  })
+  it('reports a metadata fetch failure as retryable metadata-unavailable with a URL-free cause', async () => {
+    const f = await fixture(44, 'v1.4.224-0', 'v1.4.224-1', async () => {
+      throw new TypeError('fetch failed https://objects.githubusercontent.com/a?sig=secret')
+    })
+    await f.updater.check(true)
+    const status = f.statuses.at(-1)
+    expect(status).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining(
+        'Could not read the daemon protocol metadata for v1.4.224-1 (fetch failed <url>)'
+      ),
+      retryable: true
+    })
+    expect(JSON.stringify(status)).not.toContain('sig=secret')
+    expect(f.liveProtocols).not.toHaveBeenCalled()
+    expect(f.log).toHaveBeenCalledWith(
+      expect.stringContaining('gate blocked: metadata-unavailable')
+    )
+  })
+  it.each([
+    [500, 'HTTP 500'],
+    [200, 'invalid orca-update-protocol.json']
+  ])('treats metadata HTTP %s as retryable metadata-unavailable', async (status, cause) => {
+    const f = await fixture(44, 'v1.4.224-0', 'v1.4.224-1', async () =>
+      status === 200 ? Response.json({ schemaVersion: 2 }) : new Response('boom', { status })
+    )
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining(`(${cause})`),
+      retryable: true
+    })
+  })
+  it('keeps a release without protocol metadata (404) attended and non-retryable', async () => {
+    const f = await fixture(
+      44,
+      'v1.4.224-0',
+      'v1.4.224-1',
+      async () => new Response('Not Found', { status: 404 })
+    )
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining(
+        'attended daemon protocol update (v1.4.224-1 publishes no orca-update-protocol.json)'
+      ),
+      retryable: false
+    })
   })
   it('rechecks live protocol after download and before restart', async () => {
     const f = await fixture()

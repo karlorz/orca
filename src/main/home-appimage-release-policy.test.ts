@@ -7,7 +7,9 @@ import {
   homeReleaseFromDesktopTag,
   parseHomeDesktopTagsFromAtom,
   selectHomeAppImageRelease,
-  HOME_UPDATE_PROTOCOL_MESSAGE
+  briefHomeUpdateCause,
+  classifyHomeUpdateGateMessage,
+  HomeUpdateGateError
 } from './home-appimage-release-policy'
 
 export function homeReleaseFixture(tag = 'v1.4.224-1') {
@@ -77,18 +79,50 @@ describe('managed home release policy', () => {
     expect(() => homeReleaseAssetUrl(release, 'orca-linux.AppImage')).toThrow('immutable tag')
     expect(() => homeReleaseAssetUrl(homeReleaseFixture(), 'missing')).toThrow('exactly one')
   })
-  it.each([null, [], [43], [44, 43]])(
-    'gates unverifiable and mismatched live daemons: %s',
-    (protocols) => {
-      expect(() =>
-        assertHomeDaemonProtocol(
-          { schemaVersion: 1, tag: 'v1.4.224-1', daemonProtocol: 44 },
-          'v1.4.224-1',
-          protocols
-        )
-      ).toThrow(HOME_UPDATE_PROTOCOL_MESSAGE)
+  const metadata44 = { schemaVersion: 1 as const, tag: 'v1.4.224-1', daemonProtocol: 44 }
+  function gateError(run: () => void): HomeUpdateGateError {
+    try {
+      run()
+    } catch (error) {
+      expect(error).toBeInstanceOf(HomeUpdateGateError)
+      return error as HomeUpdateGateError
     }
-  )
+    throw new Error('expected the gate to block')
+  }
+
+  it.each([
+    [null, 'unavailable'],
+    [[], 'none-live'],
+    [
+      { protocols: null, reason: 'none-live' as const, detail: 'refused: protocol 44, 45' },
+      'none-live'
+    ],
+    [{ protocols: null, reason: 'timeout' as const }, 'timeout'],
+    [{ protocols: [] }, 'none-live']
+  ])('blocks unknown live daemon state as retryable, never an empty pass: %j', (live, reason) => {
+    const error = gateError(() => assertHomeDaemonProtocol(metadata44, 'v1.4.224-1', live))
+    expect(error.kind).toBe('daemon-state-unknown')
+    expect(error.retryable).toBe(true)
+    expect(error.reason).toBe(reason)
+    expect(error.message).toMatch(/^Could not verify the live terminal daemons \(/)
+    expect(error.message).toContain(reason)
+    expect(classifyHomeUpdateGateMessage(error.message)).toBe('daemon-state-unknown')
+  })
+
+  it.each([
+    [[43], 'v1.4.224-1 needs daemon protocol 44; live daemons: 43'],
+    [[44, 43], 'v1.4.224-1 needs daemon protocol 44; live daemons: 43, 44'],
+    [{ protocols: [50], skipped: [45] }, 'needs daemon protocol 44; live daemons: 50']
+  ])('blocks a genuine mismatch as attended with both protocols: %j', (live, detail) => {
+    const error = gateError(() => assertHomeDaemonProtocol(metadata44, 'v1.4.224-1', live))
+    expect(error.kind).toBe('protocol-mismatch')
+    expect(error.retryable).toBe(false)
+    expect(error.message).toContain(detail)
+    expect(error.message).toContain('attended daemon protocol update')
+    expect(error.message).toContain('#attended-daemon-protocol-update')
+    expect(classifyHomeUpdateGateMessage(error.message)).toBe('protocol-mismatch')
+  })
+
   it('accepts matching live daemon protocols and rejects tag mismatch', () => {
     const metadata = homeProtocolMetadata.parse({
       schemaVersion: 1,
@@ -96,8 +130,24 @@ describe('managed home release policy', () => {
       daemonProtocol: 44
     })
     expect(() => assertHomeDaemonProtocol(metadata, metadata.tag, [44])).not.toThrow()
-    expect(() => assertHomeDaemonProtocol(metadata, 'v1.4.224-2', [44])).toThrow(
-      HOME_UPDATE_PROTOCOL_MESSAGE
-    )
+    expect(() =>
+      assertHomeDaemonProtocol(metadata, metadata.tag, { protocols: [44], skipped: [43] })
+    ).not.toThrow()
+    const error = gateError(() => assertHomeDaemonProtocol(metadata, 'v1.4.224-2', [44]))
+    expect(error.kind).toBe('protocol-mismatch')
+    expect(error.message).toContain('protocol metadata names v1.4.224-1, not v1.4.224-2')
+  })
+
+  it('classifies only the three gate prefixes and keeps causes free of URLs', () => {
+    expect(
+      classifyHomeUpdateGateMessage('Could not read the daemon protocol metadata for v1')
+    ).toBe('metadata-unavailable')
+    expect(classifyHomeUpdateGateMessage('AppImage download returned an empty body')).toBeNull()
+    expect(
+      briefHomeUpdateCause(
+        new Error('fetch failed https://objects.githubusercontent.com/a?X-Amz-Signature=abc')
+      )
+    ).toBe('fetch failed <url>')
+    expect(briefHomeUpdateCause(new Error('x'.repeat(400)))).toHaveLength(160)
   })
 })

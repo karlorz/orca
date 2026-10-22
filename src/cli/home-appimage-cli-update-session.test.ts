@@ -9,6 +9,7 @@ import {
 } from './home-appimage-cli-update-session'
 import {
   inspectHomeDaemonPidRecord,
+  probeHomeDaemonState,
   probeLiveHomeDaemonProtocols,
   type HomeDaemonInventoryHost
 } from './home-appimage-cli-daemon-inventory'
@@ -189,5 +190,54 @@ describe('home AppImage CLI update session', () => {
       )
     ).toEqual([44, 99])
     expect(query.mock.calls.map((call) => call[0])).toEqual([44, 99])
+  })
+
+  it('reports why the CLI inventory is unknown instead of a bare null', async () => {
+    const missing = Object.assign(new Error('missing'), { code: 'ENOENT' })
+    expect(
+      await probeHomeDaemonState('/tmp/unused', {
+        readdir: async () => {
+          throw missing
+        },
+        readPidFile: async () => '',
+        inspectRecord: async () => 'live',
+        queryInventory: async () => undefined
+      })
+    ).toEqual({ protocols: null, reason: 'none-live', detail: 'no daemon directory' })
+    const record = JSON.stringify({ pid: 4242, linuxStartTicks: '99' })
+    expect(
+      await probeHomeDaemonState(
+        '/tmp/unused',
+        inventoryHost(
+          { 'daemon-v49.pid': record },
+          async () => 'exited',
+          async () => undefined
+        )
+      )
+    ).toEqual({ protocols: null, reason: 'none-live', detail: 'no live daemon record' })
+    expect(
+      await probeHomeDaemonState(
+        '/tmp/unused',
+        inventoryHost(
+          { 'daemon-v49.pid': record },
+          async () => 'live',
+          async () => {
+            throw new Error('Daemon inventory timed out')
+          }
+        )
+      )
+    ).toEqual({ protocols: null, reason: 'timeout', detail: 'protocol 49' })
+    expect(
+      await probeHomeDaemonState(
+        '/tmp/unused',
+        inventoryHost(
+          { 'daemon-v49.pid': record },
+          async () => 'live',
+          async () => {
+            throw new Error('Daemon inventory socket failed')
+          }
+        )
+      )
+    ).toEqual({ protocols: null, reason: 'adapter-error', detail: 'protocol 49' })
   })
 })

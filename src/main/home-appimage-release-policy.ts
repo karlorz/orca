@@ -5,6 +5,99 @@ import { KARLORZ_FORK_RELEASE_FEED } from './updater-release-feeds'
 export const HOME_UPDATE_RUNBOOK =
   'https://github.com/karlorz/orca/blob/fork-main/docs/reference/linux-home-appimage-install.md#attended-daemon-protocol-update'
 export const HOME_UPDATE_PROTOCOL_MESSAGE = `This release requires an attended daemon protocol update. Orca remains running. Follow the attended runbook: ${HOME_UPDATE_RUNBOOK}`
+const HOME_UPDATE_PROTOCOL_PREFIX = 'This release requires an attended daemon protocol update'
+const HOME_UPDATE_METADATA_UNAVAILABLE_PREFIX = 'Could not read the daemon protocol metadata'
+const HOME_UPDATE_DAEMON_STATE_UNKNOWN_PREFIX = 'Could not verify the live terminal daemons'
+
+/**
+ * Why three kinds: one attended message used to cover a real protocol crossing, a failed metadata
+ * fetch and an unreadable daemon inventory, so transient failures looked like a policy block.
+ * Only `protocol-mismatch` is attended. The other two are retryable in the sense that a human may
+ * re-run the check; every install step still re-asserts the gate and blocks until it passes.
+ */
+export type HomeUpdateGateKind =
+  | 'protocol-mismatch'
+  | 'metadata-unavailable'
+  | 'daemon-state-unknown'
+export type HomeDaemonStateUnknownReason = 'timeout' | 'adapter-error' | 'none-live' | 'unavailable'
+
+/** Live daemon inventory: verified protocols, or why no generation could be verified. */
+export type HomeLiveDaemonState =
+  | { protocols: readonly number[]; skipped?: readonly number[] }
+  | { protocols: null; reason: HomeDaemonStateUnknownReason; detail?: string }
+
+export class HomeUpdateGateError extends Error {
+  constructor(
+    readonly kind: HomeUpdateGateKind,
+    message: string,
+    readonly reason?: string
+  ) {
+    super(message)
+    this.name = 'HomeUpdateGateError'
+  }
+
+  get retryable(): boolean {
+    return this.kind !== 'protocol-mismatch'
+  }
+}
+
+export function homeUpdateProtocolMismatchMessage(detail: string): string {
+  return `${HOME_UPDATE_PROTOCOL_PREFIX} (${detail}). Orca remains running. Follow the attended runbook: ${HOME_UPDATE_RUNBOOK}`
+}
+
+export function homeUpdateMetadataUnavailableMessage(tag: string, cause: string): string {
+  return `${HOME_UPDATE_METADATA_UNAVAILABLE_PREFIX} for ${tag} (${cause}). The update stays blocked; check again later.`
+}
+
+export function homeUpdateDaemonStateUnknownMessage(
+  reason: HomeDaemonStateUnknownReason,
+  detail?: string
+): string {
+  const explained = {
+    timeout: 'the daemon inventory timed out',
+    'adapter-error': 'a daemon generation failed to answer',
+    'none-live': 'no live daemon generation answered',
+    unavailable: 'the daemon inventory is unavailable'
+  }[reason]
+  const suffix = detail ? `: ${detail}` : ''
+  return `${HOME_UPDATE_DAEMON_STATE_UNKNOWN_PREFIX} (${reason}: ${explained}${suffix}). The update stays blocked; check again once Orca's terminal daemon is running.`
+}
+
+/** Classifies an updater status message; the CLI only sees UpdateStatus.message across the seam. */
+export function classifyHomeUpdateGateMessage(message: string): HomeUpdateGateKind | null {
+  if (message.startsWith(HOME_UPDATE_PROTOCOL_PREFIX)) {
+    return 'protocol-mismatch'
+  }
+  if (message.startsWith(HOME_UPDATE_METADATA_UNAVAILABLE_PREFIX)) {
+    return 'metadata-unavailable'
+  }
+  if (message.startsWith(HOME_UPDATE_DAEMON_STATE_UNKNOWN_PREFIX)) {
+    return 'daemon-state-unknown'
+  }
+  return null
+}
+
+/** Brief, URL-free cause: CDN redirects can carry signed query strings that must not be echoed. */
+export function briefHomeUpdateCause(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error)
+  const text = raw
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return (text || 'unknown error').slice(0, 160)
+}
+
+export function normalizeHomeLiveDaemonState(
+  value: readonly number[] | HomeLiveDaemonState | null
+): HomeLiveDaemonState {
+  if (value === null) {
+    return { protocols: null, reason: 'unavailable' }
+  }
+  if (Array.isArray(value)) {
+    return { protocols: value as readonly number[] }
+  }
+  return value as HomeLiveDaemonState
+}
 
 export const homeReleaseTag = z.string().regex(/^v\d+\.\d+\.\d+-\d+$/)
 const assetSchema = z.object({ name: z.string(), browser_download_url: z.string().url() })
@@ -115,13 +208,34 @@ export function homeReleaseAssetUrl(release: HomeAppImageRelease, name: string):
 export function assertHomeDaemonProtocol(
   metadata: HomeProtocolMetadata,
   tag: string,
-  liveProtocols: readonly number[] | null
+  live: readonly number[] | HomeLiveDaemonState | null
 ): void {
-  if (
-    metadata.tag !== tag ||
-    !liveProtocols?.length ||
-    liveProtocols.some((protocol) => protocol !== metadata.daemonProtocol)
-  ) {
-    throw new Error(HOME_UPDATE_PROTOCOL_MESSAGE)
+  if (metadata.tag !== tag) {
+    throw new HomeUpdateGateError(
+      'protocol-mismatch',
+      homeUpdateProtocolMismatchMessage(`protocol metadata names ${metadata.tag}, not ${tag}`),
+      'metadata-tag-mismatch'
+    )
+  }
+  const state = normalizeHomeLiveDaemonState(live)
+  // Guardrail: an empty or unknown inventory never authorizes an install.
+  if (state.protocols === null || state.protocols.length === 0) {
+    const reason = state.protocols === null ? state.reason : 'none-live'
+    const detail = state.protocols === null ? state.detail : undefined
+    throw new HomeUpdateGateError(
+      'daemon-state-unknown',
+      homeUpdateDaemonStateUnknownMessage(reason, detail),
+      reason
+    )
+  }
+  const protocols = state.protocols
+  if (protocols.some((protocol) => protocol !== metadata.daemonProtocol)) {
+    throw new HomeUpdateGateError(
+      'protocol-mismatch',
+      homeUpdateProtocolMismatchMessage(
+        `${tag} needs daemon protocol ${metadata.daemonProtocol}; live daemons: ${[...new Set(protocols)].sort((a, b) => a - b).join(', ')}`
+      ),
+      'protocol-mismatch'
+    )
   }
 }

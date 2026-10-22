@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { HOME_UPDATE_PROTOCOL_MESSAGE } from '../../main/home-appimage-release-policy'
+import type { HomeLiveDaemonState } from '../../main/home-appimage-release-policy'
 import { HomeAppImageUpdater } from '../../main/home-appimage-updater'
 import type { UpdateStatus } from '../../shared/update-status-types'
 import type { HandlerContext } from '../dispatch'
@@ -18,7 +18,12 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function fixture(protocol = 44, currentTag = 'v1.4.224-0') {
+async function fixture(
+  protocol = 44,
+  currentTag = 'v1.4.224-0',
+  live: () => Promise<readonly number[] | HomeLiveDaemonState | null> = async () => [44],
+  metadata?: () => Promise<Response>
+) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'orca-cli-home-update-'))
   roots.push(root)
   const tag = 'v1.4.224-1'
@@ -36,7 +41,9 @@ async function fixture(protocol = 44, currentTag = 'v1.4.224-0') {
       return Response.json([release])
     }
     if (url.endsWith('.json')) {
-      return Response.json({ schemaVersion: 1, tag, daemonProtocol: protocol })
+      return metadata
+        ? metadata()
+        : Response.json({ schemaVersion: 1, tag, daemonProtocol: protocol })
     }
     return new Response(url.endsWith('.txt') ? 'checksum fixture' : 'AppImage bytes')
   })
@@ -56,7 +63,7 @@ async function fixture(protocol = 44, currentTag = 'v1.4.224-0') {
         root,
         runningTag: currentTag,
         fetch,
-        liveProtocols: async () => [44],
+        liveProtocols: live,
         reconcile,
         commit,
         lock: async () => async () => {},
@@ -172,10 +179,77 @@ describe('orca update check|apply', () => {
     try {
       await expect(run('update apply')).rejects.toMatchObject({
         code: 'update_protocol_required',
-        message: HOME_UPDATE_PROTOCOL_MESSAGE
+        message: expect.stringContaining('v1.4.224-1 needs daemon protocol 45; live daemons: 44'),
+        data: expect.objectContaining({ retryable: false })
       })
       expect(f.commit).not.toHaveBeenCalled()
       expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+    } finally {
+      restore()
+    }
+  })
+
+  it('reports unknown daemon state as its own retryable code and still refuses apply', async () => {
+    const f = await fixture(44, 'v1.4.224-0', async () => ({
+      protocols: null,
+      reason: 'none-live',
+      detail: 'refused: protocol 44, 45'
+    }))
+    const restore = configureHomeAppImageCliUpdate(async () => f.session())
+    try {
+      await expect(run('update check')).rejects.toMatchObject({
+        code: 'update_daemon_state_unknown',
+        message: expect.stringContaining('none-live'),
+        data: expect.objectContaining({ retryable: true })
+      })
+      await expect(run('update apply')).rejects.toMatchObject({
+        code: 'update_daemon_state_unknown'
+      })
+      expect(f.commit).not.toHaveBeenCalled()
+      expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+    } finally {
+      restore()
+    }
+  })
+
+  it('reports a failed metadata fetch as retryable metadata-unavailable, not attended', async () => {
+    const f = await fixture(
+      44,
+      'v1.4.224-0',
+      async () => [44],
+      async () => {
+        throw new Error('getaddrinfo EAI_AGAIN https://objects.githubusercontent.com/x?sig=secret')
+      }
+    )
+    const restore = configureHomeAppImageCliUpdate(async () => f.session())
+    try {
+      const error = await run('update check').catch((caught: unknown) => caught)
+      expect(error).toMatchObject({
+        code: 'update_protocol_metadata_unavailable',
+        data: expect.objectContaining({ retryable: true })
+      })
+      expect((error as Error).message).toContain('EAI_AGAIN')
+      expect((error as Error).message).not.toContain('sig=secret')
+      expect(f.commit).not.toHaveBeenCalled()
+    } finally {
+      restore()
+    }
+  })
+
+  it('keeps a release without protocol metadata attended', async () => {
+    const f = await fixture(
+      44,
+      'v1.4.224-0',
+      async () => [44],
+      async () => new Response('Not Found', { status: 404 })
+    )
+    const restore = configureHomeAppImageCliUpdate(async () => f.session())
+    try {
+      await expect(run('update check')).rejects.toMatchObject({
+        code: 'update_protocol_required',
+        message: expect.stringContaining('publishes no orca-update-protocol.json'),
+        data: expect.objectContaining({ retryable: false })
+      })
     } finally {
       restore()
     }

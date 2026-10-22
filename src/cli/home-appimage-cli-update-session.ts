@@ -13,12 +13,17 @@ import {
 import { HomeAppImageUpdater } from '../main/home-appimage-updater'
 import { isEnsureManagedHomeAppImage } from '../main/linux-home-update-policy'
 import { readOrcaCliVersion } from './cli-version'
-import { probeLiveHomeDaemonProtocols } from './home-appimage-cli-daemon-inventory'
+import type { HomeLiveDaemonState } from '../main/home-appimage-release-policy'
+import { probeHomeDaemonState } from './home-appimage-cli-daemon-inventory'
+import { resolveHomeUpdateProfiles, type HomeUpdateProfiles } from './home-appimage-cli-profile'
 import type { HomeAppImageCliUpdateSession } from './home-appimage-cli-update'
 import { getDefaultUserDataPath } from './runtime/metadata'
 import { RuntimeClientError } from './runtime/types'
 
-export { probeLiveHomeDaemonProtocols } from './home-appimage-cli-daemon-inventory'
+export {
+  probeHomeDaemonState,
+  probeLiveHomeDaemonProtocols
+} from './home-appimage-cli-daemon-inventory'
 
 export type HomeAppImageCliUpdateHost = {
   platform: NodeJS.Platform
@@ -29,7 +34,10 @@ export type HomeAppImageCliUpdateHost = {
   cliVersion: string | null
   exists: (path: string) => boolean
   fetch: (url: string, init?: RequestInit) => Promise<Response>
-  liveProtocols: () => Promise<readonly number[] | null>
+  /** Probes the live daemons of every profile that could be running the image under `root`. */
+  liveProtocols: (context: {
+    root: string
+  }) => Promise<readonly number[] | HomeLiveDaemonState | null>
 }
 
 export function defaultHomeAppImageCliUpdateHost(): HomeAppImageCliUpdateHost {
@@ -42,8 +50,37 @@ export function defaultHomeAppImageCliUpdateHost(): HomeAppImageCliUpdateHost {
     cliVersion: readOrcaCliVersion(),
     exists: (path) => existsSync(path),
     fetch: (url, init) => globalThis.fetch(url, init),
-    liveProtocols: () => probeLiveHomeDaemonProtocols(getDefaultUserDataPath())
+    liveProtocols: ({ root }) =>
+      probeHomeUpdateProfiles(
+        resolveHomeUpdateProfiles({
+          env: process.env,
+          platform: process.platform,
+          homeDir: homedir(),
+          image: join(root, HOME_APPIMAGE_NAME)
+        })
+      )
   }
+}
+
+/** Every resolved profile must verify; the first unknown one blocks with its own reason. */
+export async function probeHomeUpdateProfiles(
+  profiles: Promise<HomeUpdateProfiles> | HomeUpdateProfiles,
+  probe: (userDataPath: string) => Promise<HomeLiveDaemonState> = (userDataPath) =>
+    probeHomeDaemonState(userDataPath)
+): Promise<HomeLiveDaemonState> {
+  const { source, userDataPaths } = await profiles
+  const protocols: number[] = []
+  for (const userDataPath of userDataPaths) {
+    const state = await probe(userDataPath)
+    if (state.protocols === null) {
+      const where = `profile ${userDataPath} from ${source}`
+      return { ...state, detail: state.detail ? `${state.detail}; ${where}` : where }
+    }
+    protocols.push(...state.protocols)
+  }
+  return protocols.length > 0
+    ? { protocols }
+    : { protocols: null, reason: 'none-live', detail: `no profile from ${source}` }
 }
 
 export async function createProductionHomeAppImageCliUpdateSession(
@@ -72,7 +109,7 @@ export async function createProductionHomeAppImageCliUpdateSession(
         root,
         runningTag,
         fetch: host.fetch,
-        liveProtocols: host.liveProtocols,
+        liveProtocols: () => host.liveProtocols({ root }),
         lock: () => acquireHomeAppImageLock(root),
         reconcile: async () => {
           const identity = await reconcileHomeAppImage(root, runningTag, extractHomeAppImage)

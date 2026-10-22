@@ -1,11 +1,19 @@
 import {
+  classifyHomeUpdateGateMessage,
   compareHomeReleaseTags as compareHomeTags,
-  HOME_UPDATE_PROTOCOL_MESSAGE,
-  homeReleaseTag
+  homeReleaseTag,
+  type HomeUpdateGateKind
 } from '../main/home-appimage-release-policy'
 import type { HomeAppImageUpdater } from '../main/home-appimage-updater'
 import type { UpdateStatus } from '../shared/update-status-types'
 import { RuntimeClientError } from './runtime/types'
+
+/** Stable CLI codes per gate outcome; only the attended mismatch is non-retryable. */
+const GATE_ERROR_CODES: Record<HomeUpdateGateKind, { code: string; retryable: boolean }> = {
+  'protocol-mismatch': { code: 'update_protocol_required', retryable: false },
+  'metadata-unavailable': { code: 'update_protocol_metadata_unavailable', retryable: true },
+  'daemon-state-unknown': { code: 'update_daemon_state_unknown', retryable: true }
+}
 
 const ADVANCED_PIN_MESSAGE =
   'The installed release has advanced. Restart Orca to use the current pin.'
@@ -168,12 +176,14 @@ function statusError(
   installedTag: string,
   selectedTag?: string
 ): RuntimeClientError {
-  if (status.message === HOME_UPDATE_PROTOCOL_MESSAGE) {
-    return new RuntimeClientError('update_protocol_required', status.message, {
+  const gate = classifyHomeUpdateGateMessage(status.message)
+  if (gate) {
+    const { code, retryable } = GATE_ERROR_CODES[gate]
+    return new RuntimeClientError(code, status.message, {
       runningTag,
       installedTag,
       ...(selectedTag ? { selectedTag } : {}),
-      retryable: false
+      retryable
     })
   }
   if (status.message === ADVANCED_PIN_MESSAGE) {

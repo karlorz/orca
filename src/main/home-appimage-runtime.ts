@@ -3,7 +3,9 @@ import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { getDaemonProvider } from './daemon/daemon-provider-state'
 import { getAllDaemonAdapters } from './daemon/daemon-provider-routing'
+import { probeHomeDaemonAdapters } from './home-appimage-daemon-probe'
 import { fetchHomeUpdateViaElectron } from './home-appimage-electron-fetch'
+import type { HomeLiveDaemonState } from './home-appimage-release-policy'
 import { HomeAppImageUpdater, type HomeAppImageUpdaterOptions } from './home-appimage-updater'
 import {
   acquireHomeAppImageLock,
@@ -29,28 +31,27 @@ async function extractHomeAppImage(image: string, cwd: string): Promise<void> {
   }
 }
 
-async function liveHomeDaemonProtocols(): Promise<readonly number[] | null> {
+export async function liveHomeDaemonProtocols(): Promise<HomeLiveDaemonState> {
   const provider = getDaemonProvider()
   if (!provider) {
-    return null
+    return { protocols: null, reason: 'unavailable', detail: 'daemon provider not started' }
   }
-  const adapters = getAllDaemonAdapters(provider)
+  let state: HomeLiveDaemonState
   try {
-    return await Promise.race([
-      Promise.all(
-        adapters.map(async (adapter) => {
-          await adapter.listSessions()
-          return adapter.protocolVersion
-        })
-      ),
-      new Promise<null>((resolve) => {
-        const timer = setTimeout(() => resolve(null), 5_000)
-        timer.unref()
-      })
-    ])
+    state = await probeHomeDaemonAdapters(getAllDaemonAdapters(provider))
   } catch {
-    return null
+    state = { protocols: null, reason: 'adapter-error' }
   }
+  if (state.protocols === null) {
+    console.warn(
+      `[updater] home AppImage daemon probe unknown: ${state.reason}${state.detail ? ` (${state.detail})` : ''}`
+    )
+  } else if (state.skipped?.length) {
+    console.info(
+      `[updater] home AppImage daemon probe skipped refused generations: ${state.skipped.join(', ')}`
+    )
+  }
+  return state
 }
 
 export function createHomeAppImageUpdater(
