@@ -153,6 +153,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
         groupBy: args.groupBy,
         worktrees,
         repoMap,
@@ -177,6 +179,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [
       args.groupBy,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
       worktrees,
       repoMap,
       args.prCache,

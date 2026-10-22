@@ -1,8 +1,13 @@
+import type {
+  RuntimeOwnerEnvironment,
+  RuntimeOwnerStatus
+} from '../../../shared/runtime-environment-owner'
 import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 
 export type SingleRuntimeLegacyOwnerState = {
   settings?: { activeRuntimeEnvironmentId?: string | null } | null
-  runtimeEnvironments?: readonly { id: string }[]
+  runtimeEnvironments?: readonly RuntimeOwnerEnvironment[]
+  runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeOwnerStatus>
 }
 
 export function getSingleFocusedRuntimeEnvironmentId(

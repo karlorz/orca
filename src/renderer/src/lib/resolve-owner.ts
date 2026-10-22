@@ -1,3 +1,4 @@
+import { runtimeOwnerRouteState, runtimeOwnerRouteHost } from './runtime-owner-route-state'
 /**
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone. It never reads
  * the "Active Server" focus setting.
@@ -153,7 +154,11 @@ export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
-  return resolveRoute(focusFreeRouteState(state), ref)
+  const routeState = runtimeOwnerRouteState(state)
+  return resolveRoute(focusFreeRouteState(routeState), {
+    ...ref,
+    ...(ref.hostId ? { hostId: runtimeOwnerRouteHost(state, ref.hostId) } : {})
+  })
 }
 
 /**
@@ -186,6 +191,7 @@ function focusFreeRouteState(state: WorktreeOperationRouteState): {
   return {
     settings: null,
     runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
     folderWorkspaces: state.folderWorkspaces,
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,

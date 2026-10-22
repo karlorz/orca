@@ -1,3 +1,5 @@
+import { collapseRuntimeOwnerWorktrees } from './runtime-owner-worktrees'
+import type { RuntimeOwnerEnvironment, RuntimeOwnerStatus } from '../runtime-environment-owner'
 import type { FolderWorkspace } from '../folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
@@ -55,6 +57,8 @@ type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: W
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
   groupBy: WorktreeGroupBy
+  runtimeEnvironments?: readonly RuntimeOwnerEnvironment[]
+  runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeOwnerStatus>
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
@@ -82,7 +86,7 @@ export type SidebarRowPlanInputs = {
 export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const {
     groupBy,
-    worktrees,
+    worktrees: publishedWorktrees,
     repoMap,
     prGroupOf,
     repoOrder,
@@ -103,6 +107,13 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     pinnedDisplayPolicy,
     filterRepoIds
   } = inputs
+  const worktrees = inputs.runtimeEnvironments
+    ? collapseRuntimeOwnerWorktrees(
+        publishedWorktrees,
+        inputs.runtimeEnvironments,
+        inputs.runtimeStatusByEnvironmentId
+      )
+    : publishedWorktrees
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).

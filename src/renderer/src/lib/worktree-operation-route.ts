@@ -1,3 +1,4 @@
+import { runtimeOwnerRouteState, runtimeOwnerRouteHost } from './runtime-owner-route-state'
 import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
@@ -114,7 +115,8 @@ export function resolveWorktreeOperationRouteResultForHost(
   worktreeId: string,
   executionHostId: ExecutionHostId
 ): WorktreeOperationRouteResolution {
-  const host = parseExecutionHostId(executionHostId)
+  state = runtimeOwnerRouteState(state)
+  const host = parseExecutionHostId(runtimeOwnerRouteHost(state, executionHostId))
   // Why: an unparseable qualifier is not evidence of an owner — fail closed.
   return host ? resolveSelectedHostRoute(state, worktreeId, host) : { kind: 'missing' }
 }
@@ -220,6 +222,7 @@ export function getWorktreeOperationOwnerHostIds(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): ExecutionHostId[] {
+  state = runtimeOwnerRouteState(state)
   const hostIds = new Set<ExecutionHostId>()
   for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
     for (const worktree of worktrees) {
@@ -259,6 +262,7 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  state = runtimeOwnerRouteState(state)
   const resolution = resolveOwnerRouteResult(state, worktreeId)
   return resolution.kind === 'resolved'
     ? { kind: 'resolved', route: onPairedWebClientHost(state, resolution.route) }

@@ -51,6 +51,8 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
   expectedOwner?: FileExplorerOperationOwner
 ): string | null | undefined {
   const ownerState: FileExplorerOwnerState = {
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     settings: state.settings,

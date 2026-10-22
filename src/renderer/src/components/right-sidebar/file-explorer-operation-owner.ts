@@ -13,6 +13,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 
@@ -41,7 +42,22 @@ export type FileExplorerOwnerState = Pick<
   | 'projectGroups'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
 > &
-  Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
+  Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>> &
+  Pick<WorktreeOperationRouteState, 'runtimeEnvironments' | 'runtimeStatusByEnvironmentId'>
+
+export function selectFileExplorerOwnerState(state: AppState): FileExplorerOwnerState {
+  return {
+    settings: state.settings,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+  }
+}
 
 /**
  * The owner every File Explorer read and write routes to, from the strict owner: a twin refuses

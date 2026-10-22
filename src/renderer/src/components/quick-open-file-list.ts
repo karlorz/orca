@@ -35,6 +35,7 @@ import { useKnownWorktreeById, useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
 import {
   getFileExplorerOperationOwnerFromState,
+  selectFileExplorerOwnerState,
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute
 } from '@/components/right-sidebar/file-explorer-operation-owner'
@@ -96,17 +97,7 @@ export function useRuntimeFileListForWorktree({
   )
   const { excludeRequest } = target
 
-  const operationOwnerState = useAppStore(
-    useShallow((state) => ({
-      settings: state.settings,
-      repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
-      projectGroups: state.projectGroups,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-    }))
-  )
+  const operationOwnerState = useAppStore(useShallow(selectFileExplorerOwnerState))
   const operationOwner = useMemo(
     () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId),
     [operationOwnerState, worktreeId]

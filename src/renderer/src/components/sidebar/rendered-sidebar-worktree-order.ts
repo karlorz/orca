@@ -76,6 +76,8 @@ export function computeRenderedSidebarRows(
 
   const repoMap = getRepoMapFromState(state)
   const rows = planSidebarRows({
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
     groupBy: state.groupBy,
     worktrees: [...visibleWorktrees],
     repoMap,

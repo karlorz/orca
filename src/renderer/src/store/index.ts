@@ -1,3 +1,4 @@
+import { registerRuntimeOwnerEnvironments } from '@/lib/runtime-owner-catalog'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -145,6 +146,7 @@ export const useAppStore = create<AppState>()(
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
+registerRuntimeOwnerEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
   await openWorkspaceBrowserTab(request)
