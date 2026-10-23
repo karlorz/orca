@@ -4,11 +4,8 @@ import { compareHomeTags } from './orca-home-appimage-install'
 import type { UpdateStatus } from '../shared/update-status-types'
 import {
   assertHomeDaemonProtocol,
-  briefHomeUpdateCause,
-  homeProtocolMetadata,
   homeReleaseAssetUrl,
-  homeUpdateMetadataUnavailableMessage,
-  homeUpdateProtocolMismatchMessage,
+  homeReleaseTag,
   HomeUpdateGateError,
   type HomeAppImageRelease,
   type HomeLiveDaemonState,
@@ -18,7 +15,8 @@ import {
   DEFAULT_FETCH_TIMEOUT_MS,
   discoverHomeAppImageRelease
 } from './home-appimage-release-discovery'
-import { fetchHomeUpdateResponse, requireHomeUpdateResponse } from './home-appimage-release-request'
+import { requireHomeUpdateResponse } from './home-appimage-release-request'
+import { readHomeProtocolFromTag, readHomeReleaseProtocol } from './home-appimage-protocol-metadata'
 
 const APPIMAGE_FETCH_TIMEOUT_MS = 30 * 60_000
 
@@ -47,6 +45,7 @@ export class HomeAppImageUpdater {
   private downloadedTag: string | null = null
   private initialization: Promise<void> | null = null
   private userInitiated = false
+  private gateContext = { tag: '', stage: 'initialize' }
 
   constructor(private readonly options: HomeAppImageUpdaterOptions) {}
 
@@ -64,7 +63,8 @@ export class HomeAppImageUpdater {
       const installed = await this.options.reconcile()
       this.ready = true
       if (installed.tag !== this.options.runningTag) {
-        const metadata = await this.readProtocolFromTag(installed.tag)
+        this.gateContext = { tag: installed.tag, stage: 'initialize' }
+        const metadata = await readHomeProtocolFromTag(this.options.fetch, installed.tag)
         await this.assertProtocol(metadata, installed.tag)
         // A committed image can be newer than the process still using its extracted old image.
         this.downloadedTag = installed.tag
@@ -92,7 +92,8 @@ export class HomeAppImageUpdater {
       if (!release) {
         this.options.sendStatus({ state: 'not-available', userInitiated: this.userInitiated })
       } else {
-        const metadata = await this.readProtocol(release)
+        this.gateContext = { tag: release.tag_name, stage: 'check' }
+        const metadata = await readHomeReleaseProtocol(this.options.fetch, release)
         await this.assertProtocol(metadata, release.tag_name)
         this.selected = { release, metadata }
         this.options.sendStatus({
@@ -119,6 +120,7 @@ export class HomeAppImageUpdater {
     let stage: string | null = null
     let unlock: (() => Promise<void>) | null = null
     const { release, metadata } = this.selected
+    this.gateContext = { tag: release.tag_name, stage: 'download' }
     try {
       this.options.sendStatus({
         state: 'downloading',
@@ -173,6 +175,7 @@ export class HomeAppImageUpdater {
       } finally {
         await file.close()
       }
+      this.gateContext.stage = 'pre-commit'
       await this.assertProtocol(metadata, release.tag_name)
       await this.options.commit(stage, release.tag_name)
       this.downloadedTag = release.tag_name
@@ -209,12 +212,14 @@ export class HomeAppImageUpdater {
       if (installed.tag !== this.downloadedTag) {
         throw new Error('The installed image changed. Check for updates again.')
       }
+      this.gateContext = { tag: installed.tag, stage: 'restart' }
       const metadata =
         this.selected?.release.tag_name === installed.tag
           ? this.selected.metadata
-          : await this.readProtocolFromTag(installed.tag)
+          : await readHomeProtocolFromTag(this.options.fetch, installed.tag)
       await this.assertProtocol(metadata, installed.tag)
       await this.options.prepareRestart?.()
+      this.gateContext.stage = 'pre-restart'
       await this.assertProtocol(metadata, installed.tag)
       await unlock()
       unlock = null
@@ -232,62 +237,6 @@ export class HomeAppImageUpdater {
     return requireHomeUpdateResponse(this.options.fetch, url, timeoutMs)
   }
 
-  private async readProtocol(release: HomeAppImageRelease): Promise<HomeProtocolMetadata> {
-    let url: string
-    try {
-      url = homeReleaseAssetUrl(release, 'orca-update-protocol.json')
-    } catch {
-      // A release without exactly one metadata asset predates the gate: attended, not retryable.
-      throw this.missingMetadata(release.tag_name)
-    }
-    return this.readProtocolAt(url, release.tag_name)
-  }
-
-  private readProtocolFromTag(tag: string): Promise<HomeProtocolMetadata> {
-    return this.readProtocolAt(
-      `https://github.com/karlorz/orca/releases/download/${tag}/orca-update-protocol.json`,
-      tag
-    )
-  }
-
-  private async readProtocolAt(url: string, tag: string): Promise<HomeProtocolMetadata> {
-    let response: Response
-    try {
-      response = await fetchHomeUpdateResponse(this.options.fetch, url, DEFAULT_FETCH_TIMEOUT_MS)
-    } catch (error) {
-      throw this.metadataUnavailable(tag, briefHomeUpdateCause(error))
-    }
-    if (response.status === 404) {
-      await response.body?.cancel().catch(() => undefined)
-      throw this.missingMetadata(tag)
-    }
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined)
-      throw this.metadataUnavailable(tag, `HTTP ${response.status}`)
-    }
-    try {
-      return homeProtocolMetadata.parse(await response.json())
-    } catch {
-      throw this.metadataUnavailable(tag, 'invalid orca-update-protocol.json')
-    }
-  }
-
-  private missingMetadata(tag: string): HomeUpdateGateError {
-    return new HomeUpdateGateError(
-      'protocol-mismatch',
-      homeUpdateProtocolMismatchMessage(`${tag} publishes no orca-update-protocol.json`),
-      'metadata-missing'
-    )
-  }
-
-  private metadataUnavailable(tag: string, cause: string): HomeUpdateGateError {
-    return new HomeUpdateGateError(
-      'metadata-unavailable',
-      homeUpdateMetadataUnavailableMessage(tag, cause),
-      cause
-    )
-  }
-
   private async assertProtocol(metadata: HomeProtocolMetadata, tag: string): Promise<void> {
     assertHomeDaemonProtocol(metadata, tag, await this.options.liveProtocols())
   }
@@ -296,8 +245,9 @@ export class HomeAppImageUpdater {
     const gate = error instanceof HomeUpdateGateError ? error : null
     if (gate) {
       const log = this.options.log ?? ((message: string) => console.warn(message))
+      const tag = homeReleaseTag.safeParse(this.gateContext.tag)
       log(
-        `[updater] home AppImage gate blocked: ${gate.kind}${gate.reason ? ` (${gate.reason})` : ''}`
+        `[updater] home AppImage gate blocked: ${gate.kind}${gate.reason ? ` (${gate.reason})` : ''} tag=${tag.success ? tag.data : 'unknown'} stage=${this.gateContext.stage} time=${new Date().toISOString()}`
       )
     }
     // Why: retryable only lets a human re-run the check or install; each step re-asserts the gate.
