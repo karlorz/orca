@@ -63,3 +63,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   herdr: null,
   jcode: null
 } satisfies Record<TuiAgent, string | null>
+
+/** A value `skills add --agent` will accept, not drop. */
+export function isUsableSkillsCliAgentKey(value: string): boolean {
+  return /^(?:\*|[a-z0-9][a-z0-9.-]*)$/i.test(value)
+}
