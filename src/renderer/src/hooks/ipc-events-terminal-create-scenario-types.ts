@@ -113,6 +113,7 @@ export type TerminalCreateSurfacingStore = {
   setSshConnectionState: SpyMock
   setSshTargetLabels: SpyMock
   setPortForwards: SpyMock
+  setUnrestoredPortForwards: SpyMock
   clearPortForwards: SpyMock
   setDetectedPorts: SpyMock
   enqueueSshCredentialRequest: SpyMock
