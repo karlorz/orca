@@ -144,6 +144,7 @@ function rebindManagedOrcadPairing(
   now: number
 ): KnownRuntimeEnvironment {
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
+  const offer = nextOffer(current)
   if (offer.scope === 'mobile') {
     return current
   }
@@ -157,7 +158,6 @@ function rebindManagedOrcadPairing(
       'This server is not managed over SSH.'
     )
   }
-  const offer = nextOffer(current)
   const nextDeployment = { ...deployment, localPort: localPort ?? deployment.localPort }
   // Why skip: orcad keeps its device registry across versions and callers pass the enrolled grant,
   // so an unchanged offer needs no rewrite, and every rewrite re-binds the sidecar entry.

@@ -35,6 +35,7 @@ import {
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
+import { wireStructuredAgentSessionBoundControls } from './structured-agent-session-bound-control-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -288,7 +289,13 @@ export class StructuredAgentSessionHost {
       now: () => this.now()
     })
 
-  send = this.conversationCommands.send
+  private readonly boundControls = wireStructuredAgentSessionBoundControls(
+    () => this.mutationContext(),
+    (...args) => this.clientDelivery.waitForSendSettlement(...args),
+    (...args) => this.conversationCommands.send(...args)
+  )
+  controlTarget = this.boundControls.controlTarget
+  send = this.boundControls.send
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete

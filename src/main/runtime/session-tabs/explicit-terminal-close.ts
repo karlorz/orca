@@ -12,10 +12,6 @@ import {
   EXPLICIT_CLOSE_NO_STOP,
   type ExplicitCloseStop
 } from './explicit-terminal-close-stops'
-import {
-  closePairedHostLeafFirst,
-  isTerminalTabPinnedInSession
-} from './paired-host-terminal-close'
 
 export abstract class OrcaRuntimeWithCloseTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
   protected describeTerminalClose(
@@ -36,25 +32,6 @@ export abstract class OrcaRuntimeWithCloseTerminal extends OrcaRuntimeWithStopEx
       return { ...close, ptyStopVerdict: 'live' }
     }
     return close
-  }
-
-  /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
-  private closeOnOwningPairedHost(
-    handle: string,
-    leaf: { worktreeId: string; tabId: string; leafId: string; ptyId: string | null },
-    method: 'terminal.close' | 'terminal.closeTab',
-    closesTab: boolean
-  ): ReturnType<typeof closePairedHostLeafFirst> {
-    return closePairedHostLeafFirst(leaf, method, {
-      call: (environmentId, hostMethod, params, timeoutMs) =>
-        this.callOrchestrationWorkerServer(environmentId, hostMethod, params, timeoutMs),
-      isTabPinned: () =>
-        closesTab &&
-        this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId).some((hostId) =>
-          isTerminalTabPinnedInSession(this.store?.getWorkspaceSession?.(hostId), leaf)
-        ),
-      readBoundLeaf: () => this.getLiveLeafForHandle(handle).leaf
-    })
   }
 
   async closeTerminal(

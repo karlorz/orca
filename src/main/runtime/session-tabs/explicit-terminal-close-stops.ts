@@ -8,6 +8,11 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
+  capturePtyIncarnationIds,
+  finishGuardedPtyStop,
+  type TerminalGcCloseStopOptions
+} from '../rpc/methods/terminal/terminal-gc-close-stop-fence'
+import {
   NO_STOP,
   OrcaRuntimeWithExplicitCloseTabPtyStops,
   type ExplicitCloseStop
@@ -66,8 +71,49 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     return close
   }
 
+  protected async closeMainOwnedTerminal(
+    handle: string,
+    wholeTab: boolean,
+    options?: TerminalGcCloseStopOptions
+  ): Promise<RuntimeTerminalClose | null> {
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return null
+    }
+    const captured = capturePtyIncarnationIds(this.ptysById, [...this.ptysById.keys()])
+    const result = await closeMainOwnedPaneByHandle(
+      {
+        runtime: this,
+        livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
+        liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+        remoteSessionIdOf: (worktreeId, tabId) =>
+          this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
+        applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+        stop: (ptyIds, addressed) =>
+          finishGuardedPtyStop(
+            {
+              ptysById: this.ptysById,
+              stopExplicitlyClosedTabPtys: (ids, ptyId, incarnations) =>
+                this.stopExplicitlyClosedTabPtys(ids, ptyId, incarnations)
+            },
+            handle,
+            ptyIds,
+            addressed,
+            captured,
+            options
+          ),
+        describe: (...args) => this.describeTerminalClose(...args)
+      },
+      handle,
+      wholeTab
+    )
+    if (result) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    }
+    return result
+  }
+
   /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
-  private closeOnOwningPairedHost(
+  protected closeOnOwningPairedHost(
     handle: string,
     leaf: { worktreeId: string; tabId: string; leafId: string; ptyId: string | null },
     method: 'terminal.close' | 'terminal.closeTab',

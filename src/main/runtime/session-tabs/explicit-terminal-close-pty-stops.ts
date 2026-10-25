@@ -11,13 +11,22 @@ export const NO_STOP: ExplicitCloseStop = { stopped: false }
 export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntimeWithFocusTerminal {
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
-    addressedPtyId: string
+    addressedPtyId: string,
+    capturedIncarnations?: ReadonlyMap<string, string>
   ): Promise<ExplicitCloseStop> {
     let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
+      const capturedIncarnationId = capturedIncarnations?.get(ptyId)
+      const liveIncarnationId = this.ptysById.get(ptyId)?.incarnationId
+      if (capturedIncarnationId && liveIncarnationId !== capturedIncarnationId) {
+        if (ptyId === addressedPtyId) {
+          throw new Error('terminal_handle_stale')
+        }
+        continue
+      }
       this.markPtyStopRequested(ptyId)
-      const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
+      const expectedIncarnationId = capturedIncarnationId ?? liveIncarnationId
       const stopOpts = expectedIncarnationId
         ? { deadlineMs, expectedIncarnationId }
         : { deadlineMs }

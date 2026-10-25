@@ -166,20 +166,6 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
   return runContext
 }
 
-// Older runtimes silently strip extraAgentArgs and would run without the requested arguments.
-async function assertExtraAgentArgsSupported(
-  client: RuntimeClient,
-  extraAgentArgs: string | undefined
-): Promise<void> {
-  if (!hasExtraAgentArgs(extraAgentArgs)) {
-    return
-  }
-  const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
-  }
-}
-
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations list': async ({ client, json }) => {
     const result = await client.call<{ automations: Automation[] }>('automation.list')

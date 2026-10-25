@@ -73,6 +73,8 @@ export function sendStructuredAgentSessionTurn(
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void
+    beforePromptWrite?: () => void
+    expectedControlTarget?: import('../../../shared/agent-session-bound-control').AgentSessionControlTarget
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
@@ -128,6 +130,8 @@ export function cancelStructuredAgentSessionTurn(
     scope?: 'background-tasks'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
+    beforeCancel?: () => void
+    expectedControlTarget?: import('../../../shared/agent-session-bound-control').AgentSessionControlTarget
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   if (params.scope) {

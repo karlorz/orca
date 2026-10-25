@@ -169,6 +169,14 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition>
   /** Reap failed acquisitions; true proves child exit, root-only proof throws AgentSessionAcquisitionRootExitObservedError. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
+  /** Read the already-owned Grok ACP child; never acquire for a control lookup. */
+  controlBinding?(sessionId: string): {
+    nativeSessionId: string
+    acquisitionGeneration: string
+    turnId: string | null
+    promptPending: boolean
+    canFollowUp: boolean
+  } | null
   hasOwnedAcquisition?(sessionId: string): boolean
   stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
   dispatch(input: {
@@ -183,6 +191,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
+    beforePromptWrite?: () => void
     /** Mark preparation before choices mutate the provider. */
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */
