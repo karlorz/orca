@@ -4,7 +4,7 @@ import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../src/shared/native-chat-turn-status'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-data'
