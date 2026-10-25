@@ -97,7 +97,6 @@ export async function openBoundControlRig() {
       state.live = false
       return true
     },
-    stopEndsSession: () => true,
     setOption: async () => undefined
   }
   const spec = acpLaunchSpecFor('grok')

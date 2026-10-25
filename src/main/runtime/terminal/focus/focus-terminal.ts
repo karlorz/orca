@@ -119,13 +119,13 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
         }
         return {
           record: {
-            handle: live.record.handle,
+            ...(live.record.handle ? { handle: live.record.handle } : {}),
             ptyId: live.record.ptyId ?? undefined
           },
           pty: {
             ptyId: live.pty.ptyId,
             incarnationId: live.pty.incarnationId,
-            paneKey: live.pty.paneKey,
+            ...(live.pty.paneKey === undefined ? {} : { paneKey: live.pty.paneKey }),
             worktreeId: live.pty.worktreeId,
             tabId: live.pty.tabId,
             connected: live.pty.connected,
