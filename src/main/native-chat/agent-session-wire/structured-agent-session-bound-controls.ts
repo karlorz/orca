@@ -10,7 +10,7 @@ import {
   agentSessionSendBodyFingerprint,
   agentSessionMessagePayload
 } from '../../../shared/structured-agent-session-send-mutation'
-import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
   type AgentSessionCancelResult,
