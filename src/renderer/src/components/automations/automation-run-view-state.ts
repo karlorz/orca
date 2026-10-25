@@ -60,6 +60,9 @@ export function getAutomationRunViewState({
   /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
   terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
+  const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
+  // Why the pane alone: a slept run drops its PTY id but keeps its pane, which the server resumes.
+  const hasPaneIdentity = Boolean(run.terminalPaneKey)
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
@@ -69,7 +72,7 @@ export function getAutomationRunViewState({
     }
   }
 
-  if (run.workspaceId && workspaceExists && terminalOnPairedServer) {
+  if (run.workspaceId && workspaceExists && hasPaneIdentity && terminalOnPairedServer) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',
@@ -78,9 +81,16 @@ export function getAutomationRunViewState({
     }
   }
 
-  // Why: leftover paneKey/ptyId after the user closes the tab is not a live
-  // terminal — offer Resume so we reopen the session instead of View run.
-  // Why dispatchedAt: a run that never dispatched left no agent to resume; opening seeds an empty shell (STA-10103).
+  if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
+    return {
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run terminal is unavailable.',
+      canOpen: true
+    }
+  }
+
+  // Why: a run that never dispatched left no agent to resume; opening seeds an empty shell (STA-10103).
   if (run.workspaceId && workspaceExists && run.dispatchedAt !== null) {
     return {
       availability: 'workspace',

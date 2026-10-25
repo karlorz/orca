@@ -86,6 +86,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  worktree rm               Remove a worktree from Orca and git',
   '  worktree gc               Garbage-collect idle linked git worktrees and idle terminals',
   '  worktree ps               Show a compact orchestration summary across worktrees',
+  '  ports                     List the listening ports Orca detected for a workspace',
   '',
   'Agents:',
   '  agent launch              Start an agent in a worktree, as a chat or terminal per your settings',

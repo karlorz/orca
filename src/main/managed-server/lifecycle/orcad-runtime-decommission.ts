@@ -1,7 +1,4 @@
-/**
- * Stopping a managed orcad and unlinking it, on T6-4's journaled decommission. The server stays
- * linked — its SSH claim, tunnel and deployment record — unless the host proves orcad exited.
- */
+// Keep claims, tunnels and registration until the host proves server exit.
 import type {
   OrcadManagedCancelStopResult,
   OrcadManagedForgetResult,
@@ -34,7 +31,6 @@ import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 
 type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean
-  /** Invalidates the server's transport and retires its client-side state once it is unlinked. */
   retireLocalState: (environmentId: string) => Promise<void> | void
 }
 
@@ -75,10 +71,7 @@ export function stopManagedOrcadEnvironment(
   })
 }
 
-/**
- * Stop's local half alone, for a host that can no longer answer (P1-E). Nothing on the host is
- * touched or assumed: a server still running there keeps running, and a later connect relinks it.
- */
+/** Forget local state without assuming host exit; later connects may relink a still-running server. */
 export function forgetManagedOrcadEnvironment(
   userDataPath: string,
   args: { selector: string },
@@ -103,7 +96,6 @@ export function forgetManagedOrcadEnvironment(
   })
 }
 
-/** Proven exit, or the refusal that keeps the server linked. */
 async function stopRemote(
   userDataPath: string,
   environment: KnownRuntimeEnvironment,
@@ -120,7 +112,7 @@ async function stopRemote(
   )
   const transaction = await readOrcadActivationTransaction(slot)
   if (transaction?.operation === 'decommission') {
-    // An earlier stop was interrupted: its journal decides, so finish exactly that one.
+    // Resume the exact interrupted stop from its journal.
     const recovered = await recoverInterruptedOrcadActivation(slot)
     if (recovered.outcome === 'recovered' && recovered.activeVersion === null) {
       return { version: transaction.activeVersion, retirement: null }
@@ -131,7 +123,7 @@ async function stopRemote(
     if (recovered.outcome === 'pending') {
       return refuse('unverifiable', recovered.code, recovered.reason)
     }
-    // Another run settled the journal first; start over from what it left, never assume live.
+    // Another run may settle recovery first; restart from its resulting record.
     if (recovered.outcome === 'none') {
       return retried
         ? refuse(
@@ -156,7 +148,6 @@ async function stopRemote(
   }
   const record = context.activationRecord
   if (!record.active) {
-    // Only a proven exit (or a deploy that never activated) leaves the record without a version.
     return { version: null, retirement: null }
   }
   const census = await collectManagedTerminalCensus(userDataPath, environment, record)
@@ -173,8 +164,7 @@ async function unlinkEnvironmentLocally(
   deployment: OrcadSshDeploymentLink,
   policy: ManagedOrcadStopPolicy
 ): Promise<void> {
-  // Environment first: a crash before the claim is released leaves a hidden target to resume,
-  // never a linked server whose SSH target was already handed back.
+  // Remove registration before releasing claims so crashes leave a resumable hidden target.
   removeManagedOrcadEnvironment(userDataPath, environment.id)
   await policy.retireLocalState(environment.id)
   await closeOrcadManagedTunnel(environment.id)
@@ -182,11 +172,10 @@ async function unlinkEnvironmentLocally(
   claims.release(deployment.sshTargetId, environment.id)
   clearManagedOrcadUpdateDeferral(environment.id)
   await claims.flush()
-  // After the fence: a crash between leaves a stale journal a later conversion clears.
+  // Clear journals after the fence; stale leftovers are recoverable on later conversion.
   removeOrcadMigrationJournalsForDestination(userDataPath, deployment.sshTargetId, environment.id)
 }
 
-/** Withdraws a stop orcad has not acted on yet; the server then keeps serving. */
 export function cancelManagedOrcadStop(
   userDataPath: string,
   args: { selector: string; signal?: AbortSignal }

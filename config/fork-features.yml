@@ -711,15 +711,12 @@ features:
       - src/cli/specs/worktree-gc.ts
 
   - id: skill-freshness-auto-check-noise
-    title: Skill update auto-check skips missing project provider folders and non-skill plugin cache links
+    title: Bundled skill planner skips missing project provider folders; plugin-cache copies stay untouched
     kind: product
     status: landed
     paths:
-      - src/main/skills/skill-freshness-inventory.ts
-      - src/main/skills/skill-plugin-cache-scan.ts
-      - src/shared/skill-freshness.ts
-      - src/renderer/src/components/skills/skill-freshness-scan-issues.tsx
-      - src/renderer/src/components/skills/skill-freshness-summary-headline.tsx
+      - src/main/skills/bundled-skill-install/targets.ts
+      - src/main/skills/bundled-skill-install/layouts.test.ts
 
   - id: automation-full-final-report
     title: Preserve bounded same-turn final automation reports through delayed completion flush and terminal retirement

@@ -194,12 +194,10 @@ export default function AgentCombobox({
     surfaceRows?.onPick(agent, surface)
     closePicker()
   }
-  const arming = useSurfaceRowArming(
-    surfaceList,
-    commandValue,
-    handleSurfacePick,
-    JSON.stringify([open, query, surfaceRows?.contextKey])
-  )
+  const arming = useSurfaceRowArming(surfaceList, commandValue, handleSurfacePick, {
+    key: JSON.stringify([open, query, surfaceRows?.contextKey]),
+    model: surfaceRows?.model
+  })
   const picksCli = surfaceRows?.selection.cli === true
 
   const handleSelectAgent = (nextValue: TuiAgent): void => {

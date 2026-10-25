@@ -24,10 +24,7 @@ import {
   type WindowsMobileFirewallEnvironment
 } from '../runtime/windows-mobile-firewall'
 
-// Why: only an explicit "This computer only" pick skips the one-way widen, and only when the address it
-// advertises really is loopback — a mismatch (a LAN address under a this-computer reach) would otherwise
-// mint a link with no listener behind it. Every other reach, including a loopback-looking Custom address
-// that fronts an SSH tunnel or reverse proxy, still opts in.
+// Only explicit this-computer intent plus a loopback address avoids widening; custom tunnel endpoints still need remote reach.
 function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address: string): boolean {
   if (reach !== 'this-computer') {
     return false
@@ -44,10 +41,6 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
     lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null
   }
 }
-
-// Why: the mobile IPC handlers provide the renderer with QR code pairing data,
-// device management, and WebSocket readiness status. They depend on the
-// OrcaRuntimeRpcServer because it owns the device registry and TLS state.
 
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
@@ -126,11 +119,7 @@ export function registerMobileHandlers(
         return { available: false as const }
       }
 
-      // Why: STA-2370 — generating a runtime pairing offer is the user's explicit opt-in to remote
-      // reach, so widen the loopback listener before advertising its LAN endpoint. If the widen fails the
-      // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
-      // "This computer only" is the opposite opt-in: the loopback listener already serves it, and the widen
-      // never narrows back, so that pick alone must not expose the runtime off-host.
+      // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
       const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
       if (!thisComputerOnly) {
         try {
@@ -140,8 +129,7 @@ export function registerMobileHandlers(
             '[mobile] Network exposure failed while creating a runtime pairing offer:',
             error
           )
-          // Why: STA-2370 — carry the specific reason/guidance to the renderer (mirrors the mobile-QR path) so
-          // a widen failure is distinguishable from a missing address, not collapsed into a bare unavailable.
+          // Preserve actionable widening failure guidance rather than generic unavailability.
           return {
             available: false as const,
             reason: 'network_exposure_failed' as const,
@@ -150,15 +138,13 @@ export function registerMobileHandlers(
         }
       }
 
-      // Why: web/desktop runtime clients need full runtime access, not the
-      // mobile allowlist used by phone QR pairing.
+      // Web/desktop runtime clients need full access instead of the phone allow-list.
       const offer = rpcServer.createPairingOffer({
         address: ip,
         rotate: args?.rotate,
         name: `Runtime ${new Date().toLocaleDateString()}`,
         scope: 'runtime',
-        // Why: a grant that only ever pointed at loopback must not make the next launch bind every
-        // interface when its local client reconnects (that would restore the exposure one restart later).
+        // Persist local reach so local authentication cannot expose the next launch to the LAN.
         reach: thisComputerOnly ? 'this-computer' : 'network'
       })
       if (!offer.available) {
@@ -180,9 +166,7 @@ export function registerMobileHandlers(
     if (!registry) {
       return { devices: [] }
     }
-    // Why: devices with lastSeenAt === 0 were created during QR generation
-    // but never actually scanned/connected. Showing them as "paired" is
-    // misleading, so we filter them out.
+    // Never-scanned QR tokens are not paired devices.
     return {
       devices: registry
         .listDevices()
@@ -201,8 +185,7 @@ export function registerMobileHandlers(
     if (!registry) {
       return { grants: [] }
     }
-    // Why: generated web/runtime links are bearer credentials even before a
-    // client first connects, so pending runtime grants must stay revocable.
+    // Runtime links are bearer credentials immediately, so unconnected grants must remain revocable.
     return {
       grants: registry
         .listDevices()
@@ -228,13 +211,6 @@ export function registerMobileHandlers(
     return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
   })
 
-  ipcMain.handle('mobile:isWebSocketReady', () => {
-    return {
-      ready: rpcServer.getWebSocketEndpoint() !== null,
-      endpoint: rpcServer.getWebSocketEndpoint()
-    }
-  })
-
   ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)
@@ -244,7 +220,7 @@ export function registerMobileHandlers(
     if (!isWindowRenderer(event)) {
       return { ok: false as const, reason: 'unsupported' as const }
     }
-    // Why: elevated inputs come from the running runtime, never the renderer.
+    // Firewall repair derives privileged inputs from runtime state, never renderer payloads.
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return repairWindowsMobileFirewall(port, firewallEnvironment)
   })

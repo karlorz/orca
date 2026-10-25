@@ -43,7 +43,10 @@ export function applyRelayHookEvent(
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
-    hasOtherAgentProcessOwner(previous.agentPresence, incoming.payload.agentType ?? 'unknown')
+    hasOtherAgentProcessOwner(previous.agentPresence, {
+      agent: incoming.payload.agentType ?? 'unknown',
+      process: incoming.agentPresence?.process
+    })
   ) {
     return undefined
   }

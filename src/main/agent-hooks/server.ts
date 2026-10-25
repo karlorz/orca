@@ -1,4 +1,4 @@
-// This main-process adapter keeps listener internals in shared/ so the relay can host the same pipeline without Electron.
+// Shared listener internals let relays host the same pipeline without Electron.
 import { clearAllListenerCaches } from '../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
@@ -61,7 +61,8 @@ export class AgentHookServer extends AgentHookServerAgentPresence {
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    newRun = false
   ): EnrichedAgentHookEventPayload | undefined {
     const previous = this.state.lastStatusByPaneKey.get(incoming.paneKey)?.grokSessionObservation
     const owner = this.sessionTerminalOwnerResolver?.(incoming.paneKey) ?? null
@@ -81,16 +82,16 @@ export class AgentHookServer extends AgentHookServerAgentPresence {
       onAccepted,
       origin,
       observedAt,
-      mutationBefore
+      mutationBefore,
+      newRun
     )
   }
 }
 
 export const agentHookServer = new AgentHookServer()
 
-// Why: exported for test coverage of the per-agent field extractors.
 export const _internals = {
-  // Why: bind the test-helper to the singleton's state so tests exercise the live caches.
+  // Bind normalization to singleton state so tests exercise its caches.
   normalizeHookPayload: (
     source: AgentHookSource,
     body: unknown,

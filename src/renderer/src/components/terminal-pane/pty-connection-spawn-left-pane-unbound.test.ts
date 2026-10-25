@@ -14,6 +14,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -135,50 +136,34 @@ describe('fresh spawn leaves a local pane unbound', () => {
   })
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, {
-      onQueuedResumeSpawnRejected: () => true,
-      ...overrides
-    })
+    return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  it.each([false, true])(
-    'remounts an unbound pane only without definitive Resume rejection (%s)',
-    async (rejected) => {
-      const { connectPanePty } = await import('./pty-connection')
-      const settleTerminalTabRecovery = vi.fn()
-      Object.assign(mockStoreState, { settleTerminalTabRecovery })
-      const transport = createMockTransport()
-      // A spawn that produced nothing: no id returned and nothing bound after it.
-      transport.connect.mockImplementation(async (options) => {
-        if (rejected) {
-          options.callbacks?.onSpawnRejected?.()
-        }
-        return null
+  it('requests pane recovery when the spawn resolves without a PTY id', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    // A spawn that produced nothing: no id returned and nothing bound after it.
+    transport.connect.mockImplementation(async () => null)
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
+    )
+    await flushAsyncTicks(40)
+
+    expect(transport.connect).toHaveBeenCalled()
+    expect(requestTerminalPaneRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-unbound-spawn',
+        ptyId: null,
+        reason: 'spawn-left-pane-unbound'
       })
-      transportFactoryQueue.push(transport)
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ tabId: 'tab-unbound-spawn' }) as never
-      )
-      await flushAsyncTicks(40)
-
-      expect(transport.connect).toHaveBeenCalled()
-      if (rejected) {
-        expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
-        expect(settleTerminalTabRecovery).toHaveBeenCalledWith('tab-unbound-spawn', 0, 'failed')
-        return
-      }
-      expect(requestTerminalPaneRecovery).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabId: 'tab-unbound-spawn',
-          ptyId: null,
-          reason: 'spawn-left-pane-unbound'
-        })
-      )
-    }
-  )
+    )
+  })
 
   // #21195: connect() resolves empty while the remote transport still holds an armed retry.
   it('leaves recovery to a transport that owns its own retry', async () => {
@@ -188,8 +173,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     const deps = createDeps({ tabId: 'tab-transport-retry' })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocks cover every pane, manager, and deps member the connect path reads.
-    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    connectPanePty(...mockPanePtyArgs(createPane(1), createManager(1), deps))
     await flushAsyncTicks(40)
 
     expect(transport.connect).toHaveBeenCalled()
@@ -205,9 +189,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-bound-spawn' }) as never
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
     )
     await flushAsyncTicks(40)
 
@@ -229,9 +211,7 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-bound-spawn' }) as never
+      ...mockPanePtyArgs(createPane(1), createManager(1), createDeps({ tabId: 'tab-bound-spawn' }))
     )
     await flushAsyncTicks(40)
 
@@ -250,9 +230,11 @@ describe('fresh spawn leaves a local pane unbound', () => {
     transportFactoryQueue.push(transport)
 
     connectPanePty(
-      createPane(1) as never,
-      createManager(1) as never,
-      createDeps({ tabId: 'tab-unbound-spawn' }) as never
+      ...mockPanePtyArgs(
+        createPane(1),
+        createManager(1),
+        createDeps({ tabId: 'tab-unbound-spawn' })
+      )
     )
     await flushAsyncTicks(40)
 

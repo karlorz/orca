@@ -53,7 +53,7 @@ export class AutomationService {
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
-  /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
+  /** Close unused completed terminals on headless hosts; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
@@ -96,8 +96,6 @@ export class AutomationService {
       : null
   }
 
-  /** CRUD callers publish through the service so every authority write lands on
-   *  the same local + runtime client-event pair. */
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
     this.publish?.(payload)
   }
@@ -109,8 +107,7 @@ export class AutomationService {
 
   setRendererReady(): void {
     this.rendererReady = true
-    // Why: the renderer publishes the desktop window graph, so only after it
-    // attaches can an unresolvable pane mean a lost terminal rather than "not yet".
+    // Pane lookup becomes authoritative after the renderer publishes its window graph.
     this.completionWatcher?.markTerminalSurfaceReady()
     void this.evaluateDueRuns()
   }
@@ -125,11 +122,9 @@ export class AutomationService {
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
-    // Why: headless serve never gets a renderer-ready IPC, but due runs still
-    // need the same startup catch-up pass desktop gets after renderer attach.
+    // Headless hosts need startup catch-up without a renderer-ready notification.
     if (this.rendererReady || this.headlessDispatcher) {
-      // Serve adopts its daemon PTYs and publishes its graph before start(), so
-      // its terminal surface is already as answerable as it will get.
+      // Serve adopts PTYs and publishes its graph before start().
       this.completionWatcher?.markTerminalSurfaceReady()
       void this.evaluateDueRuns()
     }
@@ -159,7 +154,6 @@ export class AutomationService {
     return await dispatchAutomationRun(this.dispatchHost(), automation, run, target, generation)
   }
 
-  /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
   async recordRefusedRun(automationId: string): Promise<void> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (automation) {
@@ -240,8 +234,7 @@ export class AutomationService {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        // Isolated per record (#16303): an unreadable schedule throws out of the
-        // occurrence math, and an uncaught throw here skipped every later due row.
+        // A malformed schedule must not prevent later due rows from running.
         try {
           await evaluateScheduledAutomation(this.dispatchHost(), automation, now)
         } catch (error) {

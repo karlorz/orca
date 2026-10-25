@@ -11,7 +11,7 @@ export function useAutomationsPageEscape({
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
 }): void {
-  const { activeModal, activeView, closeAutomationsPage } = store
+  const { activeModal, closeAutomationsPage, setPendingAutomationRunNavigation } = store
   const {
     createOpen,
     deleteTarget,
@@ -26,14 +26,7 @@ export function useAutomationsPageEscape({
     setSelectedAutomationRunPageId
   } = local
   useEffect(() => {
-    // Why: View run keeps this page mounted but hidden; Escape must stay with the terminal.
-    if (
-      activeView !== 'automations' ||
-      createOpen ||
-      deleteTarget ||
-      externalDeleteTarget ||
-      activeModal !== 'none'
-    ) {
+    if (createOpen || deleteTarget || externalDeleteTarget || activeModal !== 'none') {
       return
     }
 
@@ -72,6 +65,7 @@ export function useAutomationsPageEscape({
 
       if (pageView === 'run') {
         event.preventDefault()
+        setPendingAutomationRunNavigation(null)
         setSelectedAutomationRunPageId(null)
         setPageView(runPageOrigin === 'automation' ? 'automations' : 'runs')
         setIsDetailOpen(runPageOrigin === 'automation')
@@ -104,7 +98,6 @@ export function useAutomationsPageEscape({
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
-    activeView,
     closeAutomationsPage,
     createOpen,
     deleteTarget,
@@ -116,6 +109,7 @@ export function useAutomationsPageEscape({
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
+    setPendingAutomationRunNavigation,
     setPageView
   ])
 }

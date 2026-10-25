@@ -14,7 +14,6 @@ import {
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
   async dedupeTerminalCreate(
@@ -158,8 +157,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       agent: TuiAgent
       prompt: string
       title?: string
-      launchPreferences?: AgentLaunchPreferences
       extraAgentArgs?: string
+      suppressStartupUpdatePrompt?: boolean
     }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
@@ -173,16 +172,11 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(
-      repo,
-      opts.agent,
-      opts.prompt,
-      opts.launchPreferences,
-      {
-        ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-        launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
-      }
-    )
+    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
+      ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+      launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
+    })
     if (startup.launchRuntime instanceof Error) {
       throw startup.launchRuntime
     }

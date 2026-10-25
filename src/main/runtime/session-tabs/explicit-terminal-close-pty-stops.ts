@@ -18,18 +18,28 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
     for (const ptyId of ptyIds) {
       this.markPtyStopRequested(ptyId)
       const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
+      const stopOpts = expectedIncarnationId
+        ? { deadlineMs, expectedIncarnationId }
+        : { deadlineMs }
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
-          stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
+          stopped = await this.ptyController.stopAndWait(ptyId, stopOpts)
         } catch (error) {
           this.markPtyLivenessUnverifiable(ptyId, errorMessage(error))
+        }
+        const liveAfterWait = this.ptysById.get(ptyId)?.incarnationId
+        if (expectedIncarnationId && liveAfterWait !== expectedIncarnationId) {
+          if (ptyId === addressedPtyId) {
+            throw new Error('terminal_handle_stale')
+          }
+          continue
         }
         // Preserve an observed exit when a broader inventory check could not finish.
         if (
           !stopped &&
           expectedIncarnationId &&
-          this.ptysById.get(ptyId)?.incarnationId === expectedIncarnationId &&
+          liveAfterWait === expectedIncarnationId &&
           this.getPtyLivenessVerdict(ptyId)?.status === 'exited'
         ) {
           stopped = true
@@ -40,7 +50,9 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
-            this.ptyController.kill(ptyId)
+            this.ptyController.kill(ptyId, {
+              expectedIncarnationId: expectedIncarnationId ?? undefined
+            })
             if (!verdict || verdict.status === 'live') {
               this.markPtyLivenessUnverifiable(
                 ptyId,
@@ -50,7 +62,9 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
           }
         }
       } else {
-        stopped = this.ptyController?.kill(ptyId) ?? false
+        stopped = this.ptyController?.kill(ptyId, {
+          expectedIncarnationId: expectedIncarnationId ?? undefined
+        }) ?? false
       }
       if (ptyId === addressedPtyId) {
         addressedPtyStop = { stopped }

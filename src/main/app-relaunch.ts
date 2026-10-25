@@ -50,8 +50,7 @@ export function relaunchApp(
   data?: CrashReportBreadcrumbData,
   options?: Electron.RelaunchOptions
 ): void {
-  // Why: the current process can exit immediately after app.relaunch(), so
-  // persist the cause before Electron schedules the replacement process.
+  // Persist the cause before relaunch can exit this process.
   recordDurableCrashBreadcrumb('app_relaunch_requested', { ...data, reason })
   runWithLaunchPath(() =>
     app.relaunch(
@@ -66,7 +65,7 @@ export async function runBeforeRelaunchCleanup(
   try {
     await onBeforeRelaunch?.()
   } catch (error) {
-    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
+    // Cleanup must not block relaunch; log only error.name to keep secrets out of logs.
     console.warn(
       '[app] Pre-relaunch cleanup failed; continuing relaunch:',
       error instanceof Error ? error.name : typeof error

@@ -25,6 +25,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
 export function registerPtyConnectionHibernationWakeTests(): void {
   let mockStoreState: StoreState
@@ -61,7 +62,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('disarms input modes and keeps completed output until an explicit wake', async () => {
+    it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
       // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
@@ -94,11 +95,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        wakeHibernatedAgentIfArmed: () => string | null
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -119,9 +116,6 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
       binding.noteVisibilityResume()
-      await flushAsyncTicks()
-      expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
-      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -181,8 +175,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'live'
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
       const binding = connectPanePty(...args)
       await flushAsyncTicks()
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
@@ -242,10 +235,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -305,13 +295,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         isVisibleRef: { current: false }
       })
       const pane = createPane(2)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane binding exposes the wake hook this test drives.
-      const binding = connectPanePty(...args) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const args = mockPanePtyArgs(pane, createManager(1), deps)
+      const binding = connectPanePty(...args)
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -388,8 +373,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [createPane(2), manager, deps] as unknown as Parameters<typeof connectPanePty>
+      const args = mockPanePtyArgs(createPane(2), manager, deps)
       connectPanePty(...args)
       const onPtyExit = createdTransportOptions[0]?.onPtyExit
       expect(onPtyExit).toBeTypeOf('function')
@@ -420,10 +404,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         startup: { command: 'codex', launchAgent: 'codex' },
         replacesPtyId: 'pty-replaced'
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
-      const args = [createPane(2), createManager(1), deps] as unknown as Parameters<
-        typeof connectPanePty
-      >
+      const args = mockPanePtyArgs(createPane(2), createManager(1), deps)
       // Closing the tab (or parking it) disposes the pane before its deferred connect runs.
       connectPanePty(...args).dispose()
       await flushAsyncTicks()
@@ -463,10 +444,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       }
       mockStoreState.suppressedPtyExitIds['tab-pty'] = true
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
@@ -522,13 +500,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         updatedAt: 1,
         origin: 'worktree-sleep'
       }
-      const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        deps as never
-      ) as unknown as {
-        wakeHibernatedAgentIfArmed: () => string | null
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(createPane(2), createManager(1), deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -564,10 +536,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       deferredSpawn.resolve('pty-resumed')
       await flushAsyncTicks()
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
-        providerSession: { id: 'sess-hibernated-inflight' }
-      })
+      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
@@ -588,13 +557,15 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
       const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        createDeps({
-          consumeSuppressedPtyExit: vi.fn(() => true),
-          isVisibleRef: { current: false }
-        }) as never
-      ) as unknown as { wakeHibernatedAgentIfArmed: () => string | null }
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(1),
+          createDeps({
+            consumeSuppressedPtyExit: vi.fn(() => true),
+            isVisibleRef: { current: false }
+          })
+        )
+      )
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -645,12 +616,12 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
       const binding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
-      ) as unknown as {
-        wakeHibernatedAgentIfArmed: () => string | null
-      }
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(1),
+          createDeps({ isVisibleRef: { current: false } })
+        )
+      )
       await flushAsyncTicks()
 
       expect(binding.wakeHibernatedAgentIfArmed()).toBeNull()
@@ -684,13 +655,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         state: 'done',
         capturedAt: 1,
         updatedAt: 1,
-        origin: 'live'
+        origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -755,10 +723,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         origin: 'worktree-sleep'
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        noteVisibilityResume: () => void
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
 
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
@@ -802,9 +767,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         }
       }
 
-      const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
-        dispose: () => void
-      }
+      const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       expect(userInputListeners.size).toBeGreaterThan(0)
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
@@ -834,7 +797,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       const deps = createDeps()
       const pane = createPane(2)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
       await flushAsyncTicks()
       ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
 

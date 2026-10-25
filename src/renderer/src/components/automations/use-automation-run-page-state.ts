@@ -1,8 +1,18 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getAutomationHostTargetKey, getAutomationTargetFromHostId } from './automation-host-client'
-import { canRerunAutomationRun } from './automation-run-view-state'
+import {
+  getAutomationAuthorityTarget,
+  getAutomationHostTargetKey,
+  getAutomationListedTargetFromHostId
+} from './automation-host-client'
+import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
+import { useAppStore } from '@/store'
+import {
+  getAutomationRunOwnerEnvironmentId,
+  resolveAutomationRunTerminalTarget
+} from './automation-run-open-target'
+import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -27,14 +37,17 @@ export function useAutomationRunPageState({
     worktreeForRow,
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
+    runtimeEnvironments,
     selectedId,
-    setSelectedId
+    setSelectedId,
+    unifiedTabsByWorktree,
+    terminalLayoutsByTabId,
+    ptyIdsByTabId
   } = store
   const {
     isLoading,
     automationHostTargetKey,
     automations,
-    selectedAutomationRuns,
     setSelectedAutomationRunPageId,
     setActivePaneTab,
     rerunRunIdsInFlight,
@@ -42,22 +55,30 @@ export function useAutomationRunPageState({
     selectExternalKey,
     pageView,
     setPageView,
+    setRunPageOrigin,
     isDetailOpen,
     setIsDetailOpen
   } = local
-  const { selected, selectedRow } = list
-  const { selectedRuns, selectedAutomationRunPage } = setup
+  const {
+    selected,
+    selectedRow,
+    visibleRows,
+    externalAutomationEntries,
+    hostCatalog,
+    selectAutomationRow
+  } = list
+  const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
   useEffect(() => {
     if (!isDetailOpen || pendingAutomationRunNavigation) {
       return
     }
     const hasSelectedLocal = selectedRow?.key
-      ? list.visibleRows.some((row) => row.key === selectedRow.key)
+      ? visibleRows.some((row) => row.key === selectedRow.key)
       : selectedId !== null && selectedRow !== null
     const hasSelectedExternal =
       selectedExternalKey !== null &&
-      list.externalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
+      externalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
     if (hasSelectedLocal || hasSelectedExternal) {
       return
     }
@@ -66,8 +87,8 @@ export function useAutomationRunPageState({
     setActivePaneTab('overview')
   }, [
     isDetailOpen,
-    list.externalAutomationEntries,
-    list.visibleRows,
+    externalAutomationEntries,
+    visibleRows,
     pendingAutomationRunNavigation,
     selectedExternalKey,
     selectedId,
@@ -77,12 +98,19 @@ export function useAutomationRunPageState({
     setSelectedAutomationRunPageId
   ])
   useEffect(() => {
-    if (!pendingAutomationRunNavigation || isLoading) {
+    if (!pendingAutomationRunNavigation) {
       return
     }
     const pending = pendingAutomationRunNavigation
+    if (pending.runId && pageView !== 'run') {
+      setRunPageOrigin(pageView === 'automations' && isDetailOpen ? 'automation' : 'runs')
+      setPageView('run')
+    }
+    if (isLoading) {
+      return
+    }
     const pendingTargetKey = getAutomationHostTargetKey(
-      getAutomationTargetFromHostId(pending.hostId)
+      getAutomationListedTargetFromHostId(pending.hostId, { runtimeEnvironments })
     )
     if (automationHostTargetKey !== pendingTargetKey) {
       return
@@ -108,8 +136,21 @@ export function useAutomationRunPageState({
       )
       return
     }
-    if (selectedId !== pending.automationId) {
-      setSelectedId(pending.automationId)
+    const pendingRow = visibleRows.find(
+      (row) =>
+        row.automation.id === pending.automationId &&
+        (!row.catalogRef ||
+          getAutomationHostTargetKey(getAutomationAuthorityTarget(row.catalogRef.authority)) ===
+            pendingTargetKey)
+    )
+    if (!pendingRow) {
+      if (hostCatalog.resolution.effective.kind !== 'all') {
+        hostCatalog.selectHost(ALL_AUTOMATION_HOSTS_FILTER)
+      }
+      return
+    }
+    if (selectedId !== pending.automationId || selectedRow?.key !== pendingRow.key) {
+      selectAutomationRow(pendingRow.key)
       setIsDetailOpen(true)
       return
     }
@@ -121,20 +162,15 @@ export function useAutomationRunPageState({
       setPageView('automations')
       return
     }
-    if (
-      selectedAutomationRuns.notice &&
-      selectedAutomationRuns.automationId === pending.automationId
-    ) {
+    if (!selectedRunsReady) {
+      return
+    }
+    if (selectedRunsNotice) {
       setIsDetailOpen(true)
       setActivePaneTab('runs')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
-      if (pageView === 'run') {
-        setPageView('runs')
-      }
-      return
-    }
-    if (selectedAutomationRuns.automationId !== pending.automationId) {
+      setPageView('automations')
       return
     }
     setIsDetailOpen(true)
@@ -161,22 +197,40 @@ export function useAutomationRunPageState({
     automations,
     automationHostTargetKey,
     isLoading,
+    isDetailOpen,
+    hostCatalog,
+    selectAutomationRow,
+    visibleRows,
     pendingAutomationRunNavigation,
     pageView,
+    runtimeEnvironments,
     selectExternalKey,
-    selectedAutomationRuns.automationId,
-    selectedAutomationRuns.notice,
     selectedExternalKey,
     selectedId,
+    selectedRow,
     selectedRuns,
+    selectedRunsReady,
+    selectedRunsNotice,
     setActivePaneTab,
     setIsDetailOpen,
     setPendingAutomationRunNavigation,
     setPageView,
+    setRunPageOrigin,
     setSelectedAutomationRunPageId,
     setSelectedId
   ])
 
+  const activeTerminalTabIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const tabs of Object.values(unifiedTabsByWorktree)) {
+      for (const tab of tabs) {
+        if (tab.contentType === 'terminal') {
+          ids.add(tab.entityId)
+        }
+      }
+    }
+    return ids
+  }, [unifiedTabsByWorktree])
   const selectedAutomationRunPageWorktree = selectedAutomationRunPage?.workspaceId
     ? selectedRow
       ? (worktreeForRow(
@@ -192,6 +246,32 @@ export function useAutomationRunPageState({
         worktree: selectedAutomationRunPageWorktree
       })
     : null
+  const selectedAutomationRunPageOwnerEnvironmentId = useAppStore((state) =>
+    selectedAutomationRunPageWorktree
+      ? getAutomationRunOwnerEnvironmentId(
+          state,
+          selectedAutomationRunPage?.workspaceId,
+          selectedAutomationRunPageWorktree.hostId
+        )
+      : null
+  )
+  const selectedAutomationRunPageViewState = selectedAutomationRunPage
+    ? getAutomationRunViewState({
+        run: selectedAutomationRunPage,
+        workspaceExists: Boolean(selectedAutomationRunPageWorktree),
+        terminalTargetExists:
+          resolveAutomationRunTerminalTarget(
+            selectedAutomationRunPage,
+            {
+              hasTerminalTab: (tabId) => activeTerminalTabIds.has(tabId),
+              terminalLayoutsByTabId,
+              ptyIdsByTabId
+            },
+            selectedAutomationRunPageOwnerEnvironmentId
+          ) !== null,
+        terminalOnPairedServer: selectedAutomationRunPageOwnerEnvironmentId !== null
+      })
+    : null
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
@@ -200,6 +280,7 @@ export function useAutomationRunPageState({
 
   return {
     selectedAutomationRunPageWorkspaceDisplay,
+    selectedAutomationRunPageViewState,
     canRerunSelectedAutomationRunPage,
     isSelectedAutomationRunPageRerunPending
   }

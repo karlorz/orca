@@ -86,8 +86,7 @@ export async function importFreshDaemonInit(
   getDaemonLaunchIdentityMock.mockClear()
   isDaemonStaleForCurrentBundleMock.mockReset()
   isDaemonStaleForCurrentBundleMock.mockReturnValue(false)
-  // mockReset (not mockClear) also drops an unconsumed *Once queue, so a test that bails early
-  // can't leak a queued false into the next test's confirmedReplacement gate.
+  // Reset unconsumed once-only results so early test failures cannot contaminate later replacement decisions.
   killStaleDaemonMock.mockReset()
   killStaleDaemonMock.mockResolvedValue({
     killed: true,
@@ -122,8 +121,7 @@ export async function importFreshDaemonInit(
   launchedStartedAtMs.current = 1_000_000
   getProcessStartedAtMsMock.mockReset()
   getProcessStartedAtMsMock.mockReturnValue(1_000_000)
-  // Why the real port rather than a module mock: daemon-init reads AppEnvironment, whose
-  // installed instance is anchored to a realm symbol precisely so it survives resetModules.
+  // AppEnvironment survives resetModules through a realm symbol; replace its installed instance.
   setAppEnvironment({
     getPath: getPathMock,
     getAppPath: getAppPathMock,
@@ -137,9 +135,11 @@ export async function importFreshDaemonInit(
     await pinDaemonInitMocksAfterReset(pinFactories)
   }
   // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
-  const init = await import('./daemon-provider-init')
-  const restart = await import('./daemon-provider-restart')
-  const providerState = await import('./daemon-provider-state')
-  const cleanup = await import('./daemon-protocol-cleanup')
+  const [init, restart, providerState, cleanup] = await Promise.all([
+    import('./daemon-provider-init'),
+    import('./daemon-provider-restart'),
+    import('./daemon-provider-state'),
+    import('./daemon-protocol-cleanup')
+  ])
   return { ...init, ...restart, ...providerState, ...cleanup }
 }

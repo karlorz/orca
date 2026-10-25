@@ -1,15 +1,4 @@
-/**
- * A server-run automation's agent, started through the shared launch executor.
- *
- * Automations observe their run from the PTY, so the launch is `terminalOnly` whatever the chat
- * default says. What stays the automation's own is in the factories: a new-per-run workspace is
- * created agent-first from the automation's create args, and an existing workspace gets a terminal
- * titled with the run. Both fold an argv agent's prompt into its command at any length, as the
- * automation always has. A post-start agent's prompt goes out through the follow-up writer the create
- * always used, for parity: the executor's composer readiness misses slow starts (a follow-up fixes it).
- * A `reuseSession` automation first sends its prompt into the agent a previous run left idle, as on
- * the desktop, and launches fresh only when no such agent takes it.
- */
+// Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type {
   AgentLaunchPublishedSurface,
@@ -45,13 +34,11 @@ export async function launchHeadlessAutomationAgent(
     automation: Automation
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
     target: Extract<AutomationRunTargetResult, { ok: true }>
-    /** This automation's runs, whose idle agent a `reuseSession` run continues. */
     runs: readonly AutomationRun[]
   }
 ): Promise<HeadlessAutomationAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
-  // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
   // Fork: per-automation model/effort/profile and agent flags. The new-per-run create carries
   // the same preferences through buildHeadlessAutomationWorktreeCreateArgs.
@@ -74,7 +61,7 @@ export async function launchHeadlessAutomationAgent(
     runtime,
     intent: {
       agent,
-      // The workspace factory builds the create from the automation, so the target carries none.
+      // The workspace factory supplies create arguments from the automation.
       target:
         automation.workspaceMode === 'new_per_run'
           ? { kind: 'create-worktree', create: {} }
@@ -84,7 +71,6 @@ export async function launchHeadlessAutomationAgent(
     terminalOnly: true,
     workspaces: {
       createWorktree: async ({ startupAgent, startupPrompt }) => {
-        // Agent-first is the only create here; a structured pre-flight must not reach it.
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
@@ -113,7 +99,7 @@ export async function launchHeadlessAutomationAgent(
           worktreeId: created.worktree.id,
           startupTerminalHandle: startup.handle,
           ...(startup.paneKey ? { startupTerminalPaneKey: startup.paneKey } : {}),
-          // The create folds an offered prompt at any length; staging carries long lines.
+          // Creation stages long prompts while keeping them on the launch command.
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
         }
       }
@@ -128,6 +114,7 @@ export async function launchHeadlessAutomationAgent(
           prompt: startupPrompt ?? '',
           title: run.title,
           ...(launchPreferences ? { launchPreferences } : {}),
+          suppressStartupUpdatePrompt: true,
           ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {})
         })
         terminal = launched
@@ -160,7 +147,6 @@ export async function launchHeadlessAutomationAgent(
   }
 }
 
-/** Null when no previous run's agent is idle in its own PTY or it did not take the prompt. */
 async function sendToReusableSession(
   runtime: OrcaRuntimeService,
   request: {
@@ -196,7 +182,7 @@ async function sendToReusableSession(
       agent: automation.agentId,
       freshLaunch: false,
       text,
-      // As a worker brief does: a Windows host cannot find the agent in front, only a shell.
+      // Windows cannot prove which agent is foreground; refuse only a proven shell.
       unprovableHost: 'write-unless-shell'
     }))
   ) {
@@ -213,7 +199,7 @@ async function sendToReusableSession(
   }
 }
 
-/** The run's pane handle while that pane still holds the run's own PTY; null otherwise. */
+/** Reject reused pane handles whose PTY no longer belongs to this run. */
 export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
   const handle = run.terminalPaneKey
     ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
@@ -225,10 +211,7 @@ export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): s
     : null
 }
 
-/**
- * Settles once the agent's terminal exists, as the run was always recorded; a post-start prompt
- * is still being delivered, and the run's watcher observes the agent from here on.
- */
+/** Return on terminal publication; post-start prompt delivery may still be pending. */
 function launchUntilPublished(
   execution: AgentLaunchSurfaceExecution
 ): Promise<AgentLaunchPublishedSurface> {

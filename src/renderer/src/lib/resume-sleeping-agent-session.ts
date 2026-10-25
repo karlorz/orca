@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { findQueuedAgentResumeTab } from './queued-agent-resume-tab'
+import { isWorkspaceSleepRecord } from '../../../shared/workspace-sleep'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -217,8 +218,10 @@ export function resumeSleepingAgentSessionsForWorktree(
   if (hostAuthority === 'unverifiable') {
     return 0
   }
+  // Why: main alone resumes a workspace sleep's records, each in its own pane; this sweep never
+  // relaunches one in a fresh tab.
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
-    .filter((record) => record.worktreeId === worktreeId)
+    .filter((record) => record.worktreeId === worktreeId && !isWorkspaceSleepRecord(record))
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
     (record) => !isInvalidWorktreeActivationRecord(record)

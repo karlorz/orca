@@ -151,6 +151,7 @@ export function prepareWebSessionTabsSnapshotBase(
     ? currentTerminalTabs.filter(
         (tab) =>
           !shouldReplaceTerminalTab(
+            state,
             tab,
             environmentId,
             nextRemotePtyIds,

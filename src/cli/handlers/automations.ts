@@ -140,13 +140,7 @@ async function getExplicitTarget(
   return { repo, workspace }
 }
 
-/**
- * Reads the record's current owner so the mutation that follows can name it.
- *
- * The CLI cannot project an owner itself — it has no SSH target registry — so it
- * asks the authority that stores the record. A host too old to answer sends
- * nothing, and that host has no fence to satisfy either.
- */
+// Read the authoritative owner for fencing; older hosts omit it and impose no precondition.
 async function resolveExpectedOwner(
   client: Parameters<CommandHandler>[0]['client'],
   id: string
@@ -170,6 +164,20 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
     )
   }
   return runContext
+}
+
+// Older runtimes silently strip extraAgentArgs and would run without the requested arguments.
+async function assertExtraAgentArgsSupported(
+  client: RuntimeClient,
+  extraAgentArgs: string | undefined
+): Promise<void> {
+  if (!hasExtraAgentArgs(extraAgentArgs)) {
+    return
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
+  }
 }
 
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
@@ -253,7 +261,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     } satisfies AutomationUpdateParams
     await assertExtraAgentArgsSupported(client, updates.extraAgentArgs)
     const expectedOwner = await resolveExpectedOwner(client, id)
-    // Why: expectedOwner only fences the host the record is leaving; an edit that moves it needs the arrival fenced too.
+    // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id,

@@ -127,26 +127,6 @@ export function useWorktreeJumpPaletteRecentTabs({
     () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
   )
-  const recentTabRows = useMemo<RecentWorkspaceTabRow[]>(() => {
-    const now = Date.now()
-    const rows: RecentWorkspaceTabRow[] = []
-    for (const { item, worktree, row } of openTabRecentRows) {
-      if (
-        shouldIncludeOpenTabInRecentSection({
-          item,
-          worktree,
-          row,
-          paneSources: recentTabPaneSources,
-          unreadTerminalTabs,
-          unreadAgentCompletionPanes,
-          now
-        })
-      ) {
-        rows.push(row)
-      }
-    }
-    return rows
-  }, [openTabRecentRows, recentTabPaneSources, unreadAgentCompletionPanes, unreadTerminalTabs])
   const [recentTabSnapshot, setRecentTabSnapshot] = useState(EMPTY_RECENT_TAB_SNAPSHOT)
   // Why: recent rows are already narrowed by the filter, so a filter change mid-open must
   // re-capture — a frozen order would otherwise hide rows a cleared chip brought back.
@@ -185,9 +165,25 @@ export function useWorktreeJumpPaletteRecentTabs({
     ) {
       return
     }
-    const order = orderRecentWorkspaceTabs({
-      rows: recentTabRows
-    })
+    // Why here: inclusion reads wall time, so it is sampled when the snapshot is captured.
+    const now = Date.now()
+    const rows: RecentWorkspaceTabRow[] = []
+    for (const { item, worktree, row } of openTabRecentRows) {
+      if (
+        shouldIncludeOpenTabInRecentSection({
+          item,
+          worktree,
+          row,
+          paneSources: recentTabPaneSources,
+          unreadTerminalTabs,
+          unreadAgentCompletionPanes,
+          now
+        })
+      ) {
+        rows.push(row)
+      }
+    }
+    const order = orderRecentWorkspaceTabs({ rows })
     if (order.length === 0) {
       setRecentTabSnapshot(EMPTY_RECENT_TAB_SNAPSHOT)
       return
@@ -196,15 +192,18 @@ export function useWorktreeJumpPaletteRecentTabs({
     setSelectedItemId((current) =>
       current === '' || current === autoSelectedItemIdRef.current ? '' : current
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
+    autoSelectedItemIdRef,
     filter,
     hasQuery,
+    openTabRecentRows,
     query.length,
     recentOrderAttentionIncomplete,
     recentTabSnapshot,
     recentTabPaneSources,
-    recentTabRows,
+    setSelectedItemId,
+    unreadAgentCompletionPanes,
+    unreadTerminalTabs,
     visible
   ])
   const recentTabItems = useMemo<PaletteItem[]>(() => {

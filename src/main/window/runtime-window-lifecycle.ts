@@ -46,6 +46,7 @@ export function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
+    browserProfilesChanged: () => send('browser:session:profilesChanged'),
     automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,
@@ -229,7 +230,7 @@ export function registerRuntimeWindowLifecycle(
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
-    sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),

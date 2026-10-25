@@ -1,7 +1,12 @@
-import { OrcaRuntimeWithSidebarProducers } from './orca-runtime-sidebar-producers'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
+import {
+  OrcaRuntimeWithSidebarTemporal,
+  sidebarFactsRuntime
+} from './sidebar-inputs/orca-runtime-sidebar-temporal'
+import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
@@ -19,15 +24,9 @@ import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-
 import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
-import { notifyRuntimeListeners } from './runtime-async-boundaries'
-import { PetSpeakReplayBuffer, type ReplayablePetSpeakEvent } from './pet-speak-replay'
-import type { PetSpeakEvent, PetSpeakOutcome, PetVoiceRelay } from './pet-voice-relay'
-import type { PetSpeakCancelReason } from './pet-speak-observability'
-import { PetSpeechDeviceRegistry, type PetSpeechDeviceStatus } from './pet-speech-status-registry'
-import type { PetVoiceSubscriptionTracker } from './pet-voice-subscription-tracker'
 import {
   listReferenceWorkspaces,
-  selectReferenceWorkspace,
+  selectWarmedReferenceWorkspace,
   listWorkspaceReferences
 } from './runtime-reference-catalog'
 import { findWorkspaceReferences } from './runtime-reference-find'
@@ -42,27 +41,95 @@ import {
   installStructuredAgentAvailability,
   type StructuredAgentAvailabilityReader
 } from './structured-agent-availability'
+import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
+import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
+import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
+import { getMainHttpClient } from '../network/http-client'
+import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+import { CollapseWriteOrder } from './workspace-view-collapse-writes'
+import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
+import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
+import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
+import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+
+// Switch point: a window-fed build keeps no sidebar facts layer.
+const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
+  ? OrcaRuntimeWithSidebarTemporal
+  : OrcaRuntimeWithAgentTransitions
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
-  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
-    const catalog = listReferenceWorkspaces(
-      this.requireStore(),
-      this.resolvedWorktrees.peek()?.worktrees
-    )
-    try {
-      return selectReferenceWorkspace(catalog, selector, cwd)
-    } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
-        throw error
-      }
-      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
-      const warmed = listReferenceWorkspaces(
-        this.requireStore(),
-        await this.listResolvedWorktrees()
+class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  /** This runtime as its sidebar facts layer; null unless built with ORCA_SIDEBAR_INPUTS=main. */
+  get sidebarFacts() {
+    return sidebarFactsRuntime(this)
+  }
+  // Switch point. Idle until relay hosts attach; the fallback refresh runs while a window shows the sidebar or a phone reads the feed.
+  readonly pairedServerRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new PairedServerRowsProducer({
+        hasDemand: () =>
+          this.sidebarInputsFeed?.subscribed === true ||
+          (this.authoritativeWindowId !== null &&
+            this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+            this.store?.getUI?.().sidebarOpen !== false),
+        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
+      })
+    : null
+  // Switch point: the phone's icon source.
+  readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new RepoIconDataUrls({
+        repos: () => this.store?.getRepos() ?? [],
+        // Why not the shared desktop client: its net.fetch rejects every manual redirect.
+        fetch: (url, init) => {
+          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
+          return manualRedirectFetch
+            ? manualRedirectFetch(url, init)
+            : getMainHttpClient().fetch(url, init)
+        },
+        encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
+      })
+    : null
+  // Switch point: the per-writer ordering behind ui.setCollapsed.
+  readonly collapseWriteOrder = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new CollapseWriteOrder() : null
+  // Switch point: this host's workspace rows, from the listing worktree.ps reads.
+  readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new WorkspaceRowsProducer({
+        store: this.store,
+        // Its own scans, not the shared listing: metadata joins at read, so no write waits on git.
+        scan: () => this.scanResolvedWorktreeRepos(),
+        join: (scans) => this.joinResolvedWorktreeScans(scans),
+        visible: (snapshot) => this.visibleResolvedWorktreeSnapshot(snapshot),
+        lifecycle: this.workspaceLifecycle,
+        onClientEvent: (listener, options) => this.onClientEvent(listener, options)
+      })
+    : null
+  // Switch point: the phone's feed of the producers above; idle until this host's own phone reads.
+  readonly sidebarInputsFeed = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? new SidebarInputsFeed(
+        () =>
+          sidebarInputsFeedDomains({
+            facts: requireSwitchedOn(this.sidebarFacts),
+            pairedServerRows: requireSwitchedOn(this.pairedServerRows),
+            workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
+            workspaceRows: requireSwitchedOn(this.workspaceRows),
+            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
+            store: () => this.store,
+            onClientEvent: (listener, options) => this.onClientEvent(listener, options)
+          }),
+        (event) => this.emitClientEvent(event)
       )
-      return selectReferenceWorkspace(warmed, selector, cwd)
-    }
+    : null
+
+  private selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
+    return selectWarmedReferenceWorkspace(
+      this.requireStore(),
+      {
+        cached: () => this.resolvedWorktrees.peek()?.worktrees,
+        scan: () => this.listResolvedWorktrees()
+      },
+      selector,
+      cwd
+    )
   }
 
   async listWorkspaceReferences(selector: string, cwd?: string) {
@@ -98,116 +165,14 @@ class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithSidebarProducers>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
-    // Why: a worktree change must invalidate both the listing generation and this runtime's scan cache.
+    // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
+    // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
+    // module registers the generation bump at load; a headless host never loads it.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-  }
-
-  private petSpeakListeners = new Set<(event: ReplayablePetSpeakEvent) => void>()
-  private petVoiceSubscriptionTracker: PetVoiceSubscriptionTracker | null = null
-  private readonly petSpeakReplay = new PetSpeakReplayBuffer()
-  private petSpeakCompleteHandler:
-    | ((
-        eventId: string,
-        outcome: PetSpeakOutcome,
-        reason?: PetSpeakCancelReason
-      ) => Promise<{ completed: boolean }>)
-    | null = null
-  private petSpeakAcceptedHandler: ((eventId: string) => Promise<{ accepted: boolean }>) | null =
-    null
-  private petVoiceRelay: PetVoiceRelay | null = null
-  private readonly petSpeechDeviceRegistry = new PetSpeechDeviceRegistry()
-
-  setPetVoiceSubscriptionTracker(tracker: PetVoiceSubscriptionTracker | null): void {
-    this.petVoiceSubscriptionTracker = tracker
-  }
-
-  getPetVoiceSubscriptionTracker(): PetVoiceSubscriptionTracker | null {
-    return this.petVoiceSubscriptionTracker
-  }
-
-  onPetSpeakDispatched(listener: (event: ReplayablePetSpeakEvent) => void): () => void {
-    this.petSpeakListeners.add(listener)
-    return () => {
-      this.petSpeakListeners.delete(listener)
-    }
-  }
-
-  dispatchPetSpeak(event: PetSpeakEvent): void {
-    const recorded = this.petSpeakReplay.record(event)
-    notifyRuntimeListeners(this.petSpeakListeners, (listener) => listener(recorded), 'pet-speak')
-  }
-
-  getMissedPetSpeakSince(lastSeenSeq: number, epoch?: string): ReplayablePetSpeakEvent[] {
-    return this.petSpeakReplay.getMissedSince(lastSeenSeq, epoch)
-  }
-
-  getPetSpeakEpoch(): string {
-    return this.petSpeakReplay.epoch
-  }
-
-  setPetSpeakCompleteHandler(
-    handler:
-      | ((
-          eventId: string,
-          outcome: PetSpeakOutcome,
-          reason?: PetSpeakCancelReason
-        ) => Promise<{ completed: boolean }>)
-      | null
-  ): void {
-    this.petSpeakCompleteHandler = handler
-  }
-
-  setPetSpeakAcceptedHandler(
-    handler: ((eventId: string) => Promise<{ accepted: boolean }>) | null
-  ): void {
-    this.petSpeakAcceptedHandler = handler
-  }
-
-  setPetVoiceRelay(relay: PetVoiceRelay | null): void {
-    this.petVoiceRelay = relay
-  }
-
-  getPetVoiceRelay(): PetVoiceRelay | null {
-    return this.petVoiceRelay
-  }
-
-  async handlePetSpeakComplete(
-    eventId: string,
-    outcome: PetSpeakOutcome,
-    reason?: PetSpeakCancelReason
-  ): Promise<{ completed: boolean }> {
-    if (this.petSpeakCompleteHandler) {
-      return reason
-        ? await this.petSpeakCompleteHandler(eventId, outcome, reason)
-        : await this.petSpeakCompleteHandler(eventId, outcome)
-    }
-    return { completed: false }
-  }
-
-  async handlePetSpeakAccepted(eventId: string): Promise<{ accepted: boolean }> {
-    if (this.petSpeakAcceptedHandler) {
-      return await this.petSpeakAcceptedHandler(eventId)
-    }
-    return { accepted: false }
-  }
-
-  getPetSpeechDeviceRegistry(): PetSpeechDeviceRegistry {
-    return this.petSpeechDeviceRegistry
-  }
-
-  async handlePetSpeechStatus(
-    status: PetSpeechDeviceStatus,
-    connectionId?: string
-  ): Promise<{ acknowledged: boolean }> {
-    this.petSpeechDeviceRegistry.reportStatus(status, connectionId)
-    if (this.petVoiceRelay) {
-      await this.petVoiceRelay.sendDeviceStatus(status, connectionId)
-    }
-    return { acknowledged: true }
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
@@ -266,11 +231,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithSidebarProducers {
   ): Promise<TerminalCreateOptions> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     return this.resolveAgentTerminalCreateOptions(workspace, opts)
-  }
-
-  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
-  hasLiveTerminalForPaneKey(paneKey: string): boolean {
-    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
   }
 
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
@@ -342,4 +302,47 @@ const OrcaRuntimeServiceExport: {
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 
-export * from './runtime-service-compat-exports'
+export type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
+export type {
+  RuntimeAutomationCreateInput,
+  RuntimeAutomationUpdateInput
+} from './runtime-automation-controller'
+export type { SubscriptionRegistration } from './runtime-subscription-registry'
+export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent
+} from './runtime-terminal-contracts'
+export type { MessageWaitResult } from './runtime-message-waiters'
+export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
+export type {
+  MobileNotificationDispatchEvent,
+  MobileNotificationDismissEvent,
+  MobileNotificationEvent
+} from './runtime-mobile-notification-controller'
+export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
+export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
+export {
+  computeTerminalTailWaitState,
+  tailGainedNewerBlockedReason,
+  type TerminalTailWaitState
+} from './terminal-wait-tail-state'
+export { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
+export { buildPreview } from './terminal-tail-state'
+export { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
+export { projectTerminalTailLines } from './orca-runtime-terminal-projection'
+export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
+export type {
+  RuntimeWorktreeLifecycleEvent,
+  DriverState,
+  PtyLayoutTarget,
+  PtyLayoutState,
+  ApplyLayoutResult,
+  RuntimeRendererReloadFence
+} from './orca-runtime-core'
+export {
+  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+  WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
+  WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
+} from './orca-runtime-postlude'
