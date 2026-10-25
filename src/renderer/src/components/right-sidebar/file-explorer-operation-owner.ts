@@ -13,8 +13,10 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import type {
+  WorktreeOperationRoute,
+  WorktreeOperationRouteState
+} from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())

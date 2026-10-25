@@ -12,6 +12,8 @@ import {
   OrcaRuntimeWithExplicitCloseTabPtyStops,
   type ExplicitCloseStop
 } from './explicit-terminal-close-pty-stops'
+
+export { type ExplicitCloseStop, NO_STOP as EXPLICIT_CLOSE_NO_STOP } from './explicit-terminal-close-pty-stops'
 import {
   closePairedHostLeafFirst,
   isTerminalTabPinnedInSession
