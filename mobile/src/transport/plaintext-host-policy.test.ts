@@ -67,7 +67,7 @@ describe('Edit host plaintext rule', () => {
   it('still allows a public host over wss://', () => {
     expect(resolveHostEndpointEdit('ws://192.168.1.10:6768', 'wss://desk.example.com')).toEqual({
       kind: 'changed',
-      endpoint: 'wss://desk.example.com:6768'
+      endpoint: 'wss://desk.example.com:443'
     })
   })
 

@@ -7,6 +7,7 @@ import { TERMINAL_WRITE_FLUSH_WINDOW_MS } from './terminal-write-coalescer'
 
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active' },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',

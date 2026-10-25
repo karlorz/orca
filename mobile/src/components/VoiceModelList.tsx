@@ -77,6 +77,8 @@ export function VoiceModelList({
               </View>
               {action === 'needs-api-key' ? (
                 <Text style={styles.modelStateText}>{CLOUD_MODEL_NEEDS_KEY}</Text>
+              ) : model.provider === 'system' && model.status !== 'ready' ? (
+                <Text style={styles.modelStateText}>Mac only</Text>
               ) : action === 'in-use' || action === 'use' ? (
                 <View style={styles.readyActions}>
                   {action === 'in-use' ? (
@@ -103,8 +105,8 @@ export function VoiceModelList({
                       )}
                     </Pressable>
                   )}
-                  {/* A cloud model has nothing on this computer to delete. */}
-                  {model.provider === 'openai' ? null : (
+                  {/* Cloud and OS speech have nothing on this computer to delete. */}
+                  {model.provider === 'openai' || model.provider === 'system' ? null : (
                     <Pressable
                       style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                       disabled={anyBusy}

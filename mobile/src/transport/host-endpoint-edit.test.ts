@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { displayHostEndpoint } from './host-endpoint'
 import { resolveHostEndpointEdit } from './host-endpoint-edit'
+import { PLAINTEXT_HOST_ERROR } from './plaintext-host-policy'
 
 describe('resolveHostEndpointEdit', () => {
   it.each([
@@ -40,7 +41,6 @@ describe('resolveHostEndpointEdit', () => {
     ['wss://old.example.com:8443', '  WSS://tunnel.example.com  ', 'wss://tunnel.example.com:443'],
     ['ws://192.168.1.10:6768', 'wss://[2001:db8::2]', 'wss://[2001:db8::2]:443'],
     ['ws://192.168.1.10:6768', 'wss://tunnel.example.com:9443', 'wss://tunnel.example.com:9443'],
-    ['ws://192.168.1.10:6768', 'tunnel.example.com', 'ws://tunnel.example.com:6768'],
     [
       'wss://old.example.com:8443/orca?route=runtime',
       'wss://tunnel.example.com',
@@ -55,6 +55,13 @@ describe('resolveHostEndpointEdit', () => {
       })
     }
   )
+
+  it('rejects a public hostname inherited over ws://', () => {
+    expect(resolveHostEndpointEdit('ws://192.168.1.10:6768', 'tunnel.example.com')).toEqual({
+      kind: 'invalid',
+      error: PLAINTEXT_HOST_ERROR
+    })
+  })
 
   it.each([
     ['surrounding whitespace', '  desk.example.com  '],
