@@ -222,6 +222,14 @@ features:
     paths:
       - .github/workflows/fork-desktop-voice-release.yml
       - config/scripts/fork-desktop-voice-release.test.mjs
+  - id: fork-github-hosted-orcad-template
+    title: Fork desktop orcad-template qualification uses GitHub-hosted runners
+    kind: ci
+    status: landed
+    paths:
+      - .github/workflows/fork-desktop-voice-release.yml
+      - config/scripts/fork-desktop-voice-release.test.mjs
+      - .github/workflows/ci-cache-warmup-platform-jobs.yml
   - id: pet-voice-fgs-hysteresis
     title: Keep pet-voice FGS through 5-minute Tailscale reconnects
     kind: product

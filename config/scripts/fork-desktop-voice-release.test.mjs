@@ -238,8 +238,12 @@ describe('fork desktop voice release workflow', () => {
     const template = workflow.jobs['orcad-template']
     expect(template.needs).toEqual(['verify'])
     expect(template.uses).toBe('./.github/workflows/node-server-tests.yml')
-    expect(template.with).toEqual({ ref: '${{ github.sha }}', build_template: true })
-    expect(template.permissions).toEqual({ contents: 'read' })
+    expect(template.with).toEqual({
+      ref: '${{ github.sha }}',
+      build_template: true,
+      fast_runners: false
+    })
+    expect(template.permissions).toEqual({ contents: 'read', actions: 'read' })
     expect(template.secrets).toBeUndefined()
     expect(template.if).toContain("github.repository == 'karlorz/orca'")
 

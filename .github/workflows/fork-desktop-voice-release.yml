@@ -56,6 +56,7 @@ jobs:
     with:
       ref: ${{ github.sha }}
       build_template: true
+      fast_runners: false
 
   build-mac:
     needs: [verify, orcad-template]

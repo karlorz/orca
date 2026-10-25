@@ -9513,7 +9513,7 @@ snapshots:
 
   '@orca/expo-pet-speech@file:packages/expo-pet-speech(expo@55.0.31)(react-native@0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)':
     dependencies:
-      expo: 55.0.31(bbbc70ae8e0994c0f174d72b91639b84)
+      expo: 55.0.31(ffb18d8db340712289e23538af5a7293)
       react: 19.2.8
       react-native: 0.83.10(patch_hash=22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1)
 
