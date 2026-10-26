@@ -71,9 +71,10 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
           }
         }
       } else {
-        stopped = this.ptyController?.kill(ptyId, {
-          expectedIncarnationId: expectedIncarnationId ?? undefined
-        }) ?? false
+        stopped =
+          this.ptyController?.kill(ptyId, {
+            expectedIncarnationId: expectedIncarnationId ?? undefined
+          }) ?? false
       }
       if (ptyId === addressedPtyId) {
         addressedPtyStop = { stopped }
