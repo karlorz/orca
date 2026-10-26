@@ -60,8 +60,7 @@ export async function saveOrcaAutomation(
   const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
   const draft = normalizeAutomationDraftLaunchOptions(rawDraft)
 
-  // Re-check the destination at the start of the transaction. This keeps all
-  // side effects (hook probes and trust prompts) behind the destination fence.
+  // Fence the destination before hook probes/trust prompts or any other transaction side effect.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null
   if (createCheck && !createCheck.ok) {
     setEditorNotice(createCheck.notice)

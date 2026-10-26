@@ -19,13 +19,13 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
-  // Why first: an invalid project root must fail before createPairingOffer saves a pending device.
+  // Validate project root before pairing publication can persist a pending device.
   const output = servePublishMode(options)
   await state.serveReadinessPublisher.publish(
     {
       runtimeId: runtime.getRuntimeId(),
       ...(await buildServePairingReadiness(options, runtimeRpc)),
-      // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
+      // WSL barrier fails open; pending warns clients PTY launch may still race repair.
       managedWslCliReconciliation: state.managedWslCliReconciliationStatus
     },
     output

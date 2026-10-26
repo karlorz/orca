@@ -52,8 +52,7 @@ export function DictationController() {
   const erroredSessionIdsRef = useRef(new Set<string>())
   const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
-  // Why: push-to-talk restarts capture per utterance; toast once per preference,
-  // not once per press, while the selected mic stays gone.
+  // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
   const liveInserterRef = useRef<DictationLiveInserter>(undefined!)
@@ -90,9 +89,7 @@ export function DictationController() {
       } catch {
         // Swallow stop errors — the worker may already be torn down.
       }
-      // Why: stopDictation() resolves on main-process completion, while final
-      // transcript delivery is renderer IPC. Wait for this session's stopped
-      // event so old finals cannot be mistaken for the next dictation run.
+      // Main stop completion can precede renderer final-text IPC; wait for this session’s stopped event before accepting the next run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const liveTarget = liveInserterRef.current?.hasTarget
       if (!liveTarget) {
@@ -184,8 +181,7 @@ export function DictationController() {
     let captureStarted = false
 
     try {
-      // Why: worker startup can take seconds after idle teardown. Capture first
-      // and buffer locally so speech during "Starting..." is not discarded.
+      // Capture and buffer before slow worker startup so speech during Starting is retained.
       const preferredMicrophoneDeviceId = settings?.voice?.microphoneDeviceId ?? null
       const captureResult = await startCapture({
         bufferAudio: true,
@@ -207,8 +203,7 @@ export function DictationController() {
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
-        // Why: a stop requested during startup tears this capture down below, so the
-        // notice would describe a fallback that never records anything.
+        // Suppress fallback notices when a queued stop will tear down this startup capture.
         if (
           !stopRequestedDuringStartRef.current &&
           micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId
@@ -326,8 +321,7 @@ export function DictationController() {
     await finishDictationSession(sessionId)
   }, [finishDictationSession, setDictationState, stopCapture])
 
-  // Why: capture-loss fires from a stream opened before stopDictation exists;
-  // route through a ref so the two callbacks do not depend on each other.
+  // Capture opens before stopDictation exists; bridge through a ref to avoid cyclic callback dependencies.
   stopDictationRef.current = () => void stopDictation()
 
   useDictationStartStopBindings({

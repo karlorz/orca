@@ -163,7 +163,6 @@ describe('SetProjectLocationDialog', () => {
     expect(screen.queryByTestId('remote-file-browser')).toBeNull()
     expect(screen.getByRole('button', { name: 'Set location' })).toBeTruthy()
 
-    // A second Escape, now back on the form, dismisses the dialog as usual.
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalled()
   })
@@ -194,7 +193,6 @@ describe('SetProjectLocationDialog', () => {
     await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/orca')
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
-    // The user backs out and points the composer somewhere else.
     rerender(
       <SetProjectLocationDialog
         option={null}

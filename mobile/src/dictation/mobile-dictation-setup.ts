@@ -14,17 +14,12 @@ import type { MobileSpeechModelReply, MobileSpeechSetupReply } from './dictation
 export type MobileSpeechSetup = MobileSpeechSetupReply
 export type MobileSpeechModel = MobileSpeechModelReply
 
-// Dictation-setup errors startMobileDictation throws when the desktop isn't
-// configured. Mapping them lets the mic entry point open the setup sheet
-// instead of dead-ending on a toast.
+// Map setup errors to the setup sheet instead of leaving the mic entry point at a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
 const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
   'Update the paired desktop Orca app to use mobile voice settings.'
 
-// Why: mobile can pair with older desktop runtimes that predate speech.models.list;
-// show upgrade guidance instead of leaking the raw denial or not-found error.
-// Why the raw reply: this reads the refusal's code alongside its message, and no acceptance
-// policy carries both through — the same reason mobile-branch-base-ref.ts keeps its own check.
+// Older runtimes predate models.list; show upgrade guidance. Keep the raw refusal because guidance needs both code and message.
 function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
   if (reply.ok) {
     return false
@@ -37,7 +32,7 @@ function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
   )
 }
 
-// Why: headless servers from 1.4.229 until #31174 had no speech at all; name the fix, not the code.
+// Headless servers lacked speech from 1.4.229 until #31174; name the required fix.
 export const SPEECHLESS_SERVER_MESSAGE = 'Update Orca on this server to use voice dictation.'
 
 export function isSpeechlessServerError(message: string): boolean {
@@ -73,8 +68,7 @@ async function requestDictationSetupReply(client: RpcOperationSender): Promise<R
     if (!(error instanceof LogicalClientCutoverError)) {
       throw error
     }
-    // Why: this read can safely repeat on the authenticated replacement; mutation
-    // RPCs must still surface cutover so callers never replay unknown commits.
+    // Replay this read on authenticated replacement; mutations must surface cutover to avoid replaying unknown commits.
     return dictationSetupRead.request(client, null)
   }
 }
@@ -156,7 +150,6 @@ export async function setDictationConfig(
   return next
 }
 
-// A model is mid-download (or extracting) and the sheet should keep polling.
 export function isModelInFlight(model: MobileSpeechModel): boolean {
   return model.status === 'downloading' || model.status === 'extracting'
 }
@@ -176,10 +169,9 @@ export function isDictationReady(setup: MobileSpeechSetup): boolean {
   return selected?.status === 'ready'
 }
 
-// Why no "desktop": the paired computer may be a headless server. Short so the name keeps its room.
+// Keep copy short and host-neutral: the paired computer may be a headless server.
 export const CLOUD_MODEL_NEEDS_KEY = 'Needs an OpenAI key'
 
-/** What a model row in the setup sheet and Voice settings offers. */
 export type DictationModelRowAction =
   | 'in-use'
   | 'use'
@@ -187,8 +179,7 @@ export type DictationModelRowAction =
   | 'downloading'
   | 'needs-api-key'
 
-// Why cloud rows are selectable: a host with no on-device recognizer (Windows or a managed SSH
-// server) lists only cloud models, so a read-only row left the sheet with nothing to pick.
+// Windows and managed SSH hosts may offer only cloud models; those rows must remain selectable.
 export function dictationModelRowAction(
   model: MobileSpeechModel,
   selectedModelId: string | undefined

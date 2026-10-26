@@ -12,6 +12,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import { locateTerminalTab } from '../terminals/terminal-tab-location'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
@@ -62,9 +63,7 @@ export function getTerminalPtyOwnershipIdentity(
   if (scopedEnvironmentId) {
     return JSON.stringify(['runtime', scopedEnvironmentId, remote.handle])
   }
-  // Why: hydrated legacy runtime IDs omit their owner, but still refer to the same provider
-  // terminal as a scoped ID in the owning worktree. This reads the owner spawn started it on, as
-  // close does, so identity never disagrees with what a close retires.
+  // Resolve legacy/scoped PTY aliases on the owner used by spawn/close so identity and retirement agree.
   const owner = resolveTerminalPtyOwner(state, worktreeId, 'spawn')
   // Why: a twin's legacy id can't be pinned to either host, so it matches only its own exact id.
   if (owner.kind === 'ambiguous') {
@@ -276,7 +275,10 @@ export function markClosedTabSessionsForExplicitResume(
     if (!record.providerSession || record.interrupted === true) {
       continue
     }
-    if (record.state === 'done') {
+    // Why: a kept workspace-sleep record would read as stranded once its tab is gone, and the
+    // activation sweep reopens stranded sleeps (#33598). An explicit close keeps only the
+    // explicit Resume workspace handle, so it leaves as a live record.
+    if (record.state === 'done' && !isWorkspaceSleepRecord(record)) {
       continue
     }
     if (next === records) {

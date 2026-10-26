@@ -94,8 +94,7 @@ export async function readRuntimeFilePreview(
   )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   const runtimeTarget = context.target
-  // A chat attachment lives in the paired server's store, outside every worktree; that server
-  // reads it back itself (an older one answers method_not_found, and the preview falls back).
+  // Paired-server chat attachments live outside worktrees; owning server reads them. Older method_not_found keeps preview fallback.
   if (
     !remoteArgs &&
     runtimeTarget.kind === 'environment' &&
@@ -209,8 +208,7 @@ async function remoteChunkedDownloadAvailable(
     )
     return true
   } catch (error) {
-    // Why: compatible older headless servers may lack chunked downloads while
-    // still supporting preview-sized file reads that can complete the request.
+    // Older hosts may lack chunk downloads but still satisfy preview-sized reads.
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return false
     }
@@ -246,8 +244,7 @@ async function downloadRemoteFileViaPreview(
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
       { timeoutMs: 15_000 }
     )
-    // Why: old servers use an empty, metadata-free binary result to signal an
-    // unsupported binary; recognized zero-byte previews are still complete.
+    // Legacy empty metadata-free binary means unsupported; recognized zero-byte previews remain valid.
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }

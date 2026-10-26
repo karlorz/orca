@@ -1,10 +1,5 @@
-// Why: keep these shapes in lockstep with src/shared/types.ts and
-// src/shared/rate-limit-types.ts. We don't import from desktop here because
-// the mobile bundle must not pull in Electron-coupled type files.
-//
-// Pure state/selectors live here (no React Native imports) so they can be
-// unit-tested directly; AccountUsage.tsx re-exports them alongside the
-// UsageBar component.
+// Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
+// Pure RN-free selectors stay directly testable; AccountUsage re-exports them with UsageBar.
 import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
 import type {
   AccountsSnapshot,
@@ -140,11 +135,7 @@ export function getInactiveProviderUsage(
   return list.find((u) => u.accountId === accountId) ?? null
 }
 
-// Why: rate limits are fetched for the active target even when no Orca-managed
-// account exists (the default target is the agent's own system-default login).
-// Treat a provider as having usage worth showing when a fetch succeeded or any
-// window has data; an unavailable/error provider with no windows means the
-// system-default login has no credentials for it, so there is nothing to show.
+// System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.
 export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boolean {
   if (!limits) {
     return false
@@ -160,8 +151,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   return limits.status === 'ok'
 }
 
-// Why: transient errors keep the last successful window data, so availability
-// is per window rather than per provider status.
+// Determine availability per window because transient provider errors retain successful window data.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
   windowKey: 'session' | 'weekly',

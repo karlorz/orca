@@ -17,8 +17,7 @@ const MAX = { value: 'max', label: 'Max' }
 // on a mismatch (`use one of: ...`), so each model carries exactly the set it accepts.
 function grokEffort(values: readonly SessionOptionSelectChoice[]): CatalogOption {
   return {
-    // Why: `LaunchPreferences` is a strict zod object over model/effort/mode, so a
-    // novel id is dropped client-side and rejected on the wire.
+    // Keep effort: strict LaunchPreferences drops/rejects novel IDs at client/wire boundaries.
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
@@ -36,15 +35,13 @@ function grokEffort(values: readonly SessionOptionSelectChoice[]): CatalogOption
   }
 }
 
-// The enrichment gate reads only `listModels`' presence; the probe itself parses
-// through `agent-model-probe-spec.ts`, so keep this private to that gate.
+// Private enrichment-gate parser; actual probes parse through agent-model-probe-spec.ts.
 function parseGrokCatalogModels(stdout: string): CatalogModel[] {
   return parseGrokModelList(stdout).map((model) => ({ ...model, options: [] }))
 }
 
 export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
-  // Why: Grok model access depends on the signed-in account and on [model.*]
-  // config. Seed only what is verified; discovery supplies the rest.
+  // Account and model config scope access; seed verified models and discover the rest.
   models: [
     {
       id: 'grok-4.7',
@@ -136,8 +133,7 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   modelApply: {
     launchArgs: (value) => ['-m', String(value)],
     removeAgentArgs: (tokens) => removeAgentArgOption('grok', tokens, ['-m', '--model']),
-    // Why: `agent-picker` would replace the whole model list with "Choose in
-    // agent picker…" and never persist a model, so `-m` would never be emitted.
+    // agent-picker replaces the list and never persists a model, preventing -m emission.
     midSession: { kind: 'command', build: (value) => `/model ${String(value)}` }
   },
   // Why: launch resolves against this static seed, so a discovered id still needs a menu
@@ -147,8 +143,7 @@ export const GROK_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Why: grok's selectable ids retire between releases, so a stale seed entry
   // must be droppable — picking one is a fatal launch, not a warning.
   discoveredModelsAreAuthoritative: true,
-  // Why: `grok models` prints `Default model: grok-4.7` and marks the row `(default)`,
-  // so the seed states the CLI's own choice rather than a preference of ours.
+  // Match the CLI's reported Default model and (default) row marker.
   defaultModelIsCliDefault: true,
   listModels: { command: 'grok models', parse: parseGrokCatalogModels }
 }

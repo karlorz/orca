@@ -14,11 +14,7 @@ import type { AppUpdateSource } from './app-update-source'
 import { createGithubReleaseUpdateSource } from './github-release-update-source'
 import { buildTimeMobileUpdateRepo, resolveMobileUpdateRepo } from './update-repo'
 
-/**
- * Invariant: this app does not use expo-updates, so `expoConfig` is the manifest embedded in the
- * binary and its version is the binary's (app.json `version`, Android `versionName`). SDK 55
- * removed `Constants.nativeAppVersion`; adopting expo-updates would make this the update's version.
- */
+// expoConfig is embedded binary manifest because app does not use expo-updates; SDK 55 removed nativeAppVersion. Revisit version source if adopting OTA updates.
 export const installedAppVersion: string | null = Constants.expoConfig?.version ?? null
 
 // Same guard as app/troubleshoot.tsx: `__DEV__` is undefined outside the React Native runtime.

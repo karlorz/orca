@@ -21,10 +21,7 @@ import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
-  /** Provider-session claim keys already woken in place by mounted panes
-   *  (WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT). Their sleeping records are
-   *  cleared only after the in-place spawn succeeds, so the generic resume
-   *  must neither launch nor clear them here. */
+  // Mounted in-place wakes own these claim keys until spawn succeeds; generic resume must neither launch nor clear their records.
   skipClaimKeys?: ReadonlySet<string>
   /** Called with the tab id of each freshly launched resume tab, so
    *  navigation-suppressed callers can background-mount exactly those tabs. */
@@ -67,9 +64,14 @@ function openResumeTab(args: {
   startupPlan: AgentStartupPlan
   providerSession?: AgentProviderSessionMetadata
   agentArgsOverride?: string
+  // Saved-record resumes carry the saved-origin admission so an open chat
+  // continuing the conversation refuses the automatic restore (#30930).
+  savedRecord?: SleepingAgentSessionRecord
   options?: ResumeSleepingAgentSessionsOptions
 }): boolean {
   const state = useAppStore.getState()
+  const saved = args.savedRecord
+  const savedStatus = saved ? state.agentStatusByPaneKey[saved.paneKey] : undefined
   const tab = state.createTab(args.worktreeId, undefined, undefined, {
     launchAgent: args.agent,
     pendingStartup: {
@@ -77,6 +79,24 @@ function openResumeTab(args: {
       ...(args.startupPlan.env ? { env: args.startupPlan.env } : {}),
       launchConfig: args.startupPlan.launchConfig,
       ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+      ...(saved
+        ? {
+            resumeOrigin: 'saved' as const,
+            resumeSource: {
+              cancelled: false,
+              record: saved,
+              ...(savedStatus
+                ? {
+                    expectedStatus: {
+                      paneKey: saved.paneKey,
+                      receivedAt: savedStatus.updatedAt,
+                      stateStartedAt: savedStatus.stateStartedAt
+                    }
+                  }
+                : {})
+            }
+          }
+        : {}),
       launchAgent: args.agent,
       ...(args.agentArgsOverride ? { agentArgsOverride: args.agentArgsOverride } : {}),
       ...(args.startupPlan.startupCommandDelivery
@@ -123,7 +143,8 @@ export function launchSleepingAgentSession(
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     ...resolveResumeLaunchRecipe(launchConfig),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
   })
   if (!startupPlan) {
     return cannotResumeSession()
@@ -134,6 +155,7 @@ export function launchSleepingAgentSession(
     agent: record.agent,
     startupPlan,
     providerSession: record.providerSession,
+    savedRecord: record,
     ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
     options
   })

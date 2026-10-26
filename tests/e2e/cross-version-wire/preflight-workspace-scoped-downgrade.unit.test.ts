@@ -28,7 +28,6 @@ import {
   releaseModuleExport
 } from './release-checkout'
 
-// Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 const WORKTREE = 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 

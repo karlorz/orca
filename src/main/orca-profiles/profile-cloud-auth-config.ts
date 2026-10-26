@@ -45,8 +45,7 @@ export function getOrcaCloudAuthConfig(
   packaged: boolean = isPackagedOrcaBuild(),
   forkRelay: ForkOwnRelayDefaults = FORK_OWN_MOBILE_RELAY
 ): { configured: true; config: OrcaCloudAuthConfig } | { configured: false; setupMessage: string } {
-  // Why: loopback HTTP endpoints are a local-development convenience only;
-  // packaged builds must not accept plain-HTTP token endpoints via env vars.
+  // Plain HTTP token endpoints are development-only.
   const allowLoopbackHttp = !packaged
   const cleanEndpointUrl = (value: string | undefined): string | null =>
     cleanUrl(value, allowLoopbackHttp)
@@ -112,11 +111,7 @@ export function getOrcaCloudAuthConfig(
   }
 }
 
-/**
- * Where the host registers phones for background push. Deliberately outside
- * OrcaCloudAuthConfig: the push gateway authenticates with the host keypair, so an
- * accountless host reaches it on exactly the same path as a signed-in one.
- */
+/** Host-key authentication keeps phone push available without a signed-in account. */
 export function getOrcaPushGatewayUrl(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()

@@ -68,8 +68,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeActivate,
     handler: async (params, { runtime, clientKind }) =>
-      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
-      // wake to phones so web/desktop activation behavior is unchanged.
+      // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
       runtime.activateManagedWorktree(params.worktree, {
         notifyClients: params.notifyClients !== false,
         clientKind,
@@ -86,9 +85,7 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeCreate,
     handler: async (params, context) =>
-      // Why: a mobile create interrupted by a connection migration is retried with
-      // the same clientMutationId; dedupe so the host returns the in-flight/created
-      // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
+      // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
@@ -98,8 +95,7 @@ export const WORKTREE_METHODS = [
           repo,
           request: params.automationProvenanceRequest
         })
-        // Why: provenance tokens are reserved before creation so retries can recover,
-        // but failed create attempts must release the reservation for a safe retry.
+        // Reserve provenance before create for recovery, but release failed reservations so retry is safe.
         try {
           const result = await createWorktreeWithStartupAgent(
             runtime,
@@ -117,11 +113,9 @@ export const WORKTREE_METHODS = [
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          // Why stamped here: the create's change notification has bumped the generation, so this
-          // names the catalog that contains the new worktree.
+          // Create notification already bumped generation; stamp the catalog containing the new worktree.
           const stamped = { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
-          // Why: agent callers need a stable dispatch target without traversing
-          // terminal-list layout duplicates after creating the worktree.
+          // Agent callers need a stable target without duplicate terminal-list layout entries.
           return params.startupAgent && result.startupTerminal?.handle
             ? { ...stamped, agentTerminalHandle: result.startupTerminal.handle }
             : stamped
