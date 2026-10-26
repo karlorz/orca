@@ -54,8 +54,7 @@ export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void
   })
   state.desktopRelayInstaller = installer
   runtimeRpc.setMobileRelayPairingProviderInstaller(() => installer.ensure())
-  // Why: sleeping past relay-token expiry kills the broker with no retry
-  // timer; resume is the moment that state becomes recoverable.
+  // Sleep can expire the token with no retry timer; resume is the recovery opportunity.
   powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
   void installer.ensure().then((installed) => {
     if (!installed) {

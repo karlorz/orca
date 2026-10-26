@@ -36,15 +36,7 @@ function terminalTabOwnsPassiveCompletedHibernation(
   return false
 }
 
-/**
- * Whether a tab is currently attached to, or actively reconnecting to, a live
- * PTY. This deliberately checks only the live-attachment and reconnect maps —
- * NOT terminalLayoutsByTabId leaf bindings, which are a persisted layout that
- * can outlive its session (e.g. after an SSH target is removed) and must not
- * keep a dead tab pinned in the orphan sweep. The reconnect maps are the ones
- * retirement planning also honors as live ownership, so a tab it would tear
- * down on close is never swept as a dead orphan first (#9911).
- */
+/** Live/reconnect maps prove PTY ownership, matching retirement (#9911); persisted leaf bindings may outlive removed SSH sessions and must not pin dead tabs. */
 export function terminalTabHasReconnectablePty(
   state: TerminalTabReconnectState,
   tabId: string,
@@ -109,10 +101,6 @@ export function getOrphanTerminalIds(
         if (state.unverifiedPtyLossTabIds[tab.id]) {
           return false
         }
-        // Why: a tab is orphaned only when it owns NO live/reconnecting PTY; a
-        // tab whose session survives in a reconnect map (SSH relay / daemon
-        // reattach) is alive and must not be swept before reconnect rebinds it
-        // (#9911).
         return !terminalTabHasReconnectablePty(state, tab.id, tab.ptyId)
       })
       .map((tab) => tab.id)
@@ -187,10 +175,7 @@ export function buildOrphanTerminalCleanupPatch(
   }
   const nextCacheTimerByKey = { ...state.cacheTimerByKey }
 
-  // Why: orphan runtime terminals no longer have a backing unified tab or live
-  // PTY, so every per-tab cache keyed off that runtime ID must disappear with
-  // the tab. Centralizing the cleanup keeps orphan detection and teardown in
-  // lockstep across both tab creation and reconciliation paths.
+  // Share per-tab cache teardown across creation/reconciliation so orphan detection and cleanup cannot diverge.
   for (const orphanTabId of orphanTerminalIds) {
     delete nextPtyIdsByTabId[orphanTabId]
     delete nextRuntimePaneTitlesByTabId[orphanTabId]

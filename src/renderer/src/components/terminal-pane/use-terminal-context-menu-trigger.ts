@@ -95,7 +95,7 @@ export function useTerminalContextMenuTrigger({
           writeClipboardText: window.api.ui.writeTerminalClipboardText,
           clearSelectionOnSuccess: true
         }).catch(() => {
-          /* ignore clipboard write failures */
+          // Failed copy leaves selection available for retry.
         })
       } else {
         void pasteResolvedPane('right-click')

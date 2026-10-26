@@ -20,10 +20,10 @@ import {
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
-import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
-import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
-import { isMobileNativeChatAgentConfirmed } from './mobile-native-chat-eligibility'
+import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
+import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
+import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
+import { isMobileNativeChatAgentConfirmed } from './native-chat/mobile-native-chat-eligibility'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
@@ -114,7 +114,6 @@ export function useMobileSessionNativeChatDictation(
   const reportDictationFailure = useCallback(
     (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err)
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
       if (isDictationSetupRequiredError(message)) {
         setShowDictationSetup(true)
         return
@@ -164,7 +163,6 @@ export function useMobileSessionNativeChatDictation(
         showToast('Dictation inserted')
         return
       }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
       const routeContext = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
       const route = routeDictationTranscript(
@@ -217,12 +215,11 @@ export function useMobileSessionNativeChatDictation(
     void dictation.cancel()
   }, [dictation])
 
-  // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {
       cancelDictation()
     } else if (dictation.isStarting) {
-      // The start request is still settling; a second toggle is intentionally ignored.
+      // Ignore toggles until the start request settles.
     } else if (dictation.isRecording) {
       void dictation.stop()
     } else {
@@ -230,7 +227,6 @@ export function useMobileSessionNativeChatDictation(
     }
   }, [cancelDictation, dictation, startDictation])
 
-  // Hold mode: press starts, release stops — like a walkie-talkie.
   const handleDictationPressIn = useCallback(() => {
     if (!dictation.isStarting && !dictation.isRecording && !dictation.isProcessing) {
       startDictation()

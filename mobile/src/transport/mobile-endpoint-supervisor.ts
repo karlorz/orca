@@ -79,9 +79,7 @@ export class MobileEndpointSupervisor {
       this.relayRotationPending = true
       void this.recoverRelay(true)
     })
-    // Why: the race owns recovery exactly like a network-change replacement — its
-    // failure must book the shared cooldown. recoverRelay's own guards already
-    // cover stopped/background, so the timer needs no scope check.
+    // The race owns recovery and must book shared cooldown on failure; recoverRelay already guards stopped/background state.
     this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
       void this.recoverRelay(true, true)
     })
@@ -157,8 +155,7 @@ export class MobileEndpointSupervisor {
       return
     }
     if (!this.bundle) {
-      // Why: a Keychain race at open must not kill relay recovery for the whole
-      // process lifetime; each recovery attempt re-reads the durable bundle.
+      // Re-read durable credentials each recovery attempt so an opening keychain race cannot disable relay for the process lifetime.
       this.logRelay('credential bundle unavailable at start; recovery will re-read')
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
@@ -257,11 +254,8 @@ export class MobileEndpointSupervisor {
     }
   }
 
-  // forceReplacement: dial past the "direct still looks live" guard — a lease
-  // rotation, a network-change replacement, or the happy-eyeballs grace race.
-  // ownsRecovery: this dial is the connection's only hope, so a failure books the
-  // shared cooldown and any session left stale-'connected' by a half-open socket
-  // comes down; lease rotation clears it because armRetry owns its own retry.
+  // forceReplacement bypasses live-direct guards; ownsRecovery books cooldown and retires stale sessions on failure.
+  // Lease rotation leaves retry ownership to its timer.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
     return recoverMobileRelay(this.recovery(), forceReplacement, ownsRecovery)
   }

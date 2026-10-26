@@ -5,6 +5,7 @@ import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/nativ
 import { refuse } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
+import type { AgentSessionControlTarget } from '../../../shared/agent-session-bound-control'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
@@ -74,7 +75,7 @@ export function sendStructuredAgentSessionTurn(
     personsMessage?: true
     beforeRun?: () => void
     beforePromptWrite?: () => void
-    expectedControlTarget?: import('../../../shared/agent-session-bound-control').AgentSessionControlTarget
+    expectedControlTarget?: AgentSessionControlTarget
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
@@ -131,7 +132,7 @@ export function cancelStructuredAgentSessionTurn(
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
     beforeCancel?: () => void
-    expectedControlTarget?: import('../../../shared/agent-session-bound-control').AgentSessionControlTarget
+    expectedControlTarget?: AgentSessionControlTarget
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   if (params.scope) {

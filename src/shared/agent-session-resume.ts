@@ -1,4 +1,9 @@
-import type { AgentHookSource } from './agent-hook-relay'
+import {
+  hasUnsafeProviderSessionIdChars,
+  normalizeSessionId,
+  readPathFromKeys
+} from './agent-provider-session-extract'
+import type { AgentStatusCacheIdentity, RefusedPaneResume } from './agent-status-ipc-payload'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
@@ -28,7 +33,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'zcode',
   'dsh',
   'jcode',
-  'kiro'
+  'kiro',
+  'hermes'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -38,13 +44,10 @@ export type AgentProviderSessionKey = 'session_id' | 'conversation_id'
 export type AgentProviderSessionMetadata = {
   key: AgentProviderSessionKey
   id: string
-  /** Authoritative on-disk transcript/rollout path reported by the agent's hook
-   *  (Claude/Codex `transcript_path`), when available. Native chat reads this
-   *  directly because recent Claude Code versions name the transcript file with a
-   *  UUID that differs from the hook `session_id`, so reconstructing the path from
-   *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
-   *  `session_file` as the authoritative `--session` resume locator. */
+  /** Prefer hook-reported transcript paths: recent Claude filenames differ from session_id. Claude/Codex still resume by ID; Pi uses session_file as its --session locator. */
   transcriptPath?: string
+  /** Folder the agent ran in; resume runs there, not the pane's start folder (#16960). */
+  cwd?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -72,16 +75,9 @@ export type SleepingAgentSessionRecord = {
   mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
-  /** How the record was captured. Worktree-sleep records (legacy records have
-   *  no origin) are consumed by worktree activation, which opens a fresh tab.
-   *  Quit/live records describe panes that still exist in the restored session,
-   *  so only the pane's own cold-restore path may consume them — activation
-   *  launching a tab too would duplicate a warm-reattached session (#5232). */
+  /** Worktree-sleep/legacy records open fresh tabs on activation. quit/live records belong to restored panes; only their cold-restore path consumes them to avoid duplicating warm sessions (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
-  /** Set on a finished pane captured by an explicit workspace sleep. Its
-   *  `--resume` is issued by the pane's own cold restore when its tab is
-   *  opened, so a mobile wake must not background-mount every such tab and
-   *  respawn the whole workspace the user just slept (#11598). */
+  /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
   restoreOnTabOpenOnly?: boolean
 }
 
@@ -90,8 +86,7 @@ export function isPaneSleepRecord(record: Pick<SleepingAgentSessionRecord, 'orig
   return record.origin === undefined || record.origin === 'worktree-sleep'
 }
 
-/** Whether a worktree has a slept pane that only a host wake resumes: 'live'/'quit' records are
- *  not asleep (their own pane resumes them), and a tab-open-only record resumes with its tab. */
+/** Only host-wake sleep records count: live/quit panes restore themselves, and tab-open-only panes wait for their tab. */
 export function hasSleptAgentToWake(
   records: Record<string, SleepingAgentSessionRecord> | undefined,
   worktreeId: string
@@ -105,72 +100,6 @@ export function hasSleptAgentToWake(
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
-const PROVIDER_SESSION_ID_MAX_LENGTH = 512
-
-export function hasUnsafeProviderSessionIdChars(value: string): boolean {
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i)
-    if (code <= 0x1f || code === 0x7f) {
-      return true
-    }
-  }
-  return false
-}
-
-function normalizeSessionId(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-  const trimmed = value.trim()
-  if (
-    trimmed.length === 0 ||
-    trimmed.length > PROVIDER_SESSION_ID_MAX_LENGTH ||
-    trimmed.startsWith('-') ||
-    hasUnsafeProviderSessionIdChars(trimmed)
-  ) {
-    return null
-  }
-  return trimmed
-}
-
-function readSessionId(record: Record<string, unknown>, keys: readonly string[]): string | null {
-  for (const key of keys) {
-    const normalized = normalizeSessionId(record[key])
-    if (normalized) {
-      return normalized
-    }
-  }
-  return null
-}
-
-/** The agent hook's authoritative transcript/rollout path, when present. Used by
- *  native chat to read the exact file rather than reconstructing it from the
- *  session id (which recent Claude Code no longer matches to the file name). */
-function readTranscriptPathFromKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[]
-): string | undefined {
-  for (const key of keys) {
-    const raw = record[key]
-    if (typeof raw !== 'string') {
-      continue
-    }
-    const trimmed = raw.trim()
-    if (trimmed && !hasUnsafeProviderSessionIdChars(trimmed)) {
-      return trimmed
-    }
-  }
-  return undefined
-}
-
-function withTranscriptPath(
-  metadata: AgentProviderSessionMetadata,
-  payload: Record<string, unknown>,
-  keys: readonly string[] = ['transcript_path', 'transcriptPath']
-): AgentProviderSessionMetadata {
-  const transcriptPath = readTranscriptPathFromKeys(payload, keys)
-  return transcriptPath ? { ...metadata, transcriptPath } : metadata
-}
 
 export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent {
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
@@ -189,10 +118,23 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   if (!id) {
     return null
   }
-  // Why: persisted/relay metadata crosses a trust boundary too; apply the same
-  // control-character rejection used for hook-reported transcript paths.
-  const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
-  return transcriptPath ? { key, id, transcriptPath } : { key, id }
+  // Persisted/relay paths cross trust boundaries too; reject controls as for hook paths.
+  const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
+  const cwd = readPathFromKeys(record, ['cwd'])
+  return {
+    key,
+    id,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    ...(cwd ? { cwd } : {})
+  }
+}
+
+/** Older hosts' strict ensureAgentSession schema rejects the newer `cwd` field. */
+export function agentProviderSessionForEnsure(
+  providerSession: AgentProviderSessionMetadata
+): AgentProviderSessionMetadata {
+  const { cwd: _cwd, ...identity } = providerSession
+  return identity
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
@@ -210,101 +152,6 @@ export function agentProviderSessionsEqual(
     left.id === right.id &&
     ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
   )
-}
-
-export function extractAgentProviderSession(
-  source: AgentHookSource,
-  payload: Record<string, unknown>
-): AgentProviderSessionMetadata | null {
-  switch (source) {
-    // Native-chat agents: also capture the hook's authoritative transcript_path,
-    // since recent Claude Code names the transcript file with a UUID that differs
-    // from the hook session_id (so the id-based glob no longer finds it).
-    case 'qoder-cn':
-    case 'qwen-code':
-    case 'qoder':
-    case 'codebuddy':
-    case 'claude':
-    case 'codex': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
-    }
-    case 'gemini':
-    case 'droid':
-    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
-    // falls through
-    case 'kimi': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'muse': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
-    }
-    // Why: ZCode's `transcript_path` is a per-invocation temp file it deletes when the hook
-    // returns (`createCompatibleHookStdin` mkdtemp + cleanup), so only the id is durable.
-    case 'zcode': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
-    }
-    // Why: DSH's hook bridge always sends an empty `transcript_path` (its persistence seam
-    // exposes no artifact path), so the session id alone carries the resume target.
-    // Why: Kiro's hooks send no transcript path; the id alone feeds `--resume-id`.
-    case 'kiro':
-    case 'dsh': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'antigravity': {
-      const id = readSessionId(payload, ['conversationId'])
-      return id ? { key: 'conversation_id', id } : null
-    }
-    case 'opencode':
-    case 'opencode2':
-    case 'mimo-code': {
-      const id = readSessionId(payload, ['sessionID'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'pi':
-    case 'prime-agent': {
-      const id = readSessionId(payload, ['session_id'])
-      const providerSession = id
-        ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
-        : null
-      return providerSession?.transcriptPath ? providerSession : null
-    }
-    case 'grok': {
-      const id = readSessionId(payload, ['sessionId', 'session_id'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'devin': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'jcode': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
-    }
-    // OMP keeps id-based resume while optionally locating its native-chat transcript.
-    case 'omp': {
-      const id = readSessionId(payload, ['session_id'])
-      return id ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file']) : null
-    }
-    // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
-    // directory name, so the same id is the CLI's resume locator.
-    case 'copilot': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
-    }
-    case 'cursor': {
-      const id = readSessionId(payload, ['conversation_id'])
-      return id ? { key: 'conversation_id', id } : null
-    }
-    case 'amp':
-    case 'command-code':
-    case 'hermes':
-      return null
-  }
 }
 
 /** Build resume metadata from a persisted session id. Pi/Prime need a transcript path. */
@@ -329,5 +176,53 @@ export function providerSessionMetadataForAgentResume(
   return { key: 'session_id', id }
 }
 
+// Re-exported so existing call sites keep one import path.
+export {
+  extractAgentProviderSession,
+  hasUnsafeProviderSessionIdChars,
+  readPathFromKeys
+} from './agent-provider-session-extract'
 // Re-exported so the 18 existing call sites keep one import path.
 export { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+
+/** A host home check for this exact saved continuation, not a terminal writer claim. */
+export type SavedResumeDecision = {
+  agent: string
+  providerSession: AgentProviderSessionMetadata
+  verdict: 'admitted' | 'chat-home' | 'chat-writing' | 'unverifiable'
+}
+
+/** Effective facts of a terminal launch; a refused shell carries no rejected agent metadata. */
+export type TerminalLaunchResult = {
+  savedResumeDecision?: SavedResumeDecision
+  agentResumeUnavailable?: true
+  agentResumeRefused?: 'chat-home' | 'chat-writing' | 'unverifiable'
+  refusedResume?: RefusedPaneResume
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  launchToken?: string
+  resumeProviderSession?: AgentProviderSessionMetadata
+}
+
+/** Runtime-only source shared by copies of one saved startup. Never persisted or sent to a host. */
+export type SavedResumeStartupSource = {
+  cancelled: boolean
+  record?: SleepingAgentSessionRecord
+  expectedStatus?: AgentStatusCacheIdentity
+}
+
+/** Forward only effective launch facts through each existing terminal envelope. */
+export function terminalLaunchFacts(result: TerminalLaunchResult): TerminalLaunchResult {
+  return {
+    ...(result.savedResumeDecision ? { savedResumeDecision: result.savedResumeDecision } : {}),
+    ...(result.agentResumeUnavailable
+      ? { agentResumeUnavailable: result.agentResumeUnavailable }
+      : {}),
+    ...(result.agentResumeRefused ? { agentResumeRefused: result.agentResumeRefused } : {}),
+    ...(result.refusedResume ? { refusedResume: result.refusedResume } : {}),
+    ...(result.launchConfig ? { launchConfig: result.launchConfig } : {}),
+    ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+    ...(result.launchToken ? { launchToken: result.launchToken } : {}),
+    ...(result.resumeProviderSession ? { resumeProviderSession: result.resumeProviderSession } : {})
+  }
+}

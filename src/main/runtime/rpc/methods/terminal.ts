@@ -12,8 +12,7 @@ import { TERMINAL_QUESTION_ANSWER_METHODS } from './terminal/terminal-question-a
 import { TERMINAL_SESSION_NAVIGATION_METHODS } from './terminal/terminal-session-navigation-methods'
 import { TERMINAL_ORIGINATING_PANE_METHODS } from './terminal/terminal-originating-pane-methods'
 
-// The manifest order is part of the released RPC contract. Keep composition here so the
-// public entry point owns registration rather than forwarding an aggregated child export.
+// Preserve released manifest order; keep registration composition owned by this public entry point.
 export const TERMINAL_METHODS = [
   ...TERMINAL_QUERY_METHODS,
   ...TERMINAL_SEND_METHODS,

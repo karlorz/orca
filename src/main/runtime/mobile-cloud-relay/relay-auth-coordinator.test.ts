@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayHttpError } from './relay-http-client'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import type { RelayAuthContext } from './relay-auth-identity'
@@ -19,6 +19,7 @@ const context: RelayAuthContext = {
 }
 
 describe('RelayAuthCoordinator', () => {
+  afterEach(() => vi.useRealTimers())
   it('stays signed-in but does not open a broker without relay demand', async () => {
     const openBroker = vi.fn()
     const statuses: string[] = []
@@ -45,8 +46,6 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
 
-    // Why: the broker announces its cell, then the coordinator republishes the
-    // same status; a republish without the cell would erase it immediately.
     expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
 
     coordinator.reconcile()
@@ -55,6 +54,7 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('drops the cell from every status the host is not served on', async () => {
+    vi.useFakeTimers()
     let demanded = true
     const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
     const onStatus = vi.fn()
@@ -69,7 +69,8 @@ describe('RelayAuthCoordinator', () => {
     await coordinator.waitForLiveBroker()
     demanded = false
     coordinator.reconcile()
-    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('standby', undefined))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onStatus).toHaveBeenLastCalledWith('standby', undefined)
 
     coordinator.fenceAndCloseNow()
     expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
@@ -79,6 +80,7 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('opens on demand and lingers before closing the last control', async () => {
+    vi.useFakeTimers()
     let demanded = false
     const broker = { closeNow: vi.fn() }
     const statuses: string[] = []
@@ -96,12 +98,17 @@ describe('RelayAuthCoordinator', () => {
     await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
-    await vi.waitFor(() => expect(statuses.at(-1)).toBe('standby'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(statuses.at(-1)).toBe('standby')
+    await vi.advanceTimersByTimeAsync(249)
     expect(broker.closeNow).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(broker.closeNow).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(1)
+    expect(broker.closeNow).toHaveBeenCalledOnce()
+    coordinator.stop()
   })
 
   it('cancels linger when demand returns', async () => {
+    vi.useFakeTimers()
     let demanded = true
     const broker = { closeNow: vi.fn() }
     const coordinator = new RelayAuthCoordinator({
@@ -115,10 +122,13 @@ describe('RelayAuthCoordinator', () => {
     await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
     demanded = true
     coordinator.reconcile()
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(20)
     expect(broker.closeNow).not.toHaveBeenCalled()
+    coordinator.stop()
   })
 
   it('does not carry old-profile demand through an identity switch', async () => {
@@ -151,7 +161,8 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     coordinator.fenceAndCloseNow()
     read.resolve(context)
-    await vi.waitFor(() => expect(openBroker).not.toHaveBeenCalled())
+    await coordinator.waitForLiveBroker()
+    expect(openBroker).not.toHaveBeenCalled()
     expect(statuses.at(-1)).toBe('offline')
   })
 
@@ -183,6 +194,7 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('keeps one broker for duplicate events with unchanged identity', async () => {
+    vi.useFakeTimers()
     const broker = { closeNow: vi.fn() }
     const openBroker = vi.fn(async () => broker)
     const coordinator = new RelayAuthCoordinator({
@@ -191,10 +203,13 @@ describe('RelayAuthCoordinator', () => {
       onStatus: vi.fn()
     })
     coordinator.reconcile()
-    await vi.waitFor(() => expect(openBroker).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
     coordinator.reconcile()
-    await vi.waitFor(() => expect(openBroker).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
     expect(broker.closeNow).not.toHaveBeenCalled()
+    coordinator.stop()
   })
 
   it('rejects a refresh result after capability removal', async () => {
@@ -268,7 +283,7 @@ describe('RelayAuthCoordinator', () => {
     await vi.waitFor(() => expect(readCount).toBeGreaterThanOrEqual(3))
   })
 
-  it('reconnects automatically after a signed-in process restart or relaunch fence', async () => {
+  it('opens a fresh coordinator from the preserved entitled context after a fence', async () => {
     const firstBroker = { closeNow: vi.fn() }
     const firstCoordinator = new RelayAuthCoordinator({
       readContext: async () => context,
@@ -282,8 +297,6 @@ describe('RelayAuthCoordinator', () => {
 
     const reopenedBroker = { closeNow: vi.fn() }
     const reopenedCoordinator = new RelayAuthCoordinator({
-      // Why: normal quit/relaunch preserves the session store, so a fresh
-      // process reads the same entitled identity and opens without new login.
       readContext: async () => context,
       openBroker: async () => reopenedBroker,
       onStatus: vi.fn()
@@ -323,8 +336,6 @@ describe('RelayAuthCoordinator', () => {
   })
 
   it('reopens instead of republishing registered for a dead broker', async () => {
-    // Why: a broker that lost its control without recovering must not keep
-    // reporting registered on every reconcile while phones get HOST_OFFLINE.
     let firstBrokerLive = true
     const brokers = [
       { closeNow: vi.fn(), isLive: () => firstBrokerLive },

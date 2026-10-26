@@ -2,8 +2,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { getUsageWindowResetLabel, type UsageWindowRow } from './account-usage-state'
 
-// Pure types and selectors live in account-usage-state.ts (no RN imports) so
-// they are unit-testable; re-exported here so existing import sites are stable.
+// Re-export pure account-usage-state selectors/types to keep imports stable and tests free of RN.
 export type {
   RateLimitWindow,
   ProviderRateLimits,
@@ -35,9 +34,7 @@ export {
   hasVisibleRenderableUsage
 } from './account-usage-state'
 
-// Why: matches desktop StatusBar — bars show percent used (consumption), same
-// as Claude/Codex harness meters. Fresh account is empty/green; depleted is
-// full/red.
+// Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
 export function UsageBar({
   label,
   usedPercent,
@@ -182,8 +179,7 @@ const styles = StyleSheet.create({
   usageSpinner: {
     width: 36
   },
-  // Why: indented past the window label so the countdown aligns with the
-  // start of the track above it.
+  // Indent countdown past window label to align with track.
   usageResetText: {
     fontSize: typography.metaSize,
     color: colors.textMuted,

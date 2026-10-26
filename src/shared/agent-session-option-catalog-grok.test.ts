@@ -72,8 +72,7 @@ describe('grok session option catalog', () => {
 
   it('keeps the effort option shaped the way the picker and the wire expect', () => {
     const effort = grokEffortOption()
-    // The id must stay `effort`: `LaunchPreferences` is a strict zod object, so a
-    // novel id is dropped client-side and rejected on the wire.
+    // Keep effort: LaunchPreferences strips/rejects unknown keys at client/wire boundaries.
     expect(effort.id).toBe('effort')
     expect(effort.category).toBe('thought_level')
     // Why: the agent default is the absence of the flag, so the catalog names no value.
@@ -300,8 +299,7 @@ describe('grok agent-arg overrides', () => {
   })
 
   it('cascades a model override onto the effort entry', () => {
-    // A user-supplied `-m` can select a model whose effort menu differs, so the
-    // picker's effort is no longer evidence about what actually launched.
+    // User -m overrides can change the effort menu, invalidating the picker's evidence.
     expect(
       resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5', effort: 'high' }, [
         '-m',

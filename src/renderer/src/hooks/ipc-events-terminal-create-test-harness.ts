@@ -10,8 +10,7 @@ import type {
   TerminalCreateSurfacingStore
 } from './ipc-events-terminal-create-scenario-types'
 
-// Why: the terminal-create surfacing scenario is one long ordered assertion run;
-// its store/window/mock wiring lives here so the assertions stay under budget.
+// Keep ordered scenario assertions in the spec while extracting its store/window wiring to meet the line budget.
 export async function setupTerminalCreateSurfacing(
   isFloatingPanelFocused: () => boolean
 ): Promise<TerminalCreateSurfacingScenario> {
@@ -130,7 +129,6 @@ export async function setupTerminalCreateSurfacing(
   const focusTerminalListenerRef: ListenerRef<(data: FocusTerminalListenerPayload) => void> = {
     current: null
   }
-  const newTerminalTabListenerRef: ListenerRef<() => void> = { current: null }
 
   vi.resetModules()
   vi.unstubAllGlobals()
@@ -205,8 +203,7 @@ export async function setupTerminalCreateSurfacing(
       replyTerminalCreate,
       createTerminalListenerRef,
       requestTerminalCreateListenerRef,
-      focusTerminalListenerRef,
-      newTerminalTabListenerRef
+      focusTerminalListenerRef
     })
   )
 
@@ -216,9 +213,6 @@ export async function setupTerminalCreateSurfacing(
 
   if (typeof createTerminalListenerRef.current !== 'function') {
     throw new Error('Expected create-terminal listener to be registered')
-  }
-  if (typeof newTerminalTabListenerRef.current !== 'function') {
-    throw new Error('Expected new-terminal-tab listener to be registered')
   }
   return {
     createTab,
@@ -244,7 +238,6 @@ export async function setupTerminalCreateSurfacing(
     storeState,
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,
-    focusTerminalListenerRef,
-    newTerminalTabListenerRef
+    focusTerminalListenerRef
   }
 }

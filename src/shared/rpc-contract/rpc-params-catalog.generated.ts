@@ -585,6 +585,7 @@ import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
+import { RenameParams } from './structured-agent-session-rename-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalSwitchOrigin } from './terminal-originating-pane-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -754,6 +755,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.readVisual': ReadVisualParams,
   'agentSession.regenerateName': OptionsParams,
   'agentSession.release': HoldParams,
+  'agentSession.rename': RenameParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
   'agentSession.restartContinue': RestartResumableParams,

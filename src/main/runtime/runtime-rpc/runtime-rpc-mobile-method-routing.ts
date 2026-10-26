@@ -1,8 +1,7 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 
-// Why: a relaying Mac sends `execution-host` calls to the host named by the call's target (itself when
-// local) and keeps `paired-desktop` calls. A route is what allowlists a phone method.
+// Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac. This table also defines mobile allowlisting.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [

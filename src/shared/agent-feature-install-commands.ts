@@ -3,8 +3,7 @@ import { isUsableSkillsCliAgentKey } from './skills-cli-agent-keys'
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/karlorz/orca'
 
-// Why: one skills CLI for every install rail. 1.5.x cannot fetch a commit, and a bare
-// `npx skills` can reuse a stale cached copy or another binary (#18687).
+// Pin one CLI across install rails: 1.5.x lacks commit fetch and bare npx may reuse stale/wrong binaries (#18687).
 export const SKILLS_CLI_VERSION = '1.7.2'
 
 // Why: for a commit ref the skills CLI tries `clone --branch <sha>` first and falls back to
@@ -56,9 +55,7 @@ export function buildAgentFeatureSkillInstallArgs(
   return [
     `skills@${SKILLS_CLI_VERSION}`,
     'add',
-    // Why: pinned to the build's own commit so the installed bytes are the ones its bundled
-    // manifest judges freshness against, on every channel (hourly builds have no tag in
-    // this repo). `add` always re-copies, so the same command is install and update.
+    // Use the build commit for manifest freshness on every channel, including untagged hourly builds; add re-copies for updates.
     `${ORCA_SKILLS_REPOSITORY_URL}/tree/${options.sourceCommit}`,
     ...skillArgs,
     ...(global ? ['--global'] : []),

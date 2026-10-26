@@ -114,8 +114,7 @@ export function createAutomationDispatchCompletion(args: {
     if (!retirement) {
       return
     }
-    // Why: drop pointers to the stopped process (best-effort) so "View run" never dead-ends;
-    // a slept pane keeps its tab and pane key, which reopen and resume it.
+    // Clear stopped-process pointers best-effort; sleeping panes retain resumable tab/pane keys for View run.
     try {
       await args.markDispatchResult({
         runId: args.run.id,
@@ -197,8 +196,7 @@ export function createAutomationDispatchCompletion(args: {
     await finishCompletionResult(providerSessionId, result)
   }
   const settleLateResult = (result: Promise<void>): void => {
-    // Why: status/exit callbacks have no awaitable caller; the result
-    // path already releases ownership before propagating persistence errors.
+    // Status/exit callbacks have no awaitable caller; release ownership before persistence failures propagate.
     void result.catch((error) => {
       console.error('[automations] Failed to persist late automation result:', error)
     })
@@ -257,10 +255,7 @@ export function createAutomationDispatchCompletion(args: {
         return
       }
       const historyOverlap = getAgentStateHistoryOverlap(observedStateHistory, entry.stateHistory)
-      // Why: sawWorkingAfterStart stays monotonic — a recreated entry
-      // (transport loss, PTY exit, cap eviction) arrives with an empty
-      // stateHistory, so clearing it here would strand reuseSession runs
-      // with nothing left to re-derive the working edge from.
+      // Keep sawWorkingAfterStart monotonic: recreated entries lose history and cannot rederive the edge needed by reuseSession.
       for (const historicalState of entry.stateHistory.slice(historyOverlap)) {
         if (historicalState.startedAt < startedAfter) {
           continue
@@ -285,9 +280,7 @@ export function createAutomationDispatchCompletion(args: {
       }
       if (
         entry.state === 'done' &&
-        // Why: a session-boundary done is the agent CONNECTING (Claude SessionStart
-        // fires at launch, before the argv prompt submits) — completing here would
-        // close the tab and record an empty run result.
+        // SessionStart boundary-done means connection before prompt submission; finishing here would record empty output and close the new tab.
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
@@ -297,8 +290,7 @@ export function createAutomationDispatchCompletion(args: {
         handleAgentDone(entry)
       }
     }
-    // Why: Codex/Claude completion normally arrives through the global
-    // hook IPC listener, not the hidden PTY OSC fallback.
+    // Codex/Claude completion normally comes from global hook IPC rather than hidden PTY OSC.
     unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
     checkCurrentStatus()
   }

@@ -27,8 +27,7 @@ vi.mock('../quick-open-file-list', () => ({
 vi.mock('@/lib/agent-catalog', () => ({ getAgentCatalog: () => [] }))
 vi.mock('@/lib/agent-catalog-icon', () => ({ AgentIcon: () => null }))
 
-// `hold` pins deferred rows to the query they were built from, standing in for
-// the hook's useDeferredValue so later keystrokes leave them stale.
+// Pin deferred results to their originating query so newer keystrokes leave stale rows visible.
 const historyStoreMock = vi.hoisted(() => ({
   entries: [] as BrowserHistoryEntry[],
   hold: null as string | null,
