@@ -243,6 +243,12 @@
         "AutomationEditorSettingsSidebar": {
           "agentFlagsNeedFreshSession": "Agent flags require a fresh session for every run. Turn off session reuse or clear the agent flags."
         },
+        "AutomationModelField": {
+          "extraHigh": "Extra high",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium"
+        },
         "AutomationRunHistory": {
           "fdb3caa8fb": "known"
         },
@@ -455,7 +461,9 @@
             "3be27641c9": "so emulator commands can run from agent shells.",
             "3d34423e88": "Registering the Orca CLI",
             "3d8dc52c93": "Registers the orca command for emulator control in agent shells.",
-            "9b49d892e3": "Enable Orca CLI"
+            "5c59ea96ca": "Mobile emulator Orca CLI skill setup",
+            "9b49d892e3": "Enable Orca CLI",
+            "bff5341ac3": "Mobile emulator Orca CLI skill install terminal"
           },
           "emulator": {
             "device": {
@@ -503,6 +511,7 @@
         },
         "wall": {
           "AgentCapabilitiesSetupAction": {
+            "allInstalled": "All skills installed",
             "c89534cbe9": "Install CLI & Skills"
           },
           "ComputerUseAnimatedVisual": {
