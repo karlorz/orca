@@ -15,6 +15,7 @@ import type {
   GrokSessionBinding,
   GrokSessionTerminalOwner
 } from '../../../../shared/grok-session-binding'
+
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
