@@ -106,6 +106,15 @@ features:
       - src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
       - config/scripts/install-orca-home-appimage.sh
       - docs/reference/linux-home-appimage-install.md
+      - src/main/home-appimage-protocol-metadata.ts
+  - id: linux-home-appimage-omitted-metadata-fallback
+    title: Read home update protocol from the immutable tag when a GitHub API snapshot omits the descriptor
+    kind: product
+    status: landed
+    paths:
+      - src/main/home-appimage-protocol-metadata.ts
+      - src/main/home-appimage-updater.ts
+      - src/main/home-appimage-updater.test.ts
   - id: linux-home-appimage-install
     title: Home AppImage installer and protocol-gated in-app updater with shared pin-preserving verification
     kind: release
