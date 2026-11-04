@@ -22,10 +22,9 @@ function isRuntimeMetadata(value: unknown): value is RuntimeMetadata {
   if (!value || typeof value !== 'object') {
     return false
   }
-  return (
-    typeof Reflect.get(value, 'runtimeId') === 'string' &&
-    typeof Reflect.get(value, 'pid') === 'number'
-  )
+  const runtimeId = 'runtimeId' in value ? value.runtimeId : undefined
+  const pid = 'pid' in value ? value.pid : undefined
+  return typeof runtimeId === 'string' && typeof pid === 'number'
 }
 
 export function readSiblingRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
