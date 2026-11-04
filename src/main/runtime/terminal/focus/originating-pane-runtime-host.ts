@@ -10,7 +10,11 @@ export type OriginatingPaneRuntime = {
   getLivePtyForHandle: (handle: string) => LivePtyHandle | null
   getLivePtyForRetainedHandle: (handle: string) => LivePtyHandle | null
   assertGraphReady: () => void
-  leaves: Map<string, { tabId: string; leafId: string; ptyId?: string | null; worktreeId: string }>
+  leaves: {
+    get(
+      key: string
+    ): { tabId: string; leafId: string; ptyId?: string | null; worktreeId: string } | undefined
+  }
   getLeafKey: (tabId: string, leafId: string) => string
   resolveWorktreeSelector: (selector: string) => Promise<{
     id: string

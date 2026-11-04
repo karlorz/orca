@@ -4,29 +4,17 @@ import type { RuntimePtyTabCloseAuthority } from '../runtime-terminal-state-reco
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import { closeMainOwnedPaneByHandle } from './main-handle-close'
-import type { TerminalGcCloseStopOptions } from '../rpc/methods/terminal/terminal-gc-close-stop-fence'
-import {
-  closeMainOwnedTerminalHandle,
-  closeOnOwningPairedHost as closePairedOwnerFirst,
-  describeExplicitTerminalClose
-} from './explicit-terminal-close-describe'
-import {
-  NO_STOP,
-  OrcaRuntimeWithExplicitCloseTabPtyStops,
-  type ExplicitCloseStop
-} from './explicit-terminal-close-pty-stops'
+import { OrcaRuntimeWithOwnedTerminalClose } from './explicit-terminal-close-owned'
+import { NO_STOP } from './explicit-terminal-close-pty-stops'
 
 export {
   type ExplicitCloseStop,
   NO_STOP as EXPLICIT_CLOSE_NO_STOP
 } from './explicit-terminal-close-pty-stops'
 
-export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
+export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithOwnedTerminalClose {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
   protected abstract refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,
@@ -50,42 +38,6 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     committedPtyIds: Set<string>
     terminalHandlesByPtyId: Readonly<Record<string, readonly string[]>>
   }): void
-
-  protected describeTerminalClose(
-    handle: string,
-    tabId: string,
-    ptyId: string | null,
-    stop: ExplicitCloseStop
-  ): RuntimeTerminalClose {
-    return describeExplicitTerminalClose(
-      (id) => this.getPtyLivenessVerdict(id),
-      handle,
-      tabId,
-      ptyId,
-      stop
-    )
-  }
-
-  protected async closeMainOwnedTerminal(
-    handle: string,
-    wholeTab: boolean,
-    options?: TerminalGcCloseStopOptions
-  ): Promise<RuntimeTerminalClose | null> {
-    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-      return null
-    }
-    return closeMainOwnedTerminalHandle(this, handle, wholeTab, options)
-  }
-
-  /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
-  protected closeOnOwningPairedHost(
-    handle: string,
-    leaf: { worktreeId: string; tabId: string; leafId: string; ptyId: string | null },
-    method: 'terminal.close' | 'terminal.closeTab',
-    closesTab: boolean
-  ) {
-    return closePairedOwnerFirst(this, handle, leaf, method, closesTab)
-  }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {

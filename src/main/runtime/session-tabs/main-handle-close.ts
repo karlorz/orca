@@ -3,14 +3,17 @@
 import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
-import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import {
+  startedMainTerminalSurfaces,
+  type SurfacesOwner
+} from '../terminal/surface/main-terminal-surfaces'
 import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
 import { closeInMainLayout } from './main-layout-close-command'
 
 type HandleTarget = { worktreeId: string; ptyId: string | null; tabId?: string; leafId?: string }
 
 export type MainHandleCloseHost = {
-  runtime: object
+  runtime: SurfacesOwner
   /** The handle's live terminal, when it names one. */
   livePty: () => { ptyId: string; worktreeId: string } | null
   /** The handle's pane in the runtime graph; throws as a stale handle does. */

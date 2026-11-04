@@ -79,13 +79,8 @@ export function createMirroredEditorFileResolver(
       return previewSourceId
     }
     const reserved = index.byId.get(filePath) ?? index.reservedSourceIds.get(filePath)
-    return resolveEditorFileIdForOwner(
-      { openFiles: reserved ? [reserved] : [] },
-      filePath,
-      worktreeId,
-      environmentId,
-      ['edit']
-    )
+    const openFiles = reserved ? [reserved] : []
+    return resolveEditorFileIdForOwner({ openFiles }, filePath, worktreeId, environmentId, ['edit'])
   }
   return (tab: ReadyEditorSurface, existingTab: Tab | null) => {
     const mode = tab.type === 'markdown' ? tab.mode : 'edit'

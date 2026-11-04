@@ -1,7 +1,4 @@
-import {
-  OrcaRuntimeWithGuardedPtyReveal,
-  type FocusTerminalOptions
-} from '../../orca-runtime-guarded-pty-reveal'
+import type { FocusTerminalOptions } from '../../orca-runtime-guarded-pty-reveal'
 import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
 import type {
   RuntimeTerminalReveal,
@@ -15,17 +12,9 @@ import type {
   GrokSessionBinding,
   GrokSessionTerminalOwner
 } from '../../../../shared/grok-session-binding'
-import {
-  switchOriginatingPaneWithHost,
-  type OriginatingPaneNavigationReceipt,
-  type OriginatingPaneTarget
-} from '../../terminal-originating-pane-navigation'
-import {
-  originatingPaneRuntimeHost,
-  type OriginatingPaneRuntime
-} from './originating-pane-runtime-host'
+import { OrcaRuntimeWithOriginatingPaneSwitch } from './originating-pane-switch'
 
-export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
+export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithOriginatingPaneSwitch {
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -105,15 +94,6 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
       throw new Error('session_navigation_unverifiable')
     }
     return receipt
-  }
-
-  async switchOriginatingPane(
-    target: OriginatingPaneTarget,
-    options: { activateHostWindow?: boolean } = {}
-  ): Promise<OriginatingPaneNavigationReceipt> {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this mixin implements OriginatingPaneRuntime.
-    const runtime = this as OriginatingPaneRuntime
-    return switchOriginatingPaneWithHost(originatingPaneRuntimeHost(runtime), target, options)
   }
 
   async focusTerminal(

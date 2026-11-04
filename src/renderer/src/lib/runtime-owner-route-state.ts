@@ -88,15 +88,16 @@ export function runtimeOwnerRouteState(
     slices.set(source, next)
     return next
   }
+  const { repos, folderWorkspaces, projectGroups, worktreesByRepo, detectedWorktreesByRepo } = state
   return {
     ...state,
-    repos: mapped(state.repos, (rows) => rows.map(row)),
-    folderWorkspaces: mapped(state.folderWorkspaces, (rows) => rows.map(row)),
-    projectGroups: mapped(state.projectGroups, (rows) => rows.map(row)),
-    worktreesByRepo: mapped(state.worktreesByRepo, (groups) =>
+    repos: mapped(repos, (rows) => rows.map(row)),
+    folderWorkspaces: mapped(folderWorkspaces, (rows) => rows.map(row)),
+    projectGroups: mapped(projectGroups, (rows) => rows.map(row)),
+    worktreesByRepo: mapped(worktreesByRepo, (groups) =>
       Object.fromEntries(Object.entries(groups).map(([id, rows]) => [id, rows.map(row)]))
     ),
-    detectedWorktreesByRepo: mapped(state.detectedWorktreesByRepo, (groups) =>
+    detectedWorktreesByRepo: mapped(detectedWorktreesByRepo, (groups) =>
       Object.fromEntries(
         Object.entries(groups).map(([id, listing]) => [
           id,

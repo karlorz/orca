@@ -34,10 +34,7 @@ import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from './structured-agent-session-queued-wiring'
 import { wireStructuredAgentSessionBoundControls } from './structured-agent-session-bound-control-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
-import {
-  sleepStructuredAgentSessionFromHost,
-  type StructuredAgentSessionWorkspaceSleepSource
-} from './structured-agent-session-workspace-sleep'
+import { sleepStructuredAgentSessionFromHost } from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -45,7 +42,7 @@ export class StructuredAgentSessionHost {
     () => this.mutationContext(),
     this
   )
-  private readonly sessions = new StructuredAgentSessionConversations({
+  readonly sessions = new StructuredAgentSessionConversations({
     observe: (id, journal, rows) => this.clientDelivery.requestFailures.observe(id, journal, rows),
     forget: (id) => this.clientDelivery.requestFailures.forget(id),
     deliver: (sessionId, journal) => {
@@ -59,7 +56,7 @@ export class StructuredAgentSessionHost {
   })
   private readonly queued = wireQueuedMessages(this.sessions, () => this.mutationContext())
   // Journal publication renews idle activity.
-  private readonly clientDelivery = new StructuredAgentSessionClientDelivery(
+  readonly clientDelivery = new StructuredAgentSessionClientDelivery(
     this.sessions,
     () => this.now(),
     () => this.deps,
@@ -70,12 +67,12 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false
   )
   private readonly subscribers = this.clientDelivery.subscribers
-  private readonly tasks = new StructuredAgentSessionTaskQueue()
-  private readonly runtimeState: StructuredAgentSessionHostRuntimeState
+  readonly tasks = new StructuredAgentSessionTaskQueue()
+  readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly reconcileLeases: ReturnType<typeof createRestartReconciler>
   private readonly restore: ReturnType<typeof reveal.createStructuredAgentSessionHostRestore>
-  private readonly lifetime: lifetime.StructuredAgentSessionConversationLifetime
-  private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
+  readonly lifetime: lifetime.StructuredAgentSessionConversationLifetime
+  readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
   readonly restartResume: resume.StructuredAgentSessionRestartResume
@@ -208,12 +205,7 @@ export class StructuredAgentSessionHost {
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
-    sleepStructuredAgentSessionFromHost(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this instance holds the sleep collaborators.
-      this as StructuredAgentSessionWorkspaceSleepSource,
-      workspaceId,
-      markAsleep
-    )
+    sleepStructuredAgentSessionFromHost(this, workspaceId, markAsleep)
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)

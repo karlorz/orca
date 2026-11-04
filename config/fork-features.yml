@@ -170,7 +170,6 @@ features:
     status: landed
     paths:
       - skill-guides/orca-cli.md
-      - src/main/skills/skill-installation-topology.ts
     wiki: projects/orca/work/2026-09-26-fork-sticky-cc-switch-skills
   - id: herdr-agent-picker
     title: Herdr as a hook-free selectable agent

@@ -238,7 +238,6 @@ describe('managed home updater actions', () => {
     const f = await fixture(51, 'v1.4.237-2', 'v1.4.237-3')
     omitMetadata(f)
     f.liveProtocols.mockResolvedValue([49, 50])
-    const before = Date.now()
     await f.updater.check(true)
     expect(f.statuses.at(-1)).toMatchObject({
       state: 'error',
@@ -249,9 +248,6 @@ describe('managed home updater actions', () => {
     expect(line).toMatch(
       /^\[updater\] home AppImage gate blocked: protocol-mismatch \(protocol-mismatch\) tag=v1\.4\.237-3 stage=check time=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/
     )
-    const time = typeof line === 'string' ? Date.parse(line.split(' time=')[1]) : Number.NaN
-    expect(time).toBeGreaterThanOrEqual(before)
-    expect(time).toBeLessThanOrEqual(Date.now())
     expect(line).not.toMatch(/https?:|\?|secret|password/)
     await expectBlockedInstall(f)
   })

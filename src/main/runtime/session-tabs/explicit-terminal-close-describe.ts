@@ -14,6 +14,7 @@ import {
   type TerminalGcCloseStopOptions
 } from '../rpc/methods/terminal/terminal-gc-close-stop-fence'
 import { closeMainOwnedPaneByHandle, type MainHandleCloseHost } from './main-handle-close'
+import type { SurfacesOwner } from '../terminal/surface/main-terminal-surfaces'
 
 export function describeExplicitTerminalClose(
   getPtyLivenessVerdict: (ptyId: string) => PtyLivenessVerdict | null,
@@ -64,6 +65,7 @@ export type ExplicitMainOwnedCloseRuntime = {
 }
 
 export async function closeMainOwnedTerminalHandle(
+  surfacesOwner: SurfacesOwner,
   runtime: ExplicitMainOwnedCloseRuntime,
   handle: string,
   wholeTab: boolean,
@@ -71,7 +73,7 @@ export async function closeMainOwnedTerminalHandle(
 ): Promise<RuntimeTerminalClose | null> {
   const captured = capturePtyIncarnationIds(runtime.ptysById, [...runtime.ptysById.keys()])
   const host: MainHandleCloseHost = {
-    runtime,
+    runtime: surfacesOwner,
     livePty: () => runtime.getLivePtyForHandle(handle)?.pty ?? null,
     liveLeaf: () => runtime.getLiveLeafForHandle(handle).leaf,
     remoteSessionIdOf: (worktreeId, tabId) =>

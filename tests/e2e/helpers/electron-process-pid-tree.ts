@@ -6,6 +6,7 @@ const FORCE_KILL_WAIT_MS = 2_000
 
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
+    // ast-grep-ignore: test-no-real-time-wait -- SIGTERM/SIGKILL trees have no test clock; the OS reaps them.
     const timeout = setTimeout(resolve, ms)
     timeout.unref?.()
   })
@@ -43,6 +44,7 @@ export function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<bool
       resolve(exited)
     }
     const onExit = (): void => finish(true)
+    // ast-grep-ignore: test-no-real-time-wait -- child exit is an OS event; the timeout only bounds hang.
     const timeout = setTimeout(() => finish(false), timeoutMs)
     timeout.unref?.()
     proc.once('exit', onExit)
@@ -119,6 +121,7 @@ export async function forceKillPidTree(pid: number): Promise<void> {
     killPid(targetPid, 'SIGTERM')
   }
   const deadline = performance.now() + FORCE_KILL_WAIT_MS
+  // ast-grep-ignore: test-no-polling-loop -- SIGTERM descendants have no test-side exited event.
   while (true) {
     if (pids.every(hasPidExited)) {
       return
@@ -127,6 +130,7 @@ export async function forceKillPidTree(pid: number): Promise<void> {
     if (remainingMs <= 0) {
       break
     }
+    // ast-grep-ignore: test-no-real-time-wait -- SIGTERM descendants have no test-side exited event.
     await delay(Math.min(50, remainingMs))
   }
   for (const targetPid of [...pids].toReversed()) {
