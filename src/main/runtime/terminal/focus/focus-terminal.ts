@@ -18,9 +18,12 @@ import type {
 import {
   switchOriginatingPaneWithHost,
   type OriginatingPaneNavigationReceipt,
-  type OriginatingPaneTarget,
-  type TerminalOriginatingPaneHost
+  type OriginatingPaneTarget
 } from '../../terminal-originating-pane-navigation'
+import {
+  originatingPaneRuntimeHost,
+  type OriginatingPaneRuntime
+} from './originating-pane-runtime-host'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
   protected abstract getPtyManualTitle(
@@ -108,62 +111,12 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
     target: OriginatingPaneTarget,
     options: { activateHostWindow?: boolean } = {}
   ): Promise<OriginatingPaneNavigationReceipt> {
-    const host: TerminalOriginatingPaneHost = {
-      getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
-      readObservedAgentStatusPaneIdentity: (paneKey: string) =>
-        this.readObservedAgentStatusPaneIdentityFn(paneKey),
-      getLivePtyForHandle: (handle: string) => {
-        const live = this.getLivePtyForHandle(handle) ?? this.getLivePtyForRetainedHandle(handle)
-        if (!live) {
-          return null
-        }
-        return {
-          record: {
-            ...(live.record.handle ? { handle: live.record.handle } : {}),
-            ...(live.record.ptyId ? { ptyId: live.record.ptyId } : {})
-          },
-          pty: {
-            ptyId: live.pty.ptyId,
-            incarnationId: live.pty.incarnationId,
-            ...(live.pty.paneKey == null ? {} : { paneKey: live.pty.paneKey }),
-            worktreeId: live.pty.worktreeId,
-            tabId: live.pty.tabId ?? null,
-            connected: live.pty.connected,
-            connectionId: live.pty.connectionId,
-            ...(live.pty.isWsl == null ? {} : { isWsl: live.pty.isWsl })
-          }
-        }
-      },
-      getRendererLeaf: (tabId: string, leafId: string) => {
-        this.assertGraphReady()
-        return this.leaves.get(this.getLeafKey(tabId, leafId)) ?? null
-      },
-      resolveWorktree: async (worktreeId: string) => {
-        try {
-          const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
-          const rootPath = 'rootPath' in resolved ? resolved.rootPath : undefined
-          return {
-            id: resolved.id,
-            path: resolved.git.path,
-            ...(typeof rootPath === 'string' ? { rootPath } : {})
-          }
-        } catch {
-          return null
-        }
-      },
-      focusTerminal: async (handle, options) => {
-        const focused = await this.focusTerminal(handle, options)
-        return {
-          navigated: focused.navigated === true,
-          tabId: focused.tabId,
-          worktreeId: focused.worktreeId,
-          identity: focused.identity,
-          windowFocused: focused.windowFocused,
-          paneFocused: focused.paneFocused
-        }
-      }
-    }
-    return switchOriginatingPaneWithHost(host, target, options)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this mixin implements OriginatingPaneRuntime.
+    return switchOriginatingPaneWithHost(
+      originatingPaneRuntimeHost(this as OriginatingPaneRuntime),
+      target,
+      options
+    )
   }
 
   async focusTerminal(

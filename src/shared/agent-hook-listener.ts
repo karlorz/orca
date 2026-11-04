@@ -2,157 +2,53 @@ import { readGrokAutomationAssistantResult } from './automation-assistant-result
 import { readHookAgentProcess } from './agent-process-presence'
 import { resolveAgentStatusIdentity } from './agent-status-identity'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
-import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
+import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from './claude-compact-completion'
-import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import {
-  normalizeClaudePromptId,
-  normalizeGrokPromptId
-} from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
-import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
-import {
-  isOpenCodeSharedServerPost,
-  resolveOpenCodeSharedServerEnvelope,
-  suppressOpenCodeSharedServerPost,
-  trackOpenCodePaneLaunchToken
-} from './agent-hook-listener/opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
 import { CLAUDE_EXIT_SESSION_END_REASONS } from './agent-hook-listener/claude-exit-session-end-reasons'
-import { isLateGrokSessionStart } from './agent-hook-listener/grok-session-start-order'
 import { isHookFromInheritedAgent } from './agent-hook-listener/hook-owner-precedence'
-import { readPaneProviderSession } from './agent-hook-listener/pane-provider-session'
+import {
+  resolveNormalizedHookPayloadStamp,
+  type NormalizeHookPayloadOptions
+} from './agent-hook-listener/hook-payload-stamp'
 
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: NormalizeHookPayloadOptions = {}
 ): AgentHookEventPayload | null {
-  const envelope = parseHookEnvelope(state, source, body, expectedEnv)
-  if (!envelope) {
+  const stamp = resolveNormalizedHookPayloadStamp(state, source, body, expectedEnv, options)
+  if (!stamp) {
     return null
   }
   const {
     record,
-    paneKey: stampedPaneKey,
     hookPayloadRecord,
-    tabId: stampedTabId,
-    worktreeId: stampedWorktreeId,
-    launchToken: stampedLaunchToken
-  } = envelope
-  if (source === 'claude') {
-    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
-  }
-  const eventName =
-    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
-    hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName ??
-    // Only jcode posts lifecycle under event; other providers may use that field for unrelated data.
-    (source === 'jcode' ? hookPayloadRecord.event : undefined)
-  const providerSession = readPaneProviderSession(state, source, stampedPaneKey, hookPayloadRecord)
-  if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
-    return null
-  }
-  if (suppressOpenCodeSharedServerPost(state, source, record, providerSession?.id)) {
-    return null
-  }
-  const extractedPrompt = extractPromptText(hookPayloadRecord)
-  // A TUI's physical launch must pass the host fence before borrowing its creator's identity.
-  const tuiAdmission =
-    source === 'opencode' && record.opencodeTui === 1 && isOpenCodeSharedServerPost(source, record)
-      ? options.admitOpenCodeTui?.({
-          paneKey: stampedPaneKey,
-          launchToken: stampedLaunchToken,
-          hookEventName: typeof eventName === 'string' ? eventName : undefined,
-          hasExplicitPrompt: hasExplicitUserPrompt(
-            source,
-            eventName,
-            extractedPrompt,
-            extractedPrompt.text
-          )
-        })
-      : undefined
-  if (tuiAdmission === false) {
-    return null
-  }
-  // Rewrite frozen OpenCode1 server stamps before status/routing/fences use the wrong pane (#21359).
-  const stamped = {
-    paneKey: stampedPaneKey,
-    tabId: stampedTabId,
-    worktreeId: stampedWorktreeId,
-    launchToken: stampedLaunchToken
-  }
-  const { paneKey, tabId, worktreeId, launchToken } =
-    tuiAdmission === 'preserve-poster'
-      ? stamped
-      : resolveOpenCodeSharedServerEnvelope({
-          state,
-          source,
-          stamped,
-          sessionId: providerSession?.id,
-          body: record
-        })
-  // Track only resolved tokens or stale shared-server stamps can poison the live pane cache.
-  if (tuiAdmission !== 'preserve-poster') {
-    trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
-  }
-  const providerPromptId =
-    source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
-      : source === 'grok'
-        ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
-        : undefined
-  const compactTrigger =
-    source === 'claude' &&
-    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
-      ? hookPayloadRecord.trigger
-      : undefined
-  // Reject malformed Claude compacts without suppressing other providers' normalizers.
-  if (
-    source === 'claude' &&
-    (eventName === 'PreCompact' || eventName === 'PostCompact') &&
-    compactTrigger === undefined
-  ) {
-    return null
-  }
-  const previousStatus = state.lastStatusByPaneKey.get(paneKey)
-  if (
-    isLateGrokSessionStart(previousStatus, {
-      source,
-      hookEventName: typeof eventName === 'string' ? eventName : undefined,
-      paneKey,
-      tabId,
-      worktreeId,
-      connectionId: null,
-      launchToken,
-      providerSession: providerSession ?? undefined
-    })
-  ) {
-    return null
-  }
+    eventName,
+    providerSession,
+    extractedPrompt,
+    paneKey,
+    tabId,
+    worktreeId,
+    launchToken,
+    providerPromptId,
+    compactTrigger,
+    previousStatus
+  } = stamp
   const agentProcess = readHookAgentProcess(source, record.agentProcess)
   const previousReceivedAt =
     previousStatus &&

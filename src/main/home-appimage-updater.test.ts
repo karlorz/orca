@@ -93,7 +93,9 @@ async function fixture(
 
 describe('managed home updater actions', () => {
   function omitMetadata(f: Awaited<ReturnType<typeof fixture>>): void {
-    f.release.assets = f.release.assets.filter((asset) => asset.name !== 'orca-update-protocol.json')
+    f.release.assets = f.release.assets.filter(
+      (asset) => asset.name !== 'orca-update-protocol.json'
+    )
   }
 
   async function expectBlockedInstall(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
@@ -226,7 +228,9 @@ describe('managed home updater actions', () => {
     f.liveProtocols.mockResolvedValue(live)
     await f.updater.check(true)
     expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: true })
-    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('gate blocked: daemon-state-unknown'))
+    expect(f.log).toHaveBeenCalledWith(
+      expect.stringContaining('gate blocked: daemon-state-unknown')
+    )
     await expectBlockedInstall(f)
   })
 
@@ -245,7 +249,7 @@ describe('managed home updater actions', () => {
     expect(line).toMatch(
       /^\[updater\] home AppImage gate blocked: protocol-mismatch \(protocol-mismatch\) tag=v1\.4\.237-3 stage=check time=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/
     )
-    const time = typeof line === 'string' ? Date.parse(line.split(' time=')[1]) : NaN
+    const time = typeof line === 'string' ? Date.parse(line.split(' time=')[1]) : Number.NaN
     expect(time).toBeGreaterThanOrEqual(before)
     expect(time).toBeLessThanOrEqual(Date.now())
     expect(line).not.toMatch(/https?:|\?|secret|password/)

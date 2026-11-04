@@ -34,7 +34,10 @@ import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from './structured-agent-session-queued-wiring'
 import { wireStructuredAgentSessionBoundControls } from './structured-agent-session-bound-control-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
-import { sleepStructuredAgentSessionWorkspace } from './structured-agent-session-workspace-sleep'
+import {
+  sleepStructuredAgentSessionFromHost,
+  type StructuredAgentSessionWorkspaceSleepSource
+} from './structured-agent-session-workspace-sleep'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -205,18 +208,9 @@ export class StructuredAgentSessionHost {
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
-    sleepStructuredAgentSessionWorkspace(
-      {
-        deps: this.deps,
-        tasks: this.tasks,
-        lifetime: this.lifetime,
-        sessions: this.sessions,
-        // Starts registered after Stop are newer work.
-        deliveryRunning: (id) =>
-          this.conversationDelivery.loop.isRunning(id) || this.runtimeState.startFlights.has(id),
-        childWorkIncomplete: this.clientDelivery.childWorkIncomplete,
-        publishRecordNotes: this.clientDelivery.publishRecordNotes
-      },
+    sleepStructuredAgentSessionFromHost(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this instance holds the sleep collaborators.
+      this as StructuredAgentSessionWorkspaceSleepSource,
       workspaceId,
       markAsleep
     )

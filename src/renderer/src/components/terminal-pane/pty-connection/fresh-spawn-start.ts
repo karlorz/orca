@@ -2,8 +2,6 @@ import { applyTerminalLaunchResult } from './terminal-launch-result-policy'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import { useAppStore } from '@/store'
-import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -21,38 +19,20 @@ import type {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { findTerminalTabForPane } from './terminal-tab-id'
+import { createFreshSpawnCwdFence } from './fresh-spawn-cwd-fence'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
-    const releaseDeferredCwdFence = (): void => {
-      if (!session.transport.getPtyId()) {
-        // Abandoned spawns never connect; discard buffered input and settle its write promises here.
-        session.transport.abandonPreconnectInput?.()
-        try {
-          session.deps.onDeferredCwdSpawnFailed?.()
-        } catch {
-          // A cleanup callback must not turn a settled spawn into an unhandled rejection.
-        }
-      }
-    }
-
-    if (
-      hasWorktreeTeardownStarted(
-        useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]
-      )
-    ) {
-      // Worktree deletion already killed its PTYs; skip respawn into the directory being removed instead of racing main’s fence.
+    const cwdFence = createFreshSpawnCwdFence(session)
+    const releaseDeferredCwdFence = cwdFence.release
+    if (cwdFence.shouldSkip(startupOverride)) {
       releaseDeferredCwdFence()
       return Promise.resolve(null)
     }
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
-    if (effectiveStartup?.resumeSource?.cancelled) {
-      releaseDeferredCwdFence()
-      return Promise.resolve(null)
-    }
     session.authoritativeReattachGeneration += 1
     // Every connect creates/rebinds ownership; legacy replies lacking incarnationId cannot inherit the old fence.
     session.remotePtyIncarnationId = null
