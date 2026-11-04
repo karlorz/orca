@@ -1,4 +1,7 @@
-import type { FocusTerminalOptions } from '../../orca-runtime-guarded-pty-reveal'
+import {
+  OrcaRuntimeWithGuardedPtyReveal,
+  type FocusTerminalOptions
+} from '../../orca-runtime-guarded-pty-reveal'
 import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
 import type {
   RuntimeTerminalReveal,
@@ -12,9 +15,7 @@ import type {
   GrokSessionBinding,
   GrokSessionTerminalOwner
 } from '../../../../shared/grok-session-binding'
-import { OrcaRuntimeWithOriginatingPaneSwitch } from './originating-pane-switch'
-
-export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithOriginatingPaneSwitch {
+export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuardedPtyReveal {
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>

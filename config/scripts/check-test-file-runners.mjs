@@ -92,6 +92,18 @@ const NON_UNIT_TEST_RUNNERS = [
     include: ['docs/site/tests/*.test.mjs'],
     sources: ['docs/site/package.json'],
     mirrors: ['node --test tests/*.test.mjs']
+  },
+  {
+    name: 'fork-live-status',
+    include: ['fork-live-status/src/**/*.test.ts'],
+    sources: ['fork-live-status/vitest.config.ts'],
+    mirrors: ["include: ['src/**/*.test.ts']"]
+  },
+  {
+    name: 'orca-cli launcher',
+    include: ['packages/orca-cli/bin/orca.test.cjs'],
+    sources: ['packages/orca-cli/package.json'],
+    mirrors: ['node bin/orca.test.cjs']
   }
 ]
 

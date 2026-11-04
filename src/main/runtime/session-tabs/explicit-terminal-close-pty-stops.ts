@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithFocusTerminal } from '../terminal/focus/focus-terminal'
+import { OrcaRuntimeWithOriginatingPaneSwitch } from '../terminal/focus/originating-pane-switch'
 import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from '../orca-runtime-core'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/pty-liveness-verdict'
 import { errorMessage } from '../../../shared/error-message'
@@ -8,7 +8,7 @@ export type ExplicitCloseStop = { stopped: boolean }
 
 export const NO_STOP: ExplicitCloseStop = { stopped: false }
 
-export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntimeWithFocusTerminal {
+export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntimeWithOriginatingPaneSwitch {
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string,

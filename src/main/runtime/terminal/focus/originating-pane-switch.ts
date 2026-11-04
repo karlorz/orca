@@ -3,10 +3,10 @@ import {
   type OriginatingPaneNavigationReceipt,
   type OriginatingPaneTarget
 } from '../../terminal-originating-pane-navigation'
-import { OrcaRuntimeWithGuardedPtyReveal } from '../../orca-runtime-guarded-pty-reveal'
 import { originatingPaneRuntimeHost } from './originating-pane-runtime-host'
+import { OrcaRuntimeWithFocusTerminal } from './focus-terminal'
 
-export abstract class OrcaRuntimeWithOriginatingPaneSwitch extends OrcaRuntimeWithGuardedPtyReveal {
+export abstract class OrcaRuntimeWithOriginatingPaneSwitch extends OrcaRuntimeWithFocusTerminal {
   async switchOriginatingPane(
     target: OriginatingPaneTarget,
     options: { activateHostWindow?: boolean } = {}
