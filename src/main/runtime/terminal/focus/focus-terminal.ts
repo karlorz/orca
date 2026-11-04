@@ -112,11 +112,8 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
     options: { activateHostWindow?: boolean } = {}
   ): Promise<OriginatingPaneNavigationReceipt> {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this mixin implements OriginatingPaneRuntime.
-    return switchOriginatingPaneWithHost(
-      originatingPaneRuntimeHost(this as OriginatingPaneRuntime),
-      target,
-      options
-    )
+    const runtime = this as OriginatingPaneRuntime
+    return switchOriginatingPaneWithHost(originatingPaneRuntimeHost(runtime), target, options)
   }
 
   async focusTerminal(
