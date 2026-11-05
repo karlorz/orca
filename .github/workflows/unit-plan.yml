@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   plan:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 5
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
