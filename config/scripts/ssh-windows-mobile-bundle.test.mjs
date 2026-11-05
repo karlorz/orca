@@ -21,8 +21,8 @@ const verify = consumer.steps.find(
 
 it('binds the bundle to the same run and source across architectures and retry attempts', () => {
   expect(producer['runs-on']).toBe(
-      "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}"
-    )
+    "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}"
+  )
   for (const job of [producer, consumer]) {
     expect(
       job.steps.find((step) => step.uses?.startsWith('actions/checkout')).with.ref
