@@ -1,12 +1,14 @@
 import { resolveAgentStatusIdentity } from '../agent-status-identity'
 import { sameAgentStatusTerminalOwner } from '../agent-status-terminal-owner'
+import type { AgentProcessIdentity } from '../agent-process-presence'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 
 export function isHookFromInheritedAgent(
   previous: AgentHookEventPayload | undefined,
   source: AgentHookSource,
-  worktreeId: string | undefined
+  worktreeId: string | undefined,
+  incoming?: { process?: AgentProcessIdentity; session?: string }
 ): boolean {
   const receivedAt =
     previous && 'receivedAt' in previous && typeof previous.receivedAt === 'number'
@@ -28,6 +30,8 @@ export function isHookFromInheritedAgent(
         agentPresence: previous.providerSessionOnly ? undefined : previous.agentPresence
       },
       incoming: source,
+      incomingProcess: incoming?.process,
+      incomingSession: incoming?.session,
       now: Date.now()
     }).inheritedFromActivePane
   )

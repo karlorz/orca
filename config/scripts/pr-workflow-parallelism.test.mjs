@@ -14,7 +14,7 @@ describe('PR workflow parallelism', () => {
     for (const [expression, hosted, upstream] of [
       [workflow.jobs.code_paths['runs-on'], 'ubuntu-24.04', 'blacksmith-2vcpu-ubuntu-2404'],
       [workflow.jobs.preflight['runs-on'], 'ubuntu-24.04', 'blacksmith-8vcpu-ubuntu-2404'],
-      [workflow.jobs.test.with.runner, 'ubuntu-24.04', 'blacksmith-4vcpu-ubuntu-2404'],
+      [workflow.jobs.test.with.runner, 'ubuntu-24.04', 'blacksmith-8vcpu-ubuntu-2404'],
       [
         workflow.jobs.dependency_isolation['runs-on'],
         'ubuntu-24.04',

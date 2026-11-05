@@ -102,6 +102,15 @@ export function resolveAgentStatusIdentity(args: {
     !args.existing.agentPresence?.suspended &&
     (otherProcessOwner || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
   ) {
+    // Why: a nested child that posted while the owner idled must not silence the owner's next session (#30589).
+    if (
+      args.incomingSession &&
+      incomingAgentType !== existingAgentType &&
+      !args.incomingProcess &&
+      args.existing.agentPresence?.process
+    ) {
+      return { agentType: incomingAgentType, inheritedFromActivePane: false }
+    }
     return {
       // Inherited ORCA_PANE_KEY does not grant child CLI ownership; idle leaves foreground process/resume identity intact.
       agentType: existingAgentType,

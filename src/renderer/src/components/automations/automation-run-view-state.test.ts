@@ -76,7 +76,7 @@ describe('automation run view state', () => {
     })
   })
 
-  it('offers Open workspace after the run tab is closed even if PTY identity remains', () => {
+  it('keeps View run after the run tab is closed while PTY identity remains', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
@@ -84,8 +84,9 @@ describe('automation run view state', () => {
         terminalTargetExists: false
       })
     ).toMatchObject({
-      availability: 'workspace',
-      actionLabel: 'Open workspace',
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run terminal is unavailable.',
       canOpen: true
     })
   })

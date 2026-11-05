@@ -103,13 +103,13 @@ export function prepareWebSessionTabsSnapshotBase(
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const existingTerminalById = new Map(currentTerminalTabs.map((tab) => [tab.id, tab]))
   const reconcilesNonAgentTabs = options?.contentScope !== 'agent-session'
-  // Why: a runtime this client already mirrors directly is the worktree's owner; another
-  // runtime's copy of the same tabs would only duplicate them in this strip. One verdict strips
-  // the frame's surfaces for every downstream builder (terminal/browser/editor/agent); retention
-  // gates keep the flag so an inert frame cannot cull what it never owned.
+  // Why: a live row from another runtime is that runtime's to retire. Skip unhydrated
+  // retractions so a browser-only or subset frame cannot cull terminals it never owned.
+  // Still admit this frame's own surfaces — blanking the snapshot dropped desktop-A
+  // browsers and unique terminals in a shared workspace (#31983).
   const mirrorsOwnedByOtherRuntime =
     reconcilesNonAgentTabs && crossRuntimeMirrorSuppressesFrame(currentTerminalTabs, environmentId)
-  const admittedSnapshot = mirrorsOwnedByOtherRuntime ? { ...snapshot, tabs: [] } : snapshot
+  const admittedSnapshot = snapshot
   const terminalSurfaceTabs = reconcilesNonAgentTabs
     ? admittedSnapshot.tabs.filter(isTerminalSurfaceTab)
     : []
@@ -148,18 +148,25 @@ export function prepareWebSessionTabsSnapshotBase(
   const contentsAffirmed = hostSnapshotAffirmsWorktreeContents(snapshot)
   const isWorktreeRemovalFrame = isWebSessionTabsWorktreeRemovalFrame(snapshot)
   const retainedTerminalTabs = reconcilesNonAgentTabs
-    ? currentTerminalTabs.filter(
-        (tab) =>
-          !shouldReplaceTerminalTab(
-            state,
-            tab,
-            environmentId,
-            nextRemotePtyIds,
-            nextMirroredTerminalIds,
-            exactProvisionalHandoffs,
-            state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
-          )
-      )
+    ? currentTerminalTabs.filter((tab) => {
+        // Unpublished absence cannot cull; listed surfaces on the same frame still rebuild.
+        if (
+          !contentsAffirmed &&
+          isMirroredTerminalSurfaceId(tab.id) &&
+          !nextMirroredTerminalIds.has(tab.id)
+        ) {
+          return true
+        }
+        return !shouldReplaceTerminalTab(
+          state,
+          tab,
+          environmentId,
+          nextRemotePtyIds,
+          nextMirroredTerminalIds,
+          exactProvisionalHandoffs,
+          state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+        )
+      })
     : currentTerminalTabs
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
     admittedSnapshot,
@@ -190,7 +197,12 @@ export function prepareWebSessionTabsSnapshotBase(
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  if (reconcilesNonAgentTabs && !isWorktreeRemovalFrame && !mirrorsOwnedByOtherRuntime) {
+  if (
+    reconcilesNonAgentTabs &&
+    !isWorktreeRemovalFrame &&
+    contentsAffirmed &&
+    !mirrorsOwnedByOtherRuntime
+  ) {
     for (const tabId of collectUnhydratedMirroredTabRetractions({
       state,
       environmentId,

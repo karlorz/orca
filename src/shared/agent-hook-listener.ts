@@ -81,7 +81,12 @@ export function normalizeHookPayload(
     return null
   }
   // Reject before provider folds mutate the pane's prompt, tool and child caches.
-  if (isHookFromInheritedAgent(previousStatus, source, worktreeId)) {
+  if (
+    isHookFromInheritedAgent(previousStatus, source, worktreeId, {
+      process: agentProcess,
+      session: providerSession?.id
+    })
+  ) {
     return null
   }
   // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An

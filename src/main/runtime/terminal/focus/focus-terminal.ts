@@ -8,8 +8,6 @@ import type {
   TerminalPaneRevealTarget
 } from '../../../../shared/terminal-pane-reveal'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import type {
   GrokSessionBinding,
@@ -103,18 +101,6 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
     options: FocusTerminalOptions = {}
   ): Promise<RuntimeTerminalFocus> {
     const navigateHost = options.navigateHost !== false
-    const livePtyIdentity = (): RuntimeTerminalFocus => {
-      const live = this.getLivePtyForHandle(handle)
-      if (!live?.pty.connected) {
-        throw new Error('terminal_exited')
-      }
-      return {
-        handle,
-        tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
-        worktreeId: live.pty.worktreeId,
-        navigated: false
-      }
-    }
     const liveLeafIdentity = (): RuntimeTerminalFocus => {
       this.assertGraphReady()
       const { leaf: current } = this.getLiveLeafForHandle(handle)
@@ -126,78 +112,29 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithGuarde
       }
     }
 
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      if (!pty.pty.connected) {
+    if (this.retainedHandleIdentityIsInconsistent(handle)) {
+      throw new Error('terminal_handle_stale')
+    }
+
+    const resolveRetained = () => this.getLivePtyForRetainedHandle(handle)
+    if (resolveRetained()) {
+      return this.focusLivePtyTerminal(handle, resolveRetained, options)
+    }
+
+    const record = this.handles.get(handle)
+    if (options.existingSessionOnly && record && !record.tabId.startsWith('pty:')) {
+      throw new Error('terminal_handle_stale')
+    }
+
+    const resolveOwned = () => this.getLivePtyForHandle(handle)
+    const owned = resolveOwned()
+    if (owned) {
+      if (!owned.pty.connected) {
         throw new Error('terminal_exited')
       }
-      if (!navigateHost || !this.notifier?.revealTerminalSession) {
-        return {
-          handle,
-          tabId: this.paneOfPty(pty.pty).tabId ?? pty.record.tabId,
-          worktreeId: pty.pty.worktreeId,
-          navigated: false
-        }
-      }
-      // Coalesce concurrent host navigations: only the latest full reveal claims navigated.
-      return this.terminalFocusNavigationCoalescer.run({
-        key: handle,
-        resolveSuperseded: (completed) =>
-          completed ? { ...completed, navigated: false } : livePtyIdentity(),
-        run: async (ctx) => {
-          const live = this.getLivePtyForHandle(handle)
-          if (!live?.pty.connected) {
-            throw new Error('terminal_exited')
-          }
-          if (!ctx.isCurrent()) {
-            return {
-              handle,
-              tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          const notifier = this.notifier
-          if (!notifier?.revealTerminalSession) {
-            return {
-              handle,
-              tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          const recorded = this.paneOfPty(live.pty)
-          const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
-          const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
-            ptyId: live.pty.ptyId,
-            title:
-              this.getPtyManualTitle(live.pty, false) ??
-              getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
-            ...(live.pty.launchConfig
-              ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
-              : {}),
-            ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
-            ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
-            ...(recorded.tabId !== null ? { tabId: recorded.tabId } : {}),
-            ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
-          })
-          if (!ctx.isCurrent() || this.notifier !== notifier) {
-            return {
-              handle,
-              tabId: revealed?.tabId ?? this.paneOfPty(live.pty).tabId ?? live.record.tabId,
-              worktreeId: live.pty.worktreeId,
-              navigated: false
-            }
-          }
-          return {
-            handle,
-            tabId: revealed?.tabId ?? this.paneOfPty(live.pty).tabId ?? live.record.tabId,
-            worktreeId: live.pty.worktreeId,
-            navigated: true
-          }
-        }
-      })
+      return this.focusLivePtyTerminal(handle, resolveOwned, options)
     }
+
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     if (!navigateHost) {

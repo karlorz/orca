@@ -242,6 +242,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         // Disarm input-eating modes on the dead frozen TUI, then arm its reveal wake.
         session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }
+        session.wakeHibernatedAgentPane ??= () => session.spawnColdRestoreAgentResume()
         const pendingWakeMatches =
           session.pendingHibernatedWakeTarget?.ptyId === ptyId &&
           session.pendingHibernatedWakeTarget.record === sleepingRecordEntry.record

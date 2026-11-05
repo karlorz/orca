@@ -310,7 +310,7 @@ async function closesOnlyThatPane(
   if (entry === 'phone-headless') {
     const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(snapshot.tabs.map((tab) => tab.id)).toEqual([`${TAB_ID}::${SIBLING_LEAF_ID}`])
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.some((call) => call[0] === PTY_ID)).toBe(true)
     return
   }
   expectDesktopDropsPane(harness, TAB_ID, LEAF_ID)
@@ -340,7 +340,7 @@ describe("a close of a tab's last pane still closes the tab", () => {
 
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect((await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([])
-    expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    expect(harness.kill.mock.calls.some((call) => call[0] === PTY_ID)).toBe(true)
   })
 
   // Main-owned bind-before-register makes live tabs without saved panes impossible; covered by main tab-close cases.
@@ -360,7 +360,7 @@ describe("a close of a tab's last pane still closes the tab", () => {
       })
 
       expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
-      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+      expect(harness.kill.mock.calls.some((call) => call[0] === PTY_ID)).toBe(true)
     }
   )
 
