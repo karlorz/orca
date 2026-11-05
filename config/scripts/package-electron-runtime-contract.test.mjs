@@ -123,8 +123,9 @@ describe('Electron runtime package contract', () => {
         if (!job['runs-on']) {
           continue
         }
+        const context = { inputs, github: { repository: 'karlorz/orca' } }
         const runner = job['runs-on'].startsWith('${{')
-          ? compileAggregateExpression(job['runs-on'], ['inputs'])({ inputs }).coerceString()
+          ? compileAggregateExpression(job['runs-on'], ['inputs', 'github'])(context).coerceString()
           : job['runs-on']
         expect(runner).not.toMatch(/^(blacksmith-|orca-)/)
       }
