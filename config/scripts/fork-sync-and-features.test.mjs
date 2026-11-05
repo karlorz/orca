@@ -126,7 +126,7 @@ describe('fork-features registry', () => {
       expect(feature.id).toMatch(/^[a-z0-9-]+$/)
       expect(feature.title.length).toBeGreaterThan(0)
       expect(['product', 'release', 'ci', 'docs']).toContain(feature.kind)
-      expect(['landed', 'in-progress']).toContain(feature.status)
+      expect(['landed', 'in-progress', 'superseded']).toContain(feature.status)
       expect(ids.has(feature.id)).toBe(false)
       ids.add(feature.id)
     }

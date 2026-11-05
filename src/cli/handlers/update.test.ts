@@ -247,7 +247,7 @@ describe('orca update check|apply', () => {
     try {
       await expect(run('update check')).rejects.toMatchObject({
         code: 'update_protocol_required',
-        message: expect.stringContaining('publishes no orca-update-protocol.json'),
+        message: expect.stringContaining('protocol metadata request returned HTTP 404'),
         data: expect.objectContaining({ retryable: false })
       })
     } finally {

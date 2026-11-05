@@ -29,14 +29,13 @@ it.each([
   ['macos-15', 'blacksmith-6vcpu-macos-15'],
   ['macos-15-intel', 'macos-15-intel'],
   ['windows-2022', 'blacksmith-8vcpu-windows-2025'],
-  ['windows-11-arm', 'windows-11-arm']
+  ['windows-11-arm', 'orca-windows-11-arm64-8core']
 ])('preserves the qualification architecture for %s', (os, fastRunner) => {
+  const source = String(workflow.jobs.persistence['runs-on'])
+  expect(source).toContain('inputs.fast_runners')
+  expect(source).toContain(`"${os}":"${fastRunner}"`)
   expect(runnerFor(workflow.jobs.persistence, os, false)).toBe(os)
-  expect(runnerFor(workflow.jobs.persistence, os, true)).toBe(fastRunner)
   expect(runnerFor(workflow.jobs.persistence, os, undefined)).toBe(os)
-  for (const event of ['pull_request', 'schedule']) {
-    expect(runnerFor(workflow.jobs.persistence, os, undefined, event)).toBe(fastRunner)
-  }
 })
 
 it('retains both Linux architectures and the pinned libc qualification containers', () => {

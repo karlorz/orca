@@ -62,7 +62,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('disarms input modes and resumes a hibernated agent session on visibility reveal', async () => {
+    it('disarms input modes and keeps completed hibernation frozen until an explicit wake', async () => {
       // Regression: hibernation suppresses its kill's PTY exit while hidden; before the wake fix onExit permanently latched handledExitPtyId, leaving a frozen inert ghost pane on reveal.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
@@ -116,6 +116,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
 
       binding.noteVisibilityResume()
+      await flushAsyncTicks()
+      // Completed worktree-sleep stays frozen on reveal; an explicit wake resumes it.
+      expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -527,7 +531,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       deferredSpawn.resolve('pty-resumed')
       await flushAsyncTicks()
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      // Finished hibernation evidence stays so a later Resume workspace can remount the pane.
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
     })
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {
@@ -618,8 +623,8 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect(binding.wakeHibernatedAgentIfArmed()).toBeNull()
     })
 
-    it('auto-resumes a hibernated pane when its kill lands after the pane is already revealed', async () => {
-      // If reveal precedes wake arming, the arm-time visibility check must resume the pane immediately.
+    it('keeps completed hibernation frozen when its kill lands after the pane is already revealed', async () => {
+      // Worktree-sleep output stays passive until an explicit wake, even if the pane is already visible.
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -660,6 +665,9 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
       const connectCallsBeforeExit = transport.connect.mock.calls.length
       onPtyExit?.('tab-pty')
+      await flushAsyncTicks()
+      expect(transport.connect.mock.calls.length).toBe(connectCallsBeforeExit)
+      expect(binding.wakeHibernatedAgentIfArmed()).not.toBeNull()
       await flushAsyncTicks()
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {

@@ -36,6 +36,10 @@ export function isMirroredTerminalOfAnotherEnvironment(
   environmentId: string
 ): boolean {
   const owners = new Set<string>()
+  if (tab.ptyId && !getRemoteRuntimePtyEnvironmentId(tab.ptyId)) {
+    // A handle that names no runtime is unqualified; leftover layout PTYs cannot keep it.
+    return false
+  }
   for (const ptyId of [
     tab.ptyId,
     ...Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})

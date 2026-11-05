@@ -19,6 +19,40 @@ type WorkspaceSleepHost = {
   publishRecordNotes: (sessionId: string) => void
 }
 
+export type StructuredAgentSessionWorkspaceSleepSource = {
+  deps: WorkspaceSleepHost['deps']
+  tasks: WorkspaceSleepHost['tasks']
+  lifetime: WorkspaceSleepHost['lifetime']
+  sessions: WorkspaceSleepHost['sessions']
+  conversationDelivery: { loop: { isRunning: (sessionId: string) => boolean } }
+  runtimeState: { startFlights: { has: (sessionId: string) => boolean } }
+  clientDelivery: {
+    childWorkIncomplete: WorkspaceSleepHost['childWorkIncomplete']
+    publishRecordNotes: WorkspaceSleepHost['publishRecordNotes']
+  }
+}
+
+export function sleepStructuredAgentSessionFromHost(
+  host: StructuredAgentSessionWorkspaceSleepSource,
+  workspaceId: string,
+  markAsleep?: boolean
+): Promise<AgentSessionWorkspaceSleepResult> {
+  return sleepStructuredAgentSessionWorkspace(
+    {
+      deps: host.deps,
+      tasks: host.tasks,
+      lifetime: host.lifetime,
+      sessions: host.sessions,
+      deliveryRunning: (id) =>
+        host.conversationDelivery.loop.isRunning(id) || host.runtimeState.startFlights.has(id),
+      childWorkIncomplete: host.clientDelivery.childWorkIncomplete,
+      publishRecordNotes: host.clientDelivery.publishRecordNotes
+    },
+    workspaceId,
+    markAsleep
+  )
+}
+
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
 
 /** Return only this call’s current proven stops; markAsleep marks exactly those receipts. */

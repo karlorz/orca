@@ -86,12 +86,14 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       : input.selected
         ? (input.legacyTarget(input.selected) ?? { kind: 'local' as const })
         : { kind: 'local' as const }
+  const lastRunAt = input.selected?.automation.lastRunAt ?? ''
   const fetchKey =
     automationId && rowKey
       ? [
           rowKey,
           capturedAutomationOwnerKey(capturedAutomationOwner(input.context.capturedOwners, rowKey)),
-          getAutomationHostTargetKey(target)
+          getAutomationHostTargetKey(target),
+          lastRunAt
         ].join('|')
       : ''
   const inputRef = useRef({ ...input, target })

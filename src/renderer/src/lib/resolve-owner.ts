@@ -63,7 +63,8 @@ function toOwnerMatch(
 
 /** Detect folder/project twins before unqualified route lookups collapse them into missing/local ownership. */
 function isFolderTwin(state: WorktreeOperationRouteState, folderWorkspaceId: string): boolean {
-  const folder = resolveIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
+  const { folderWorkspaces } = state
+  const folder = resolveIndexedFolderWorkspaceOwner(folderWorkspaces, folderWorkspaceId)
   if (folder.kind !== 'resolved') {
     return folder.kind === 'ambiguous'
   }
@@ -180,18 +181,19 @@ export function resolveWriteRoute(
 function focusFreeRouteState(state: WorktreeOperationRouteState): {
   [K in keyof Required<WorktreeOperationRouteState>]: WorktreeOperationRouteState[K]
 } {
+  const { folderWorkspaces, worktreesByRepo, detectedWorktreesByRepo } = state
   return {
     settings: null,
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces,
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     activeWorktreeId: state.activeWorktreeId,
     activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    worktreesByRepo,
+    detectedWorktreesByRepo,
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
   }
@@ -306,9 +308,10 @@ export function someWorktreeCopy(
   matches: (row: WorktreeCopy) => boolean
 ): boolean {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const { worktreesByRepo, detectedWorktreesByRepo } = state
   const copyMatches = (row: WorktreeCopy & { id: string }) => row.id === worktreeId && matches(row)
   return Boolean(
-    state.worktreesByRepo?.[repoId]?.some(copyMatches) ||
-    state.detectedWorktreesByRepo?.[repoId]?.worktrees.some(copyMatches)
+    worktreesByRepo?.[repoId]?.some(copyMatches) ||
+    detectedWorktreesByRepo?.[repoId]?.worktrees.some(copyMatches)
   )
 }

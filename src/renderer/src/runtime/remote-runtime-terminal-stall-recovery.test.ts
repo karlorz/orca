@@ -115,7 +115,7 @@ describe('remote terminal stalled stream recovery', () => {
     sendBinary.mockClear()
 
     expect(multiplexer.recoverStalledForE2e(new Set(['term-e2e-recover']))).toBe(1)
-    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
     expect(multiplexer.recoverStalledForE2e(new Set(['term-e2e-recover']))).toBe(0)
   })

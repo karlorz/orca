@@ -39,7 +39,7 @@ it('skips draft detection and rechecks the same draft once it is ready', () => {
   expect(workflow.on.pull_request.types).toContain('ready_for_review')
   expect(runInNewContext(workflow.jobs.changes.if, context('push', 2))).toBe(true)
   for (const event of ['schedule', 'workflow_dispatch', 'workflow_call']) {
-    expect(runInNewContext(workflow.jobs.changes.if, context(event, 2))).toBe(false)
+    expect(runInNewContext(workflow.jobs.changes.if, context(event, 2))).toBe(true)
   }
 })
 

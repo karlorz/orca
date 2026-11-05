@@ -52,7 +52,8 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
     if (!pty || pty.ptyId !== record.ptyId || !pty.connected) {
       return { kind: 'unrelated' }
     }
-    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
+    const pane = this.paneOfPty(pty)
+    const parsedPaneKey = parsePaneKey(pane.paneKey ?? '')
     if (!parsedPaneKey) {
       return { kind: 'unrelated' }
     }
@@ -63,7 +64,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
       leaf.leafId === record.leafId &&
       record.worktreeId === leaf.worktreeId &&
       leaf.worktreeId === pty.worktreeId &&
-      record.tabId === pty.tabId &&
+      record.tabId === pane.tabId &&
       record.tabId === parsedPaneKey.tabId &&
       record.leafId === parsedPaneKey.leafId
     return consistent ? { kind: 'live', live: { record, pty } } : { kind: 'inconsistent' }
@@ -79,12 +80,13 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
   }
 
   private livePtyIdentity(handle: string, live: LivePtyHandle): LivePtyIdentity {
+    const pane = this.paneOfPty(live.pty)
     return {
       handle,
       runtimeId: live.record.runtimeId,
       ptyId: live.pty.ptyId,
       incarnationId: live.pty.incarnationId,
-      tabId: live.pty.tabId ?? live.record.tabId,
+      tabId: pane.tabId ?? live.record.tabId,
       leafId: live.record.leafId,
       worktreeId: live.pty.worktreeId
     }
@@ -123,7 +125,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
       }
       return {
         handle,
-        tabId: live.pty.tabId ?? live.record.tabId,
+        tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
         worktreeId: live.pty.worktreeId,
         navigated: false
       }
@@ -143,7 +145,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
     if (!navigateHost || !this.notifier?.revealTerminalSession) {
       return {
         handle,
-        tabId: resolved.pty.tabId ?? resolved.record.tabId,
+        tabId: this.paneOfPty(resolved.pty).tabId ?? resolved.record.tabId,
         worktreeId: resolved.pty.worktreeId,
         navigated: false
       }
@@ -164,10 +166,11 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
         ) {
           throw new Error('terminal_handle_stale')
         }
+        const pane = this.paneOfPty(live.pty)
         if (!ctx.isCurrent()) {
           return {
             handle,
-            tabId: live.pty.tabId ?? live.record.tabId,
+            tabId: pane.tabId ?? live.record.tabId,
             worktreeId: live.pty.worktreeId,
             navigated: false
           }
@@ -176,12 +179,12 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
         if (!notifier?.revealTerminalSession) {
           return {
             handle,
-            tabId: live.pty.tabId ?? live.record.tabId,
+            tabId: pane.tabId ?? live.record.tabId,
             worktreeId: live.pty.worktreeId,
             navigated: false
           }
         }
-        const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
+        const parsedPaneKey = parsePaneKey(pane.paneKey ?? '')
         const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
           ptyId: live.pty.ptyId,
           title:
@@ -192,7 +195,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
             : {}),
           ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
           ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
-          ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
+          ...(pane.tabId !== null ? { tabId: pane.tabId } : {}),
           ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {}),
           ...(options.activateHostWindow === true ? { activateHostWindow: true } : {}),
           ...(options.flashFocusedPane === true ? { flashFocusedPane: true } : {}),
@@ -220,7 +223,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
         if (!ctx.isCurrent() || this.notifier !== notifier) {
           return {
             handle,
-            tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+            tabId: revealed?.tabId ?? pane.tabId ?? live.record.tabId,
             worktreeId: live.pty.worktreeId,
             navigated: false
           }
@@ -230,7 +233,7 @@ export class OrcaRuntimeWithGuardedPtyReveal extends OrcaRuntimeWithWaitForLeafP
         }
         return {
           handle,
-          tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+          tabId: revealed?.tabId ?? pane.tabId ?? live.record.tabId,
           worktreeId: live.pty.worktreeId,
           navigated: true,
           ...(revealed?.identity ? { identity: revealed.identity } : {}),

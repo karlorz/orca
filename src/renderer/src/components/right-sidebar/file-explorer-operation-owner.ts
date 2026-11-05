@@ -18,6 +18,11 @@ import type {
   WorktreeOperationRouteState
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
 
@@ -53,9 +58,9 @@ export function selectFileExplorerOwnerState(state: AppState): FileExplorerOwner
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
   }

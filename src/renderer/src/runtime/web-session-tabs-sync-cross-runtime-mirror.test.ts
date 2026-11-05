@@ -14,9 +14,8 @@ import {
 } from './web-session-tabs-sync-test-harness'
 
 /**
- * MSI is paired to pvelxc and republishes pvelxc's worktree from its own view. A client paired to
- * pvelxc already sees the same tabs first-hand, so MSI's copy is a second view of one worktree and
- * admitting it duplicates the strip.
+ * MSI is paired to pvelxc and also publishes this worktree. A client that already mirrors pvelxc
+ * still admits MSI's unique surfaces so a shared workspace can show both runtimes (#31983).
  */
 const environments = [
   { id: 'pvelxc', runtimeId: 'runtime-pvelxc', lastUsedAt: 1 },
@@ -76,7 +75,7 @@ describe('cross-runtime session surface mirrors', () => {
   })
   afterEach(() => registerRuntimeOwnerEnvironments(() => []))
 
-  it('ignores MSI editor surfaces for a worktree this client mirrors from pvelxc', () => {
+  it('keeps the first-hand pvelxc editor and still admits MSI unique editor surfaces', () => {
     const paired = pvelxcMirroredState()
     const next = apply(
       paired,
@@ -84,20 +83,30 @@ describe('cross-runtime session surface mirrors', () => {
       'msi'
     )
 
-    expect(next.openFiles).toEqual(paired.openFiles)
+    expect(next.openFiles?.map((file) => file.runtimeEnvironmentId).sort()).toEqual([
+      'msi',
+      'pvelxc'
+    ])
     const editorTabs = (next.unifiedTabsByWorktree[WT] ?? []).filter(
       (tab) => tab.contentType === 'editor'
     )
-    expect(editorTabs).toHaveLength(1)
-    expect(editorTabs.every((tab) => tab.executionHostId === 'runtime:pvelxc')).toBe(true)
+    expect(editorTabs).toHaveLength(3)
+    expect(new Set(editorTabs.map((tab) => tab.executionHostId))).toEqual(
+      new Set(['runtime:msi', 'runtime:pvelxc'])
+    )
   })
 
-  it('ignores MSI terminal surfaces for that worktree and keeps the pvelxc mirror', () => {
+  it('keeps the pvelxc terminal and still admits MSI unique terminal surfaces', () => {
     const paired = pvelxcMirroredState()
     const next = apply(paired, makeSnapshot([hostTerminal('msi-tab', 'terminal-msi')]), 'msi')
 
-    expect(next.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([COORD_TAB_ID])
+    expect(next.tabsByWorktree[WT]?.map((tab) => tab.id).sort()).toEqual(
+      [COORD_TAB_ID, toWebTerminalSurfaceTabId('msi-tab')].sort()
+    )
     expect(next.ptyIdsByTabId[COORD_TAB_ID]).toEqual(['remote:pvelxc@@terminal-coord'])
+    expect(next.ptyIdsByTabId[toWebTerminalSurfaceTabId('msi-tab')]).toEqual([
+      'remote:msi@@terminal-msi'
+    ])
   })
 
   it('mirrors MSI surfaces for a client with no pvelxc mirror of that worktree', () => {

@@ -206,20 +206,19 @@ describe('automation run workspace action', () => {
     expect(mocks.toastMessage).toHaveBeenCalled()
   })
 
-  it('remounts a closed tab from the run provider session when nothing was hibernated', () => {
+  it('does not remount a closed run while PTY identity still names the terminal', () => {
     mocks.tabsByWorktree = { [worktreeId]: [] }
     mocks.sleepingAgentSessionsByPaneKey = {}
 
     openRun(makeRun({ terminalPtyId: 'pty-1', providerSessionId: 'sess-closed' }))
 
-    expect(launchSleepingAgentSession).toHaveBeenCalled()
+    expect(launchSleepingAgentSession).not.toHaveBeenCalled()
     expect(mocks.createTab).not.toHaveBeenCalled()
-    expect(mocks.setState).toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalled()
     expect(mocks.toastMessage).not.toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
-  it('synthesizes Antigravity conversation_id metadata instead of session_id', () => {
+  it('does not synthesize a sleeping Antigravity session while PTY identity remains', () => {
     mocks.tabsByWorktree = { [worktreeId]: [] }
     mocks.sleepingAgentSessionsByPaneKey = {}
     const action = createAutomationRunWorkspaceAction({
@@ -232,20 +231,9 @@ describe('automation run workspace action', () => {
 
     action(makeRun({ terminalPtyId: 'pty-1', providerSessionId: 'agy-conv' }))
 
-    expect(mocks.setState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sleepingAgentSessionsByPaneKey: expect.objectContaining({
-          [paneKey]: expect.objectContaining({
-            agent: 'antigravity',
-            providerSession: { key: 'conversation_id', id: 'agy-conv' }
-          })
-        })
-      })
-    )
-    expect(launchSleepingAgentSession).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'antigravity' }),
-      expect.objectContaining({ onSessionLaunched: expect.any(Function) })
-    )
+    expect(launchSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mocks.setState).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalled()
   })
 
   it('does not synthesize a Pi resume without a transcript path', () => {

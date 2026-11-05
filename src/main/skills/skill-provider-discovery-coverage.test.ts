@@ -12,7 +12,8 @@ const HOME = '/home/test'
 const AGENTS_WITHOUT_INSTALL_PROVIDER: Partial<Record<TuiAgent, string>> = {
   'claude-agent-teams': 'detected only alongside claude, whose entry covers .claude/skills',
   aider: 'no skills support',
-  hermes: 'Windows home under %LOCALAPPDATA% and opt-in project skills fit no table shape'
+  hermes: 'Windows home under %LOCALAPPDATA% and opt-in project skills fit no table shape',
+  herdr: 'hook-free multiplexer with no skills install surface'
 }
 const WORKSPACE = '/workspace/current'
 

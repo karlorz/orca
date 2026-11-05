@@ -1,5 +1,15 @@
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { isSameEditorOwner } from '../../store/slices/editor/file-ids/editor-file-ids'
+import type { OpenFile } from '../../store/slices/editor'
 import { buildWebSessionExistingTabIndex } from '../web-session-existing-tab-index'
 import { resolveWebSessionVisibleTabId } from '../web-session-focus-intent'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsClientHostedPages,
+  hostSnapshotAffirmsWorktreeContents
+} from '../host-session-snapshot-authority'
+import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
 import {
   buildMirroredBrowserTabs,
@@ -8,20 +18,12 @@ import {
 } from './mirrored-browser-tabs'
 import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
-import {
-  hostSnapshotAffirmsAgentSessions,
-  hostSnapshotAffirmsClientHostedPages,
-  hostSnapshotAffirmsWorktreeContents
-} from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
-import type { OpenFile } from '../../store/slices/editor'
 import {
   advanceWebSessionOpenFilesIndex,
   sameOpenFiles,
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
-import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from './mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
@@ -150,7 +152,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
     (reconcilesEditorFiles ? worktreeOpenFiles : [])
       .filter(
         (file) =>
-          file.runtimeEnvironmentId === environmentId &&
+          isSameEditorOwner(file, worktreeId, environmentId) &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           // Cull only host-mirrored files; locally opened tabs have no host counterpart to list them.
           file.mirroredFromRuntimeSession === true &&
@@ -160,7 +162,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
   )
   const isReplacedOpenFile = (file: OpenFile): boolean =>
     mirroredFileRecords.has(file) ||
-    (file.runtimeEnvironmentId === environmentId &&
+    (isSameEditorOwner(file, worktreeId, environmentId) &&
       (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id)))
   const replacedOpenFileCount = worktreeOpenFiles.filter(isReplacedOpenFile).length
   // Both consumers are worktree-scoped; use surviving IDs without walking global files.
@@ -176,7 +178,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
       return state.openFiles
     }
     const retained = state.openFiles.filter(
-      (file) => !(file.worktreeId === worktreeId && isReplacedOpenFile(file))
+      (file) => !(worktreeIdsEqual(file.worktreeId, worktreeId) && isReplacedOpenFile(file))
     )
     const next = [...retained, ...mirroredOpenFiles]
     return sameOpenFiles(state.openFiles, next) ? state.openFiles : next

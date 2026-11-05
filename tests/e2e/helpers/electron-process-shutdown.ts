@@ -1,60 +1,21 @@
-import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import {
+  forceKillPidTree,
+  forceKillProcessTree,
+  hasExited,
+  killPid,
+  PROCESS_EXIT_TIMEOUT_MS,
+  readPosixDescendantPids,
+  releaseExitedProcessPipes,
+  waitForExit
+} from './electron-process-pid-tree'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
-const PROCESS_EXIT_TIMEOUT_MS = 5_000
-const FORCE_KILL_WAIT_MS = 2_000
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms)
-    timeout.unref?.()
-  })
-}
-
-function hasExited(proc: ChildProcess): boolean {
-  return proc.exitCode !== null || proc.signalCode !== null
-}
-
-function releaseExitedProcessPipes(proc: ChildProcess): void {
-  if (!hasExited(proc)) {
-    return
-  }
-  // Detached SSH helpers can retain inherited pipes after Electron itself exits.
-  for (const stream of proc.stdio) {
-    stream?.destroy()
-  }
-}
-
-function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
-  if (hasExited(proc)) {
-    return Promise.resolve(true)
-  }
-
-  return new Promise((resolve) => {
-    let settled = false
-    const finish = (exited: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      proc.off('exit', onExit)
-      proc.off('close', onExit)
-      resolve(exited)
-    }
-    const onExit = (): void => finish(true)
-    const timeout = setTimeout(() => finish(false), timeoutMs)
-    timeout.unref?.()
-    proc.once('exit', onExit)
-    proc.once('close', onExit)
-  })
-}
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeout: NodeJS.Timeout | null = null
@@ -71,100 +32,6 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
       clearTimeout(timeout)
     }
   }
-}
-
-function readPosixDescendantPids(rootPid: number): number[] {
-  try {
-    const output = execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' })
-    const childrenByParent = new Map<number, number[]>()
-    for (const line of output.split('\n')) {
-      const [pidText, ppidText] = line.trim().split(/\s+/)
-      const pid = Number(pidText)
-      const ppid = Number(ppidText)
-      if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
-        continue
-      }
-      const children = childrenByParent.get(ppid) ?? []
-      children.push(pid)
-      childrenByParent.set(ppid, children)
-    }
-
-    const descendants: number[] = []
-    const stack = [...(childrenByParent.get(rootPid) ?? [])]
-    while (stack.length > 0) {
-      const pid = stack.pop()
-      if (!pid) {
-        continue
-      }
-      descendants.push(pid)
-      stack.push(...(childrenByParent.get(pid) ?? []))
-    }
-    return descendants
-  } catch {
-    return []
-  }
-}
-
-function killPid(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(pid, signal)
-  } catch {
-    /* already dead or inaccessible */
-  }
-}
-
-function hasPidExited(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return false
-  } catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
-  }
-}
-
-async function forceKillPidTree(pid: number): Promise<void> {
-  if (!pid) {
-    return
-  }
-
-  if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
-    } catch {
-      /* already dead or taskkill unavailable */
-    }
-    return
-  }
-
-  // Capture descendants before killing the root or reparenting can strand Electron/shell children.
-  const pids = [...readPosixDescendantPids(pid), pid]
-  for (const targetPid of [...pids].toReversed()) {
-    killPid(targetPid, 'SIGTERM')
-  }
-  const deadline = performance.now() + FORCE_KILL_WAIT_MS
-  while (true) {
-    if (pids.every(hasPidExited)) {
-      return
-    }
-    const remainingMs = deadline - performance.now()
-    if (remainingMs <= 0) {
-      break
-    }
-    await delay(Math.min(50, remainingMs))
-  }
-  for (const targetPid of [...pids].toReversed()) {
-    killPid(targetPid, 'SIGKILL')
-  }
-}
-
-async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
-  const pid = proc.pid
-  if (!pid || hasExited(proc)) {
-    return
-  }
-
-  await forceKillPidTree(pid)
-  await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
 }
 
 // SIGKILL the whole tree without shutdown hooks for force-quit scenarios; use ordinary close for graceful persistence.

@@ -96,5 +96,47 @@
     "text": "fixtures · files named *.fixture.tsx under src/renderer/src",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/ChatFontFamilySetting.tsx",
+    "kind": "jsx-text",
+    "text": "fontFamily",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "chat",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "font",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "family",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "typeface",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/chat-appearance-search.ts",
+    "kind": "object-property:keywords",
+    "text": "typography",
+    "dynamic": false,
+    "count": 1
   }
 ]

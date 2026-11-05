@@ -55,6 +55,7 @@ async function fixture(
   const unlock = vi.fn(async () => {})
   const restart = vi.fn(async () => {})
   const restartAborted = vi.fn()
+  const prepareRestart = vi.fn(async () => {})
   const liveProtocols = vi.fn(async (): Promise<readonly number[] | HomeLiveDaemonState | null> => [
     44
   ])
@@ -70,10 +71,13 @@ async function fixture(
     sendStatus: (status) => statuses.push(status),
     restart,
     restartAborted,
+    prepareRestart,
     recordCheck: vi.fn(),
     log
   })
   return {
+    release,
+    prepareRestart,
     log,
     updater,
     fetch,
@@ -88,6 +92,202 @@ async function fixture(
 }
 
 describe('managed home updater actions', () => {
+  function omitMetadata(f: Awaited<ReturnType<typeof fixture>>): void {
+    f.release.assets = f.release.assets.filter(
+      (asset) => asset.name !== 'orca-update-protocol.json'
+    )
+  }
+
+  async function expectBlockedInstall(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
+    await f.updater.download()
+    await f.updater.restart()
+    expect(f.statuses.some((status) => status.state === 'available')).toBe(false)
+    expect(f.fetch.mock.calls.some(([url]) => url.endsWith('.AppImage'))).toBe(false)
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.prepareRestart).not.toHaveBeenCalled()
+    expect(f.restart).not.toHaveBeenCalled()
+  }
+
+  it('reads immutable metadata when an API snapshot omits its descriptor', async () => {
+    const f = await fixture()
+    omitMetadata(f)
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'available', version: '1.4.224-1' })
+    expect(f.fetch.mock.calls.map(([url]) => url)).toEqual([
+      HOME_RELEASES_API_URL,
+      'https://github.com/karlorz/orca/releases/download/v1.4.224-1/orca-update-protocol.json'
+    ])
+    expect(f.liveProtocols).toHaveBeenCalledOnce()
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.restart).not.toHaveBeenCalled()
+    expect(f.log).not.toHaveBeenCalled()
+  })
+
+  it('blocks duplicate descriptors without probing the canonical URL', async () => {
+    const f = await fixture()
+    f.release.assets.push({
+      name: 'orca-update-protocol.json',
+      browser_download_url:
+        'https://github.com/karlorz/orca/releases/download/v1.4.224-1/orca-update-protocol.json'
+    })
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining('duplicate orca-update-protocol.json descriptors'),
+      retryable: false
+    })
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('(metadata-descriptor-duplicate)'))
+    expect(f.fetch.mock.calls.map(([url]) => url)).toEqual([HOME_RELEASES_API_URL])
+    expect(f.liveProtocols).not.toHaveBeenCalled()
+    await expectBlockedInstall(f)
+  })
+
+  it.each([
+    'https://example.com/orca-update-protocol.json',
+    'https://github.com/karlorz/orca/releases/download/v1.4.224-2/orca-update-protocol.json',
+    'https://github.com/karlorz/orca/releases/download/v1.4.224-1/orca-update-protocol.json?sig=secret',
+    'https://github.com/karlorz/orca/releases/download/v1.4.224-1/orca-update-protocol.json#pairing-secret',
+    'https://account:password@github.com/karlorz/orca/releases/download/v1.4.224-1/orca-update-protocol.json'
+  ])('blocks an invalid descriptor without fetching it or falling back: %s', async (url) => {
+    const f = await fixture()
+    f.release.assets = f.release.assets.map((asset) =>
+      asset.name === 'orca-update-protocol.json' ? { ...asset, browser_download_url: url } : asset
+    )
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining('invalid orca-update-protocol.json descriptors'),
+      retryable: false
+    })
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('(metadata-descriptor-invalid)'))
+    expect(f.fetch.mock.calls.map(([requested]) => requested)).toEqual([HOME_RELEASES_API_URL])
+    expect(f.liveProtocols).not.toHaveBeenCalled()
+    expect(JSON.stringify(f.log.mock.calls)).not.toMatch(/https?:|\?|secret|account|password/)
+    await expectBlockedInstall(f)
+  })
+
+  it.each([
+    {
+      label: 'HTTP 404',
+      response: async () => new Response('Not Found', { status: 404 }),
+      reason: 'metadata-http-404',
+      retryable: false
+    },
+    {
+      label: 'malformed JSON',
+      response: async () => new Response('{'),
+      reason: 'metadata-invalid',
+      retryable: true
+    },
+    {
+      label: 'invalid schema',
+      response: async () => Response.json({ schemaVersion: 2 }),
+      reason: 'metadata-invalid',
+      retryable: true
+    },
+    {
+      label: 'wrong tag',
+      response: async () =>
+        Response.json({ schemaVersion: 1, tag: 'v1.4.224-2', daemonProtocol: 44 }),
+      reason: 'metadata-tag-mismatch',
+      retryable: false
+    },
+    {
+      label: 'HTTP 503',
+      response: async () => new Response('Unavailable', { status: 503 }),
+      reason: 'metadata-http-503',
+      retryable: true
+    },
+    {
+      label: 'transport failure',
+      response: async (): Promise<Response> => {
+        throw new Error('fetch failed https://account:password@example.com/?pairing=secret')
+      },
+      reason: 'metadata-fetch-failed',
+      retryable: true
+    }
+  ])('keeps omitted-descriptor fallback blocked on $label', async (testCase) => {
+    const f = await fixture(44, 'v1.4.224-0', 'v1.4.224-1', testCase.response)
+    omitMetadata(f)
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: testCase.retryable })
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining(`(${testCase.reason})`))
+    expect(f.fetch).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(f.log.mock.calls)).not.toMatch(/https?:|\?|secret|account|password/)
+    await expectBlockedInstall(f)
+  })
+
+  it.each([
+    { protocols: null, reason: 'unavailable' as const },
+    { protocols: null, reason: 'timeout' as const },
+    { protocols: null, reason: 'adapter-error' as const },
+    { protocols: [] }
+  ])('still blocks unknown live state after fallback succeeds: %j', async (live) => {
+    const f = await fixture()
+    omitMetadata(f)
+    f.liveProtocols.mockResolvedValue(live)
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: true })
+    expect(f.log).toHaveBeenCalledWith(
+      expect.stringContaining('gate blocked: daemon-state-unknown')
+    )
+    await expectBlockedInstall(f)
+  })
+
+  it('blocks target 51 against verified 49/50 after fallback and attributes the gate', async () => {
+    const f = await fixture(51, 'v1.4.237-2', 'v1.4.237-3')
+    omitMetadata(f)
+    f.liveProtocols.mockResolvedValue([49, 50])
+    await f.updater.check(true)
+    expect(f.statuses.at(-1)).toMatchObject({
+      state: 'error',
+      message: expect.stringContaining('v1.4.237-3 needs daemon protocol 51; live daemons: 49, 50'),
+      retryable: false
+    })
+    const line = f.log.mock.calls[0]?.[0]
+    expect(line).toMatch(
+      /^\[updater\] home AppImage gate blocked: protocol-mismatch \(protocol-mismatch\) tag=v1\.4\.237-3 stage=check time=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/
+    )
+    expect(line).not.toMatch(/https?:|\?|secret|password/)
+    await expectBlockedInstall(f)
+  })
+
+  it('rechecks fallback metadata against live protocols before committing', async () => {
+    const f = await fixture()
+    omitMetadata(f)
+    await f.updater.check()
+    f.liveProtocols.mockResolvedValueOnce([44]).mockResolvedValue([45])
+    await f.updater.download()
+    expect(f.statuses.at(-1)).toMatchObject({ state: 'error', retryable: false })
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('tag=v1.4.224-1 stage=pre-commit'))
+    expect(f.commit).not.toHaveBeenCalled()
+    expect(f.restart).not.toHaveBeenCalled()
+  })
+
+  it('rechecks fallback metadata after restart preparation', async () => {
+    const f = await fixture()
+    omitMetadata(f)
+    await f.updater.check()
+    await f.updater.download()
+    f.prepareRestart.mockImplementation(async () => {
+      f.liveProtocols.mockResolvedValue([45])
+    })
+    await f.updater.restart()
+    expect(f.prepareRestart).toHaveBeenCalledOnce()
+    expect(f.restart).not.toHaveBeenCalled()
+    expect(f.restartAborted).toHaveBeenCalledOnce()
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('tag=v1.4.224-1 stage=pre-restart'))
+  })
+
+  it('attributes installed-tag metadata failures to initialization', async () => {
+    const f = await fixture(45)
+    f.reconcile.mockResolvedValue({ tag: 'v1.4.224-1' })
+    await f.updater.check()
+    expect(f.log).toHaveBeenCalledWith(expect.stringContaining('tag=v1.4.224-1 stage=initialize'))
+    expect(f.statuses.some((status) => status.state === 'downloaded')).toBe(false)
+    expect(f.restart).not.toHaveBeenCalled()
+  })
+
   it('offers 230-1 to a running 229-10 build across the numeric fork suffixes', async () => {
     const f = await fixture(44, 'v1.4.229-10', 'v1.4.230-1')
     await f.updater.check(true)
@@ -120,7 +320,7 @@ describe('managed home updater actions', () => {
       retryable: false
     })
     expect(f.log).toHaveBeenCalledWith(
-      '[updater] home AppImage gate blocked: protocol-mismatch (protocol-mismatch)'
+      expect.stringContaining('gate blocked: protocol-mismatch (protocol-mismatch)')
     )
     expect(f.commit).not.toHaveBeenCalled()
     expect(f.restart).not.toHaveBeenCalled()
@@ -141,7 +341,7 @@ describe('managed home updater actions', () => {
     })
     expect(f.statuses.some((status) => status.state === 'available')).toBe(false)
     expect(f.log).toHaveBeenCalledWith(
-      '[updater] home AppImage gate blocked: daemon-state-unknown (none-live)'
+      expect.stringContaining('gate blocked: daemon-state-unknown (none-live)')
     )
     await f.updater.download()
     expect(f.commit).not.toHaveBeenCalled()
@@ -210,7 +410,7 @@ describe('managed home updater actions', () => {
     expect(f.statuses.at(-1)).toMatchObject({
       state: 'error',
       message: expect.stringContaining(
-        'attended daemon protocol update (v1.4.224-1 publishes no orca-update-protocol.json)'
+        'attended daemon protocol update (v1.4.224-1 protocol metadata request returned HTTP 404)'
       ),
       retryable: false
     })
