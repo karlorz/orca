@@ -160,8 +160,8 @@ it.each([
   const warm = parse(readFileSync(source, 'utf8')).jobs['warm-linux-package-fixtures']
   const context = { github: { event_name: event } }
   expect(warm['runs-on']).toBe(
-      "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}"
-    )
+    "${{ github.repository == 'karlorz/orca' && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}"
+  )
   expect(warm.steps.map((step) => step.uses)).toEqual([
     'actions/checkout@v6',
     './.github/actions/prepare-linux-package-fixture',
