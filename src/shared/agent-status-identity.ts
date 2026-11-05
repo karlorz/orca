@@ -102,12 +102,13 @@ export function resolveAgentStatusIdentity(args: {
     !args.existing.agentPresence?.suspended &&
     (otherProcessOwner || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
   ) {
-    // Why: a nested child that posted while the owner idled must not silence the owner's next session (#30589).
+    // Why: a working nested child must not silence the owner's next session (#30589); idle process owners still keep resume identity.
     if (
       args.incomingSession &&
       incomingAgentType !== existingAgentType &&
       !args.incomingProcess &&
-      args.existing.agentPresence?.process
+      args.existing.agentPresence?.process &&
+      isActiveExistingIdentity(args.existing, args.now, staleAfterMs)
     ) {
       return { agentType: incomingAgentType, inheritedFromActivePane: false }
     }
