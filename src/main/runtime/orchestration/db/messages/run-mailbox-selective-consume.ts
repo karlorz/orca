@@ -100,6 +100,21 @@ export function getRunMailboxSnapshot(
   return entries
 }
 
+/** The target only counts while it is currently unread in this exact Run mailbox. */
+function readRunMailboxTarget(
+  db: OrchestrationDb,
+  runId: string,
+  messageId: string
+): { read: number } | undefined {
+  return db.db
+    .prepare(
+      `SELECT read FROM messages
+       WHERE id = ? AND run_id = ? AND to_handle = ?
+         AND delivery_contract = 'current_delivery'`
+    )
+    .get(messageId, runId, `run:${runId}`) as { read: number } | undefined
+}
+
 function countUnrelatedMutations(
   before: MailboxSnapshotEntry[],
   after: MailboxSnapshotEntry[],
@@ -133,8 +148,9 @@ export function selectiveConsumeMailboxDelivery(
     })
     const before = this.getRunMailboxSnapshot(params.runId)
     const fenceBefore = this.getRunMailboxFence(params.runId)
-    const target = before.find((entry) => entry.message_ids.includes(params.messageId))
-    if (!target) {
+    const targetRow = readRunMailboxTarget(this, params.runId, params.messageId)
+    // Already read (standalone, acknowledged history, fenced history) is a no-op, never acceptance.
+    if (!targetRow || targetRow.read !== 0) {
       this.db.exec('COMMIT')
       return {
         target_accept_count: 0,
@@ -144,8 +160,19 @@ export function selectiveConsumeMailboxDelivery(
         fence: fenceBefore
       }
     }
-    if (target.delivery_id !== null) {
-      const delivery = this.getDeliveryRaw(target.delivery_id)
+    const targetEntries = before.filter((entry) => entry.message_ids.includes(params.messageId))
+    if (targetEntries.length === 0) {
+      throw new OrchestrationError(
+        'selective_consume_verification_failed',
+        'The unread target is missing from the mailbox snapshot; the transaction was rolled back.',
+        { before }
+      )
+    }
+    for (const entry of targetEntries) {
+      if (entry.delivery_id === null) {
+        continue
+      }
+      const delivery = this.getDeliveryRaw(entry.delivery_id)
       if (delivery?.status === 'outstanding') {
         throw new OrchestrationError(
           'outstanding_delivery_conflict',
@@ -157,6 +184,19 @@ export function selectiveConsumeMailboxDelivery(
     this.markAsRead([params.messageId])
     const after = this.getRunMailboxSnapshot(params.runId, [params.messageId])
     const fence = this.getRunMailboxFence(params.runId)
+    const afterTargetEntries = after.filter((entry) =>
+      entry.message_ids.includes(params.messageId)
+    )
+    if (
+      afterTargetEntries.length === 0 ||
+      !afterTargetEntries.every((entry) => entry.read.every((flag) => flag === 1))
+    ) {
+      throw new OrchestrationError(
+        'selective_consume_verification_failed',
+        'Selective consume did not observe the target read transition; the transaction was rolled back.',
+        { before, after }
+      )
+    }
     const unrelatedMutationCount = countUnrelatedMutations(before, after, params.messageId)
     if (unrelatedMutationCount > 0) {
       throw new OrchestrationError(

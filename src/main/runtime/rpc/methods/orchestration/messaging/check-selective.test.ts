@@ -46,6 +46,21 @@ describe('orchestration check --selective and mailbox fence', () => {
     return activeRunId
   }
 
+  function insertHistoryDelivery(
+    id: string,
+    messageIds: string[],
+    status: 'acknowledged' | 'fenced',
+    acknowledgedAt: string | null = null
+  ): void {
+    db.db
+      .prepare(
+        `INSERT INTO deliveries (
+           id, run_id, mailbox_handle, consumer_generation, message_ids, status, created_at, acknowledged_at
+         ) VALUES (?, ?, ?, 0, ?, ?, datetime('now'), ?)`
+      )
+      .run(id, runId(), `run:${runId()}`, JSON.stringify(messageIds), status, acknowledgedAt)
+  }
+
   it('marks exactly the target read and reports an unchanged snapshot otherwise', async () => {
     setup()
     const target = insert('target')
@@ -116,7 +131,157 @@ describe('orchestration check --selective and mailbox fence', () => {
     })) as SelectiveConsumeResult
     expect(readTarget.target_accept_count).toBe(0)
     expect(readTarget.after).toEqual(readTarget.before)
+    expect(readTarget.fence).toBe(db.getRunMailboxFence(runId()))
     expect(db.getMessageById(second.id)?.read).toBe(0)
+  })
+
+  it('treats an acknowledged-history target as a no-op with no fence bump', async () => {
+    setup()
+    const target = insert('acked')
+    const run = db.getRun(runId())
+    const delivery = db.getOrCreateRunDelivery({
+      runId: runId(),
+      consumerGeneration: run?.consumer_generation ?? 0
+    })
+    if (!delivery) {
+      throw new Error('Expected a Delivery')
+    }
+    db.acknowledgeRunDelivery({
+      runId: runId(),
+      consumerGeneration: run?.consumer_generation ?? 0,
+      deliveryId: delivery.delivery.id
+    })
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(0)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore)
+    expect(result.after).toEqual(result.before)
+    expect(result.before).toEqual([
+      {
+        delivery_id: delivery.delivery.id,
+        message_ids: [target.id],
+        read: [1],
+        acknowledged: true
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+  })
+
+  it('treats a read target in fenced history as a no-op', async () => {
+    setup()
+    const target = insert('fenced-read')
+    const run = db.getRun(runId())
+    const delivery = db.getOrCreateRunDelivery({
+      runId: runId(),
+      consumerGeneration: run?.consumer_generation ?? 0
+    })
+    if (!delivery) {
+      throw new Error('Expected a Delivery')
+    }
+    db.markAsRead([target.id])
+    db.fenceUnacknowledgedMailboxDeliveries(`run:${runId()}`)
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore)
+    expect(result.after).toEqual(result.before)
+    expect(result.before).toEqual([
+      {
+        delivery_id: delivery.delivery.id,
+        message_ids: [target.id],
+        read: [1],
+        acknowledged: false
+      }
+    ])
+  })
+
+  it('consumes an unread target held only by fenced history', async () => {
+    setup()
+    const target = insert('fenced-unread')
+    const run = db.getRun(runId())
+    const delivery = db.getOrCreateRunDelivery({
+      runId: runId(),
+      consumerGeneration: run?.consumer_generation ?? 0
+    })
+    if (!delivery) {
+      throw new Error('Expected a Delivery')
+    }
+    db.fenceUnacknowledgedMailboxDeliveries(`run:${runId()}`)
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(1)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore + 1)
+    expect(result.after).toEqual([
+      {
+        delivery_id: delivery.delivery.id,
+        message_ids: [target.id],
+        read: [1],
+        acknowledged: false
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+  })
+
+  it('is a no-op for an already-read target with duplicate historical memberships', async () => {
+    setup()
+    const target = insert('duplicate-read')
+    db.markAsRead([target.id])
+    insertHistoryDelivery('delivery_hist_a', [target.id], 'acknowledged', '2026-01-01 00:00:00')
+    insertHistoryDelivery('delivery_hist_b', [target.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore)
+    expect(result.after).toEqual(result.before)
+    expect(result.before).toHaveLength(2)
+    expect(result.before.every((entry) => entry.read[0] === 1)).toBe(true)
+  })
+
+  it('marks an unread target read across duplicate historical memberships', async () => {
+    setup()
+    const target = insert('duplicate-unread')
+    insertHistoryDelivery('delivery_hist_c', [target.id], 'acknowledged', '2026-01-01 00:00:00')
+    insertHistoryDelivery('delivery_hist_d', [target.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(1)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore + 1)
+    expect(result.before.map((entry) => entry.read)).toEqual([[0], [0]])
+    expect(result.after.map((entry) => entry.read)).toEqual([[1], [1]])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
   })
 
   it('fails closed without mutation when the target sits in an outstanding Delivery', async () => {
