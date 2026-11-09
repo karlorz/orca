@@ -162,6 +162,137 @@ describe('task unique binding', () => {
     expect(db.listTaskBindingIntents(unbound.id)).toHaveLength(0)
   })
 
+  it('rejects the same exact card under a different message and job', () => {
+    const db = open()
+    const winner = db.createTask({ runId, spec: 'first', binding: binding() })
+
+    const conflict = captureOrchestrationError(() =>
+      db.createTask({
+        runId,
+        spec: 'same card',
+        binding: binding({
+          messageId: 'msg_other_card',
+          intentJob: 'job_other_card',
+          intentRun: 'run_other_card'
+        })
+      })
+    )
+
+    expect(conflict.code).toBe('K_CONFLICT')
+    expect(conflict.data).toMatchObject({
+      existing_task_id: winner.id,
+      reason: 'binding_mismatch'
+    })
+    expect(db.listTasks({ messageId: 'msg_other_card' })).toHaveLength(0)
+    expect(db.listTaskBindingIntents(winner.id)).toHaveLength(1)
+  })
+
+  it('rejects a new message and card that reuse the same intent job', () => {
+    const db = open()
+    const winner = db.createTask({ runId, spec: 'first', binding: binding() })
+
+    const conflict = captureOrchestrationError(() =>
+      db.createTask({
+        runId,
+        spec: 'same job',
+        binding: binding({
+          messageId: 'msg_other_job',
+          cardDigest: CARD_B,
+          intentRun: 'run_other_job'
+        })
+      })
+    )
+
+    expect(conflict.code).toBe('K_CONFLICT')
+    expect(conflict.data).toMatchObject({
+      existing_task_id: winner.id,
+      reason: 'binding_mismatch'
+    })
+    expect(db.listTasks({ messageId: 'msg_other_job' })).toHaveLength(0)
+    expect(db.getTaskByIntentJob('job_target_1')?.id).toBe(winner.id)
+  })
+
+  it('rejects changed intent job or run on the same message', () => {
+    const db = open()
+    const winner = db.createTask({ runId, spec: 'first', binding: binding() })
+
+    for (const changed of [binding({ intentJob: 'job_changed' }), binding({ intentRun: 'run_changed' })]) {
+      const conflict = captureOrchestrationError(() =>
+        db.createTask({ runId, spec: 'changed', binding: changed })
+      )
+      expect(conflict.code).toBe('K_CONFLICT')
+      expect(conflict.data).toMatchObject({
+        existing_task_id: winner.id,
+        reason: 'binding_mismatch'
+      })
+    }
+    expect(db.listTasks({ messageId: 'msg_binding_target_1' })).toHaveLength(1)
+  })
+
+  it('rejects a cross-Run rebinding of the same message', () => {
+    const db = open()
+    const runA = db.createRun({
+      objective: 'A',
+      coordinatorHandle: 'term_a',
+      coordinatorPaneKey: 'tab_a:11111111-1111-4111-8111-111111111111'
+    })
+    const runB = db.createRun({
+      objective: 'B',
+      coordinatorHandle: 'term_b',
+      coordinatorPaneKey: 'tab_b:22222222-2222-4222-9222-222222222222'
+    })
+    const winner = db.createTask({ runId: runA.id, spec: 'first', binding: binding() })
+
+    const conflict = captureOrchestrationError(() =>
+      db.createTask({
+        runId: runB.id,
+        spec: 'rebind',
+        binding: binding({
+          cardDigest: CARD_B,
+          intentJob: 'job_rebind',
+          intentRun: 'run_rebind'
+        })
+      })
+    )
+
+    expect(conflict.code).toBe('K_CONFLICT')
+    expect(conflict.data).toMatchObject({
+      existing_task_id: winner.id,
+      reason: 'binding_mismatch'
+    })
+    expect(winner.run_id).toBe(runA.id)
+    expect(db.listTasks({ runId: runB.id })).toHaveLength(0)
+    expect(db.getTaskByMessageId('msg_binding_target_1')?.run_id).toBe(runA.id)
+  })
+
+  it('keeps the first serialized winner across two database connections', () => {
+    const path = databasePath()
+    const first = open(path)
+    const runA = first.createRun({
+      objective: 'A',
+      coordinatorHandle: 'term_a',
+      coordinatorPaneKey: 'tab_a:11111111-1111-4111-8111-111111111111'
+    })
+    const winner = first.createTask({ runId: runA.id, spec: 'first', binding: binding() })
+
+    const second = open(path)
+    const runB = second.createRun({
+      objective: 'B',
+      coordinatorHandle: 'term_b',
+      coordinatorPaneKey: 'tab_b:22222222-2222-4222-9222-222222222222'
+    })
+    const conflict = captureOrchestrationError(() =>
+      second.createTask({ runId: runB.id, spec: 'second', binding: binding() })
+    )
+
+    expect(conflict.code).toBe('K_CONFLICT')
+    expect(conflict.data).toMatchObject({
+      existing_task_id: winner.id,
+      reason: 'same_message'
+    })
+    expect(second.listTasks({ runId: runB.id })).toHaveLength(0)
+  })
+
   it('reads the binding back after reopening a file-backed database', () => {
     const path = databasePath()
     const first = open(path)

@@ -8,7 +8,8 @@ import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import { TASK_COLUMN_LIST, TASK_COLUMN_LIST_ALIASED } from '../row-column-lists'
 import {
-  isUniqueMessageIdError,
+  bindingIntegrityConflictError,
+  isUniqueBindingError,
   taskBindingConflictError,
   validateTaskBinding,
   type TaskBindingInput
@@ -62,7 +63,7 @@ export function createTask(
   })
   return runLifecycleWriteTransaction(this.db, TASK_CREATE_SAVEPOINT, () => {
     if (binding) {
-      const existing = this.getTaskByMessageId(binding.messageId)
+      const existing = this.findTaskBindingConflict(binding)
       if (existing) {
         throw taskBindingConflictError(existing, binding)
       }
@@ -108,11 +109,11 @@ export function createTask(
           binding?.intentRun ?? null
         )
     } catch (error) {
-      if (binding && isUniqueMessageIdError(error)) {
-        const existing = this.getTaskByMessageId(binding.messageId)
-        if (existing) {
-          throw taskBindingConflictError(existing, binding)
-        }
+      if (binding && isUniqueBindingError(error)) {
+        const existing = this.findTaskBindingConflict(binding)
+        throw existing
+          ? taskBindingConflictError(existing, binding)
+          : bindingIntegrityConflictError(binding)
       }
       throw error
     }

@@ -5,6 +5,7 @@ import { DERIVED_DELIVERY_SCHEMA_SQL } from './migrate-v41'
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(`${createCoreTablesSql()}\n${createGraphTablesSql()}`)
+  this.createTaskBindingIndexesIfPossible()
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

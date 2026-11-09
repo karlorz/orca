@@ -1,9 +1,20 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { TASK_BINDING_UNIQUE_INDEXES_SQL } from './create-graph-tables-sql'
+import { assertNoDuplicateTaskBindings } from './task-binding-indexes'
 import { OUTSTANDING_MAILBOX_INDEX_SQL } from './migrate-v41'
 
 export function hasColumn(this: OrchestrationDb, table: string, column: string): boolean {
   const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
   return rows.some((r) => r.name === column)
+}
+
+// A pre-v44 tasks table has no binding columns yet; migrateV45 creates these after v44 adds them.
+export function createTaskBindingIndexesIfPossible(this: OrchestrationDb): void {
+  if (!this.hasColumn('tasks', 'card_digest') || !this.hasColumn('tasks', 'intent_job')) {
+    return
+  }
+  assertNoDuplicateTaskBindings.call(this)
+  this.db.exec(TASK_BINDING_UNIQUE_INDEXES_SQL)
 }
 
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
@@ -73,6 +84,7 @@ export function messagesTypeCheckAllowsQuestion(this: OrchestrationDb): boolean 
 
 export type SchemaColumnProbesMethods = {
   hasColumn: typeof hasColumn
+  createTaskBindingIndexesIfPossible: typeof createTaskBindingIndexesIfPossible
   createMailboxDeliveryIndexesIfPossible: typeof createMailboxDeliveryIndexesIfPossible
   messagesTypeCheckAllowsHeartbeat: typeof messagesTypeCheckAllowsHeartbeat
   messagesTypeCheckAllowsQuestion: typeof messagesTypeCheckAllowsQuestion
@@ -81,6 +93,7 @@ export type SchemaColumnProbesMethods = {
 export function attachSchemaColumnProbes(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     hasColumn,
+    createTaskBindingIndexesIfPossible,
     createMailboxDeliveryIndexesIfPossible,
     messagesTypeCheckAllowsHeartbeat,
     messagesTypeCheckAllowsQuestion

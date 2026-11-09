@@ -35,6 +35,7 @@ export function taskBindingConflictError(
   binding: TaskBindingInput
 ): OrchestrationError {
   const sameBinding =
+    existing.message_id === binding.messageId &&
     existing.card_digest === binding.cardDigest &&
     (existing.intent_job ?? null) === binding.intentJob &&
     (existing.intent_run ?? null) === binding.intentRun
@@ -55,11 +56,23 @@ export function taskBindingConflictError(
   )
 }
 
-export function isUniqueMessageIdError(error: unknown): boolean {
+/** Any M/C/J identity collision is one structured conflict class. */
+export function isUniqueBindingError(error: unknown): boolean {
   return (
     error instanceof Error &&
     (error.message.includes('tasks.message_id') ||
+      error.message.includes('tasks.card_digest') ||
+      error.message.includes('tasks.intent_job') ||
       error.message.includes('task_binding_intents.message_id'))
+  )
+}
+
+/** Fail closed when a unique violation's winner cannot be read; never report a false absence. */
+export function bindingIntegrityConflictError(binding: TaskBindingInput): OrchestrationError {
+  return new OrchestrationError(
+    'K_CONFLICT',
+    `A conflicting binding for message ${binding.messageId} exists but its winner could not be read; no Task was created.`,
+    { existing_task_id: null, existing: null, reason: 'binding_mismatch' }
   )
 }
 
@@ -68,6 +81,36 @@ export function getTaskByMessageId(this: OrchestrationDb, messageId: string): Ta
   return this.db
     .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE message_id = ?`)
     .get(messageId) as TaskRow | undefined
+}
+
+export function getTaskByCardDigest(
+  this: OrchestrationDb,
+  cardDigest: string
+): TaskRow | undefined {
+  return this.db
+    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE card_digest = ?`)
+    .get(cardDigest) as TaskRow | undefined
+}
+
+export function getTaskByIntentJob(
+  this: OrchestrationDb,
+  intentJob: string
+): TaskRow | undefined {
+  return this.db
+    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE intent_job = ?`)
+    .get(intentJob) as TaskRow | undefined
+}
+
+/** Global identity order: original message, then exact card, then fully-qualified intent job. */
+export function findTaskBindingConflict(
+  this: OrchestrationDb,
+  binding: TaskBindingInput
+): TaskRow | undefined {
+  return (
+    this.getTaskByMessageId(binding.messageId) ??
+    this.getTaskByCardDigest(binding.cardDigest) ??
+    this.getTaskByIntentJob(binding.intentJob)
+  )
 }
 
 export function listTaskBindingIntents(
@@ -106,6 +149,9 @@ export function insertTaskBindingIntent(
 
 export type TaskBindingStoreMethods = {
   getTaskByMessageId: typeof getTaskByMessageId
+  getTaskByCardDigest: typeof getTaskByCardDigest
+  getTaskByIntentJob: typeof getTaskByIntentJob
+  findTaskBindingConflict: typeof findTaskBindingConflict
   listTaskBindingIntents: typeof listTaskBindingIntents
   insertTaskBindingIntent: typeof insertTaskBindingIntent
 }
@@ -113,6 +159,9 @@ export type TaskBindingStoreMethods = {
 export function attachTaskBindingStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getTaskByMessageId,
+    getTaskByCardDigest,
+    getTaskByIntentJob,
+    findTaskBindingConflict,
     listTaskBindingIntents,
     insertTaskBindingIntent
   })

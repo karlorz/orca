@@ -5,6 +5,15 @@ import {
 } from '../pane-key-match'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
 
+// Binding identities are global to the orchestration graph DB; first write wins, no remapping.
+// Fresh databases create these once the columns exist; pre-v45 databases get them from migrateV45.
+export const TASK_BINDING_UNIQUE_INDEXES_SQL = `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_card_digest_unique
+  ON tasks(card_digest) WHERE card_digest IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_intent_job_unique
+  ON tasks(intent_job) WHERE intent_job IS NOT NULL;
+`
+
 // Additive tables outlive v30 writers, so legacy parent deletes must clean their rows too.
 export const ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL = `
 CREATE TRIGGER IF NOT EXISTS trg_tasks_delete_additive_lifecycle
