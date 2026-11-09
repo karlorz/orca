@@ -59,12 +59,24 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       count: number
       runId?: string
       legacyReadOnly?: boolean
+      scope?: 'global' | 'run-filtered'
+      bound?: boolean
+      task_id?: string | null
+      binding?: {
+        message_id: string
+        card_digest: string
+        intent_job: string | null
+        intent_run: string | null
+        generation: number
+      } | null
+      global_binding_exists?: boolean | null
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
       brief: brief ? true : undefined,
       messageId: getOptionalStringFlag(flags, 'message-id'),
       cardDigest: getOptionalStringFlag(flags, 'card'),
+      globalBinding: flags.has('global-binding') ? true : undefined,
       run,
       callerTerminalHandle
     })
@@ -78,6 +90,16 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         }
       : result
     printResult(output, json, (r) => {
+      if (r.scope === 'global') {
+        if (!r.bound || !r.binding) {
+          return `No global binding for ${getOptionalStringFlag(flags, 'message-id') ?? '?'}.`
+        }
+        return (
+          `Global binding: ${r.task_id} message=${r.binding.message_id} ` +
+          `card=${r.binding.card_digest} job=${r.binding.intent_job ?? '-'} ` +
+          `run=${r.binding.intent_run ?? '-'} generation=${r.binding.generation}`
+        )
+      }
       if (r.count === 0) {
         return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
       }

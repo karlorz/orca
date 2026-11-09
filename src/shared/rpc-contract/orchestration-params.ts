@@ -151,17 +151,43 @@ export const TaskCreateParams = z
     }
   })
 
-export const TaskListParams = z.object({
-  status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
-  ready: OptionalBoolean,
-  // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
-  brief: OptionalBoolean,
-  run: OptionalString,
-  callerTerminalHandle: OptionalString,
-  // Authoritative K readback: an empty result is the only safe-absence signal.
-  messageId: OptionalString,
-  cardDigest: OptionalString
-})
+export const TaskListParams = z
+  .object({
+    status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
+    ready: OptionalBoolean,
+    // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
+    brief: OptionalBoolean,
+    run: OptionalString,
+    callerTerminalHandle: OptionalString,
+    // Scoped readback: count 0 here is scoped absence, never global absence.
+    messageId: OptionalString,
+    cardDigest: OptionalString,
+    // Global probe: the only authoritative M lookup across Runs.
+    globalBinding: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    if (params.globalBinding !== true) {
+      return
+    }
+    if (!params.messageId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--global-binding requires --message-id.',
+        path: ['messageId']
+      })
+    }
+    if (
+      params.cardDigest !== undefined ||
+      params.status !== undefined ||
+      params.ready === true ||
+      params.brief === true
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--global-binding cannot be combined with card, status, ready, or brief filters.'
+      })
+    }
+  })
 
 export const TaskShowParams = z.object({
   id: requiredString('Missing --id'),

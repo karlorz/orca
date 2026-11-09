@@ -90,6 +90,15 @@ export const ORCHESTRATION_TASK_METHODS = [
       { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
     ) => {
       const db = runtime.getOrchestrationDb()
+      if (params.globalBinding === true) {
+        const task = db.getTaskByMessageId(params.messageId ?? '')
+        return {
+          scope: 'global',
+          bound: task !== undefined,
+          task_id: task?.id ?? null,
+          binding: task ? exposeTaskBinding(task) : null
+        }
+      }
       const explicitRun = params.run ? db.getRun(params.run) : undefined
       const run =
         explicitRun?.legacy === 1
@@ -121,6 +130,10 @@ export const ORCHESTRATION_TASK_METHODS = [
       return {
         runId: run.id,
         legacyReadOnly: run.legacy === 1,
+        scope: 'run-filtered',
+        global_binding_exists: params.messageId
+          ? Boolean(db.getTaskByMessageId(params.messageId))
+          : null,
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
         count: tasks.length
       }

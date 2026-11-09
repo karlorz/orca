@@ -31,7 +31,7 @@ export const ORCHESTRATION_TASK_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-list'],
     summary: 'List orchestration tasks',
     usage:
-      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--message-id <M>] [--card <sha256>] [--run <run_id>] [--from <handle>] [--json]',
+      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--message-id <M>] [--card <sha256>] [--global-binding] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'status',
@@ -39,13 +39,15 @@ export const ORCHESTRATION_TASK_COMMAND_SPECS: CommandSpec[] = [
       'brief',
       'message-id',
       'card',
+      'global-binding',
       'run',
       'from'
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
       '--brief collapses whitespace and caps each spec at 160 characters.',
-      '--message-id / --card are the authoritative binding readback; count 0 is the only safe-absence signal.'
+      '--message-id / --card read back bindings inside the resolved Run; count 0 there is scoped absence only.',
+      '--global-binding --message-id <M> is the authoritative cross-Run probe and returns {bound, task_id, binding, scope: "global"}.'
     ]
   },
   {

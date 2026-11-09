@@ -140,6 +140,96 @@ describe('orchestration task unique binding RPC', () => {
     expect(empty.tasks).toEqual([])
   })
 
+  it('labels wrong-Run, wrong-card and status-filter zeros as scoped absence', async () => {
+    setup()
+    const created = (await call('orchestration.taskCreate', {
+      spec: 'bound task',
+      ...bindingParams()
+    })) as { task: { id: string } }
+    const otherRun = db.createRun({
+      objective: 'other',
+      coordinatorHandle: 'term_other',
+      coordinatorPaneKey: 'tab_other:33333333-3333-4333-8333-333333333333'
+    })
+
+    const wrongRun = (await call('orchestration.taskList', {
+      run: otherRun.id,
+      messageId: 'msg_rpc_bind_1'
+    })) as { count: number; scope: string; global_binding_exists: boolean | null }
+    expect(wrongRun.count).toBe(0)
+    expect(wrongRun.scope).toBe('run-filtered')
+    expect(wrongRun.global_binding_exists).toBe(true)
+    expect(JSON.stringify(wrongRun)).not.toContain(created.task.id)
+
+    const wrongCard = (await call('orchestration.taskList', {
+      messageId: 'msg_rpc_bind_1',
+      cardDigest: OTHER_CARD
+    })) as { count: number; global_binding_exists: boolean | null }
+    expect(wrongCard.count).toBe(0)
+    expect(wrongCard.global_binding_exists).toBe(true)
+
+    const wrongStatus = (await call('orchestration.taskList', {
+      messageId: 'msg_rpc_bind_1',
+      status: 'completed'
+    })) as { count: number; global_binding_exists: boolean | null }
+    expect(wrongStatus.count).toBe(0)
+    expect(wrongStatus.global_binding_exists).toBe(true)
+  })
+
+  it('answers the global binding probe across Runs', async () => {
+    setup()
+    const created = (await call('orchestration.taskCreate', {
+      spec: 'bound task',
+      ...bindingParams()
+    })) as { task: { id: string } }
+
+    const hit = (await call('orchestration.taskList', {
+      messageId: 'msg_rpc_bind_1',
+      globalBinding: true
+    })) as {
+      scope: string
+      bound: boolean
+      task_id: string | null
+      binding: { message_id: string; card_digest: string; task_id: string } | null
+    }
+    expect(hit.scope).toBe('global')
+    expect(hit.bound).toBe(true)
+    expect(hit.task_id).toBe(created.task.id)
+    expect(hit.binding).toMatchObject({
+      message_id: 'msg_rpc_bind_1',
+      card_digest: CARD,
+      task_id: created.task.id
+    })
+
+    const miss = (await call('orchestration.taskList', {
+      messageId: 'msg_rpc_absent',
+      globalBinding: true
+    })) as { scope: string; bound: boolean; task_id: string | null; binding: unknown }
+    expect(miss).toEqual({
+      scope: 'global',
+      bound: false,
+      task_id: null,
+      binding: null
+    })
+  })
+
+  it('rejects ambiguous global probe filters and requires a message id', async () => {
+    setup()
+    await expect(
+      call('orchestration.taskList', {
+        messageId: 'msg_rpc_bind_1',
+        globalBinding: true,
+        cardDigest: OTHER_CARD
+      })
+    ).rejects.toThrow()
+    await expect(call('orchestration.taskList', { globalBinding: true })).rejects.toThrow()
+  })
+
+  it('shares the workspace access class with task-show', () => {
+    expect(h.findMethod('orchestration.taskList').permission).toBe('workspace')
+    expect(h.findMethod('orchestration.taskShow').permission).toBe('workspace')
+  })
+
   it('shows the full row, binding and intent history', async () => {
     setup()
     const created = (await call('orchestration.taskCreate', {

@@ -95,6 +95,25 @@ describe('orchestration unique-bind CLI mapping', () => {
     )
   })
 
+  it('passes --global-binding through task-list', async () => {
+    callMock.mockResolvedValueOnce({
+      result: { scope: 'global', bound: false, task_id: null, binding: null }
+    })
+
+    await invoke(
+      'orchestration task-list',
+      new Map<string, string | boolean>([
+        ['message-id', 'msg_cli_1'],
+        ['global-binding', true]
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskList',
+      expect.objectContaining({ messageId: 'msg_cli_1', globalBinding: true })
+    )
+  })
+
   it('calls task-show with the task id', async () => {
     callMock.mockResolvedValueOnce({
       result: {
