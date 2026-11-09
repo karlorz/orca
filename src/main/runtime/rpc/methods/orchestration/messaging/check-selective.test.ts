@@ -385,4 +385,236 @@ describe('orchestration check --selective and mailbox fence', () => {
       call('orchestration.check', { terminal: 'term_worker', peek: true, expectFence: 0 })
     ).rejects.toMatchObject({ code: 'invalid_argument' })
   })
+
+  it('consumes an unread target in a multi-message fenced Delivery while the peer stays unread', async () => {
+    setup()
+    const target = insert('target-multi-fenced')
+    const peer = insert('peer-multi-fenced')
+    insertHistoryDelivery('delivery_hist_multi_fenced', [target.id, peer.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(1)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore + 1)
+    expect(result.before).toEqual([
+      {
+        delivery_id: 'delivery_hist_multi_fenced',
+        message_ids: [target.id, peer.id],
+        read: [0, 0],
+        acknowledged: false
+      }
+    ])
+    expect(result.after).toEqual([
+      {
+        delivery_id: 'delivery_hist_multi_fenced',
+        message_ids: [target.id, peer.id],
+        read: [1, 0],
+        acknowledged: false
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+    expect(db.getMessageById(peer.id)?.read).toBe(0)
+  })
+
+  it('consumes an unread target in a multi-message fenced Delivery when the peer is already read', async () => {
+    setup()
+    const target = insert('target-multi-peer-read')
+    const peer = insert('peer-multi-peer-read')
+    db.markAsRead([peer.id])
+    insertHistoryDelivery('delivery_hist_multi_peer_read', [target.id, peer.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(1)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore + 1)
+    expect(result.before).toEqual([
+      {
+        delivery_id: 'delivery_hist_multi_peer_read',
+        message_ids: [target.id, peer.id],
+        read: [0, 1],
+        acknowledged: false
+      }
+    ])
+    expect(result.after).toEqual([
+      {
+        delivery_id: 'delivery_hist_multi_peer_read',
+        message_ids: [target.id, peer.id],
+        read: [1, 1],
+        acknowledged: false
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+    expect(db.getMessageById(peer.id)?.read).toBe(1)
+  })
+
+  it('consumes an unread target spanning multiple historical Deliveries with mixed memberships', async () => {
+    setup()
+    const target = insert('target-mixed')
+    const peerA = insert('peer-mixed-a')
+    const peerB = insert('peer-mixed-b')
+    insertHistoryDelivery(
+      'delivery_hist_mixed_1',
+      [target.id, peerA.id],
+      'acknowledged',
+      '2026-01-01 00:00:00'
+    )
+    insertHistoryDelivery('delivery_hist_mixed_2', [peerB.id, target.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    const result = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(result.target_accept_count).toBe(1)
+    expect(result.unrelated_mutation_count).toBe(0)
+    expect(result.fence).toBe(fenceBefore + 1)
+    expect(result.before).toEqual([
+      {
+        delivery_id: 'delivery_hist_mixed_1',
+        message_ids: [target.id, peerA.id],
+        read: [0, 0],
+        acknowledged: true
+      },
+      {
+        delivery_id: 'delivery_hist_mixed_2',
+        message_ids: [peerB.id, target.id],
+        read: [0, 0],
+        acknowledged: false
+      }
+    ])
+    expect(result.after).toEqual([
+      {
+        delivery_id: 'delivery_hist_mixed_1',
+        message_ids: [target.id, peerA.id],
+        read: [1, 0],
+        acknowledged: true
+      },
+      {
+        delivery_id: 'delivery_hist_mixed_2',
+        message_ids: [peerB.id, target.id],
+        read: [0, 1],
+        acknowledged: false
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+    expect(db.getMessageById(peerA.id)?.read).toBe(0)
+    expect(db.getMessageById(peerB.id)?.read).toBe(0)
+  })
+
+  it('treats a repeated consume of a multi-message fenced Delivery as count0 with no fence bump', async () => {
+    setup()
+    const target = insert('target-repeat')
+    const peer = insert('peer-repeat')
+    insertHistoryDelivery('delivery_hist_repeat', [target.id, peer.id], 'fenced')
+
+    const first = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+    expect(first.target_accept_count).toBe(1)
+
+    const second = (await call('orchestration.check', {
+      terminal: 'term_coord',
+      selective: true,
+      messageId: target.id
+    })) as SelectiveConsumeResult
+
+    expect(second.target_accept_count).toBe(0)
+    expect(second.unrelated_mutation_count).toBe(0)
+    expect(second.fence).toBe(first.fence)
+    expect(second.after).toEqual(second.before)
+    expect(second.before).toEqual([
+      {
+        delivery_id: 'delivery_hist_repeat',
+        message_ids: [target.id, peer.id],
+        read: [1, 0],
+        acknowledged: false
+      }
+    ])
+    expect(db.getMessageById(target.id)?.read).toBe(1)
+    expect(db.getMessageById(peer.id)?.read).toBe(0)
+  })
+
+  it('rolls back when a trigger marks a shared-entry peer read during consume', async () => {
+    setup()
+    const target = insert('target-trigger-peer')
+    const peer = insert('peer-trigger-peer')
+    insertHistoryDelivery('delivery_hist_trigger_peer', [target.id, peer.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    db.db.exec(`
+      CREATE TEMP TRIGGER mutate_peer_on_target_read
+      AFTER UPDATE OF read ON messages
+      WHEN NEW.id = '${target.id}' AND NEW.read = 1
+      BEGIN
+        UPDATE messages SET read = 1 WHERE id = '${peer.id}';
+      END;
+    `)
+
+    await expect(
+      call('orchestration.check', {
+        terminal: 'term_coord',
+        selective: true,
+        messageId: target.id
+      })
+    ).rejects.toMatchObject({
+      code: 'selective_consume_verification_failed',
+      data: { unrelated_mutation_count: 1 }
+    })
+
+    expect(db.getMessageById(target.id)?.read).toBe(0)
+    expect(db.getMessageById(peer.id)?.read).toBe(0)
+    expect(db.getRunMailboxFence(runId())).toBe(fenceBefore)
+  })
+
+  it('rolls back when a trigger mutates Delivery metadata during consume', async () => {
+    setup()
+    const target = insert('target-trigger-meta')
+    const peer = insert('peer-trigger-meta')
+    insertHistoryDelivery('delivery_hist_trigger_meta', [target.id, peer.id], 'fenced')
+    const fenceBefore = db.getRunMailboxFence(runId())
+
+    db.db.exec(`
+      CREATE TEMP TRIGGER mutate_delivery_status_on_target_read
+      AFTER UPDATE OF read ON messages
+      WHEN NEW.id = '${target.id}' AND NEW.read = 1
+      BEGIN
+        UPDATE deliveries SET status = 'acknowledged' WHERE id = 'delivery_hist_trigger_meta';
+      END;
+    `)
+
+    await expect(
+      call('orchestration.check', {
+        terminal: 'term_coord',
+        selective: true,
+        messageId: target.id
+      })
+    ).rejects.toMatchObject({
+      code: 'selective_consume_verification_failed',
+      data: { unrelated_mutation_count: 1 }
+    })
+
+    expect(db.getMessageById(target.id)?.read).toBe(0)
+    expect(db.getMessageById(peer.id)?.read).toBe(0)
+    expect(db.getRunMailboxFence(runId())).toBe(fenceBefore)
+    const delivery = db.db
+      .prepare('SELECT status FROM deliveries WHERE id = ?')
+      .get('delivery_hist_trigger_meta') as { status: string }
+    expect(delivery.status).toBe('fenced')
+  })
 })
