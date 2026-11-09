@@ -224,8 +224,10 @@ Snapshot vocabulary (DESIGN §7.C, exact): each entry is
 `{delivery_id, message_ids[], read[], acknowledged}`. Entries cover every Delivery for the
 mailbox in rowid order (including acknowledged/fenced history), followed by unread messages
 not held by any Delivery in sequence order (`delivery_id: null`, `read: [0]`,
-`acknowledged: false`). The just-consumed target keeps its entry so `after` differs only in
-that entry's `read` flag; duplicate memberships all flip to read.
+`acknowledged: false`). The just-consumed target keeps its entry so `after` differs only at
+the target's positions: only target indices may move `0 -> 1`, while every other
+`(message_id, read)` position in the same Delivery and each entry's `delivery_id`,
+`message_ids` order and `acknowledged` flag must compare equal.
 
 ### Outcomes
 
@@ -234,7 +236,7 @@ that entry's `read` flag; duplicate memberships all flip to read.
 | `M` is absent, outside this Run mailbox, or currently read (standalone, acknowledged, fenced, duplicate history) | `target_accept_count: 0`, `unrelated_mutation_count: 0`, `before` deep-equals `after`, fence unchanged, no write |
 | Unread `M` belongs to an outstanding Delivery | `outstanding_delivery_conflict` with `{delivery_id, message_id}`, no write, fence unchanged |
 | Unread `M` in no outstanding Delivery | exactly `M` is marked read, fence bumps once, `target_accept_count: 1`, `unrelated_mutation_count: 0` |
-| Target read transition not observed, or any non-target snapshot entry changed | transaction rolls back and fails `selective_consume_verification_failed` with the diff counts and snapshots |
+| Target read transition not observed, or any peer read flag, Delivery metadata, or non-target snapshot entry changed | transaction rolls back and fails `selective_consume_verification_failed` with the diff counts and snapshots |
 
 ## 4. Error codes
 
