@@ -60,6 +60,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
         })
       }
 
+      if (params.selective === true) {
+        throw new OrchestrationError(
+          'selective_unsupported',
+          '--selective is only supported on the Run mailbox; worker and direct mailboxes must consume a whole Delivery batch.'
+        )
+      }
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
       // Why: reading another pane's Dispatch mail is wrong in every mode, so peek is fenced too.
       if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
@@ -106,6 +112,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
           'stable_pane_required',
           `Terminal ${handle} has no live pane bound to a Run, so this inbox can never receive Run mail. Rebind this terminal with orchestration run-use, or read the Run mailbox with --run <run_id>.`,
           orchestrationSkillRecoveryData()
+        )
+      }
+      if (params.expectFence !== undefined) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          '--expect-fence requires a Run mailbox; this terminal is not bound to a Run.'
         )
       }
       return checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })

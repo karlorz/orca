@@ -34,9 +34,11 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
+      fence?: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal: getOptionalStringFlag(flags, 'terminal'),
+      run: getOptionalStringFlag(flags, 'run')
     })
     printResult(result, json, (value) => {
       if (value.count === 0) {

@@ -37,6 +37,8 @@ export type OrchestrationCheckOutput = {
   count: number
   formatted?: string
   deliveryId?: string | null
+  // Additive mailbox fence; absent on older runtimes and direct mailboxes.
+  fence?: number
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean

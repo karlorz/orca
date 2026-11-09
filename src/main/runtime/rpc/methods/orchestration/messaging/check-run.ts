@@ -61,6 +61,29 @@ export async function checkRunMailbox(args: {
     callerEvidence: orchestrationCompatibilityEvidence
   })
   const generation = run.consumer_generation
+  const fence = (): number => db.getRunMailboxFence(run.id)
+  const withRunFence = (value: unknown): unknown =>
+    value && typeof value === 'object'
+      ? { ...(value as Record<string, unknown>), fence: fence() }
+      : value
+  // Guard before routing: a stale reader must see no mutation at all.
+  if (params.expectFence !== undefined) {
+    const actualFence = fence()
+    if (actualFence !== params.expectFence) {
+      throw new OrchestrationError(
+        'fence_stale',
+        `Run mailbox fence is ${actualFence}, expected ${params.expectFence}. No effects were applied.`,
+        { expected_fence: params.expectFence, actual_fence: actualFence }
+      )
+    }
+  }
+  if (params.selective === true) {
+    return db.selectiveConsumeRunDelivery({
+      runId: run.id,
+      consumerGeneration: generation,
+      messageId: params.messageId ?? ''
+    })
+  }
   const address = `run:${run.id}`
   runtime.ensureOrchestrationFederationRelay(run.id)
   await routeDirectSnapshot(run.id, handle, (throughSequence) =>
@@ -97,12 +120,14 @@ export async function checkRunMailbox(args: {
     revalidateConsumer()
   } catch (error) {
     if (pending.acknowledged) {
-      return interruptedAcknowledgedCheck(run.id, pending.acknowledged, 'consumer_fenced')
+      return withRunFence(
+        interruptedAcknowledgedCheck(run.id, pending.acknowledged, 'consumer_fenced')
+      )
     }
     throw error
   }
   if (pending.result) {
-    return pending.result
+    return withRunFence(pending.result)
   }
   const acknowledged = pending.acknowledged
   if (params.all || (params.unread === false && !params.peek)) {
@@ -110,7 +135,8 @@ export async function checkRunMailbox(args: {
     const result = {
       messages: exposeMessages(messages),
       count: messages.length,
-      acknowledged: acknowledged ?? null
+      acknowledged: acknowledged ?? null,
+      fence: fence()
     }
     if (params.format || params.inject) {
       return {
@@ -127,6 +153,7 @@ export async function checkRunMailbox(args: {
     messages: exposeMessages(messages),
     count: messages.length,
     acknowledged: acknowledged ?? null,
+    fence: fence(),
     ...(params.format || params.inject
       ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
       : {})
@@ -147,6 +174,7 @@ export async function checkRunMailbox(args: {
       count: current.messages.length,
       replayed: current.replayed,
       acknowledged: acknowledged ?? null,
+      fence: fence(),
       timedOut: false,
       cancelled: false,
       connectionLost: false,
@@ -165,6 +193,7 @@ export async function checkRunMailbox(args: {
       messages: [],
       count: 0,
       acknowledged: acknowledged ?? null,
+      fence: fence(),
       timedOut: false,
       cancelled: false,
       connectionLost: false
@@ -182,7 +211,7 @@ export async function checkRunMailbox(args: {
     if (!acknowledged) {
       throw error
     }
-    return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
+    return withRunFence(interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced'))
   }
   const latestRun = db.getRun(run.id)
   if (!latestRun || latestRun.consumer_generation !== generation) {
@@ -204,6 +233,7 @@ export async function checkRunMailbox(args: {
       messages: [],
       count: 0,
       acknowledged: acknowledged ?? null,
+      fence: fence(),
       timedOut: true,
       cancelled: false,
       connectionLost: false
@@ -224,6 +254,7 @@ export async function checkRunMailbox(args: {
       messages: [],
       count: 0,
       acknowledged: acknowledged ?? null,
+      fence: fence(),
       timedOut: false,
       cancelled: true,
       connectionLost: signal?.aborted === true
@@ -241,6 +272,7 @@ export async function checkRunMailbox(args: {
     count: current?.messages.length ?? 0,
     replayed: current?.replayed ?? false,
     acknowledged: acknowledged ?? null,
+    fence: fence(),
     timedOut: false,
     cancelled: false,
     connectionLost: false,

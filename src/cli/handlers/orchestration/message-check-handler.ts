@@ -15,29 +15,49 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
 import { orchestrationCallerLabel, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
+type SelectiveConsumeOutput = {
+  target_accept_count: number
+  unrelated_mutation_count: number
+  before: unknown[]
+  after: unknown[]
+  fence: number
+}
+
 type CheckResult = {
   messages: MessageSummary[]
   count: number
   formatted?: string
   deliveryId?: string | null
   runId?: string
+  fence?: number
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean
   legacyCompatibility?: LegacyCompatibilityResult
-}
+} & Partial<SelectiveConsumeOutput>
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
     const peek = flags.has('peek')
+    const selective = flags.has('selective')
     // Older runtimes ignore peek, making --unread --peek destructive.
-    if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
+    if (
+      [flags.has('unread'), peek, flags.has('all'), selective].filter(Boolean).length > 1
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Choose at most one message read mode: --unread, --peek, or --all.'
+        'Choose at most one message read mode: --unread, --peek, --all, or --selective.'
       )
     }
+    const messageId = getOptionalStringFlag(flags, 'message-id')
+    if (selective && !messageId) {
+      throw new RuntimeClientError('invalid_argument', '--selective requires --message-id.')
+    }
+    if (!selective && messageId !== undefined) {
+      throw new RuntimeClientError('invalid_argument', '--message-id requires --selective.')
+    }
+    const expectFence = parseExpectFence(flags)
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
@@ -62,10 +82,19 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         run: getOptionalStringFlag(flags, 'run'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
-        timeoutMs
+        timeoutMs,
+        selective: selective ? true : undefined,
+        messageId,
+        expectFence
       })
     } finally {
       stopKeepalive?.()
+    }
+    if (selective) {
+      printResult(result, json, (value) =>
+        formatSelectiveConsumeText(value as SelectiveConsumeOutput, messageId ?? '')
+      )
+      return
     }
     if (peek) {
       result = filterLegacyPeekResult(result, wait)
@@ -90,6 +119,26 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       })
     }
   }
+}
+
+function parseExpectFence(flags: Map<string, string | boolean>): number | undefined {
+  const raw = getOptionalStringFlag(flags, 'expect-fence')
+  if (raw === undefined) {
+    return undefined
+  }
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RuntimeClientError('invalid_argument', '--expect-fence must be a non-negative integer.')
+  }
+  return value
+}
+
+function formatSelectiveConsumeText(value: SelectiveConsumeOutput, messageId: string): string {
+  return (
+    `Selective consume ${messageId}: ` +
+    `target_accept_count=${value.target_accept_count} ` +
+    `unrelated_mutation_count=${value.unrelated_mutation_count} fence=${value.fence}`
+  )
 }
 
 function filterLegacyPeekResult(

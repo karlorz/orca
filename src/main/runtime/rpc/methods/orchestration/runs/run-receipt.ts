@@ -5,7 +5,9 @@ const INTERNAL_RUN_COLUMNS = [
   'home_database',
   'coordinator_pane_key',
   'coordinator_orca_session_id',
-  'coordinator_orca_session_id_generation'
+  'coordinator_orca_session_id_generation',
+  // Mailbox fencing is an internal read guard; check/inbox expose it explicitly instead.
+  'mailbox_fence'
 ] as const
 
 export type RunReceipt = Omit<RunRow, (typeof INTERNAL_RUN_COLUMNS)[number]>

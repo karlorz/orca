@@ -60,6 +60,16 @@ export async function checkWorkerMailbox(args: {
   }
   const deliveryRunId = workerMailbox.runId
   db.requireRun(deliveryRunId)
+  if (params.expectFence !== undefined) {
+    const actualFence = db.getRunMailboxFence(deliveryRunId)
+    if (actualFence !== params.expectFence) {
+      throw new OrchestrationError(
+        'fence_stale',
+        `Run mailbox fence is ${actualFence}, expected ${params.expectFence}. No effects were applied.`,
+        { expected_fence: params.expectFence, actual_fence: actualFence }
+      )
+    }
+  }
   const mailboxIdentity = { runId: deliveryRunId, dispatchId: workerMailbox.dispatchId }
   const address = `dispatch:${workerMailbox.dispatchId}`
   // Federated hosts keep consumer generations on remote_dispatch_attachments, without a dispatch_contexts row.

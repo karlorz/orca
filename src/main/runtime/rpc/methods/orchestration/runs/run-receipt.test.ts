@@ -13,6 +13,7 @@ const RUN_ROW: RunRow = {
   coordinator_orca_session_id: testOrcaSessionId('22222222-2222-4222-8222-222222222222'),
   coordinator_orca_session_id_generation: 3,
   consumer_generation: 3,
+  mailbox_fence: 7,
   legacy: 0,
   created_at: '2026-09-04T18:53:07Z',
   updated_at: '2026-09-04T18:53:09Z'
