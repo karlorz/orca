@@ -45,19 +45,54 @@ export const CheckParams = z
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
     wait: OptionalBoolean,
-    timeoutMs: OptionalFiniteNumber
+    timeoutMs: OptionalFiniteNumber,
+    selective: OptionalBoolean,
+    messageId: OptionalString,
+    expectFence: OptionalFiniteNumber
   })
   .superRefine((params, ctx) => {
     // Why: CLI encodes --peek as {peek:true, unread:false} for pre-peek runtimes, so that pair is one mode, not a conflict.
     const modes = [
       params.unread === true,
       params.peek === true,
-      params.all === true || (params.unread === false && params.peek !== true)
+      params.all === true || (params.unread === false && params.peek !== true),
+      params.selective === true
     ].filter(Boolean)
     if (modes.length > 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+        message:
+          'Choose at most one message read mode: --unread, --peek, --all, or --selective.'
+      })
+    }
+    if (params.selective === true && !params.messageId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--selective requires --message-id.',
+        path: ['messageId']
+      })
+    }
+    if (params.selective !== true && params.messageId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--message-id requires --selective.',
+        path: ['selective']
+      })
+    }
+    if (params.selective === true && (params.ack !== undefined || params.wait === true)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--selective cannot be combined with --ack or --wait.'
+      })
+    }
+    if (
+      params.expectFence !== undefined &&
+      (!Number.isInteger(params.expectFence) || params.expectFence < 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--expect-fence must be a non-negative integer.',
+        path: ['expectFence']
       })
     }
   })
@@ -72,24 +107,64 @@ export const ReplyParams = z.object({
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
   // Filter inbox by handle to agree with check --all.
-  terminal: OptionalString
-})
-
-export const TaskCreateParams = z.object({
-  spec: requiredString('Missing --spec'),
-  taskTitle: OptionalString,
-  displayName: OptionalString,
-  deps: OptionalString,
-  parent: OptionalString,
-  callerTerminalHandle: OptionalString,
+  terminal: OptionalString,
+  // Optional Run scope: the response then carries that Run's mailbox fence.
   run: OptionalString
 })
+
+export const TaskCreateParams = z
+  .object({
+    spec: requiredString('Missing --spec'),
+    taskTitle: OptionalString,
+    displayName: OptionalString,
+    deps: OptionalString,
+    parent: OptionalString,
+    callerTerminalHandle: OptionalString,
+    run: OptionalString,
+    messageId: OptionalString,
+    cardDigest: OptionalString,
+    intentJob: OptionalString,
+    intentRun: OptionalString
+  })
+  .superRefine((params, ctx) => {
+    const fields = [params.messageId, params.cardDigest, params.intentJob, params.intentRun]
+    const present = fields.filter((value) => value !== undefined)
+    if (present.length === 0) {
+      return
+    }
+    // A unique binding is all-or-nothing; a partial intent cannot be reconciled.
+    if (present.length !== fields.length || fields.some((value) => value === '')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          '--message-id, --card, --intent-job and --intent-run must be supplied together.',
+        path: ['messageId']
+      })
+      return
+    }
+    if (!/^[0-9a-f]{64}$/.test(params.cardDigest ?? '')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--card must be exactly 64 lowercase hex characters (sha256).',
+        path: ['cardDigest']
+      })
+    }
+  })
 
 export const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
   ready: OptionalBoolean,
   // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
   brief: OptionalBoolean,
+  run: OptionalString,
+  callerTerminalHandle: OptionalString,
+  // Authoritative K readback: an empty result is the only safe-absence signal.
+  messageId: OptionalString,
+  cardDigest: OptionalString
+})
+
+export const TaskShowParams = z.object({
+  id: requiredString('Missing --id'),
   run: OptionalString,
   callerTerminalHandle: OptionalString
 })

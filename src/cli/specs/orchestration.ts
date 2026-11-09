@@ -1,4 +1,5 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
+import { ORCHESTRATION_TASK_COMMAND_SPECS } from './orchestration-task-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -88,11 +89,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'check'],
     summary: "Check this agent's messages",
     usage:
-      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
+      'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all | --selective --message-id <M>] [--expect-fence <n>] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
+      '  --selective --message-id <M>: mark exactly one Run-mailbox message read in one transaction\n' +
+      '          and report target_accept_count/unrelated_mutation_count with before/after snapshots.\n' +
+      '  --expect-fence <n>: fail with fence_stale and no mutation when the Run mailbox fence differs.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
       '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
       '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
@@ -106,6 +110,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'unread',
       'peek',
       'all',
+      'selective',
+      'message-id',
+      'expect-fence',
       'types',
       'format',
       'wait',
@@ -117,7 +124,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging. Several --wait calls may wait on one Run inbox; waiting reserves nothing, listeners woken together get the same Delivery, and a repeated --ack is a no-op.'
+      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging. Several --wait calls may wait on one Run inbox; waiting reserves nothing, listeners woken together get the same Delivery, and a repeated --ack is a no-op.',
+      '--selective is Run-mailbox only and fails closed when the target belongs to an outstanding Delivery (outstanding_delivery_conflict).'
     ]
   },
   {
@@ -131,49 +139,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
+    usage:
+      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
     identityFlagRoles: { terminal: 'target' }
   },
-  {
-    path: ['orchestration', 'task-create'],
-    summary: 'Create an orchestration task',
-    usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'spec',
-      'task-title',
-      'display-name',
-      'deps',
-      'parent',
-      'run',
-      'from',
-      'retry-request'
-    ],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'task-list'],
-    summary: 'List orchestration tasks',
-    usage:
-      'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
-    identityFlagRoles: { from: 'caller' },
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
-  },
-  {
-    path: ['orchestration', 'task-update'],
-    summary: 'Update a task status',
-    usage:
-      'orca orchestration task-update --id <task_id> --status <status> [--result <text>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'result', 'run', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' },
-    notes: [
-      'Valid --status values: pending, ready, dispatched, completed, failed, blocked.',
-      'To cancel a Task, stop or abandon its worker, then set --status failed --result cancelled; a later worker-start --retry-of reopens it.'
-    ]
-  },
+  ...ORCHESTRATION_TASK_COMMAND_SPECS,
   ...ORCHESTRATION_WORKER_COMMAND_SPECS,
   {
     path: ['orchestration', 'dispatch'],

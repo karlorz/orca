@@ -22,7 +22,8 @@ export {
   ReplyParams,
   ResetParams,
   TaskCreateParams,
-  TaskListParams
+  TaskListParams,
+  TaskShowParams
 } from '../../../../../shared/rpc-contract/orchestration-params'
 export { getLifecycleGroupRecipientError, isDispatchMutationMessageType }
 

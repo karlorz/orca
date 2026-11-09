@@ -156,6 +156,12 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'answer_conflict',
   'stale_delivery',
   'invalid_argument',
+  // PDR safe-ingress native contracts: unique bind, mailbox fence, selective consume.
+  'K_CONFLICT',
+  'fence_stale',
+  'outstanding_delivery_conflict',
+  'selective_unsupported',
+  'selective_consume_verification_failed',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   // Paired-only method refusal must match the mobile transport allowlist's forbidden code.
