@@ -33,6 +33,7 @@ import { attachMailboxPointerEnterState } from './messages/mailbox-pointer-enter
 import { attachMessageInbox } from './messages/message-inbox'
 import { attachMessageInsert } from './messages/message-insert'
 import { attachRoleMailboxDelivery } from './messages/role-mailbox-delivery'
+import { attachRunMailboxSelectiveConsume } from './messages/run-mailbox-selective-consume'
 import { attachStructuredPointerOperationStore } from './messages/structured-pointer-operation-store'
 import { attachMutationReceiptStore } from './mutation-receipts/mutation-receipt-store'
 import { attachLifecycleTransition } from './lifecycle-transition'
@@ -42,6 +43,7 @@ import { attachRunBinding } from './runs/run-binding'
 import { attachRunCoordinatorMailRouting } from './runs/run-coordinator-mail-routing'
 import { attachRunCreate } from './runs/run-create'
 import { attachRunDelivery } from './runs/run-delivery'
+import { attachRunMailboxFence } from './runs/run-mailbox-fence'
 import { attachRunLookup } from './runs/run-lookup'
 import { attachLegacyCoordinatorMailTakeover } from './runs/legacy-coordinator-mail-takeover'
 import { attachAdoptLegacyRun } from './schema/adopt-legacy-run'
@@ -50,6 +52,7 @@ import { attachCreateTables } from './schema/create-tables'
 import { attachMigrateLegacyContractStorage } from './schema/migrate-legacy-contract-storage'
 import { attachSchemaMigrate } from './schema/migrate'
 import { attachSchemaColumnProbes } from './schema/schema-column-probes'
+import { attachTaskBindingStore } from './tasks/task-binding-store'
 import { attachTaskStore } from './tasks/task-store'
 import { attachTaskStatusTransition } from './tasks/task-status-transition'
 import { attachFederatedWorkerStartReconcile } from './worker-dispatch/federated-worker-start-reconcile'
@@ -92,8 +95,10 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachRunCoordinatorMailRouting(ctor)
   attachLegacyCoordinatorMailTakeover(ctor)
   attachRunDelivery(ctor)
+  attachRunMailboxFence(ctor)
   attachMessageInsert(ctor)
   attachRoleMailboxDelivery(ctor)
+  attachRunMailboxSelectiveConsume(ctor)
   attachStructuredPointerOperationStore(ctor)
   attachMessageInbox(ctor)
   attachMailboxPointerEnterState(ctor)
@@ -101,6 +106,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachForeignDirectMailboxRouting(ctor)
   attachQuestionThreads(ctor)
   attachTaskStore(ctor)
+  attachTaskBindingStore(ctor)
   attachTaskStatusTransition(ctor)
   attachWorkerDispatchStart(ctor)
   attachWorkerDispatchStage(ctor)

@@ -7,6 +7,7 @@ import { UNBOUND_RUN_ID } from '../contract-constants'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
+const MESSAGE_INSERT_FENCE_SAVEPOINT = 'message_insert_fence'
 
 export type MessageInsert = {
   id?: string
@@ -44,23 +45,26 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  stmt.run(
-    id,
-    runId,
-    deliveryContract,
-    msg.from,
-    msg.to,
-    msg.subject,
-    msg.body ?? '',
-    msg.type ?? 'status',
-    msg.priority ?? 'normal',
-    msg.threadId ?? null,
-    msg.payload ?? null,
-    msg.senderPaneKey ?? null
-  )
-  return exposeMessageTimestamps(
-    this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
-  )
+  return runLifecycleWriteTransaction(this.db, MESSAGE_INSERT_FENCE_SAVEPOINT, () => {
+    stmt.run(
+      id,
+      runId,
+      deliveryContract,
+      msg.from,
+      msg.to,
+      msg.subject,
+      msg.body ?? '',
+      msg.type ?? 'status',
+      msg.priority ?? 'normal',
+      msg.threadId ?? null,
+      msg.payload ?? null,
+      msg.senderPaneKey ?? null
+    )
+    this.bumpRunMailboxFence(runId)
+    return exposeMessageTimestamps(
+      this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
+    )
+  })
 }
 
 export function insertMessages(this: OrchestrationDb, messages: MessageInsert[]): MessageRow[] {

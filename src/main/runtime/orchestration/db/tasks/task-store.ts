@@ -5,7 +5,16 @@ import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
+import { TASK_COLUMN_LIST, TASK_COLUMN_LIST_ALIASED } from '../row-column-lists'
+import {
+  isUniqueMessageIdError,
+  taskBindingConflictError,
+  validateTaskBinding,
+  type TaskBindingInput
+} from './task-binding-store'
+
+const TASK_CREATE_SAVEPOINT = 'task_create_binding'
 
 export function createTask(
   this: OrchestrationDb,
@@ -20,11 +29,16 @@ export function createTask(
     createdByProcessIncarnation?: string
     createdByRunGeneration?: number
     runId?: string
+    binding?: TaskBindingInput
   }
 ): TaskRow {
   const runId = task.runId
   if (!runId) {
     throw new Error('Run is required')
+  }
+  const binding = task.binding
+  if (binding) {
+    validateTaskBinding(binding)
   }
   this.requireRun(runId)
   if (task.parentId) {
@@ -46,48 +60,71 @@ export function createTask(
     taskTitle: task.taskTitle,
     displayName: task.displayName
   })
-  this.db
-    .prepare(
-      `INSERT INTO tasks (
-         id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
-         created_by_process_incarnation, created_by_run_generation,
-         task_title, display_name, spec, status, deps
-       ) VALUES (
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         CASE WHEN EXISTS (
-           SELECT 1
-           FROM json_each(?) requested
-           LEFT JOIN tasks dependency ON dependency.id = requested.value
-           WHERE dependency.id IS NULL
-              OR dependency.run_id <> ?
-              OR dependency.status <> 'completed'
-         ) THEN 'pending' ELSE 'ready' END,
-         ?
-       )`
-    )
-    .run(
-      id,
-      runId,
-      task.parentId ?? null,
-      task.createdByTerminalHandle ?? null,
-      task.createdByPaneKey ?? null,
-      task.createdByProcessIncarnation ?? null,
-      task.createdByRunGeneration ?? null,
-      display.taskTitle || null,
-      display.displayName || null,
-      task.spec,
-      depsJson,
-      runId,
-      depsJson
-    )
-  return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
+  return runLifecycleWriteTransaction(this.db, TASK_CREATE_SAVEPOINT, () => {
+    if (binding) {
+      const existing = this.getTaskByMessageId(binding.messageId)
+      if (existing) {
+        throw taskBindingConflictError(existing, binding)
+      }
+    }
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO tasks (
+             id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
+             created_by_process_incarnation, created_by_run_generation,
+             task_title, display_name, spec, status, deps,
+             message_id, card_digest, intent_job, intent_run, binding_generation
+           ) VALUES (
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+             CASE WHEN EXISTS (
+               SELECT 1
+               FROM json_each(?) requested
+               LEFT JOIN tasks dependency ON dependency.id = requested.value
+               WHERE dependency.id IS NULL
+                  OR dependency.run_id <> ?
+                  OR dependency.status <> 'completed'
+             ) THEN 'pending' ELSE 'ready' END,
+             ?, ?, ?, ?, ?, 1
+           )`
+        )
+        .run(
+          id,
+          runId,
+          task.parentId ?? null,
+          task.createdByTerminalHandle ?? null,
+          task.createdByPaneKey ?? null,
+          task.createdByProcessIncarnation ?? null,
+          task.createdByRunGeneration ?? null,
+          display.taskTitle || null,
+          display.displayName || null,
+          task.spec,
+          depsJson,
+          runId,
+          depsJson,
+          binding?.messageId ?? null,
+          binding?.cardDigest ?? null,
+          binding?.intentJob ?? null,
+          binding?.intentRun ?? null
+        )
+    } catch (error) {
+      if (binding && isUniqueMessageIdError(error)) {
+        const existing = this.getTaskByMessageId(binding.messageId)
+        if (existing) {
+          throw taskBindingConflictError(existing, binding)
+        }
+      }
+      throw error
+    }
+    if (binding) {
+      this.insertTaskBindingIntent(id, binding, task.createdByTerminalHandle ?? null)
+    }
+    return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
+  })
 }
 
-// Explicit projections make hot task lookups and coordinator polls cacheable.
-const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
-
 // Hoist the explicit lineage query to reuse its statement-cache entry.
-const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
+const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${TASK_COLUMN_LIST_ALIASED},
          creator.id AS creator_dispatch_id,
          creator.run_id AS creator_dispatch_run_id,
          creator.assignee_pane_key AS creator_dispatch_pane_key,
@@ -128,32 +165,38 @@ export function getTask(
 
 export function listTasks(
   this: OrchestrationDb,
-  filter?: { status?: TaskStatus; ready?: boolean; runId?: string }
+  filter?: {
+    status?: TaskStatus
+    ready?: boolean
+    runId?: string
+    messageId?: string
+    cardDigest?: string
+  }
 ): TaskRow[] {
-  const runWhere = filter?.runId ? 'run_id = ? AND ' : ''
-  const runParams: Database.BindValue[] = filter?.runId ? [filter.runId] : []
-  if (filter?.ready) {
-    return this.db
-      .prepare(
-        `SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE ${runWhere}status = 'ready' ORDER BY created_at`
-      )
-      .all(...runParams) as TaskRow[]
-  }
-  if (filter?.status) {
-    return this.db
-      .prepare(
-        `SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE ${runWhere}status = ? ORDER BY created_at`
-      )
-      .all(...runParams, filter.status) as TaskRow[]
-  }
+  const where: string[] = []
+  const params: Database.BindValue[] = []
   if (filter?.runId) {
-    return this.db
-      .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE run_id = ? ORDER BY created_at`)
-      .all(filter.runId) as TaskRow[]
+    where.push('run_id = ?')
+    params.push(filter.runId)
   }
+  if (filter?.ready) {
+    where.push("status = 'ready'")
+  } else if (filter?.status) {
+    where.push('status = ?')
+    params.push(filter.status)
+  }
+  if (filter?.messageId) {
+    where.push('message_id = ?')
+    params.push(filter.messageId)
+  }
+  if (filter?.cardDigest) {
+    where.push('card_digest = ?')
+    params.push(filter.cardDigest)
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   return this.db
-    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks ORDER BY created_at`)
-    .all() as TaskRow[]
+    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks ${whereSql} ORDER BY created_at`)
+    .all(...params) as TaskRow[]
 }
 
 // Use an indexed correlated lookup instead of materializing every retained Dispatch.
@@ -163,6 +206,8 @@ export function listTasksWithDispatch(
     status?: TaskStatus
     ready?: boolean
     runId?: string
+    messageId?: string
+    cardDigest?: string
   }
 ): (TaskRow & {
   assignee_handle: string | null
@@ -179,6 +224,14 @@ export function listTasksWithDispatch(
   } else if (filter?.status) {
     whereClauses.push('t.status = ?')
     params.push(filter.status)
+  }
+  if (filter?.messageId) {
+    whereClauses.push('t.message_id = ?')
+    params.push(filter.messageId)
+  }
+  if (filter?.cardDigest) {
+    whereClauses.push('t.card_digest = ?')
+    params.push(filter.cardDigest)
   }
   const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
   const sql = `

@@ -131,11 +131,37 @@ CREATE TABLE IF NOT EXISTS tasks (
   deps          TEXT NOT NULL DEFAULT '[]',
   result        TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  completed_at  TEXT
+  completed_at  TEXT,
+  -- Unique-bind identity: at most one Task per original message for all time.
+  message_id    TEXT,
+  card_digest   TEXT,
+  intent_job    TEXT,
+  intent_run    TEXT,
+  binding_generation INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+-- idx_tasks_message_id_unique is created by migrateV44: an older tasks table lacks message_id here.
+
+CREATE TABLE IF NOT EXISTS task_binding_intents (
+  intent_id             TEXT PRIMARY KEY,
+  message_id            TEXT NOT NULL,
+  card_digest           TEXT NOT NULL,
+  intent_job            TEXT,
+  intent_run            TEXT,
+  owner_terminal_handle TEXT,
+  generation            INTEGER NOT NULL,
+  state                 TEXT NOT NULL
+    CHECK(state IN ('reserved', 'committed', 'conflict')),
+  task_id               TEXT,
+  error                 TEXT,
+  created_at            TEXT,
+  updated_at            TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_task_binding_intents_message_id
+  ON task_binding_intents(message_id);
 
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,

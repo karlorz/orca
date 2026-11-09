@@ -12,6 +12,7 @@ export const RUN_COLUMNS = [
   'coordinator_orca_session_id',
   'coordinator_orca_session_id_generation',
   'consumer_generation',
+  'mailbox_fence',
   'legacy',
   'created_at',
   'updated_at'
@@ -32,7 +33,12 @@ export const TASK_COLUMNS = [
   'deps',
   'result',
   'created_at',
-  'completed_at'
+  'completed_at',
+  'message_id',
+  'card_digest',
+  'intent_job',
+  'intent_run',
+  'binding_generation'
 ] as const satisfies readonly (keyof TaskRow)[]
 
 export const DISPATCH_CONTEXT_COLUMNS = [
@@ -135,6 +141,8 @@ export function selectColumns(columns: readonly string[], alias?: string): strin
 }
 
 export const RUN_COLUMN_LIST = selectColumns(RUN_COLUMNS)
+export const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
+export const TASK_COLUMN_LIST_ALIASED = selectColumns(TASK_COLUMNS, 't')
 export const DISPATCH_CONTEXT_COLUMN_LIST = selectColumns(DISPATCH_CONTEXT_COLUMNS)
 export const ATTEMPT_OBSERVATION_FACT_COLUMN_LIST = selectColumns(ATTEMPT_OBSERVATION_FACT_COLUMNS)
 export const REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST = selectColumns(

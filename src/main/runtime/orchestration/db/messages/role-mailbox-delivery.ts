@@ -100,6 +100,7 @@ export function getOrCreateMailboxDelivery(
         JSON.stringify(messages.map((message) => message.id))
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
+    this.bumpRunMailboxFence(params.runId)
     this.db.exec('COMMIT')
     return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }
   } catch (error) {
@@ -164,6 +165,7 @@ export function acknowledgeMailboxDelivery(
         "UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now') WHERE id = ?"
       )
       .run(delivery.id)
+    this.bumpRunMailboxFence(params.runId)
     const acknowledged = this.getDeliveryRaw(delivery.id) as DeliveryRow
     this.db.exec('COMMIT')
     return { delivery: exposeDeliveryTimestamps(acknowledged), duplicate: false }

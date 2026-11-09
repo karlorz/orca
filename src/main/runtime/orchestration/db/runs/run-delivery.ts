@@ -116,6 +116,14 @@ export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string):
   return this.hasOutstandingMailboxDelivery(`run:${runId}`)
 }
 
+/** Run-mailbox entry point for the single-transaction selective consume. */
+export function selectiveConsumeRunDelivery(
+  this: OrchestrationDb,
+  params: { runId: string; consumerGeneration: number; messageId: string }
+): ReturnType<OrchestrationDb['selectiveConsumeMailboxDelivery']> {
+  return this.selectiveConsumeMailboxDelivery(params)
+}
+
 export type RunDeliveryMethods = {
   requireCurrentConsumer: typeof requireCurrentConsumer
   getOrCreateRunDelivery: typeof getOrCreateRunDelivery
@@ -123,6 +131,7 @@ export type RunDeliveryMethods = {
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
   hasOutstandingRunDelivery: typeof hasOutstandingRunDelivery
+  selectiveConsumeRunDelivery: typeof selectiveConsumeRunDelivery
 }
 
 export function attachRunDelivery(ctor: { prototype: object }): void {
@@ -132,6 +141,7 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,
-    hasOutstandingRunDelivery
+    hasOutstandingRunDelivery,
+    selectiveConsumeRunDelivery
   })
 }

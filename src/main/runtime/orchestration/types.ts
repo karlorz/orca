@@ -52,6 +52,8 @@ export type RunRow = {
   /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
   coordinator_orca_session_id_generation: number | null
   consumer_generation: number
+  /** Bumped in every mailbox-mutating transaction; read by check --expect-fence. */
+  mailbox_fence: number
   legacy: number
   created_at: string
   updated_at: string
@@ -274,6 +276,29 @@ export type TaskRow = {
   result: string | null
   created_at: string
   completed_at: string | null
+  /** Unique-bind identity; null on Tasks created without a binding. */
+  message_id: string | null
+  card_digest: string | null
+  intent_job: string | null
+  intent_run: string | null
+  binding_generation: number
+}
+
+export type TaskBindingIntentState = 'reserved' | 'committed' | 'conflict'
+
+export type TaskBindingIntentRow = {
+  intent_id: string
+  message_id: string
+  card_digest: string
+  intent_job: string | null
+  intent_run: string | null
+  owner_terminal_handle: string | null
+  generation: number
+  state: TaskBindingIntentState
+  task_id: string | null
+  error: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export type DispatchContextRow = {

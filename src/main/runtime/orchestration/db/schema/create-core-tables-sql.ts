@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS runs (
   -- are equal (run-coordinator-orca-session). So bump consumer_generation for a rebind or unbind only.
   coordinator_orca_session_id_generation INTEGER,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
+  -- Monotonic mailbox mutation counter: bumped in every mailbox-mutating transaction.
+  mailbox_fence         INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))

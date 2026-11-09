@@ -33,6 +33,7 @@ import type { MailboxPointerEnterStateMethods } from './messages/mailbox-pointer
 import type { MessageInboxMethods } from './messages/message-inbox'
 import type { MessageInsertMethods } from './messages/message-insert'
 import type { RoleMailboxDeliveryMethods } from './messages/role-mailbox-delivery'
+import type { RunMailboxSelectiveConsumeMethods } from './messages/run-mailbox-selective-consume'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
 import type { LifecycleTransitionMethods } from './lifecycle-transition'
 import type { QuestionThreadsMethods } from './questions/question-threads'
@@ -41,6 +42,7 @@ import type { RunBindingMethods } from './runs/run-binding'
 import type { RunCoordinatorMailRoutingMethods } from './runs/run-coordinator-mail-routing'
 import type { RunCreateMethods } from './runs/run-create'
 import type { RunDeliveryMethods } from './runs/run-delivery'
+import type { RunMailboxFenceMethods } from './runs/run-mailbox-fence'
 import type { RunLookupMethods } from './runs/run-lookup'
 import type { LegacyCoordinatorMailTakeoverMethods } from './runs/legacy-coordinator-mail-takeover'
 import type { AdoptLegacyRunMethods } from './schema/adopt-legacy-run'
@@ -49,6 +51,7 @@ import type { CreateTablesMethods } from './schema/create-tables'
 import type { MigrateLegacyContractStorageMethods } from './schema/migrate-legacy-contract-storage'
 import type { SchemaMigrateMethods } from './schema/migrate'
 import type { SchemaColumnProbesMethods } from './schema/schema-column-probes'
+import type { TaskBindingStoreMethods } from './tasks/task-binding-store'
 import type { TaskStoreMethods } from './tasks/task-store'
 import type { TaskStatusTransitionMethods } from './tasks/task-status-transition'
 import type { FederatedWorkerStartReconcileMethods } from './worker-dispatch/federated-worker-start-reconcile'
@@ -91,14 +94,17 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   RunCoordinatorMailRoutingMethods &
   LegacyCoordinatorMailTakeoverMethods &
   RunDeliveryMethods &
+  RunMailboxFenceMethods &
   MessageInsertMethods &
   RoleMailboxDeliveryMethods &
+  RunMailboxSelectiveConsumeMethods &
   MessageInboxMethods &
   MailboxPointerEnterStateMethods &
   DirectMailboxRoutingMethods &
   ForeignDirectMailboxRoutingMethods &
   QuestionThreadsMethods &
   TaskStoreMethods &
+  TaskBindingStoreMethods &
   TaskStatusTransitionMethods &
   WorkerDispatchStartMethods &
   WorkerDispatchStageMethods &
