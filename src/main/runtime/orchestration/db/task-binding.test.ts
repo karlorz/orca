@@ -187,6 +187,23 @@ describe('task unique binding', () => {
     expect(db.listTaskBindingIntents(winner.id)).toHaveLength(1)
   })
 
+  it('rejects the same card, job and run under a new message id', () => {
+    const db = open()
+    const winner = db.createTask({ runId, spec: 'first', binding: binding() })
+
+    const conflict = captureOrchestrationError(() =>
+      db.createTask({ runId, spec: 'second', binding: binding({ messageId: 'msg_second' }) })
+    )
+
+    expect(conflict.code).toBe('K_CONFLICT')
+    expect(conflict.data).toMatchObject({
+      existing_task_id: winner.id,
+      reason: 'binding_mismatch'
+    })
+    expect(db.listTasks({ messageId: 'msg_second' })).toHaveLength(0)
+    expect(db.listTasks({ runId })).toHaveLength(1)
+  })
+
   it('rejects a new message and card that reuse the same intent job', () => {
     const db = open()
     const winner = db.createTask({ runId, spec: 'first', binding: binding() })
