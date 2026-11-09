@@ -61,7 +61,7 @@ export function createTask(
     taskTitle: task.taskTitle,
     displayName: task.displayName
   })
-  return runLifecycleWriteTransaction(this.db, TASK_CREATE_SAVEPOINT, () => {
+  const create = (): TaskRow => {
     if (binding) {
       const existing = this.findTaskBindingConflict(binding)
       if (existing) {
@@ -121,7 +121,10 @@ export function createTask(
       this.insertTaskBindingIntent(id, binding, task.createdByTerminalHandle ?? null)
     }
     return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
-  })
+  }
+  // Unbound creates stay in autocommit: the single INSERT is atomic, and holding the
+  // writer lock would block a concurrent dependency completion from committing.
+  return binding ? runLifecycleWriteTransaction(this.db, TASK_CREATE_SAVEPOINT, create) : create()
 }
 
 // Hoist the explicit lineage query to reuse its statement-cache entry.
