@@ -115,22 +115,59 @@ function readRunMailboxTarget(
     .get(messageId, runId, `run:${runId}`) as { read: number } | undefined
 }
 
-function countUnrelatedMutations(
+type SnapshotVerification = {
+  targetTransitions: number
+  unrelatedMutationCount: number
+}
+
+/**
+ * Compare complete ordered Delivery metadata and every (message_id, read) position,
+ * including positions inside target-containing entries. Only target 0->1 may move.
+ */
+function verifySelectiveConsumeSnapshot(
   before: MailboxSnapshotEntry[],
   after: MailboxSnapshotEntry[],
   targetMessageId: string
-): number {
-  const others = (entries: MailboxSnapshotEntry[]) =>
-    entries.filter((entry) => !entry.message_ids.includes(targetMessageId))
-  const beforeOthers = others(before)
-  const afterOthers = others(after)
-  let count = Math.abs(beforeOthers.length - afterOthers.length)
-  for (let index = 0; index < Math.min(beforeOthers.length, afterOthers.length); index += 1) {
-    if (JSON.stringify(beforeOthers[index]) !== JSON.stringify(afterOthers[index])) {
-      count += 1
+): SnapshotVerification {
+  let targetTransitions = 0
+  let unrelatedMutationCount = Math.abs(before.length - after.length)
+  const comparedEntries = Math.min(before.length, after.length)
+  for (let index = 0; index < comparedEntries; index += 1) {
+    const beforeEntry = before[index]
+    const afterEntry = after[index]
+    if (
+      beforeEntry.delivery_id !== afterEntry.delivery_id ||
+      beforeEntry.acknowledged !== afterEntry.acknowledged ||
+      beforeEntry.message_ids.length !== afterEntry.message_ids.length ||
+      beforeEntry.read.length !== afterEntry.read.length
+    ) {
+      unrelatedMutationCount += 1
+      continue
+    }
+    let entryMismatch = false
+    for (let position = 0; position < beforeEntry.message_ids.length; position += 1) {
+      if (beforeEntry.message_ids[position] !== afterEntry.message_ids[position]) {
+        entryMismatch = true
+        continue
+      }
+      const messageId = beforeEntry.message_ids[position]
+      const beforeRead = beforeEntry.read[position]
+      const afterRead = afterEntry.read[position]
+      if (messageId === targetMessageId) {
+        if (beforeRead === 0 && afterRead === 1) {
+          targetTransitions += 1
+        } else {
+          entryMismatch = true
+        }
+      } else if (beforeRead !== afterRead) {
+        entryMismatch = true
+      }
+    }
+    if (entryMismatch) {
+      unrelatedMutationCount += 1
     }
   }
-  return count
+  return { targetTransitions, unrelatedMutationCount }
 }
 
 /** Mark exactly one Run-mailbox message read inside one BEGIN IMMEDIATE, proving nothing else moved. */
@@ -182,27 +219,33 @@ export function selectiveConsumeMailboxDelivery(
       }
     }
     this.markAsRead([params.messageId])
+    const targetAfter = readRunMailboxTarget(this, params.runId, params.messageId)
     const after = this.getRunMailboxSnapshot(params.runId, [params.messageId])
     const fence = this.getRunMailboxFence(params.runId)
-    const afterTargetEntries = after.filter((entry) =>
-      entry.message_ids.includes(params.messageId)
-    )
-    if (
-      afterTargetEntries.length === 0 ||
-      !afterTargetEntries.every((entry) => entry.read.every((flag) => flag === 1))
-    ) {
+    if (!targetAfter || targetAfter.read !== 1) {
       throw new OrchestrationError(
         'selective_consume_verification_failed',
         'Selective consume did not observe the target read transition; the transaction was rolled back.',
-        { before, after }
+        { target_accept_count: 0, before, after }
       )
     }
-    const unrelatedMutationCount = countUnrelatedMutations(before, after, params.messageId)
-    if (unrelatedMutationCount > 0) {
+    const verification = verifySelectiveConsumeSnapshot(before, after, params.messageId)
+    if (verification.unrelatedMutationCount > 0) {
       throw new OrchestrationError(
         'selective_consume_verification_failed',
         'Selective consume changed unrelated mailbox state; the transaction was rolled back.',
-        { unrelated_mutation_count: unrelatedMutationCount, before, after }
+        {
+          unrelated_mutation_count: verification.unrelatedMutationCount,
+          before,
+          after
+        }
+      )
+    }
+    if (verification.targetTransitions === 0) {
+      throw new OrchestrationError(
+        'selective_consume_verification_failed',
+        'Selective consume did not observe the target read transition in the mailbox snapshot; the transaction was rolled back.',
+        { target_accept_count: 0, before, after }
       )
     }
     this.db.exec('COMMIT')
